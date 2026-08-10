@@ -1,266 +1,172 @@
-import { describe, it, expect } from 'vitest';
-import { createRunState, deserializeRunState } from '../../src/state/run-state.js';
-import { dangerClockBaseRate, corruptionDangerRate } from '../../src/rules/scaling.js';
-import { makeCharacter, makeParty } from '../helpers/fixtures.js';
+import { describe, expect, it } from 'vitest';
+import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
+import { createRunState, deserializeRunState, validateRunState } from '../../src/state/run-state.js';
 
-describe('createRunState — defaults', () => {
-  const party = makeParty(2);
-  const state = createRunState(42, party);
+function makeCharacter(id = 'operator_1') {
+  return {
+    id,
+    classId: 'breacher',
+    sigilId: 'pua-e000',
+    attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+    currentHP: 30,
+    currentCHARGE: 10,
+    calibrationCount: 0,
+    calibrationChoices: [],
+    signatureTier: 1,
+    equipment: { weapon: null, armor: null, offhand: null },
+    protocolDeck: [],
+    conditions: []
+  };
+}
 
-  it('worldSeed set', () => { expect(state.worldSeed).toBe(42); });
-  it('depth: 1', () => { expect(state.depth).toBe(1); });
-  it('partyPosition {x:10, y:0}', () => { expect(state.partyPosition).toEqual({ x: 10, y: 0 }); });
-  it('fogOfWar is Uint8Array(80) of zeros', () => {
-    expect(state.fogOfWar).toBeInstanceOf(Uint8Array);
-    expect(state.fogOfWar.length).toBe(80);
-    expect(state.fogOfWar.every(b => b === 0)).toBe(true);
-  });
-  it('openedContainers === 0n', () => { expect(state.openedContainers).toBe(0n); });
-  it('defeatedEnemies === 0n', () => { expect(state.defeatedEnemies).toBe(0n); });
-  it('dangerClockProgress: 0', () => { expect(state.dangerClockProgress).toBe(0); });
-  it('inventory empty', () => { expect(state.inventory).toEqual([]); });
-  it('corruption: 0', () => { expect(state.corruption).toBe(0); });
-  it('credits: 0', () => { expect(state.credits).toBe(0); });
-  it('scrapCounter: 0', () => { expect(state.scrapCounter).toBe(0); });
-  it('themesSeen empty Set', () => { expect(state.themesSeen).toBeInstanceOf(Set); expect(state.themesSeen.size).toBe(0); });
-  it('echoQueue: []', () => { expect(state.echoQueue).toEqual([]); });
-  it('rngState: null', () => { expect(state.rngState).toBeNull(); });
-  it('flags.version: 1, calibrationFloorsReached: []', () => {
-    expect(state.flags).toEqual({ version: 1, calibrationFloorsReached: [] });
-  });
-  it('party held by reference', () => { expect(state.party).toBe(party); });
-  it('creationTimestamp is a number', () => { expect(typeof state.creationTimestamp).toBe('number'); });
-});
+function makeState(options = {}) {
+  return createRunState(42, [makeCharacter()], { creationTimestamp: 1_000, ...options });
+}
 
-describe('serialize — JSON safety contract', () => {
-  const state = createRunState(7, makeParty(1));
-  state.markContainerOpened(0);
-  state.markContainerOpened(2);
-  state.themesSeen.add('industrial');
-  state.themesSeen.add('organic');
+describe('RunState v2 canonical shape', () => {
+  it('creates independent canonical collections and summary state', () => {
+    const party = [makeCharacter()];
+    const state = createRunState(42, party, { creationTimestamp: 1_000 });
+    party[0].attributes.mgt = 1;
+    expect(state.party[0].attributes.mgt).toBe(5);
+    expect(state.flags).toEqual({ version: 2, calibrationFloorsReached: [] });
+    expect(state.activeCombat).toBeNull();
+    expect(state.stats).toEqual({ enemiesSlain: 0, echoesSlain: 0, corruptItemsEquipped: 0, floorsDescended: 0 });
+    expect(state.recentEvents).toEqual([]);
+  });
 
-  it('fogOfWar → plain Array(80)', () => {
-    const s = state.serialize();
-    expect(Array.isArray(s.fogOfWar)).toBe(true);
-    expect(s.fogOfWar).toHaveLength(80);
+  it('serializes plain independent v2 data without legacy aliases', () => {
+    const state = makeState();
+    state.markContainerOpened(3);
+    const serialized = state.serialize();
+    expect(serialized.openedContainers).toBe('8');
+    expect(serialized.party[0]).toMatchObject({ currentHP: 30, currentCHARGE: 10, sigilId: 'pua-e000' });
+    expect(serialized.party[0]).not.toHaveProperty('hp');
+    expect(() => JSON.stringify(serialized)).not.toThrow();
+    serialized.party[0].attributes.mgt = 1;
+    expect(state.party[0].attributes.mgt).toBe(5);
   });
-  it('openedContainers → decimal string', () => {
-    const s = state.serialize();
-    expect(s.openedContainers).toBe('5');
-  });
-  it('defeatedEnemies → decimal string "0"', () => {
-    const s = state.serialize();
-    expect(s.defeatedEnemies).toBe('0');
-  });
-  it('themesSeen → Array', () => {
-    const s = state.serialize();
-    expect(Array.isArray(s.themesSeen)).toBe(true);
-    expect(s.themesSeen).toContain('industrial');
-    expect(s.themesSeen).toContain('organic');
-  });
-  it('flags deep-copied — mutating serialized flags does not touch state', () => {
-    const s = state.serialize();
-    s.flags.calibrationFloorsReached.push(3);
-    expect(state.flags.calibrationFloorsReached).toEqual([]);
-  });
-  it('JSON.stringify(serialize()) does not throw', () => {
-    expect(() => JSON.stringify(state.serialize())).not.toThrow();
-  });
-  it('openedContainers "0" for fresh state', () => {
-    const fresh = createRunState(1, []);
-    expect(fresh.serialize().openedContainers).toBe('0');
+
+  it('maintains non-serialized legacy aliases while later modules migrate', () => {
+    const state = makeState();
+    state.party[0].hp -= 4;
+    state.party[0].charge -= 2;
+    expect(state.party[0].currentHP).toBe(26);
+    expect(state.party[0].currentCHARGE).toBe(8);
+    expect(state.party[0].sigilCodepoint).toBe(0xe000);
   });
 });
 
-describe('advanceFloor', () => {
-  it('depth++, fog zeroed, BigInts reset, conditions emptied', () => {
-    const party = [makeCharacter({ id: 'a', conditions: [{ id: 'burning', duration: 2, stacks: 1 }] }), makeCharacter({ id: 'b' })];
-    const state = createRunState(1, party);
-    state.markContainerOpened(1);
-    state.markEnemyDefeated(3);
-    state.markCellVisited(0, 0);
-    state.advanceFloor();
-    expect(state.depth).toBe(2);
-    expect(state.fogOfWar.every(b => b === 0)).toBe(true);
-    expect(state.openedContainers).toBe(0n);
-    expect(state.defeatedEnemies).toBe(0n);
-    expect(state.party[0].conditions).toEqual([]);
+describe('RunState bounds and hostile input', () => {
+  it('rejects invalid state rather than clamping or fabricating identities', () => {
+    const serialized = makeState().serialize();
+    serialized.party[0].classId = '';
+    expect(validateRunState(serialized)).toEqual({ valid: false, errors: ['invalid_run_state'] });
+    expect(deserializeRunState(serialized)).toBeNull();
   });
 
-  it('members without conditions key untouched', () => {
-    const party = [{ id: 'noconds', hp: 20 }];
-    const state = createRunState(1, party);
-    expect(() => state.advanceFloor()).not.toThrow();
+  it.each([
+    ['seed', state => { state.worldSeed = -1; }],
+    ['fog length', state => { state.fogOfWar.pop(); }],
+    ['position', state => { state.partyPosition.x = 20; }],
+    ['inventory', state => { state.inventory = Array.from({ length: 101 }, () => validItem()); }],
+    ['echo queue', state => { state.echoQueue = [validEcho(), validEcho(), validEcho()]; }],
+    ['non-finite number', state => { state.corruption = Number.NaN; }],
+    ['bitfield', state => { state.openedContainers = '-1'; }]
+  ])('rejects invalid %s', (_label, mutate) => {
+    const serialized = makeState().serialize();
+    mutate(serialized);
+    expect(deserializeRunState(serialized)).toBeNull();
   });
 });
 
-describe('mutators — corruption, scrap, inventory', () => {
-  it('addCorruption accumulates', () => {
-    const state = createRunState(1, []);
-    state.addCorruption(0.1);
-    state.addCorruption(0.05);
-    expect(state.corruption).toBeCloseTo(0.15);
+function validItem() {
+  return { id: 'item_1', category: 'weapon', baseType: 'sidearm', rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+}
+
+function validEcho() {
+  return { character: makeCharacter('dead_operator'), deathFloor: 3, appearanceFloor: 6 };
+}
+
+describe('deterministic mutators', () => {
+  it('queues a deep-copied Echo from the combat cursor and persists the advanced cursor', () => {
+    const state = makeState();
+    const cursor = createRNGCursorForRun(42);
+    const expectedCursor = createRNGCursorForRun(42);
+    const expectedFloor = 5 + 2 + expectedCursor.nextInt('combat', 3);
+    const character = makeCharacter('dead_operator');
+    const result = state.queueEcho(character, 5, cursor);
+    character.currentHP = 0;
+    expect(result.queued).toBe(true);
+    expect(state.echoQueue[0].appearanceFloor).toBe(expectedFloor);
+    expect(state.echoQueue[0].character.currentHP).toBe(30);
+    expect(state.rngState.combat.cursor).toBe(1);
   });
-  it('addScrap accumulates', () => {
-    const state = createRunState(1, []);
-    state.addScrap(5);
-    state.addScrap(3);
-    expect(state.scrapCounter).toBe(8);
+
+  it('returns explicit failures for invalid mutation requests and caps Echoes', () => {
+    const state = makeState();
+    expect(state.markContainerOpened(64)).toEqual({ marked: false, reason: 'invalid_id' });
+    expect(state.markCellVisited(20, 0)).toEqual({ marked: false, reason: 'invalid_coordinate' });
+    state.queueEcho(makeCharacter('one'), 1, createRNGCursorForRun(1));
+    state.queueEcho(makeCharacter('two'), 1, createRNGCursorForRun(2));
+    expect(state.queueEcho(makeCharacter('three'), 1, createRNGCursorForRun(3))).toEqual({ queued: false, reason: 'queue_full' });
   });
-  it('getInventoryCount', () => {
-    const state = createRunState(1, []);
-    state.inventory.push({ id: 'i1' }, { id: 'i2' });
-    expect(state.getInventoryCount()).toBe(2);
+
+  it('tracks visited cells as exactly 80 persisted bits and resets them', () => {
+    const state = makeState();
+    state.markCellVisited(19, 31);
+    expect(state.isCellVisited(19, 31)).toBe(true);
+    expect(state.isCellVisited(20, 31)).toBe(false);
+    state.resetFogOfWar();
+    expect(state.fogOfWar).toHaveLength(80);
+    expect(state.isCellVisited(19, 31)).toBe(false);
   });
-  it('isInventoryFull at 99 → false', () => {
-    const state = createRunState(1, []);
-    state.inventory = Array(99).fill({ id: 'x' });
-    expect(state.isInventoryFull()).toBe(false);
-  });
-  it('isInventoryFull at 100 → true', () => {
-    const state = createRunState(1, []);
-    state.inventory = Array(100).fill({ id: 'x' });
+
+  it('counts consumable stacks toward the hard inventory cap', () => {
+    const state = makeState({ inventory: [{ ...validItem(), category: 'consumable', count: 100 }] });
+    expect(state.getInventoryCount()).toBe(100);
     expect(state.isInventoryFull()).toBe(true);
   });
-});
 
-describe('markContainerOpened / markEnemyDefeated', () => {
-  it('markContainerOpened(0) → bit 0 set → 1n', () => {
-    const state = createRunState(1, []);
-    state.markContainerOpened(0);
-    expect(state.openedContainers).toBe(1n);
-  });
-  it('markContainerOpened(5) → |= 32n', () => {
-    const state = createRunState(1, []);
-    state.markContainerOpened(5);
-    expect(state.openedContainers).toBe(32n);
-  });
-  it('ids up to 63 work', () => {
-    const state = createRunState(1, []);
-    state.markContainerOpened(63);
-    expect(state.openedContainers).toBe(1n << 63n);
-  });
-  it('markEnemyDefeated works the same', () => {
-    const state = createRunState(1, []);
-    state.markEnemyDefeated(0);
-    state.markEnemyDefeated(2);
-    expect(state.defeatedEnemies).toBe(5n);
-  });
-});
-
-describe('markCellVisited', () => {
-  it('(0,0) sets byte 0 bit 0', () => {
-    const state = createRunState(1, []);
+  it('clears floor-only state and updates scorecard truth on descent', () => {
+    const state = makeState({ activeCombat: { round: 1, actors: [] } });
     state.markCellVisited(0, 0);
-    expect(state.fogOfWar[0] & 1).toBe(1);
-  });
-  it('(19,31) sets byte 79 bit 7', () => {
-    const state = createRunState(1, []);
-    state.markCellVisited(19, 31);
-    expect(state.fogOfWar[79] & 0x80).toBe(0x80);
-  });
-  it('out-of-range (y=32) silently ignored', () => {
-    const state = createRunState(1, []);
-    const before = [...state.fogOfWar];
-    state.markCellVisited(0, 32);
-    expect([...state.fogOfWar]).toEqual(before);
-  });
-});
-
-describe('queueEcho', () => {
-  it('pushes {character, deathFloor, appearanceFloor} with appearanceFloor in [deathFloor+2, deathFloor+4]', () => {
-    const char = makeCharacter({ id: 'dead' });
-    for (let i = 0; i < 20; i++) {
-      const state = createRunState(i, []);
-      state.queueEcho(char, 5);
-      const entry = state.echoQueue[0];
-      expect(entry.character).toBe(char);
-      expect(entry.deathFloor).toBe(5);
-      expect(entry.appearanceFloor).toBeGreaterThanOrEqual(7);
-      expect(entry.appearanceFloor).toBeLessThanOrEqual(9);
-    }
-  });
-  it('queue caps at 2 (third call ignored)', () => {
-    const state = createRunState(1, []);
-    const c1 = makeCharacter({ id: 'c1' });
-    const c2 = makeCharacter({ id: 'c2' });
-    const c3 = makeCharacter({ id: 'c3' });
-    state.queueEcho(c1, 1);
-    state.queueEcho(c2, 2);
-    state.queueEcho(c3, 3);
-    expect(state.echoQueue).toHaveLength(2);
-    expect(state.echoQueue[0].character).toBe(c1);
-    expect(state.echoQueue[1].character).toBe(c2);
-  });
-});
-
-describe('getDangerClockRate', () => {
-  it('equals dangerClockBaseRate(depth) + corruptionDangerRate(corruption)', () => {
-    const state = createRunState(1, []);
-    state.depth = 10;
-    state.corruption = 0.5;
-    const expected = dangerClockBaseRate(10) + corruptionDangerRate(0.5);
-    expect(state.getDangerClockRate()).toBeCloseTo(expected);
-  });
-});
-
-describe('deserializeRunState — full round-trip', () => {
-  it('mutate everything, serialize → deserialize → serialize deep-equal', () => {
-    const party = makeParty(2);
-    const state = createRunState(99, party);
-    state.depth = 5;
-    state.floorSubSeed = 3;
-    state.markContainerOpened(1);
-    state.markContainerOpened(3);
     state.markEnemyDefeated(0);
-    state.markCellVisited(5, 10);
-    state.inventory = [{ id: 'i1', baseType: 'sword' }];
-    state.corruption = 0.3;
-    state.credits = 500;
-    state.scrapCounter = 42;
-    state.themesSeen.add('industrial');
-    state.themesSeen.add('digital');
-    state.dangerClockProgress = 0.15;
-    state.echoQueue = [{ character: makeCharacter({ id: 'echo1' }), deathFloor: 3, appearanceFloor: 6 }];
-    state.rngState = { gen: { cursor: 5, prngState: [1, 2, 3, 4] } };
-    state.flags.calibrationFloorsReached = [3, 6];
-    state.partyPosition = { x: 5, y: 7 };
+    expect(state.advanceFloor()).toEqual({ advanced: true, depth: 2 });
+    expect(state.activeCombat).toBeNull();
+    expect(state.stats).toMatchObject({ enemiesSlain: 1, floorsDescended: 1 });
+    expect(state.isCellVisited(0, 0)).toBe(false);
+  });
 
-    const serialized = state.serialize();
-    const deserialized = deserializeRunState(serialized);
-    expect(deserialized.serialize()).toEqual(serialized);
+  it('caps portable LOG entries at 64 structured values', () => {
+    const state = makeState();
+    for (let index = 0; index < 65; index++) state.recordEvent({ index, type: 'move' });
+    expect(state.recentEvents).toHaveLength(64);
+    expect(state.recentEvents[0]).toEqual({ index: 1, type: 'move' });
   });
 });
 
-describe('deserializeRunState — empty object', () => {
-  it('sane defaults: worldSeed 0, party [], depth 1', () => {
-    const state = deserializeRunState({});
-    expect(state.worldSeed).toBe(0);
-    expect(state.party).toEqual([]);
-    expect(state.depth).toBe(1);
+describe('v1 normalization', () => {
+  it('normalizes legacy names only at the v1 boundary', () => {
+    const v1 = {
+      ...makeState().serialize(),
+      party: [{ ...makeCharacter(), hp: 27, charge: 4, protocols: [{ school: 'ward', tier: 1 }], sigilCodepoint: 0xe000 }],
+      flags: { version: 1, calibrationFloorsReached: [3] }
+    };
+    delete v1.party[0].currentHP;
+    delete v1.party[0].currentCHARGE;
+    delete v1.party[0].protocolDeck;
+    delete v1.party[0].sigilId;
+    const state = deserializeRunState(v1, { sourceVersion: 1 });
+    expect(state.serialize().party[0]).toMatchObject({ currentHP: 27, currentCHARGE: 4, sigilId: 'pua-e000', protocolDeck: [{ school: 'ward', tier: 1 }] });
+    expect(state.flags.version).toBe(2);
   });
-});
 
-describe('deserializeRunState — falsy-field quirks', () => {
-  it('depth: 0 is ignored (if(data.depth)) → stays 1', () => {
-    const state = deserializeRunState({ depth: 0 });
-    expect(state.depth).toBe(1);
-  });
-  it('corruption: 0 IS honored (!== undefined)', () => {
-    const state = deserializeRunState({ corruption: 0 });
-    expect(state.corruption).toBe(0);
-  });
-  it('credits: 0 IS honored', () => {
-    const state = deserializeRunState({ credits: 0 });
-    expect(state.credits).toBe(0);
-  });
-  it('openedContainers "0" → 0n', () => {
-    const state = deserializeRunState({ openedContainers: '0' });
-    expect(state.openedContainers).toBe(0n);
-  });
-  it('flags missing calibrationFloorsReached → defaults to [] with version forced to 1', () => {
-    const state = deserializeRunState({ flags: { version: 999 } });
-    expect(state.flags.version).toBe(1);
-    expect(state.flags.calibrationFloorsReached).toEqual([]);
+  it('preserves bounded unknown v1 fields under extensions', () => {
+    const v1 = makeState().serialize();
+    v1.flags.version = 1;
+    v1.legacyField = { retained: true };
+    const state = deserializeRunState(v1, { sourceVersion: 1 });
+    expect(state.extensions).toEqual({ legacyField: { retained: true } });
   });
 });
