@@ -451,10 +451,22 @@ describe('symbol-table.json', () => {
     expect(symbolTable.version).toBe(1);
   });
 
-  it('every table has entries array and escape field', () => {
+  it('has 486 ABI-ordered entries with valid packed escape widths', () => {
+    expect(Object.values(symbolTable.tables).reduce((total, table) => total + table.entries.length, 0)).toBe(486);
     for (const [name, table] of Object.entries(symbolTable.tables)) {
       expect(Array.isArray(table.entries)).toBe(true);
+      expect(Number.isInteger(table.width)).toBe(true);
       expect(table).toHaveProperty('escape');
+      expect(table.escape).toBe(2 ** table.width - 1);
+      expect(table.entries.length).toBeLessThanOrEqual(table.escape);
     }
+  });
+
+  it('references every sigil, theme, protocol, and affix in ABI order', () => {
+    expect(symbolTable.tables.sigil_codepoint.entries).toEqual(ALL_SIGIL_CODEPOINTS);
+    expect(symbolTable.tables.sigil_id.entries).toEqual(ALL_SIGIL_CODEPOINTS.map((codepoint) => `pua-${codepoint.toString(16)}`));
+    expect(symbolTable.tables.theme_id.entries).toEqual(themes.themes.map((theme) => theme.id));
+    expect(symbolTable.tables.protocol_ref.entries).toEqual(Object.keys(protocols.schools).flatMap((school) => protocols.schools[school].tiers.map((protocol) => [school, protocol.tier])));
+    expect(symbolTable.tables.affix_id.entries).toEqual(Object.keys(affixes.affixes));
   });
 });

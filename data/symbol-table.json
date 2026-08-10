@@ -2,51 +2,676 @@
   "version": 1,
   "tables": {
     "class": {
+      "width": 3,
       "escape": 7,
-      "entries": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"]
-    },
-    "sigil": {
-      "escape": 63,
-      "entries": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59]
-    },
-    "attribute": {
-      "escape": 15,
-      "entries": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
-    },
-    "hp": {
-      "escape": 127,
-      "entries": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]
-    },
-    "charge": {
-      "escape": 127,
-      "entries": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]
-    },
-    "conditions": {
-      "escape": 63,
-      "entries": ["none", "jammed", "overloaded", "shielded", "blinded", "immobilized", "corroded", "marked", "panicked", "burning"]
-    },
-    "item_id": {
-      "escape": 255,
-      "entries": ["sidearm", "heavy_melee", "polearm", "light_ranged", "heavy_ranged", "sniper", "area_projector", "shield", "none", "light", "medium", "heavy", "repair_patch", "med_kit", "charge_cell", "boost_cell", "purge_spike", "shield_capacitor", "adrenal_injector"]
-    },
-    "equipment": {
-      "escape": 127,
       "entries": [
-        ["sidearm", "weapon"], ["heavy_melee", "weapon"], ["polearm", "weapon"], ["light_ranged", "weapon"], ["heavy_ranged", "weapon"], ["sniper", "weapon"], ["area_projector", "weapon"], ["shield", "offhand"],
-        ["none", "armor"], ["light", "armor"], ["medium", "armor"], ["heavy", "armor"]
+        "breacher",
+        "ghost",
+        "compiler",
+        "anchor",
+        "oracle",
+        "operator"
       ]
     },
-    "calamity_count": {
-      "escape": 31,
-      "entries": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    "sigil_id": {
+      "width": 7,
+      "escape": 127,
+      "entries": [
+        "pua-e000",
+        "pua-e001",
+        "pua-e002",
+        "pua-e003",
+        "pua-e004",
+        "pua-e005",
+        "pua-e006",
+        "pua-e007",
+        "pua-e008",
+        "pua-e009",
+        "pua-e00a",
+        "pua-e00b",
+        "pua-e00c",
+        "pua-e00d",
+        "pua-e00e",
+        "pua-e00f",
+        "pua-e010",
+        "pua-e011",
+        "pua-e012",
+        "pua-e013",
+        "pua-e014",
+        "pua-e015",
+        "pua-e016",
+        "pua-e017",
+        "pua-e018",
+        "pua-e019",
+        "pua-e01a",
+        "pua-e01b",
+        "pua-e01c",
+        "pua-e01d",
+        "pua-e01e",
+        "pua-e01f",
+        "pua-e020",
+        "pua-e021",
+        "pua-e022",
+        "pua-e023",
+        "pua-e024",
+        "pua-e025",
+        "pua-e026",
+        "pua-e027",
+        "pua-e028",
+        "pua-e029",
+        "pua-e02a",
+        "pua-e02b",
+        "pua-e02c",
+        "pua-e02d",
+        "pua-e02e",
+        "pua-e02f",
+        "pua-e030",
+        "pua-e031",
+        "pua-e032",
+        "pua-e033",
+        "pua-e034",
+        "pua-e035",
+        "pua-e036",
+        "pua-e037",
+        "pua-e038",
+        "pua-e039",
+        "pua-e03a",
+        "pua-e03b",
+        "pua-e03c",
+        "pua-e03d",
+        "pua-e03e",
+        "pua-e03f",
+        "pua-e040",
+        "pua-e041",
+        "pua-e042",
+        "pua-e043",
+        "pua-e044",
+        "pua-e045",
+        "pua-e046",
+        "pua-e047"
+      ]
     },
-    "sigil_tier": {
-      "escape": 7,
-      "entries": [0, 1, 2, 3, 4, 5, 6, 7]
+    "sigil_codepoint": {
+      "width": 7,
+      "escape": 127,
+      "entries": [
+        57344,
+        57345,
+        57346,
+        57347,
+        57348,
+        57349,
+        57350,
+        57351,
+        57352,
+        57353,
+        57354,
+        57355,
+        57356,
+        57357,
+        57358,
+        57359,
+        57360,
+        57361,
+        57362,
+        57363,
+        57364,
+        57365,
+        57366,
+        57367,
+        57368,
+        57369,
+        57370,
+        57371,
+        57372,
+        57373,
+        57374,
+        57375,
+        57376,
+        57377,
+        57378,
+        57379,
+        57380,
+        57381,
+        57382,
+        57383,
+        57384,
+        57385,
+        57386,
+        57387,
+        57388,
+        57389,
+        57390,
+        57391,
+        57392,
+        57393,
+        57394,
+        57395,
+        57396,
+        57397,
+        57398,
+        57399,
+        57400,
+        57401,
+        57402,
+        57403,
+        57404,
+        57405,
+        57406,
+        57407,
+        57408,
+        57409,
+        57410,
+        57411,
+        57412,
+        57413,
+        57414,
+        57415
+      ]
+    },
+    "attribute": {
+      "width": 4,
+      "escape": 15,
+      "entries": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    "hp": {
+      "width": 7,
+      "escape": 127,
+      "entries": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80
+      ]
+    },
+    "charge": {
+      "width": 7,
+      "escape": 127,
+      "entries": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80
+      ]
+    },
+    "condition_mask": {
+      "width": 7,
+      "escape": 127,
+      "entries": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ]
+    },
+    "item_id": {
+      "width": 5,
+      "escape": 31,
+      "entries": [
+        "sidearm",
+        "heavy_melee",
+        "polearm",
+        "light_ranged",
+        "heavy_ranged",
+        "sniper",
+        "area_projector",
+        "shield",
+        "none",
+        "light",
+        "medium",
+        "heavy",
+        "repair_patch",
+        "med_kit",
+        "charge_cell",
+        "boost_cell",
+        "purge_spike",
+        "shield_capacitor",
+        "adrenal_injector"
+      ]
+    },
+    "equipment": {
+      "width": 4,
+      "escape": 15,
+      "entries": [
+        [
+          "sidearm",
+          "weapon"
+        ],
+        [
+          "heavy_melee",
+          "weapon"
+        ],
+        [
+          "polearm",
+          "weapon"
+        ],
+        [
+          "light_ranged",
+          "weapon"
+        ],
+        [
+          "heavy_ranged",
+          "weapon"
+        ],
+        [
+          "sniper",
+          "weapon"
+        ],
+        [
+          "area_projector",
+          "weapon"
+        ],
+        [
+          "shield",
+          "offhand"
+        ],
+        [
+          "none",
+          "armor"
+        ],
+        [
+          "light",
+          "armor"
+        ],
+        [
+          "medium",
+          "armor"
+        ],
+        [
+          "heavy",
+          "armor"
+        ]
+      ]
+    },
+    "calibration_count": {
+      "width": 5,
+      "escape": 31,
+      "entries": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    "signature_tier": {
+      "width": 2,
+      "escape": 3,
+      "entries": [
+        1,
+        2,
+        3
+      ]
+    },
+    "theme_id": {
+      "width": 4,
+      "escape": 15,
+      "entries": [
+        "cold_storage",
+        "foundry",
+        "data_stream",
+        "data_cache",
+        "archive",
+        "hive",
+        "void",
+        "lattice",
+        "stack",
+        "terminal",
+        "nursery",
+        "crypt"
+      ]
+    },
+    "protocol_ref": {
+      "width": 5,
+      "escape": 31,
+      "entries": [
+        [
+          "disrupt",
+          1
+        ],
+        [
+          "disrupt",
+          2
+        ],
+        [
+          "disrupt",
+          3
+        ],
+        [
+          "disrupt",
+          4
+        ],
+        [
+          "disrupt",
+          5
+        ],
+        [
+          "ward",
+          1
+        ],
+        [
+          "ward",
+          2
+        ],
+        [
+          "ward",
+          3
+        ],
+        [
+          "ward",
+          4
+        ],
+        [
+          "ward",
+          5
+        ],
+        [
+          "scry",
+          1
+        ],
+        [
+          "scry",
+          2
+        ],
+        [
+          "scry",
+          3
+        ],
+        [
+          "scry",
+          4
+        ],
+        [
+          "scry",
+          5
+        ],
+        [
+          "rewrite",
+          1
+        ],
+        [
+          "rewrite",
+          2
+        ],
+        [
+          "rewrite",
+          3
+        ],
+        [
+          "rewrite",
+          4
+        ],
+        [
+          "rewrite",
+          5
+        ]
+      ]
+    },
+    "affix_id": {
+      "width": 5,
+      "escape": 31,
+      "entries": [
+        "reinforced",
+        "overcharged",
+        "lucky",
+        "phasing",
+        "edged",
+        "precise",
+        "extended",
+        "vampiric",
+        "conducting",
+        "incendiary",
+        "corrosive",
+        "jamming",
+        "lightweight",
+        "shielding",
+        "fortified",
+        "resonant"
+      ]
     },
     "inventory_default": {
-      "escape": 7,
-      "entries": ["empty"]
+      "width": 1,
+      "escape": 1,
+      "entries": [
+        "empty"
+      ]
     }
   }
 }

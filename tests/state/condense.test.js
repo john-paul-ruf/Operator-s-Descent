@@ -1,70 +1,50 @@
 import { describe, it, expect } from 'vitest';
-import { initCondenser, condense, expand } from '../../src/state/condense.js';
+import { createBitReader, createBitWriter } from '../../src/state/bit-codec.js';
+import { expand, getTableVersion, initCondenser, readSymbol, writeSymbol } from '../../src/state/condense.js';
 import { loadData } from '../helpers/data.js';
-import { createRunState } from '../../src/state/run-state.js';
-import { makeParty } from '../helpers/fixtures.js';
 
 const symbolTable = loadData('symbol-table');
 
-describe('condense — init', () => {
-  it('initCondenser runs without throwing', () => {
-    expect(() => initCondenser(symbolTable)).not.toThrow();
+function roundTrip(fieldName, value, writeRaw = () => {}, readRaw = () => 'raw') {
+  const writer = createBitWriter();
+  writeSymbol(writer, fieldName, value, writeRaw);
+  return readSymbol(createBitReader(writer.toUint8Array(), writer.bitLength), fieldName, readRaw);
+}
+
+describe('condense — field symbols', () => {
+  it('initializes the committed symbol table and exposes its version', () => {
+    initCondenser(symbolTable);
+    expect(getTableVersion()).toBe(symbolTable.version);
   });
 
-  it('condense returns {data: Uint8Array, tableVersion: 1}', () => {
+  it('encodes and decodes every committed entry', () => {
     initCondenser(symbolTable);
-    const result = condense({ foo: 'bar' });
-    expect(result.data).toBeInstanceOf(Uint8Array);
-    expect(result.tableVersion).toBe(symbolTable.version);
-  });
-});
-
-describe('condense — round-trip', () => {
-  it('flat object', () => {
-    initCondenser(symbolTable);
-    const obj = { a: 1, b: 'hello', c: true };
-    const result = condense(obj);
-    const expanded = expand(result.data, result.tableVersion);
-    expect(expanded).toEqual(obj);
+    for (const [fieldName, table] of Object.entries(symbolTable.tables)) {
+      for (const value of table.entries) expect(roundTrip(fieldName, value)).toEqual(value);
+    }
   });
 
-  it('nested arrays/objects', () => {
+  it('writes the field escape and losslessly reads rare legal values', () => {
     initCondenser(symbolTable);
-    const obj = { outer: { inner: [1, 2, { deep: 'value' }] } };
-    const result = condense(obj);
-    const expanded = expand(result.data, result.tableVersion);
-    expect(expanded).toEqual(obj);
+    const writer = createBitWriter();
+    writeSymbol(writer, 'hp', 255, (value, target) => target.writeVarUint(value));
+    const reader = createBitReader(writer.toUint8Array(), writer.bitLength);
+    expect(reader.readUint(symbolTable.tables.hp.width)).toBe(symbolTable.tables.hp.escape);
+    expect(reader.readVarUint()).toBe(255);
+    expect(roundTrip('sigil_id', 'pua-f8ff', (value, target) => target.writeVarUint(value.length), (source) => 'pua-f8ff')).toBe('pua-f8ff');
   });
 
-  it('realistic run-state serialize() payload', () => {
+  it('rejects malformed table indexes and incompatible table versions', () => {
     initCondenser(symbolTable);
-    const state = createRunState(42, makeParty(2));
-    state.depth = 5;
-    state.corruption = 0.3;
-    state.markContainerOpened(1);
-    state.themesSeen.add('industrial');
-    const serialized = state.serialize();
-    const result = condense(serialized);
-    const expanded = expand(result.data, result.tableVersion);
-    expect(expanded).toEqual(serialized);
+    const writer = createBitWriter();
+    writer.writeUint(symbolTable.tables.class.entries.length, symbolTable.tables.class.width);
+    expect(() => readSymbol(createBitReader(writer.toUint8Array(), writer.bitLength), 'class', () => null)).toThrow('invalid_symbol_index');
+    expect(() => expand(new Uint8Array(), symbolTable.version + 1)).toThrow('version_mismatch');
   });
 
-  it('empty object', () => {
-    initCondenser(symbolTable);
-    const obj = {};
-    const result = condense(obj);
-    const expanded = expand(result.data, result.tableVersion);
-    expect(expanded).toEqual(obj);
-  });
-});
-
-describe('condense — charset limitation', () => {
-  it('non-Latin-1 char does NOT survive byte round-trip (truncated → JSON.parse throws)', () => {
-    initCondenser(symbolTable);
-    const obj = { char: '\u2603' };
-    const result = condense(obj);
-    // LIMITATION: charCodeAt truncates to low 8 bits — non-Latin-1 chars produce invalid JSON.
-    // Save payloads are ASCII by construction, so this is expected behavior.
-    expect(() => expand(result.data, result.tableVersion)).toThrow();
+  it('compares canonical values after hash lookup collisions', () => {
+    initCondenser({ version: 1, tables: { test: { width: 2, escape: 3, entries: ['first', 'second'] } } }, () => 0);
+    expect(roundTrip('test', 'second')).toBe('second');
+    expect(roundTrip('test', 'third', (value, target) => target.writeVarUint(value.length), () => 'third')).toBe('third');
   });
 });

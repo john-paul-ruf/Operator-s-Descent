@@ -23,7 +23,7 @@ const ARMOR_IDS = ['none', 'light', 'medium', 'heavy'];
 const AFFIX_IDS = ['reinforced', 'overcharged', 'lucky', 'phasing', 'edged', 'precise', 'extended', 'vampiric', 'conducting', 'incendiary', 'corrosive', 'jamming', 'lightweight', 'shielding', 'fortified', 'resonant'];
 const CONDITION_IDS = ['jammed', 'overloaded', 'shielded', 'blinded', 'immobilized', 'corroded', 'marked', 'panicked', 'burning'];
 const CONSUMABLE_IDS = ['repair_patch', 'med_kit', 'charge_cell', 'boost_cell', 'purge_spike', 'shield_capacitor', 'adrenal_injector'];
-const SYMBOL_TABLE_IDS = ['class', 'sigil', 'attribute', 'hp', 'charge', 'conditions', 'item_id', 'equipment', 'calamity_count', 'sigil_tier', 'inventory_default'];
+const SYMBOL_TABLE_IDS = ['class', 'sigil_id', 'sigil_codepoint', 'attribute', 'hp', 'charge', 'condition_mask', 'item_id', 'equipment', 'calibration_count', 'signature_tier', 'theme_id', 'protocol_ref', 'affix_id', 'inventory_default'];
 const DICE = new Set(['d4', 'd6', 'd8', 'd10', 'd12']);
 const EFFECT_TYPES = new Set(['damage', 'heal', 'condition', 'heal_over_time', 'buff', 'reveal', 'reveal_full', 'reveal_marked', 'swap', 'remove_condition', 'ap_penalty', 'reshape']);
 const CONSUMABLE_EFFECT_TYPES = new Set(['heal', 'charge_restore', 'charge_restore_full', 'remove_condition', 'apply_condition', 'ap_restore']);
@@ -286,7 +286,7 @@ function validateSymbolTable(data, errors, registry) {
     return;
   }
   for (const [name, table] of Object.entries(data.tables).sort(([a], [b]) => a.localeCompare(b))) {
-    if (!isStableId(name) || !hasFields(table, ['escape', 'entries']) || !Number.isInteger(table.escape) || table.escape < 0 || !Array.isArray(table.entries) || new Set(table.entries.map((entry) => JSON.stringify(entry))).size !== table.entries.length) {
+    if (!isStableId(name) || !hasFields(table, ['width', 'escape', 'entries']) || !isIntegerIn(table.width, 1, 32) || !Number.isInteger(table.escape) || table.escape < 0 || table.escape >= 2 ** table.width || !Array.isArray(table.entries) || table.entries.length > table.escape || new Set(table.entries.map((entry) => JSON.stringify(entry))).size !== table.entries.length) {
       addError(errors, 'invalid_schema', file, `Invalid symbol table ${name}.`);
     }
   }
@@ -294,9 +294,11 @@ function validateSymbolTable(data, errors, registry) {
   const expectedItems = [...Object.keys(registry.equipment?.weapons || {}), ...Object.keys(registry.equipment?.armor || {}), ...Object.keys(registry.consumables?.consumables || {})].sort();
   const expectedEquipment = [...Object.entries(registry.equipment?.weapons || {}).map(([id, item]) => [id, item.slot]), ...Object.keys(registry.equipment?.armor || {}).map((id) => [id, 'armor'])];
   if (!table.class?.entries || table.class.entries.join('|') !== (registry.classes?.classes || []).map((entry) => entry.id).join('|')) addError(errors, 'invalid_reference', file, 'Class table must match class catalog order.');
-  if (!table.conditions?.entries || !Object.keys(registry.conditions?.conditions || {}).every((id) => table.conditions.entries.includes(id))) addError(errors, 'invalid_reference', file, 'Condition table must include every condition.');
+  const expectedCodepoints = [...CLASS_IDS.flatMap((id) => registry.sigils?.playerBank?.families?.[id]?.codepoints || []), ...ENEMY_IDS.flatMap((id) => registry.sigils?.bestiaryBank?.archetypes?.[id]?.codepoints || [])];
+  if (!table.sigil_codepoint?.entries || table.sigil_codepoint.entries.join('|') !== expectedCodepoints.join('|') || !table.sigil_id?.entries || table.sigil_id.entries.join('|') !== expectedCodepoints.map((codepoint) => `pua-${codepoint.toString(16)}`).join('|')) addError(errors, 'invalid_reference', file, 'Sigil tables must match both sigil banks.');
   if (!table.item_id?.entries || table.item_id.entries.slice().sort().join('|') !== expectedItems.join('|')) addError(errors, 'invalid_reference', file, 'Item table must match equipment and consumables.');
   if (!table.equipment?.entries || table.equipment.entries.length !== expectedEquipment.length || expectedEquipment.some(([id, slot]) => !table.equipment.entries.some((entry) => Array.isArray(entry) && entry[0] === id && entry[1] === slot))) addError(errors, 'invalid_reference', file, 'Equipment table must match equipment slots.');
+  if (!table.theme_id?.entries || table.theme_id.entries.join('|') !== THEME_IDS.join('|') || !table.protocol_ref?.entries || SCHOOL_IDS.some((school) => ![1, 2, 3, 4, 5].every((tier) => table.protocol_ref.entries.some((entry) => Array.isArray(entry) && entry[0] === school && entry[1] === tier))) || !table.affix_id?.entries || table.affix_id.entries.join('|') !== AFFIX_IDS.join('|')) addError(errors, 'invalid_reference', file, 'Symbol tables must match theme, protocol, and affix catalogs.');
 }
 
 export function validateGameData(registry) {
