@@ -15,7 +15,7 @@
 | # | Session | Modules | Status | Completed | Notes |
 |---|---------|---------|--------|-----------|-------|
 | 01 | Scaffolding: HTML, CSS, Service Worker, Event Bus | M77-M80, M81, M34, M82(partial) | done | 2026-08-10 | All scaffolding files created. CRT frame renders. Event bus functional. main.js loads data and attempts title mount (expected fail). Service worker registered. Placeholder woff2 font created (8 bytes). |
-| 02 | Core Logic: PRNG, Hash, RNG Cursor | M01, M02, M03 | pending | | |
+| 02 | Core Logic: PRNG, Hash, RNG Cursor | M01, M02, M03 | done | 2026-08-10 | Core logic modules created: PRNG (xorshift128+), FNV-1a hash, RNG cursor with save/restore. All zero-dependency, verified for determinism. Fixed syncTo: when prngState provided, just setState+setCursor (no fast-forward). |
 | 03 | Data Files: All JSON Content + Placeholder Font | M04–M14 | pending | | |
 | 04 | Rules Engine Part 1: Attributes, Scaling, Classes, Equipment, Conditions | M15–M19 | pending | | |
 | 05 | Rules Engine Part 2: Protocols, Consumables, Loot, Enemies, Combat, Inventory | M20–M25 | pending | | |
@@ -118,3 +118,15 @@ Full config in FORGE-CONFIG.md. Key points for this feature:
 - The service worker will fail to cache missing data files on first install — expected since data/*.json don't exist yet (SESSION-03 creates them).
 - The `#crt-overlays` div in index.html is currently empty — CRT layer DOM elements will need to be injected by the glitch system (Phase 7) or manually created at screen mount time.
 - No `package.json` exists yet (by design — no runtime dependencies). Vitest config will need to be set up when tests are first written.
+
+### SESSION-02 → SESSION-03/04
+
+**What was built:**
+- `src/core/prng.js` — xorshift128+ PRNG with `createPRNG`, `next()`, `nextInt()`, `getState()`, `setState()`, `hash()` (non-advancing)
+- `src/core/hash.js` — FNV-1a hash with `Math.imul`, handles numbers, strings, bigints. Returns uint32.
+- `src/core/rng-cursor.js` — Cursor wrapping two PRNG streams (gen/combat), `syncTo` for save/restore
+
+**Notes for next session:**
+- `syncTo` behavior: when `prngState` is provided, it sets state directly and sets cursor (no fast-forward needed — the saved state IS the state at that cursor). When `prngState` is null, it fast-forwards from current position by drawing values.
+- PRNG `hash()` method uses FNV-1a internally and is non-advancing — same as standalone `hash()` from `hash.js`.
+- PRNG seeds: use `hash(worldSeed, "gen")` and `hash(worldSeed, "combat")` to derive stream seeds.
