@@ -32,19 +32,23 @@ function parseLayer(frame, limits) {
 }
 
 function runSync(data, budgetCheck) {
-  const layers = [];
-  let current = data;
+  let states = [{ data, layers: [] }];
   for (let pass = 0; pass < PASSES.length; pass++) {
     if (isAsync(PASSES[pass])) continue;
-    const result = PASSES[pass].compress(current);
-    if (!result || result.encodedSize >= current.length) continue;
-    const frame = frameLayer(pass, current.length, result.metadata, result.data);
-    if (frame.length >= current.length) continue;
-    layers.push(frame);
-    current = result.data;
-    if (budgetCheck?.(current, layers)) break;
+    const next = [...states];
+    for (const state of states) {
+      const result = PASSES[pass].compress(state.data);
+      if (!result || result.encodedSize >= state.data.length) continue;
+      const frame = frameLayer(pass, state.data.length, result.metadata, result.data);
+      if (frame.length >= state.data.length) continue;
+      next.push({ data: result.data, layers: [...state.layers, frame] });
+    }
+    states = next;
   }
-  return { data: current, layers };
+  const score = (state) => state.data.length + state.layers.reduce((total, layer) => total + 11 + new DataView(layer.buffer, layer.byteOffset, layer.byteLength).getUint16(5, true), 0);
+  const result = states.reduce((best, state) => score(state) < score(best) ? state : best);
+  if (budgetCheck) budgetCheck(result.data, result.layers);
+  return result;
 }
 
 export function compressSync(data, budgetCheck) { return runSync(data, budgetCheck); }
@@ -91,7 +95,9 @@ function decodeSync(data, layers, limits = {}) {
     if (!(layers[index] instanceof Uint8Array)) {
       const pass = PASSES[layers[index]?.pass];
       if (!pass || isAsync(pass)) fail('malformed_compression');
-      current = pass.decompress(current, layers[index].metadata ?? layers[index].dict ?? new Uint8Array(), { maxOutput: options.maxOutput });
+      const layer = layers[index];
+      if (layer.dataLength !== undefined && current.length !== layer.dataLength) fail('malformed_compression');
+      current = pass.decompress(current, layer.metadata ?? layer.dict ?? new Uint8Array(), { maxOutput: options.maxOutput, expectedLength: layer.originalLength });
       continue;
     }
     const layer = parseLayer(layers[index], options);

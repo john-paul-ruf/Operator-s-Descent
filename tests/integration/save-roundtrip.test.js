@@ -40,14 +40,10 @@ describe('save round-trip — budget suite (Custom Rule 6)', () => {
     it(`inventory ${n} items: fragment length recorded`, () => {
       const state = buildRealisticRun(42, { depth: 5, inventoryItems: n });
       const result = encodeRun(state);
-      lengths[n] = result.success ? result.length : result.length;
-      if (result.success) {
-        expect(result.length).toBeLessThan(1500);
-        expect(result.fragment).toMatch(/^[A-Za-z0-9_-]+$/);
-      } else {
-        expect(result.error).toBe('save_too_large');
-        expect(result.length).toBeGreaterThanOrEqual(1500);
-      }
+      lengths[n] = result.length;
+      expect(result.success).toBe(true);
+      expect(result.length).toBeLessThan(1500);
+      expect(result.fragment).toMatch(/^[A-Za-z0-9_-]+$/);
     });
   }
 
@@ -63,14 +59,9 @@ describe('save round-trip — budget suite (Custom Rule 6)', () => {
       state.markEnemyDefeated(i);
     }
     const result = encodeRun(state);
-    if (result.success) {
-      expect(result.length).toBeLessThan(1500);
-      expect(result.fragment).toMatch(/^[A-Za-z0-9_-]+$/);
-    } else {
-      // BUG: depth-30 with 100 items + full fog exceeds 1500-char save budget
-      expect(result.error).toBe('save_too_large');
-      expect(result.length).toBeGreaterThanOrEqual(1500);
-    }
+    expect(result.success).toBe(true);
+    expect(result.length).toBeLessThan(1500);
+    expect(result.fragment).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 });
 

@@ -1,90 +1,80 @@
-import { condense, initCondenser } from './condense.js';
-import { compressLegacySync } from './compress/progressive.js';
+import { getTableVersion, initCondenser } from './condense.js';
+import { compressSync } from './compress/progressive.js';
 import { encrypt } from './encrypt.js';
+import { encodeRunPayload } from './save-schema.js';
 
-const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
+const MAGIC = [0x4f, 0x44];
 const BUDGET = 1500;
-
-let initialized = false;
-
-export function initEncoder(symbolTableData) {
-  initCondenser(symbolTableData);
-  initialized = true;
-}
-
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
-function base64urlEncode(bytes) {
+export function initEncoder(symbolTableData) { initCondenser(symbolTableData); }
+
+export function base64urlEncode(bytes) {
   let result = '';
-  let i = 0;
-  while (i < bytes.length) {
-    const b1 = bytes[i] || 0;
-    const b2 = bytes[i + 1] || 0;
-    const b3 = bytes[i + 2] || 0;
-
-    result += B64URL[(b1 >> 2) & 0x3F];
-    result += B64URL[((b1 << 4) | (b2 >> 4)) & 0x3F];
-
-    if (i + 1 < bytes.length) {
-      result += B64URL[((b2 << 2) | (b3 >> 6)) & 0x3F];
-    }
-    if (i + 2 < bytes.length) {
-      result += B64URL[b3 & 0x3F];
-    }
-    i += 3;
+  for (let index = 0; index < bytes.length; index += 3) {
+    const first = bytes[index];
+    const second = bytes[index + 1];
+    const third = bytes[index + 2];
+    result += B64URL[first >>> 2] + B64URL[((first & 3) << 4) | ((second ?? 0) >>> 4)];
+    if (second !== undefined) result += B64URL[((second & 15) << 2) | ((third ?? 0) >>> 6)];
+    if (third !== undefined) result += B64URL[third & 63];
   }
   return result;
 }
 
-function crc32(data) {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < data.length; i++) {
-    crc ^= data[i];
-    for (let j = 0; j < 8; j++) {
-      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
-    }
+export function crc32(data) {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
   }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
-function uint32ToBytes(val) {
-  return [(val >>> 24) & 0xFF, (val >>> 16) & 0xFF, (val >>> 8) & 0xFF, val & 0xFF];
-}
+function writeUint32(bytes, offset, value) { new DataView(bytes.buffer).setUint32(offset, value, true); }
 
-function buildHeader(version, layers, checksum) {
-  const header = [version, layers.length];
-  for (const layer of layers) {
-    header.push(layer.pass & 0xFF);
-  }
-  header.push(...uint32ToBytes(checksum));
-  return new Uint8Array(header);
+function describeLayers(layers) {
+  return layers.map((layer) => {
+    const view = new DataView(layer.buffer, layer.byteOffset, layer.byteLength);
+    const metadataLength = view.getUint16(5, true);
+    return { pass: layer[0], originalLength: view.getUint32(1, true), metadata: layer.slice(11, 11 + metadataLength), dataLength: view.getUint32(7, true) };
+  });
 }
 
 export function encodeRun(runState) {
-  const serialized = runState.serialize();
-  const condensed = condense(serialized);
-  const compressed = compressLegacySync(condensed.data, (d) => base64urlEncode(d).length < BUDGET - 20);
-  const encrypted = encrypt(compressed.data, SAVE_VERSION);
-
-  const checksum = crc32(encrypted);
-  const header = buildHeader(SAVE_VERSION, compressed.layers, checksum);
-  const combined = new Uint8Array(header.length + encrypted.length);
-  combined.set(header, 0);
-  combined.set(encrypted, header.length);
-
-  const str = base64urlEncode(combined);
-  if (str.length > BUDGET) {
-    return { success: false, error: 'save_too_large', length: str.length };
+  const payload = encodeRunPayload(runState);
+  const compressed = compressSync(payload.bytes);
+  const layers = describeLayers(compressed.layers);
+  const descriptorsLength = layers.reduce((length, layer) => length + 11 + layer.metadata.length, 0);
+  const headerLength = 14 + descriptorsLength;
+  const frame = new Uint8Array(headerLength + compressed.data.length + 4);
+  frame.set(MAGIC);
+  frame[2] = SAVE_VERSION;
+  new DataView(frame.buffer).setUint16(3, payload.tableVersion, true);
+  writeUint32(frame, 5, payload.worldSeed);
+  writeUint32(frame, 9, payload.bitLength);
+  frame[13] = layers.length;
+  let offset = 14;
+  for (const layer of layers) {
+    frame[offset++] = layer.pass;
+    writeUint32(frame, offset, layer.originalLength); offset += 4;
+    new DataView(frame.buffer).setUint16(offset, layer.metadata.length, true); offset += 2;
+    writeUint32(frame, offset, layer.dataLength); offset += 4;
+    frame.set(layer.metadata, offset); offset += layer.metadata.length;
   }
-  return { success: true, fragment: str, length: str.length };
+  frame.set(encrypt(compressed.data, SAVE_VERSION), offset);
+  writeUint32(frame, frame.length - 4, crc32(frame.slice(0, -4)));
+  const fragment = base64urlEncode(frame);
+  if (fragment.length >= BUDGET) throw new RangeError('save_budget_exceeded');
+  return { success: true, fragment, length: fragment.length, metrics: { rawBytes: payload.bytes.length, compressedBytes: compressed.data.length, layers: layers.length } };
 }
 
 export function encodeSeed(worldSeed) {
   const bytes = new Uint8Array(5);
-  bytes[0] = SAVE_VERSION;
-  const seedBytes = uint32ToBytes(worldSeed);
-  for (let i = 0; i < 4; i++) bytes[1 + i] = seedBytes[i];
+  bytes[0] = 1;
+  new DataView(bytes.buffer).setUint32(1, worldSeed, false);
   return base64urlEncode(bytes);
 }
 
-export { base64urlEncode, crc32, SAVE_VERSION };
+export { getTableVersion };

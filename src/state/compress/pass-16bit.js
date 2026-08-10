@@ -12,7 +12,7 @@ export function compress(bytes) {
   for (let index = 0; index < bytes.length;) {
     const code = index + 1 < bytes.length ? codes.get(word(bytes, index)) : undefined;
     if (code !== undefined) { data.push(128 + code); index += 2; }
-    else { if (bytes[index] >= 192) data.push(192, bytes[index]); else data.push(bytes[index]); index++; }
+    else { if (bytes[index] >= 128) data.push(192, bytes[index]); else data.push(bytes[index]); index++; }
   }
   const metadata = Uint8Array.from(dictionary.flatMap(value => [value >>> 8, value & 255]));
   const compressed = Uint8Array.from(data);

@@ -1,35 +1,54 @@
 function fail(code) { const error = new RangeError(code); error.code = code; throw error; }
-function dword(bytes, index) { return `${bytes[index]},${bytes[index + 1]},${bytes[index + 2]},${bytes[index + 3]}`; }
+function key(bytes, index) { return (bytes[index] << 16) | (bytes[index + 1] << 8) | bytes[index + 2]; }
 
 export function compress(bytes) {
   if (!(bytes instanceof Uint8Array) || bytes.length < 8) return null;
-  const frequencies = new Map();
-  for (let index = 0; index + 3 < bytes.length; index++) { const value = dword(bytes, index); frequencies.set(value, (frequencies.get(value) || 0) + 1); }
-  const dictionary = [...frequencies].filter(([, count]) => count > 1).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).slice(0, 8).map(([value]) => value.split(',').map(Number));
-  if (!dictionary.length) return null;
-  const codes = new Map(dictionary.map((value, index) => [value.join(','), index]));
+  const positions = new Map();
   const data = [];
   for (let index = 0; index < bytes.length;) {
-    const code = index + 3 < bytes.length ? codes.get(dword(bytes, index)) : undefined;
-    if (code !== undefined) { data.push(128 + code); index += 4; }
-    else { if (bytes[index] >= 128) data.push(144, bytes[index]); else data.push(bytes[index]); index++; }
+    let length = 0;
+    let distance = 0;
+    if (index + 2 < bytes.length) {
+      const candidates = positions.get(key(bytes, index)) ?? [];
+      for (let candidate = candidates.length - 1, checked = 0; candidate >= 0 && checked < 64; candidate--, checked++) {
+        const start = candidates[candidate];
+        const candidateDistance = index - start;
+        if (candidateDistance > 0xffff) continue;
+        let candidateLength = 0;
+        while (candidateLength < 18 && index + candidateLength < bytes.length && bytes[start + candidateLength] === bytes[index + candidateLength]) candidateLength++;
+        if (candidateLength > length) { length = candidateLength; distance = candidateDistance; }
+      }
+    }
+    const consumed = length >= 4 ? length : 1;
+    if (consumed > 1) data.push(128 + consumed - 3, distance & 255, distance >>> 8);
+    else if (bytes[index] >= 128) data.push(144, bytes[index]);
+    else data.push(bytes[index]);
+    for (let offset = 0; offset < consumed; offset++) {
+      const position = index + offset;
+      if (position + 2 >= bytes.length) continue;
+      const hash = key(bytes, position);
+      const candidates = positions.get(hash) ?? [];
+      candidates.push(position);
+      if (candidates.length > 128) candidates.shift();
+      positions.set(hash, candidates);
+    }
+    index += consumed;
   }
-  const metadata = Uint8Array.from(dictionary.flat());
   const compressed = Uint8Array.from(data);
-  return compressed.length + metadata.length < bytes.length ? { data: compressed, metadata, encodedSize: compressed.length + metadata.length } : null;
+  return compressed.length < bytes.length ? { data: compressed, metadata: new Uint8Array(), encodedSize: compressed.length } : null;
 }
 
 export function decompress(data, metadata = new Uint8Array(), { maxOutput = 1_000_000, expectedLength } = {}) {
-  if (!(data instanceof Uint8Array) || !(metadata instanceof Uint8Array)) fail('malformed_compression');
-  if (metadata.length === 0) { const length = data[0]; metadata = data.slice(1, 1 + length); data = data.slice(1 + length); }
-  if (!metadata.length || metadata.length % 4 || metadata.length > 32) fail('malformed_compression');
+  if (!(data instanceof Uint8Array) || !(metadata instanceof Uint8Array) || metadata.length) fail('malformed_compression');
   const output = [];
   for (let index = 0; index < data.length; index++) {
     if (data[index] < 128) output.push(data[index]);
-    else if (data[index] < 136) {
-      const offset = (data[index] - 128) * 4;
-      if (offset + 3 >= metadata.length) fail('malformed_compression');
-      output.push(...metadata.slice(offset, offset + 4));
+    else if (data[index] < 144) {
+      if (index + 2 >= data.length) fail('truncated');
+      const length = data[index] - 125;
+      const distance = data[++index] | (data[++index] << 8);
+      if (!distance || distance > output.length || output.length + length > maxOutput) fail('malformed_compression');
+      for (let offset = 0; offset < length; offset++) output.push(output[output.length - distance]);
     }
     else if (data[index] === 144) { if (++index >= data.length) fail('truncated'); output.push(data[index]); }
     else fail('malformed_compression');

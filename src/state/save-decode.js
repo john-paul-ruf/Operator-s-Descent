@@ -2,65 +2,82 @@ import { expand } from './condense.js';
 import { decompressSync } from './compress/progressive.js';
 import { decrypt } from './encrypt.js';
 import { deserializeRunState } from './run-state.js';
-import { SAVE_VERSION, crc32 } from './save-encode.js';
+import { decodeRunPayload } from './save-schema.js';
+import { SAVE_VERSION, base64urlEncode, crc32 } from './save-encode.js';
 
-const B64URL_REV = {};
+const MAGIC = [0x4f, 0x44];
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-for (let i = 0; i < B64URL.length; i++) B64URL_REV[B64URL[i]] = i;
+const VALUES = Object.fromEntries([...B64URL].map((char, index) => [char, index]));
+const MAX_LAYERS = 5;
+const MAX_PAYLOAD_BYTES = 20000;
 
-function base64urlDecode(str) {
-  const out = [];
-  let i = 0;
-  while (i < str.length) {
-    const remaining = str.length - i;
-    const c1 = B64URL_REV[str[i]] || 0;
-    const c2 = b64val(str, i + 1);
-    const c3 = b64val(str, i + 2);
-    const c4 = b64val(str, i + 3);
+function fail(code) { const error = new RangeError(code); error.code = code; throw error; }
+function readUint32(bytes, offset) { return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, true); }
 
-    if (remaining >= 2) out.push(((c1 << 2) | (c2 >> 4)) & 0xFF);
-    if (remaining >= 3) out.push(((c2 << 4) | (c3 >> 2)) & 0xFF);
-    if (remaining >= 4) out.push(((c3 << 6) | c4) & 0xFF);
-    i += 4;
+function base64urlDecode(fragment) {
+  if (typeof fragment !== 'string' || !/^[A-Za-z0-9_-]*$/.test(fragment) || fragment.length % 4 === 1) fail('malformed');
+  const output = [];
+  for (let index = 0; index < fragment.length; index += 4) {
+    const remaining = fragment.length - index;
+    if (remaining < 2) fail('malformed');
+    const first = VALUES[fragment[index]], second = VALUES[fragment[index + 1]], third = remaining > 2 ? VALUES[fragment[index + 2]] : 0, fourth = remaining > 3 ? VALUES[fragment[index + 3]] : 0;
+    output.push((first << 2) | (second >>> 4));
+    if (remaining > 2) output.push(((second & 15) << 4) | (third >>> 2));
+    if (remaining > 3) output.push(((third & 3) << 6) | fourth);
   }
-  return new Uint8Array(out);
+  return Uint8Array.from(output);
 }
 
-function b64val(str, idx) {
-  if (idx >= str.length || str[idx] === '=') return 0;
-  return B64URL_REV[str[idx]] || 0;
+function decodeV1(bytes) {
+  if (bytes.length < 6) return { success: false, error: 'truncated' };
+  try {
+    const layerCount = bytes[1];
+    let offset = 2;
+    if (layerCount > MAX_LAYERS || offset + layerCount + 4 > bytes.length) return { success: false, error: 'truncated' };
+    const layers = Array.from({ length: layerCount }, () => ({ pass: bytes[offset++] }));
+    const checksum = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, false); offset += 4;
+    const encrypted = bytes.slice(offset);
+    if (crc32(encrypted) !== checksum) return { success: false, error: 'checksum_failed' };
+    const runState = deserializeRunState(expand(decompressSync(decrypt(encrypted, 1), layers), 1), { sourceVersion: 1 });
+    return runState ? { success: true, runState } : { success: false, error: 'malformed' };
+  } catch { return { success: false, error: 'malformed' }; }
 }
 
 export function decodeRun(fragment) {
   try {
     const bytes = base64urlDecode(fragment);
-    if (bytes.length < 6) return { success: false, error: 'truncated' };
-
-    const version = bytes[0];
-    if (version !== SAVE_VERSION) return { success: false, error: 'version_mismatch' };
-
-    const layerCount = bytes[1];
+    if (!bytes.length) return { success: false, error: 'truncated' };
+    if (bytes[0] === 1) return decodeV1(bytes);
+    if (bytes.length < 3) return { success: false, error: 'truncated' };
+    if (bytes[0] !== MAGIC[0] || bytes[1] !== MAGIC[1]) return { success: false, error: 'malformed' };
+    if (bytes[2] !== SAVE_VERSION) return { success: false, error: 'version_mismatch' };
+    if (bytes.length < 18) return { success: false, error: 'truncated' };
+    const tableVersion = new DataView(bytes.buffer, bytes.byteOffset + 3, 2).getUint16(0, true);
+    const worldSeed = readUint32(bytes, 5);
+    const bitLength = readUint32(bytes, 9);
+    const layerCount = bytes[13];
+    if (layerCount > MAX_LAYERS || bitLength > MAX_PAYLOAD_BYTES * 8) return { success: false, error: 'malformed' };
+    let offset = 14;
     const layers = [];
-    let offset = 2;
-    for (let i = 0; i < layerCount; i++) {
-      layers.push({ pass: bytes[offset], dict: new Uint8Array(0) });
-      offset++;
+    for (let index = 0; index < layerCount; index++) {
+      if (offset + 11 > bytes.length - 4) return { success: false, error: 'truncated' };
+      const pass = bytes[offset++], originalLength = readUint32(bytes, offset); offset += 4;
+      const metadataLength = new DataView(bytes.buffer, bytes.byteOffset + offset, 2).getUint16(0, true); offset += 2;
+      const dataLength = readUint32(bytes, offset); offset += 4;
+      if (offset + metadataLength > bytes.length - 4 || originalLength > MAX_PAYLOAD_BYTES || dataLength > MAX_PAYLOAD_BYTES) return { success: false, error: 'malformed' };
+      layers.push({ pass, originalLength, dataLength, metadata: bytes.slice(offset, offset + metadataLength) });
+      offset += metadataLength;
     }
-
-    const checksum = ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0;
-    offset += 4;
-
-    const payload = bytes.slice(offset);
-    if (crc32(payload) !== checksum) return { success: false, error: 'checksum_failed' };
-
-    const decrypted = decrypt(payload, version);
-    const decompressed = decompressSync(decrypted, layers);
-    const expanded = expand(decompressed, version);
-    const runState = deserializeRunState(expanded);
-
-    return { success: true, runState };
-  } catch {
-    return { success: false, error: 'malformed' };
+    const encrypted = bytes.slice(offset, -4);
+    if (encrypted.length > MAX_PAYLOAD_BYTES || crc32(bytes.slice(0, -4)) !== readUint32(bytes, bytes.length - 4)) return { success: false, error: 'checksum_failed' };
+    if ((layers.length && layers.at(-1).dataLength !== encrypted.length) || (!layers.length && Math.ceil(bitLength / 8) !== encrypted.length)) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
+    const payload = decompressSync(decrypt(encrypted, SAVE_VERSION), layers, { maxOutput: MAX_PAYLOAD_BYTES, maxInput: MAX_PAYLOAD_BYTES });
+    if (payload.length !== Math.ceil(bitLength / 8)) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
+    const decoded = decodeRunPayload(payload, bitLength, { tableVersion });
+    if (decoded.worldSeed !== worldSeed) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
+    return { success: true, runState: decoded.runState, recoveredSeed: worldSeed };
+  } catch (error) {
+    return { success: false, error: error?.code === 'version_mismatch' ? 'version_mismatch' : 'malformed' };
   }
 }
 
@@ -68,13 +85,9 @@ export function decodeSeed(fragment) {
   try {
     const bytes = base64urlDecode(fragment);
     if (bytes.length < 5) return { success: false, error: 'truncated' };
-
-    const version = bytes[0];
-    if (version !== SAVE_VERSION) return { success: false, error: 'version_mismatch' };
-
-    const seed = ((bytes[1] << 24) | (bytes[2] << 16) | (bytes[3] << 8) | bytes[4]) >>> 0;
-    return { success: true, seed };
-  } catch {
-    return { success: false, error: 'malformed' };
-  }
+    if (bytes[0] !== 1) return { success: false, error: 'version_mismatch' };
+    return { success: true, seed: new DataView(bytes.buffer, bytes.byteOffset + 1, 4).getUint32(0, false) };
+  } catch { return { success: false, error: 'malformed' }; }
 }
+
+export { base64urlDecode };

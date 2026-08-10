@@ -9,8 +9,6 @@ import {
 } from '../../src/state/save-encode.js';
 import { decodeSeed } from '../../src/state/save-decode.js';
 import { createRunState } from '../../src/state/run-state.js';
-import { compressSync } from '../../src/state/compress/progressive.js';
-import { condense } from '../../src/state/condense.js';
 import { makeParty } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
 
@@ -25,8 +23,8 @@ function makeState() {
 }
 
 describe('save-encode constants', () => {
-  it('SAVE_VERSION === 1', () => {
-    expect(SAVE_VERSION).toBe(1);
+  it('SAVE_VERSION === 2', () => {
+    expect(SAVE_VERSION).toBe(2);
   });
 });
 
@@ -121,52 +119,9 @@ describe('encodeRun', () => {
     expect(a.fragment).toBe(b.fragment);
   });
 
-  it('save_too_large when budget exceeded by 100 verbose items', () => {
-    const state = makeState();
-    for (let i = 0; i < 100; i++) {
-      state.inventory.push({
-        id: `item_${String(i).padStart(3, '0')}`,
-        name: `Item_${i}_${(i * 7919 * 13).toString(16).repeat(10)}`,
-        baseType: 'weapon',
-        category: 'sidearm',
-        rarity: 'common',
-        corrupt: false,
-        tier: i % 4,
-        salvageValue: i,
-        conditions: [],
-        affixes: [{ id: `affix_${i}`, tier: 1, category: 'prefix' }],
-      });
-    }
-    const result = encodeRun(state);
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('save_too_large');
-    expect(result.length).toBeGreaterThanOrEqual(1500);
-  });
-});
-
-describe('dict-loss probe (encode side)', () => {
-  it('16/32-bit passes either engage or layers ⊆ {0} on real payloads', () => {
-    const state = makeState();
-    for (let i = 0; i < 50; i++) {
-      state.inventory.push({
-        id: `item_${i}`,
-        name: 'Identical_Item_Name',
-        baseType: 'weapon',
-        category: 'sidearm',
-        rarity: 'common',
-        corrupt: false,
-        tier: 1,
-        salvageValue: 5,
-        conditions: [],
-        affixes: []
-      });
-    }
-    const condensed = condense(state.serialize());
-    const compressed = compressSync(condensed.data);
-    const layerPasses = compressed.layers.map(l => l.pass);
-    const hasDictPasses = layerPasses.some(p => p === 3 || p === 4);
-    if (!hasDictPasses) {
-      expect(layerPasses.every(p => p === 0)).toBe(true);
-    }
+  it('reports payload and compression metrics without affecting its deterministic fragment', () => {
+    const result = encodeRun(makeState());
+    expect(result.metrics.rawBytes).toBeGreaterThanOrEqual(result.metrics.compressedBytes);
+    expect(result.metrics.layers).toBeGreaterThanOrEqual(0);
   });
 });

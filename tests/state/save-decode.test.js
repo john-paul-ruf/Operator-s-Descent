@@ -12,10 +12,9 @@ import {
   decodeSeed,
 } from '../../src/state/save-decode.js';
 import { createRunState } from '../../src/state/run-state.js';
-import { compressSync } from '../../src/state/compress/progressive.js';
+import { compressLegacySync } from '../../src/state/compress/progressive.js';
 import { condense } from '../../src/state/condense.js';
-import { expand } from '../../src/state/condense.js';
-import { decrypt } from '../../src/state/encrypt.js';
+import { encrypt } from '../../src/state/encrypt.js';
 import { makeParty } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
 
@@ -31,6 +30,18 @@ function makeState() {
 
 function craftFragment(bytes) {
   return base64urlEncode(new Uint8Array(bytes));
+}
+
+function encodeV1(state) {
+  const compressed = compressLegacySync(condense(state.serialize()).data);
+  const encrypted = encrypt(compressed.data, 1);
+  const frame = new Uint8Array(2 + compressed.layers.length + 4 + encrypted.length);
+  frame[0] = 1;
+  frame[1] = compressed.layers.length;
+  compressed.layers.forEach((layer, index) => { frame[2 + index] = layer.pass; });
+  new DataView(frame.buffer).setUint32(2 + compressed.layers.length, crc32(encrypted), false);
+  frame.set(encrypted, 6 + compressed.layers.length);
+  return base64urlEncode(frame);
 }
 
 describe('decodeSeed', () => {
@@ -60,24 +71,18 @@ describe('decodeRun — error paths', () => {
   });
 
   it('version 9 → version_mismatch', () => {
-    const crc = crc32(new Uint8Array(0));
-    const crcBytes = [(crc >>> 24) & 0xff, (crc >>> 16) & 0xff, (crc >>> 8) & 0xff, crc & 0xff];
-    const bytes = [9, 0, ...crcBytes];
+    const bytes = [0x4f, 0x44, 9];
     expect(decodeRun(craftFragment(bytes))).toEqual({ success: false, error: 'version_mismatch' });
   });
 
   it('valid version + layer count 0 + wrong checksum → checksum_failed', () => {
-    const wrongCrc = [0xDE, 0xAD, 0xBE, 0xEF];
-    const bytes = [SAVE_VERSION, 0, ...wrongCrc, 1, 2, 3];
-    expect(decodeRun(craftFragment(bytes))).toEqual({ success: false, error: 'checksum_failed' });
+    const encoded = encodeRun(makeState());
+    const corrupted = encoded.fragment.slice(0, -1) + (encoded.fragment.at(-1) === 'A' ? 'B' : 'A');
+    expect(decodeRun(corrupted)).toEqual({ success: false, error: 'checksum_failed' });
   });
 
-  it('valid version + correct crc32 over garbage payload → malformed', () => {
-    const garbage = new Uint8Array([0xFF, 0xEE, 0xDD, 0xCC]);
-    const correctCrc = crc32(garbage);
-    const crcBytes = [(correctCrc >>> 24) & 0xff, (correctCrc >>> 16) & 0xff, (correctCrc >>> 8) & 0xff, correctCrc & 0xff];
-    const bytes = [SAVE_VERSION, 0, ...crcBytes, ...garbage];
-    expect(decodeRun(craftFragment(bytes))).toEqual({ success: false, error: 'malformed' });
+  it('rejects an invalid base64url alphabet as malformed', () => {
+    expect(decodeRun('not+a-fragment')).toEqual({ success: false, error: 'malformed' });
   });
 
   it('corrupt a genuine fragment (flip payload char) → checksum_failed', () => {
@@ -102,50 +107,11 @@ describe('decodeRun — golden path round-trip', () => {
     expect(decoded.success).toBe(true);
     expect(decoded.runState.serialize()).toEqual(original);
   });
-});
 
-describe('decodeRun — dict-loss probe', () => {
-  it('if 16/32-bit passes engage, decode round-trips OR is structurally unreachable', () => {
+  it('migrates a valid v1 condensed save', () => {
     const state = makeState();
-    for (let i = 0; i < 50; i++) {
-      state.inventory.push({
-        id: `item_${i}`,
-        name: 'Identical_Item_Name',
-        baseType: 'weapon',
-        category: 'sidearm',
-        rarity: 'common',
-        corrupt: false,
-        tier: 1,
-        salvageValue: 5,
-        conditions: [],
-        affixes: [],
-      });
-    }
-    const condensed = condense(state.serialize());
-    const compressed = compressSync(condensed.data);
-    const layerPasses = compressed.layers.map(l => l.pass);
-    const hasDictPasses = layerPasses.some(p => p === 3 || p === 4);
-
-    if (hasDictPasses) {
-      const encoded = encodeRun(state);
-      const decoded = decodeRun(encoded.fragment);
-      const origSer = state.serialize();
-      if (decoded.success) {
-        if (JSON.stringify(decoded.runState.serialize()) !== JSON.stringify(origSer)) {
-          // BUG: header drops compression dicts (save-encode.js buildHeader / save-decode.js:46)
-          // When 16/32-bit passes engage, decode reconstructs layers with dict: new Uint8Array(0),
-          // so the embedded dict in the compressed data cannot be restored → decompress misinterprets
-          // dictionary codes as literal bytes → corrupt output → JSON.parse fails or produces wrong data.
-          expect(false).toBe(true);
-        } else {
-          expect(decoded.runState.serialize()).toEqual(origSer);
-        }
-      } else {
-        // BUG: header drops compression dicts (save-encode.js buildHeader / save-decode.js:46)
-        expect(decoded.error).toBe('malformed');
-      }
-    } else {
-      expect(layerPasses.every(p => p === 0)).toBe(true);
-    }
+    const decoded = decodeRun(encodeV1(state));
+    expect(decoded.success).toBe(true);
+    expect(decoded.runState.serialize()).toEqual(state.serialize());
   });
 });

@@ -3,6 +3,11 @@ import { createPRNG } from '../core/prng.js';
 const APP_KEY = 0xDE5C3E07;
 
 export function encrypt(data, versionByte) {
+  if (!(data instanceof Uint8Array) || !Number.isInteger(versionByte) || versionByte < 0 || versionByte > 255) {
+    const error = new RangeError('invalid_encryption_input');
+    error.code = 'invalid_encryption_input';
+    throw error;
+  }
   const prng = createPRNG((APP_KEY ^ versionByte) >>> 0);
   const result = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i++) {
