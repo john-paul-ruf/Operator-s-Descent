@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveWeaponStats,
   resolveArmorStats,
+  resolveLoadout,
+  evaluateRange,
   getRangeBand,
   getCoverBonus,
   getSalvageValue,
@@ -62,17 +64,34 @@ describe('resolveArmorStats', () => {
     const stats = resolveArmorStats(base, [{ id: 'test', effectData: { finPenaltyReduction: 5 } }]);
     expect(stats.finPenalty).toBe(0);
   });
-  it('lightweight id adds +1 with same clamp', () => {
+  it('uses the declared lightweight reduction once', () => {
     const base = { defenseBonus: 0, finPenalty: -1 };
     const stats = resolveArmorStats(base, [{ id: 'lightweight', effectData: {} }]);
-    expect(stats.finPenalty).toBe(0);
+    expect(stats.finPenalty).toBe(-1);
   });
-  it('both finPenaltyReduction and lightweight together still ≤ 0', () => {
+  it('does not apply a duplicated lightweight reduction', () => {
     const base = { defenseBonus: 0, finPenalty: -2 };
     const stats = resolveArmorStats(base, [
       { id: 'lightweight', effectData: { finPenaltyReduction: 1 } },
     ]);
-    expect(stats.finPenalty).toBe(0);
+    expect(stats.finPenalty).toBe(-1);
+  });
+});
+
+describe('loadout and range contracts', () => {
+  it('resolves catalog IDs, shield defense, and affix numeric hooks once', () => {
+    const loadout = resolveLoadout({ equipment: { weapon: 'sidearm', armor: 'medium', offhand: 'shield', weaponAffixes: ['precise'], armorAffixes: ['fortified'] } }, {
+      weapons: { sidearm: { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 1 }, shield: { damageDie: null, rangeBand: null, maxRange: 0, defenseBonus: 2 } },
+      armor: { medium: { defenseBonus: 3, finPenalty: -1 } }
+    }, { affixes: { precise: { effectData: { accuracyBonus: 1 } }, fortified: { effectData: { defenseBonus: 2 } } } });
+    expect(loadout).toMatchObject({ weapon: { id: 'sidearm', accuracyBonus: 2 }, armor: { id: 'medium', defenseBonus: 5 }, offhand: { id: 'shield', defenseBonus: 2 }, defenseBonus: 7 });
+  });
+
+  it('reports explicit sniper penalties and maximum-range misses', () => {
+    const sniper = { rangeBand: 'long', minRange: 3, maxRange: 16, accuracyBonus: -1 };
+    expect(evaluateRange(sniper, 2)).toEqual({ legal: true, band: 'long', accuracyModifier: -1, reason: 'minimum_range_penalty' });
+    expect(evaluateRange(sniper, 3)).toEqual({ legal: true, band: 'long', accuracyModifier: 1, reason: 'in_range' });
+    expect(evaluateRange(sniper, 17)).toEqual({ legal: false, band: 'long', accuracyModifier: 0, reason: 'beyond_maximum' });
   });
 });
 

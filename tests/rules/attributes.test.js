@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modifier, deriveStats, attributeCost } from '../../src/rules/attributes.js';
+import { attributeCost, attributeStepCost, deriveStats, modifier, overclockTarget, protocolSaveDC } from '../../src/rules/attributes.js';
 import { makeCharacter, makeClassData } from '../helpers/fixtures.js';
 
 describe('modifier', () => {
@@ -63,4 +63,31 @@ describe('attributeCost', () => {
   it('(5, 9) === 8', () => { expect(attributeCost(5, 9)).toBe(8); });
   it('(5, 10) === 11', () => { expect(attributeCost(5, 10)).toBe(11); });
   it('(1, 10) === 15', () => { expect(attributeCost(1, 10)).toBe(15); });
+});
+
+describe('authoritative formula helpers', () => {
+  it('uses rank three as the creation-cost baseline', () => {
+    expect(attributeStepCost(3, 6)).toBe(3);
+    expect(attributeStepCost(3, 8)).toBe(7);
+    expect(attributeStepCost(3, 10)).toBe(13);
+  });
+
+  it('derives protocol DC and overclock targets from the defined formulas', () => {
+    expect(protocolSaveDC(makeCharacter({ attributes: { mgt: 3, fin: 3, vit: 3, res: 3, foc: 8, sig: 3 } }), 4)).toBe(17);
+    expect(overclockTarget(1)).toBe(13);
+    expect(overclockTarget(5)).toBe(21);
+  });
+
+  it('applies armor and shield stats without mutating the character', () => {
+    const character = makeCharacter({ classId: 'ghost', attributes: { mgt: 5, fin: 6, vit: 5, res: 5, foc: 5, sig: 5 } });
+    const stats = deriveStats(character, makeClassData({ id: 'ghost' }), { armor: { finPenalty: -1, defenseBonus: 3 }, offhand: { defenseBonus: 2 } });
+    expect(stats).toMatchObject({ defenseBase: 15, initiativeMod: 0, rangedAccuracy: 0, finPenalty: -1 });
+    expect(character.attributes.fin).toBe(6);
+  });
+
+  it('lets Breacher and Anchor ignore medium armor FIN penalties only', () => {
+    const character = makeCharacter({ attributes: { mgt: 5, fin: 6, vit: 5, res: 5, foc: 5, sig: 5 } });
+    expect(deriveStats(character, makeClassData({ id: 'breacher' }), { armor: { id: 'medium', finPenalty: -1, defenseBonus: 3 } }).initiativeMod).toBe(1);
+    expect(deriveStats(character, makeClassData({ id: 'operator' }), { armor: { id: 'medium', finPenalty: -1, defenseBonus: 3 } }).initiativeMod).toBe(0);
+  });
 });
