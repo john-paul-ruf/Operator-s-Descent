@@ -4,6 +4,8 @@ import { enemyAI } from './enemies.js';
 import { castProtocol, overclockProtocol } from './protocols.js';
 import { applyConsumable } from './consumables.js';
 
+const AP_PER_TURN = 2;
+
 export function initiateCombat(party, enemies, rngCursor) {
   const combatants = new Map();
 
@@ -32,14 +34,21 @@ export function initiateCombat(party, enemies, rngCursor) {
     combatants,
     log: [],
     ended: false,
-    result: null
+    result: null,
+    turnStarted: false
   };
 }
 
-export function executeAction(combatState, action, rngCursor, context) {
-  const { type, actorId, targetId, school, tier, consumableId } = action;
+export function executeAction(combatState, action, rngCursor, context = {}) {
+  const { type, actorId, targetId, school, tier, consumableId } = action || {};
   const actor = combatState.combatants.get(actorId);
   if (!actor || actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
+  if (combatState.turnOrder[combatState.currentTurn] !== actorId) {
+    return { success: false, reason: 'invalid-turn' };
+  }
+  prepareTurn(combatState, actor, context);
+  if (actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
+  if (actor.ap <= 0) return { success: false, reason: 'no-ap' };
   if (hasCondition(actor, 'jammed') && (type === 'cast' || type === 'overclock')) {
     return { success: false, reason: 'jammed' };
   }
@@ -63,6 +72,10 @@ export function executeAction(combatState, action, rngCursor, context) {
       actor.ap = 0;
       return { success, retreated: success };
     }
+    case 'wait':
+      actor.ap = 0;
+      combatState.log.push({ type: 'wait', actorId });
+      return { success: true };
     default:
       return { success: false, reason: 'invalid-action' };
   }
@@ -108,25 +121,52 @@ function executeAttack(combatState, actor, targetId, rngCursor, context) {
 }
 
 function executeProtocol(combatState, actor, school, tier, targetId, overclock, rngCursor, context) {
-  const target = targetId ? combatState.combatants.get(targetId) : null;
-  const result = overclock
-    ? overclockProtocol(actor, school, tier, target, context.protocolsData, context.conditionsData, rngCursor)
-    : castProtocol(actor, school, tier, target, context.protocolsData, context.conditionsData, rngCursor);
-  if (result.success && result.result) {
-    combatState.log.push({ type: 'protocol', actorId: actor.id, targetId, school, tier, overclocked: overclock, result: result.result });
+  const protocolData = context.protocolsData?.schools?.[school]?.tiers?.[tier - 1];
+  if (!protocolData || !canUseProtocol(actor, school, tier)) {
+    return { success: false, reason: 'invalid-protocol' };
   }
-  actor.ap--;
+
+  const target = targetId == null ? null : combatState.combatants.get(targetId);
+  if (targetId != null && (!target || target.hp <= 0)) {
+    return { success: false, reason: 'invalid-target' };
+  }
+
+  const conditionsData = context.conditionsData?.conditions || context.conditionsData;
+  const result = overclock
+    ? overclockProtocol(actor, school, tier, target, context.protocolsData, conditionsData, rngCursor)
+    : castProtocol(actor, school, tier, target, context.protocolsData, conditionsData, rngCursor);
+  if (result.success) {
+    combatState.log.push({ type: 'protocol', actorId: actor.id, targetId, school, tier, overclocked: overclock, result: result.result });
+    actor.ap--;
+  }
   return result;
 }
 
 function executeItem(combatState, actor, targetId, consumableId, rngCursor, context) {
-  const target = combatState.combatants.get(targetId) || actor;
-  const result = applyConsumable(target, context.consumablesData?.consumables?.[consumableId], { inCombat: true, rngCursor, activeCharacter: actor });
+  const inventory = context.runState?.inventory;
+  const inventoryItem = inventory?.find(item => item.id === consumableId || item.baseType === consumableId);
+  if (inventory && !inventoryItem) return { success: false, reason: 'invalid-item' };
+
+  const itemId = inventoryItem?.baseType || consumableId;
+  const target = targetId == null ? actor : combatState.combatants.get(targetId);
+  if (!target || target.hp <= 0) return { success: false, reason: 'invalid-target' };
+
+  const result = applyConsumable(target, context.consumablesData?.consumables?.[itemId], { inCombat: true, rngCursor, activeCharacter: actor });
   if (result.success) {
-    combatState.log.push({ type: 'item', actorId: actor.id, targetId, consumableId, result });
+    combatState.log.push({ type: 'item', actorId: actor.id, targetId, consumableId: itemId, result });
+    actor.ap--;
+    if (inventory && inventoryItem) {
+      inventory.splice(inventory.indexOf(inventoryItem), 1);
+    }
   }
-  actor.ap--;
   return result;
+}
+
+function canUseProtocol(actor, school, tier) {
+  if (actor.side === 'enemy') {
+    return actor.protocolAccess?.schools?.includes(school) && tier <= (actor.protocolAccess.maxTier || tier);
+  }
+  return actor.protocols?.some(protocol => protocol.school === school && protocol.tier === tier) || false;
 }
 
 function getCoverBonus(target) {
@@ -141,46 +181,72 @@ function rollDice(rngCursor, count, sides) {
   return total;
 }
 
-export function resolveTurn(combatState, rngCursor, context) {
-  const actorId = combatState.turnOrder[combatState.currentTurn];
-  const actor = combatState.combatants.get(actorId);
+export function resolveTurn(combatState, rngCursor, context = {}) {
+  let safety = Math.max(1, combatState.turnOrder.length * 2 + 1);
 
-  if (actor && actor.hp > 0) {
-    const tickResults = tickConditions(actor, context.conditionsData);
-    if (tickResults.length > 0) {
-      for (const r of tickResults) {
-        if (r.type === 'damage' && r.amount > 0) {
-          actor.hp -= r.amount;
-          combatState.log.push({ type: 'condition-damage', actorId, source: r.source, amount: r.amount });
-          if (actor.hp <= 0) {
-            actor.hp = 0;
-            combatState.log.push({ type: 'death', actorId, cause: 'condition' });
-          }
-        }
-      }
+  while (!combatState.ended && safety-- > 0) {
+    const actor = getActiveActor(combatState);
+    if (!actor || actor.hp <= 0) {
+      advanceTurn(combatState);
+      continue;
     }
 
-    if (actor.hp > 0) {
-      actor.ap = actor.archetypeId === 'apex' ? 2 : 2;
-
-      if (actor.side === 'enemy') {
-        while (actor.ap > 0 && actor.hp > 0 && !combatState.ended) {
-          const action = enemyAI(actor, combatState, rngCursor);
-          executeAction(combatState, action, rngCursor, context);
-          const end = checkCombatEnd(combatState);
-          if (end.ended) break;
-        }
-      }
+    prepareTurn(combatState, actor, context);
+    const afterConditions = checkCombatEnd(combatState);
+    if (afterConditions.ended) return afterConditions;
+    if (actor.hp <= 0) {
+      advanceTurn(combatState);
+      continue;
     }
+
+    if (actor.side === 'enemy') {
+      while (actor.ap > 0 && actor.hp > 0 && !combatState.ended) {
+        const action = enemyAI(actor, combatState, rngCursor);
+        const actionResult = executeAction(combatState, action, rngCursor, context);
+        if (!actionResult.success) actor.ap = 0;
+        const end = checkCombatEnd(combatState);
+        if (end.ended) return end;
+      }
+      advanceTurn(combatState);
+      continue;
+    }
+
+    if (actor.ap > 0) return checkCombatEnd(combatState);
+    advanceTurn(combatState);
   }
 
+  return checkCombatEnd(combatState);
+}
+
+function prepareTurn(combatState, actor, context) {
+  if (combatState.turnStarted) return;
+  combatState.turnStarted = true;
+  actor.ap = AP_PER_TURN;
+
+  const tickResults = tickConditions(actor, context.conditionsData?.conditions || context.conditionsData);
+  for (const result of tickResults) {
+    if (result.type !== 'damage' || result.amount <= 0) continue;
+    actor.hp -= result.amount;
+    combatState.log.push({ type: 'condition-damage', actorId: actor.id, source: result.source, amount: result.amount });
+    if (actor.hp <= 0) {
+      actor.hp = 0;
+      combatState.log.push({ type: 'death', actorId: actor.id, cause: 'condition' });
+    }
+  }
+}
+
+function getActiveActor(combatState) {
+  const actorId = combatState.turnOrder[combatState.currentTurn];
+  return combatState.combatants.get(actorId);
+}
+
+function advanceTurn(combatState) {
   combatState.currentTurn++;
+  combatState.turnStarted = false;
   if (combatState.currentTurn >= combatState.turnOrder.length) {
     combatState.currentTurn = 0;
     combatState.round++;
   }
-
-  return checkCombatEnd(combatState);
 }
 
 export function checkCombatEnd(combatState) {

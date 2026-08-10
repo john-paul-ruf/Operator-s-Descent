@@ -65,7 +65,7 @@ export function enemyAI(enemy, combatState, rngCursor) {
   }
 
   if (enemy.behavior === 'controller' && enemy.protocolAccess) {
-    return { type: 'apply_condition', actorId: enemy.id, targetId: target.id };
+    return { type: 'attack', actorId: enemy.id, targetId: target.id };
   }
 
   if (enemy.hp < enemy.hpMax * 0.25 && enemy.retreats) {

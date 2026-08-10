@@ -16,18 +16,20 @@ export function createStatusBar(runState, combatState = null) {
     roundEl.textContent = `R${combatState.round || 1}`;
     strip.appendChild(roundEl);
 
-    if (combatState.combatants && combatState.activeIndex !== undefined) {
-      const active = combatState.combatants[combatState.activeIndex];
-      if (active) {
-        const sigil = createSigilToken(active.sigilCodepoint || 0xE000, 34);
-        sigil.classList.add('status-active-sigil');
-        strip.appendChild(sigil);
-        if (active.hp !== undefined && active.hpMax !== undefined) {
-          strip.appendChild(createHPBar(active.hp, active.hpMax));
-        }
-        if (active.charge !== undefined && active.chargeMax !== undefined) {
-          strip.appendChild(createChargeBar(active.charge, active.chargeMax));
-        }
+    const activeId = combatState.turnOrder?.[combatState.currentTurn];
+    const actors = combatState.combatants instanceof Map
+      ? [...combatState.combatants.values()]
+      : Array.isArray(combatState.combatants) ? combatState.combatants : [];
+    const active = actors.find(actor => actor.id === activeId);
+    if (active) {
+      const sigil = createSigilToken(active.sigilCodepoint || 0xE000, 34);
+      sigil.classList.add('status-active-sigil');
+      strip.appendChild(sigil);
+      if (active.hp !== undefined && active.hpMax !== undefined) {
+        strip.appendChild(createHPBar(active.hp, active.hpMax));
+      }
+      if (active.charge !== undefined && active.chargeMax !== undefined) {
+        strip.appendChild(createChargeBar(active.charge, active.chargeMax));
       }
     }
   } else {

@@ -76,15 +76,18 @@ export function createPlayfield(canvas) {
 
     renderCombat(combatState, lattice, zoomOrigin) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const grid = lattice.getGrid();
-      const w = lattice.getWidth();
-      const h = lattice.getHeight();
+      const grid = lattice?.getGrid?.() || [];
+      const w = lattice?.getWidth?.() || grid[0]?.length || COMBAT_GRID_W;
+      const h = lattice?.getHeight?.() || grid.length || COMBAT_GRID_H;
 
       const cx = zoomOrigin?.x ?? Math.floor(w / 2);
       const cy = zoomOrigin?.y ?? Math.floor(h / 2);
       const ox = cx - Math.floor(COMBAT_GRID_W / 2);
       const oy = cy - Math.floor(COMBAT_GRID_H / 2);
-      const combatants = combatState?.combatants || [];
+      const combatants = combatState?.combatants instanceof Map
+        ? [...combatState.combatants.values()]
+        : Array.isArray(combatState?.combatants) ? combatState.combatants : [];
+      const activeId = combatState?.turnOrder?.[combatState?.currentTurn];
 
       for (let dy = 0; dy < COMBAT_GRID_H; dy++) {
         for (let dx = 0; dx < COMBAT_GRID_W; dx++) {
@@ -93,7 +96,7 @@ export function createPlayfield(canvas) {
           const px = dx * COMBAT_CELL_SIZE;
           const py = dy * COMBAT_CELL_SIZE;
 
-          ctx.fillStyle = (gx < 0 || gx >= w || gy < 0 || gy >= h || grid[gy][gx] === 0)
+          ctx.fillStyle = (gx < 0 || gx >= w || gy < 0 || gy >= h || grid[gy]?.[gx] === 0)
             ? '#1a0e36' : '#0a0612';
           ctx.fillRect(px, py, COMBAT_CELL_SIZE, COMBAT_CELL_SIZE);
 
@@ -110,8 +113,7 @@ export function createPlayfield(canvas) {
 
         const px = dx * COMBAT_CELL_SIZE;
         const py = dy * COMBAT_CELL_SIZE;
-        const isActive = combatState.activeIndex !== undefined &&
-          combatants[combatState.activeIndex] === c;
+        const isActive = c.id === activeId;
 
         if (isActive) {
           ctx.strokeStyle = accentColor;
@@ -121,10 +123,10 @@ export function createPlayfield(canvas) {
         }
 
         ctx.font = `${COMBAT_CELL_SIZE - 8}px 'DESCENT SIGIL', monospace`;
-        ctx.fillStyle = c.enemy ? '#e83a3a' : accentColor;
+        ctx.fillStyle = c.side === 'enemy' ? '#e83a3a' : accentColor;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const codepoint = c.sigilCodepoint || (c.enemy ? 0xE030 : 0xE000);
+        const codepoint = c.sigilCodepoint || (c.side === 'enemy' ? 0xE030 : 0xE000);
         ctx.fillText(
           String.fromCodePoint(codepoint),
           px + COMBAT_CELL_SIZE / 2,

@@ -43,12 +43,19 @@ export function createConsole(state) {
     modeTabs.forEach(({ tab, mode }) => {
       tab.classList.toggle('active', mode.id === modeId);
     });
-    const mode = MODES.find(m => m.id === modeId);
-    if (mode) {
-      contentArea.innerHTML = '';
-      mode.module.render(contentArea, state);
-    }
+    renderCurrentMode();
     bus.dispatch('ui:mode-change', { mode: modeId });
+  }
+
+  function renderCurrentMode() {
+    const mode = MODES.find(m => m.id === currentMode);
+    if (!mode) return;
+    contentArea.innerHTML = '';
+    mode.module.render(contentArea, createModeContext());
+  }
+
+  function createModeContext() {
+    return { ...state, bus, refresh: renderCurrentMode };
   }
 
   function expand() {
@@ -63,6 +70,10 @@ export function createConsole(state) {
     bus.dispatch('ui:console-collapse');
   }
 
+  function refresh() {
+    renderCurrentMode();
+  }
+
   function render() {
     tabBar.innerHTML = '';
     modeTabs.forEach(({ tab }) => tabBar.appendChild(tab));
@@ -74,6 +85,8 @@ export function createConsole(state) {
 
   if (state?.inputHandler) {
     state.inputHandler.onAction((action) => {
+      const mode = MODES.find(item => item.id === currentMode);
+      mode?.module.handleInput?.({ action }, createModeContext());
       const match = action.match(/^mode-(\d)$/);
       if (match) {
         const idx = parseInt(match[1]) - 1;
@@ -83,5 +96,5 @@ export function createConsole(state) {
     });
   }
 
-  return { setMode, expand, collapse, render, container, get currentMode() { return currentMode; } };
+  return { setMode, expand, collapse, refresh, render, container, get currentMode() { return currentMode; } };
 }

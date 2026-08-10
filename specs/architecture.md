@@ -176,8 +176,8 @@ src/
 - **Owns:** The d20 combat engine. Initiative rolling, turn order, AP economy, move actions, attack rolls (melee/ranged/protocol), damage calculation, cover determination, flanking, opportunity attacks, natural 1/20 handling, retreat, victory/wipe detection.
 - **Exports:**
   - `initiateCombat(party, enemies, rngCursor) → CombatState`
-  - `executeAction(combatState, action, rngCursor) → ActionResult`
-  - `resolveTurn(combatState, rngCursor) → TurnResult`
+  - `executeAction(combatState, action, rngCursor, context) → ActionResult` — Resolves the explicit action selected by the active actor; it never invents a player action.
+  - `resolveTurn(combatState, rngCursor, context) → TurnResult` — Prepares a turn, resolves enemy AI, and advances after a party actor has spent its AP; a party turn with remaining AP stays active until another explicit `executeAction` call.
   - `checkCombatEnd(combatState) → 'ongoing' | 'victory' | 'wipe'`
 - **Depends on:** `core/prng.js`, `core/rng-cursor.js`, `rules/attributes.js`, `rules/conditions.js`, `rules/equipment.js`, `rules/enemies.js`.
 - **Key types:** `CombatState`, `Action`, `ActionResult` (includes log entries for LOG mode).
