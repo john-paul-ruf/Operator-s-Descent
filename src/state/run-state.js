@@ -381,6 +381,28 @@ function buildRunState(data) {
       this.recentEvents.push(entry);
       if (this.recentEvents.length > MAX_EVENTS) this.recentEvents.splice(0, this.recentEvents.length - MAX_EVENTS);
       return { recorded: true };
+    },
+    applyCombatResult(combatResult) {
+      if (!combatResult || !combatResult.result) return { applied: false, reason: 'invalid-result' };
+      if (combatResult.result === 'victory') {
+        this.activeCombat = null;
+        if (combatResult.victoryPayload?.defeatedSpawnIds) {
+          for (const id of combatResult.victoryPayload.defeatedSpawnIds) this.stats.enemiesSlain += 1;
+        }
+      } else if (combatResult.result === 'retreat') {
+        this.activeCombat = null;
+        this.dangerClockProgress = 0;
+      } else if (combatResult.result === 'wipe') {
+        this.activeCombat = null;
+      }
+      return { applied: true, result: combatResult.result };
+    },
+    setActiveCombat(snapshot) {
+      if (snapshot === null) { this.activeCombat = null; return { set: true }; }
+      const bounded = cloneBounded(snapshot, MAX_COMBAT_BYTES);
+      if (bounded === undefined) return { set: false, reason: 'invalid-snapshot' };
+      this.activeCombat = bounded;
+      return { set: true };
     }
   };
   return state;

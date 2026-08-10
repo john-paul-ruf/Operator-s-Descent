@@ -71,7 +71,7 @@ describe('combat simulation — termination & outcome sweep (20 seeds)', () => {
       const result = simulate(party, [drone, warden], seed, baseContext);
       expect(result.iterations).toBeLessThan(400);
       expect(result.state.ended).toBe(true);
-      expect(['victory', 'wipe']).toContain(result.state.result);
+      expect(['victory', 'wipe', 'retreat']).toContain(result.state.result);
     });
   }
 });

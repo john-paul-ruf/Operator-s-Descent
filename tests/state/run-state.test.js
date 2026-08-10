@@ -170,3 +170,49 @@ describe('v1 normalization', () => {
     expect(state.extensions).toEqual({ legacyField: { retained: true } });
   });
 });
+
+describe('applyCombatResult', () => {
+  it('victory clears activeCombat and increments enemiesSlain', () => {
+    const state = makeState();
+    state.setActiveCombat({ round: 1, actors: [{ id: 'a' }] });
+    expect(state.activeCombat).not.toBeNull();
+    state.applyCombatResult({ result: 'victory', victoryPayload: { defeatedSpawnIds: ['e1', 'e2'] } });
+    expect(state.activeCombat).toBeNull();
+    expect(state.stats.enemiesSlain).toBe(2);
+  });
+
+  it('retreat clears activeCombat and resets danger clock', () => {
+    const state = makeState();
+    state.setActiveCombat({ round: 1, actors: [{ id: 'a' }] });
+    state.dangerClockProgress = 0.5;
+    state.applyCombatResult({ result: 'retreat' });
+    expect(state.activeCombat).toBeNull();
+    expect(state.dangerClockProgress).toBe(0);
+  });
+
+  it('wipe clears activeCombat', () => {
+    const state = makeState();
+    state.setActiveCombat({ round: 1, actors: [{ id: 'a' }] });
+    state.applyCombatResult({ result: 'wipe' });
+    expect(state.activeCombat).toBeNull();
+  });
+
+  it('returns invalid for missing result', () => {
+    const state = makeState();
+    expect(state.applyCombatResult(null)).toEqual({ applied: false, reason: 'invalid-result' });
+  });
+});
+
+describe('setActiveCombat', () => {
+  it('sets activeCombat from a valid snapshot', () => {
+    const state = makeState();
+    state.setActiveCombat({ round: 3, actors: [{ id: 'a' }] });
+    expect(state.activeCombat).toEqual({ round: 3, actors: [{ id: 'a' }] });
+  });
+
+  it('clears activeCombat when passed null', () => {
+    const state = makeState({ activeCombat: { round: 1, actors: [] } });
+    state.setActiveCombat(null);
+    expect(state.activeCombat).toBeNull();
+  });
+});

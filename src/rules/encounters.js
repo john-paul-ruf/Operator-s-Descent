@@ -106,3 +106,34 @@ export function createStandardEncounter(floor, contact, party, enemies, rngCurso
     forfeitableLoot: []
   };
 }
+
+export function completeEncounter(encounter, combatResult) {
+  if (!encounter || !combatResult) return { resolved: false, reason: 'invalid-input' };
+  const result = combatResult.result;
+  if (result === 'victory') {
+    return {
+      resolved: true,
+      outcome: 'victory',
+      loot: [...(encounter.forfeitableLoot || [])],
+      defeatedSpawnIds: combatResult.victoryPayload?.defeatedSpawnIds || [],
+      reclaimableGear: combatResult.victoryPayload?.reclaimableGear || []
+    };
+  }
+  if (result === 'retreat') {
+    return {
+      resolved: true,
+      outcome: 'retreat',
+      loot: [],
+      forfeitedLoot: [...(encounter.forfeitableLoot || [])]
+    };
+  }
+  if (result === 'wipe') {
+    return {
+      resolved: true,
+      outcome: 'wipe',
+      loot: [],
+      forfeitedLoot: [...(encounter.forfeitableLoot || [])]
+    };
+  }
+  return { resolved: false, reason: 'combat-not-ended' };
+}

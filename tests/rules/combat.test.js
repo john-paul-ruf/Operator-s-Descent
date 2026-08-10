@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd } from '../../src/rules/combat.js';
-import { createStandardEncounter } from '../../src/rules/encounters.js';
+import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd, getCharacterDeaths, toCombatSnapshot } from '../../src/rules/combat.js';
+import { createStandardEncounter, completeEncounter } from '../../src/rules/encounters.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { modifier } from '../../src/rules/attributes.js';
 import { makeCharacter, makeWeapon, makeParty, findSeed } from '../helpers/fixtures.js';
@@ -979,5 +979,179 @@ describe('initiateCombat — initiative tie-break', () => {
     const state = initiateCombat(party, [enemy], cursor);
     expect(state.combatants.get('zzz').initiative).toBe(state.combatants.get('aaa').initiative);
     expect(state.turnOrder).toEqual(['aaa', 'zzz']);
+  });
+});
+
+describe('terminal results — victory payload', () => {
+  it('victory sets ended, result, and victoryPayload with defeated spawn IDs', () => {
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd20' }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', defense: 0, hp: 1, hpMax: 1 });
+    const { state } = startCombat(party, [enemy], 1, 'a');
+    state.combatants.get('enemy_1').hp = 0;
+    const end = checkCombatEnd(state);
+    expect(end.result).toBe('victory');
+    expect(state.victoryPayload).toBeDefined();
+    expect(state.victoryPayload.defeatedSpawnIds).toContain('enemy_1');
+    expect(state.victoryPayload.reason).toBe('combat-victory');
+  });
+
+  it('victoryPayload is built only once', () => {
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd20' }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', defense: 0, hp: 1, hpMax: 1 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    checkCombatEnd(state);
+    const first = state.victoryPayload;
+    checkCombatEnd(state);
+    expect(state.victoryPayload).toBe(first);
+  });
+});
+
+describe('terminal results — retreat payload', () => {
+  it('successful retreat sets ended=true, result=retreat with retreatPayload', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const enemy = makeEnemy({ id: 'enemy_1' });
+    const seed = findAttackSeed(14, 1, 1);
+    const { state, cursor } = startCombat(party, [enemy], seed, 'a');
+    const result = executeAction(state, { type: 'retreat', actorId: 'a' }, cursor, baseContext);
+    expect(result.retreated).toBe(true);
+    expect(state.ended).toBe(true);
+    expect(state.result).toBe('retreat');
+    expect(state.retreatPayload).toBeDefined();
+    expect(state.retreatPayload.retreated).toBe(true);
+    expect(state.retreatPayload.reason).toBe('retreat');
+  });
+
+  it('failed retreat does not set ended', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const enemy = makeEnemy({ id: 'enemy_1' });
+    const seed = findAttackSeed(0, 1, 1);
+    const { state, cursor } = startCombat(party, [enemy], seed, 'a');
+    executeAction(state, { type: 'retreat', actorId: 'a' }, cursor, baseContext);
+    expect(state.ended).toBe(false);
+    expect(state.result).toBeNull();
+    expect(state.retreatPayload).toBeUndefined();
+  });
+});
+
+describe('getCharacterDeaths', () => {
+  it('returns dead party members with survivors', () => {
+    const party = [
+      makeCharacter({ id: 'a', hp: 100, hpMax: 100, weapon: makeWeapon({ damageDie: 'd20' }) }),
+      makeCharacter({ id: 'b', hp: 100, hpMax: 100 })
+    ];
+    const enemy = makeEnemy({ id: 'enemy_1', defense: 0, hp: 100, hpMax: 100, weapon: { damageDie: 'd20', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    const deadActor = state.combatants.get('b');
+    deadActor.hp = 0;
+    const deaths = getCharacterDeaths(state);
+    expect(deaths).toHaveLength(1);
+    expect(deaths[0].characterId).toBe('b');
+  });
+
+  it('returns empty when no survivors (wipe — deaths handled separately)', () => {
+    const party = [makeCharacter({ id: 'a', hp: 0 })];
+    const enemy = makeEnemy({ id: 'enemy_1', hp: 100, hpMax: 100 });
+    const { state } = startCombat(party, [enemy]);
+    const deaths = getCharacterDeaths(state);
+    expect(deaths).toHaveLength(0);
+  });
+
+  it('does not return the same death twice', () => {
+    const party = [
+      makeCharacter({ id: 'a', hp: 100, hpMax: 100 }),
+      makeCharacter({ id: 'b', hp: 100, hpMax: 100 })
+    ];
+    const enemy = makeEnemy({ id: 'enemy_1', hp: 100, hpMax: 100 });
+    const { state } = startCombat(party, [enemy]);
+    state.combatants.get('b').hp = 0;
+    const first = getCharacterDeaths(state);
+    const second = getCharacterDeaths(state);
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(0);
+  });
+});
+
+describe('toCombatSnapshot', () => {
+  it('returns null when combat is ended', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const enemy = makeEnemy({ id: 'enemy_1', hp: 0 });
+    const { state } = startCombat(party, [enemy]);
+    checkCombatEnd(state);
+    expect(toCombatSnapshot(state)).toBeNull();
+  });
+
+  it('returns null for null input', () => {
+    expect(toCombatSnapshot(null)).toBeNull();
+  });
+
+  it('produces a snapshot with arena/actors/initiativeOrder/currentIndex/round/encounter', () => {
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon() })];
+    const enemy = makeEnemy({ id: 'enemy_1', hp: 50, hpMax: 50 });
+    const { state } = startCombat(party, [enemy], 1, 'a');
+    const snap = toCombatSnapshot(state);
+    expect(snap).not.toBeNull();
+    expect(snap.arena).toBeDefined();
+    expect(snap.actors).toHaveLength(2);
+    expect(snap.initiativeOrder).toHaveLength(2);
+    expect(snap.initiativeOrder).toEqual(state.turnOrder);
+    expect(snap.currentIndex).toBe(state.currentTurn);
+    expect(snap.round).toBe(1);
+    expect(snap.encounter).toBeDefined();
+    expect(snap.pendingEffects).toEqual([]);
+    expect(snap.eventOrder).toBe(0);
+  });
+
+  it('excludes dead actors from the snapshot', () => {
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon() }), makeCharacter({ id: 'b', hp: 0 })];
+    const enemy = makeEnemy({ id: 'enemy_1', hp: 50, hpMax: 50 });
+    const { state } = startCombat(party, [enemy], 1, 'a');
+    const snap = toCombatSnapshot(state);
+    expect(snap.actors).toHaveLength(2);
+    expect(snap.initiativeOrder).toHaveLength(2);
+    expect(snap.actors.find(a => a.id === 'b')).toBeUndefined();
+  });
+});
+
+describe('completeEncounter', () => {
+  it('maps victory to resolved with loot and defeated spawn IDs', () => {
+    const encounter = { id: 'e1', kind: 'standard', forfeitableLoot: ['item1'] };
+    const combatResult = { result: 'victory', victoryPayload: { defeatedSpawnIds: ['enemy_1'], reclaimableGear: [] } };
+    const completion = completeEncounter(encounter, combatResult);
+    expect(completion.resolved).toBe(true);
+    expect(completion.outcome).toBe('victory');
+    expect(completion.loot).toEqual(['item1']);
+    expect(completion.defeatedSpawnIds).toEqual(['enemy_1']);
+  });
+
+  it('maps retreat to resolved with forfeited loot', () => {
+    const encounter = { id: 'e1', kind: 'standard', forfeitableLoot: ['item1', 'item2'] };
+    const combatResult = { result: 'retreat' };
+    const completion = completeEncounter(encounter, combatResult);
+    expect(completion.resolved).toBe(true);
+    expect(completion.outcome).toBe('retreat');
+    expect(completion.loot).toEqual([]);
+    expect(completion.forfeitedLoot).toEqual(['item1', 'item2']);
+  });
+
+  it('maps wipe to resolved with forfeited loot, no victory drops', () => {
+    const encounter = { id: 'e1', kind: 'standard', forfeitableLoot: ['item1'] };
+    const combatResult = { result: 'wipe' };
+    const completion = completeEncounter(encounter, combatResult);
+    expect(completion.resolved).toBe(true);
+    expect(completion.outcome).toBe('wipe');
+    expect(completion.forfeitedLoot).toEqual(['item1']);
+  });
+
+  it('returns unresolved for non-ended combat', () => {
+    const encounter = { id: 'e1', kind: 'standard' };
+    const combatResult = { result: null };
+    const completion = completeEncounter(encounter, combatResult);
+    expect(completion.resolved).toBe(false);
+  });
+
+  it('returns invalid for null inputs', () => {
+    expect(completeEncounter(null, { result: 'victory' }).resolved).toBe(false);
+    expect(completeEncounter({ id: 'e1' }, null).resolved).toBe(false);
   });
 });

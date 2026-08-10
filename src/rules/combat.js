@@ -230,7 +230,12 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
       const success = roll >= 15;
       pushLog(combatState, { type: 'retreat', actorId, targetId, roll, success });
       actor.ap = 0;
-      return { success, retreated: success };
+      if (success) {
+        combatState.ended = true;
+        combatState.result = 'retreat';
+        combatState.retreatPayload = buildRetreatPayload(combatState, actorId);
+      }
+      return { success, retreated: success, retreatPayload: success ? combatState.retreatPayload : null };
     }
     case 'wait':
       actor.ap = 0;
@@ -593,9 +598,98 @@ export function checkCombatEnd(combatState) {
   if (enemiesAlive === 0) {
     combatState.ended = true;
     combatState.result = 'victory';
+    if (!combatState.victoryPayload) combatState.victoryPayload = buildVictoryPayload(combatState);
   } else if (partyAlive === 0) {
     combatState.ended = true;
     combatState.result = 'wipe';
   }
   return { ended: combatState.ended, result: combatState.result };
+}
+
+function buildVictoryPayload(combatState) {
+  const defeatedSpawnIds = [];
+  const reclaimableGear = [];
+  for (const actor of combatState.combatants.values()) {
+    if (actor.side === 'enemy' && actor.hp <= 0) {
+      defeatedSpawnIds.push(actor.id);
+      if (actor.archetypeId === 'echo' && actor.equipment) {
+        for (const slot of ['weapon', 'armor', 'offhand']) {
+          if (actor.equipment[slot]) reclaimableGear.push(actor.equipment[slot]);
+        }
+      }
+    }
+  }
+  return {
+    defeatedSpawnIds,
+    reclaimableGear,
+    forfeitableLoot: combatState.forfeitableLoot || [],
+    reason: 'combat-victory'
+  };
+}
+
+function buildRetreatPayload(combatState, actorId) {
+  return {
+    retreated: true,
+    actorId,
+    forfeitableLoot: combatState.forfeitableLoot || [],
+    reason: 'retreat'
+  };
+}
+
+export function getCharacterDeaths(combatState) {
+  const deaths = [];
+  for (const actor of combatState.combatants.values()) {
+    if (actor.side === 'party' && actor.hp <= 0 && !actor._deathRecorded) {
+      actor._deathRecorded = true;
+      const partyAlive = [...combatState.combatants.values()].filter(c => c.side === 'party' && c.hp > 0).length;
+      if (partyAlive > 0) {
+        deaths.push({ characterId: actor.id, character: { ...actor } });
+      }
+    }
+  }
+  return deaths;
+}
+
+export function toCombatSnapshot(combatState) {
+  if (!combatState || combatState.ended) return null;
+  const actors = [];
+  const initiativeOrder = [];
+  for (const id of combatState.turnOrder) {
+    const actor = combatState.combatants.get(id);
+    if (!actor || actor.hp <= 0) continue;
+    initiativeOrder.push(id);
+    actors.push({
+      id: actor.id,
+      side: actor.side,
+      x: actor.position?.x ?? 0,
+      y: actor.position?.y ?? 0,
+      hp: Math.max(0, Math.min(255, actor.hp)),
+      charge: Math.max(0, Math.min(255, actor.charge ?? 0)),
+      conditions: (actor.conditions || []).map(c => ({ id: c.id ?? c.conditionId, conditionId: c.id ?? c.conditionId, duration: c.duration ?? 0, stacks: c.stacks ?? 1 })),
+      initiative: actor.initiative ?? 0,
+      ap: Math.max(0, Math.min(7, actor.ap ?? 0)),
+      moves: actor.moveAvailable ? 1 : 0,
+      freeActions: 0,
+      defeated: actor.hp <= 0,
+      retreated: Boolean(actor.retreated)
+    });
+  }
+  const window = combatState.window;
+  return {
+    arena: {
+      originX: window?.originX ?? 0,
+      originY: window?.originY ?? 0,
+      contactId: combatState.id ?? 'combat'
+    },
+    actors,
+    initiativeOrder,
+    currentIndex: Math.max(0, Math.min(Math.max(0, initiativeOrder.length - 1), combatState.currentTurn)),
+    round: Math.max(1, combatState.round ?? 1),
+    pendingEffects: [],
+    encounter: {
+      id: combatState.id ?? 'encounter',
+      type: combatState.kind ?? 'standard'
+    },
+    eventOrder: combatState.log.length
+  };
 }
