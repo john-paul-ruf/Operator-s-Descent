@@ -1,10 +1,14 @@
 import { modifier } from './attributes.js';
-import { tickConditions, hasCondition, getConditionEffects } from './conditions.js';
+import { tickConditions, hasCondition, getConditionEffects, applyCondition } from './conditions.js';
 import { enemyAI } from './enemies.js';
 import { castProtocol, overclockProtocol } from './protocols.js';
 import { applyConsumable } from './consumables.js';
+import { evaluateRange } from './equipment.js';
+import { getSignatureCapabilities, applySignatureModifier } from './classes.js';
+import { distanceCells, getEdgeCoverBonus, isFlanked, getOpportunityAttackers, FLANK_ATTACK_BONUS } from './combat-geometry.js';
 
 const AP_PER_TURN = 2;
+const UNARMED_WEAPON = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 1, accuracyBonus: 0 };
 
 const DIRECTIONS = {
   n: { dx: 0, dy: -1 },
@@ -115,16 +119,12 @@ function legalDirectionsFrom(combatState, actor) {
   });
 }
 
-function chebyshevPos(a, b) {
-  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-}
-
 function nearestHostile(combatState, actor) {
   let nearest = null;
   let nearestDistance = Infinity;
   for (const other of combatState.combatants.values()) {
     if (other.id === actor.id || other.hp <= 0 || other.side === actor.side || !other.position || !actor.position) continue;
-    const distance = chebyshevPos(actor.position, other.position);
+    const distance = distanceCells(actor.position, other.position);
     if (distance < nearestDistance) {
       nearestDistance = distance;
       nearest = other;
@@ -144,7 +144,7 @@ function fleeDirection(combatState, actor) {
     if (!legalStep(combatState.window, actor.position, delta)) continue;
     const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
     if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) continue;
-    const score = chebyshevPos(dest, hostile.position);
+    const score = distanceCells(dest, hostile.position);
     if (score > bestScore) {
       bestScore = score;
       best = name;
@@ -158,13 +158,13 @@ function stepToward(combatState, actor, targetId) {
   const target = combatState.combatants.get(targetId);
   if (!target || !target.position || !actor.position) return null;
   let best = null;
-  let bestDistance = chebyshevPos(actor.position, target.position);
+  let bestDistance = distanceCells(actor.position, target.position);
   for (const name of DIRECTION_ORDER) {
     const delta = DIRECTIONS[name];
     if (!legalStep(combatState.window, actor.position, delta)) continue;
     const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
     if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) continue;
-    const distance = chebyshevPos(dest, target.position);
+    const distance = distanceCells(dest, target.position);
     if (distance < bestDistance) {
       bestDistance = distance;
       best = name;
@@ -216,23 +216,23 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
     case 'item':
       return executeItem(combatState, actor, targetId, consumableId, rngCursor, context);
     case 'move':
-      return executeMove(combatState, actor, { direction, targetId });
+      return executeMove(combatState, actor, { direction, targetId }, rngCursor, context);
     case 'swap':
       return executeSwap(combatState, actor, targetId);
     case 'end-turn':
-      combatState.log.push({ type: 'end-turn', actorId });
+      pushLog(combatState, { type: 'end-turn', actorId });
       actor.ap = 0;
       return { success: true };
     case 'retreat': {
       const roll = rngCursor.nextInt('combat', 20) + 1;
       const success = roll >= 15;
-      combatState.log.push({ type: 'retreat', actorId, targetId, roll, success });
+      pushLog(combatState, { type: 'retreat', actorId, targetId, roll, success });
       actor.ap = 0;
       return { success, retreated: success };
     }
     case 'wait':
       actor.ap = 0;
-      combatState.log.push({ type: 'wait', actorId });
+      pushLog(combatState, { type: 'wait', actorId });
       return { success: true };
     default:
       return { success: false, reason: 'invalid-action' };
@@ -243,12 +243,12 @@ export function endTurn(combatState, actorId, context = {}) {
   const actor = combatState.combatants.get(actorId);
   if (!actor || actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
   if (combatState.turnOrder[combatState.currentTurn] !== actorId) return { success: false, reason: 'invalid-turn' };
-  combatState.log.push({ type: 'end-turn', actorId });
+  pushLog(combatState, { type: 'end-turn', actorId });
   actor.ap = 0;
   return { success: true };
 }
 
-function executeMove(combatState, actor, { direction, targetId }) {
+function executeMove(combatState, actor, { direction, targetId }, rngCursor, context) {
   if (!actor.moveAvailable) return { success: false, reason: 'no-move' };
   if (hasCondition(actor, 'immobilized')) return { success: false, reason: 'immobilized' };
   if (!combatState.window) return { success: false, reason: 'no-window' };
@@ -262,64 +262,169 @@ function executeMove(combatState, actor, { direction, targetId }) {
   const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
   if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) return { success: false, reason: 'illegal-cell' };
 
+  const origin = { ...actor.position };
+  const phasing = signatureEffectsFor(actor, 'move', context).some(effect => effect.parameters?.ignoreOpportunityAttacks);
+  const reactors = phasing ? [] : getOpportunityAttackers(actor, origin, dest, combatState);
+  const triggeredAttacks = [];
+  for (const reactor of reactors) {
+    if (actor.hp <= 0) break;
+    triggeredAttacks.push(performAttackRoll(combatState, reactor, actor, rngCursor, context, { allowReactions: false, trigger: 'opportunity' }).sequence);
+  }
+
+  if (actor.hp <= 0) {
+    pushLog(combatState, { type: 'move', actorId: actor.id, direction: chosenDirection, from: origin, to: null, cancelled: true, triggeredAttacks });
+    return { success: false, reason: 'dead', triggeredAttacks };
+  }
+
   actor.position = dest;
   actor.moveAvailable = false;
-  combatState.log.push({ type: 'move', actorId: actor.id, direction: chosenDirection, to: { ...dest } });
-  return { success: true, position: { ...dest } };
+  pushLog(combatState, { type: 'move', actorId: actor.id, direction: chosenDirection, from: origin, to: { ...dest }, triggeredAttacks });
+  return { success: true, position: { ...dest }, triggeredAttacks };
 }
 
 function executeSwap(combatState, actor, targetId) {
   if (!actor.swapAvailable) return { success: false, reason: 'no-swap' };
   const ally = combatState.combatants.get(targetId);
   if (!ally || ally.id === actor.id || ally.hp <= 0 || ally.side !== actor.side) return { success: false, reason: 'invalid-target' };
-  if (!actor.position || !ally.position || chebyshevPos(actor.position, ally.position) !== 1) return { success: false, reason: 'not-adjacent' };
+  if (!actor.position || !ally.position || distanceCells(actor.position, ally.position) !== 1) return { success: false, reason: 'not-adjacent' };
 
   const actorPosition = actor.position;
   actor.position = ally.position;
   ally.position = actorPosition;
   actor.swapAvailable = false;
-  combatState.log.push({ type: 'swap', actorId: actor.id, withId: ally.id });
+  pushLog(combatState, { type: 'swap', actorId: actor.id, withId: ally.id });
   return { success: true };
+}
+
+function pushLog(combatState, entry) {
+  entry.sequence = combatState.log.length;
+  combatState.log.push(entry);
+  return entry;
+}
+
+function sideMates(combatState, actor) {
+  return [...combatState.combatants.values()].filter(other => other.side === actor.side && other.hp > 0);
+}
+
+function classFor(actor, context) {
+  return context?.classData ?? context?.classesData?.classes?.find(entry => entry.id === actor?.classId);
+}
+
+// Resolved, tier-gated class-signature effects for one hook (e.g. Breacher's BREACH ignoring
+// cover on 'attack', Ghost's PHASE suppressing reactions on 'move'). Gracefully returns no
+// effects when the caller doesn't supply class data — signature integration outside these two
+// named hooks is out of this session's scope.
+function signatureEffectsFor(actor, hook, context) {
+  const capabilities = getSignatureCapabilities(actor, classFor(actor, context));
+  return applySignatureModifier(hook, {}, capabilities).effects;
+}
+
+// Shared by on-turn attacks and reactions (opportunity attacks, fumble counters) so both paths
+// get identical range/cover/flank/crit resolution and logging. Never touches AP — callers that
+// spend an action (executeAttack) decrement it themselves; reactions never do.
+function performAttackRoll(combatState, attacker, target, rngCursor, context, options = {}) {
+  const conditionsData = context.conditionsData?.conditions || context.conditionsData;
+  const weapon = attacker.weapon || UNARMED_WEAPON;
+  const isMelee = weapon.rangeBand === 'adjacent';
+  const distance = distanceCells(attacker.position, target.position);
+  const positioned = distance !== null;
+  const ignoresCover = options.ignoreCover ?? signatureEffectsFor(attacker, 'attack', context).some(effect => effect.parameters?.ignoreCover);
+  const range = positioned
+    ? evaluateRange(weapon, distance)
+    : { legal: true, band: weapon.rangeBand ?? null, accuracyModifier: weapon.accuracyBonus || 0, reason: 'unpositioned' };
+
+  const roll = rngCursor.nextInt('combat', 20) + 1;
+  const attribute = isMelee ? 'mgt' : 'fin';
+  const attributeModifier = modifier(attacker.attributes?.[attribute] ?? 3);
+  const attackerEffects = getConditionEffects(attacker, conditionsData);
+  const blindedPenalty = !isMelee ? (attackerEffects.rangedPenalty || 0) : 0;
+  const targetEffects = getConditionEffects(target, conditionsData);
+  const markedBonus = targetEffects.attackBonusAgainst || 0;
+  const coverBonus = positioned && !ignoresCover ? getEdgeCoverBonus(combatState.window, attacker, target) : 0;
+  const flanked = positioned && isFlanked(target, sideMates(combatState, attacker), combatState.window);
+  const flankBonus = flanked ? FLANK_ATTACK_BONUS : 0;
+
+  const total = roll + attributeModifier + (range.accuracyModifier ?? 0) + markedBonus + blindedPenalty + flankBonus;
+  const defense = Math.max(targetEffects.defenseFloor, (target.defense || 10) + coverBonus + targetEffects.defenseBonus + targetEffects.defensePenalty);
+
+  const isCrit = roll === 20;
+  const isFumble = roll === 1;
+  const hit = range.legal && !isFumble && (isCrit || total >= defense);
+
+  const dieSize = parseInt(weapon.damageDie?.slice(1) || '6', 10);
+  let damage = 0;
+  let damageRoll = null;
+  if (hit) {
+    if (isCrit) {
+      damage = dieSize;
+    } else {
+      damageRoll = rollDice(rngCursor, 1, dieSize);
+      damage = damageRoll;
+    }
+    if (isMelee) damage += attributeModifier;
+    damage = Math.max(0, damage);
+    if (targetEffects.damageMultiplier > 1) damage = Math.floor(damage * targetEffects.damageMultiplier);
+    target.hp -= damage;
+  }
+
+  const triggeredAttacks = [];
+  const entry = pushLog(combatState, {
+    type: 'attack',
+    actorId: attacker.id,
+    targetId: target.id,
+    die: 'd20',
+    naturalRoll: roll,
+    attribute,
+    attributeModifier,
+    weaponAccuracy: range.accuracyModifier ?? 0,
+    markedBonus,
+    blindedPenalty,
+    flanked,
+    flankBonus,
+    coverBonus,
+    range: { distance, band: range.band, legal: range.legal },
+    roll: total,
+    targetDefense: defense,
+    hit,
+    crit: isCrit,
+    fumble: isFumble,
+    damage,
+    damageDie: weapon.damageDie ?? null,
+    damageRoll,
+    trigger: options.trigger ?? null,
+    triggeredAttacks
+  });
+
+  if (hit && isCrit) {
+    for (const hook of weapon.effects?.onHit?.conditions ?? []) {
+      if (hook.trigger !== 'critical') continue;
+      const result = applyCondition(target, hook.conditionId, {}, rngCursor, conditionsData);
+      entry.criticalEffects = entry.criticalEffects ?? [];
+      entry.criticalEffects.push({ conditionId: hook.conditionId, ...result });
+    }
+  }
+
+  if (target.hp <= 0) {
+    target.hp = 0;
+    pushLog(combatState, { type: 'death', actorId: attacker.id, targetId: target.id });
+  }
+
+  if (isFumble && options.allowReactions !== false) {
+    for (const reactor of getOpportunityAttackers(attacker, attacker.position, null, combatState)) {
+      if (attacker.hp <= 0) break;
+      triggeredAttacks.push(performAttackRoll(combatState, reactor, attacker, rngCursor, context, { allowReactions: false, trigger: 'fumble' }).sequence);
+    }
+  }
+
+  return entry;
 }
 
 function executeAttack(combatState, actor, targetId, rngCursor, context) {
   const target = combatState.combatants.get(targetId);
   if (!target || target.hp <= 0) return { success: false, reason: 'invalid-target' };
-
-  const roll = rngCursor.nextInt('combat', 20) + 1;
-  const isMelee = !actor.weapon || actor.weapon?.rangeBand === 'adjacent';
-  const attrMod = isMelee ? modifier(actor.attributes?.mgt || 3) : modifier(actor.attributes?.fin || 3);
-  const weaponBonus = actor.weapon?.accuracyBonus || 0;
-  const coverBonus = context?.lattice && actor.position && target.position
-    ? 0
-    : 0;
-  const markedBonus = hasCondition(target, 'marked') ? 2 : 0;
-  const total = roll + attrMod + weaponBonus + markedBonus;
-
-  const conditionEffects = getConditionEffects(target, context.conditionsData?.conditions || context.conditionsData);
-  const defense = Math.max(conditionEffects.defenseFloor, (target.defense || 10) + getCoverBonus(target) + conditionEffects.defenseBonus + conditionEffects.defensePenalty);
-
-  const isCrit = roll === 20;
-  const isFumble = roll === 1;
-  const hit = !isFumble && (isCrit || total >= defense);
-
-  let damage = 0;
-  if (hit) {
-    const dieSize = parseInt(actor.weapon?.damageDie?.slice(1) || '6', 10);
-    const dieCount = isCrit ? 2 : 1;
-    damage = rollDice(rngCursor, dieCount, dieSize);
-    if (isMelee) damage += modifier(actor.attributes?.mgt || 3);
-    if (hasCondition(target, 'overloaded')) damage = Math.floor(damage * 1.5);
-    target.hp -= damage;
-    if (target.hp <= 0) {
-      target.hp = 0;
-      combatState.log.push({ type: 'death', actorId: actor.id, targetId });
-    }
-  }
-
-  combatState.log.push({ type: 'attack', actorId: actor.id, targetId, roll: total, naturalRoll: roll, hit, damage, crit: isCrit, fumble: isFumble });
+  const entry = performAttackRoll(combatState, actor, target, rngCursor, context, {});
   actor.ap--;
-  return { success: true, hit, damage, crit: isCrit, fumble: isFumble };
+  return { success: true, hit: entry.hit, damage: entry.damage, crit: entry.crit, fumble: entry.fumble };
 }
 
 function executeProtocol(combatState, actor, school, tier, targetId, overclock, rngCursor, context) {
@@ -338,7 +443,7 @@ function executeProtocol(combatState, actor, school, tier, targetId, overclock, 
     ? overclockProtocol(actor, school, tier, target, context.protocolsData, conditionsData, rngCursor)
     : castProtocol(actor, school, tier, target, context.protocolsData, conditionsData, rngCursor);
   if (result.success) {
-    combatState.log.push({ type: 'protocol', actorId: actor.id, targetId, school, tier, overclocked: overclock, result: result.result });
+    pushLog(combatState, { type: 'protocol', actorId: actor.id, targetId, school, tier, overclocked: overclock, result: result.result });
     actor.ap--;
   }
   return result;
@@ -355,7 +460,7 @@ function executeItem(combatState, actor, targetId, consumableId, rngCursor, cont
 
   const result = applyConsumable(target, context.consumablesData?.consumables?.[itemId], { inCombat: true, rngCursor, activeCharacter: actor, conditionsData: context.conditionsData, inventory, itemId: inventoryItem?.id });
   if (result.success) {
-    combatState.log.push({ type: 'item', actorId: actor.id, targetId, consumableId: itemId, result });
+    pushLog(combatState, { type: 'item', actorId: actor.id, targetId, consumableId: itemId, result });
     actor.ap--;
     if (inventory && result.inventory) {
       inventory.splice(0, inventory.length, ...result.inventory);
@@ -370,10 +475,6 @@ function canUseProtocol(actor, school, tier) {
     return actor.protocolAccess?.schools?.includes(school) && tier <= (actor.protocolAccess.maxTier || tier);
   }
   return actor.protocols?.some(protocol => protocol.school === school && protocol.tier === tier) || false;
-}
-
-function getCoverBonus(target) {
-  return target.coverBonus || 0;
 }
 
 function rollDice(rngCursor, count, sides) {
@@ -434,10 +535,10 @@ function prepareTurn(combatState, actor, context, rngCursor) {
   for (const result of tickResults) {
     if (result.type !== 'damage' || result.amount <= 0) continue;
     actor.hp -= result.amount;
-    combatState.log.push({ type: 'condition-damage', actorId: actor.id, source: result.source, amount: result.amount });
+    pushLog(combatState, { type: 'condition-damage', actorId: actor.id, source: result.source, amount: result.amount });
     if (actor.hp <= 0) {
       actor.hp = 0;
-      combatState.log.push({ type: 'death', actorId: actor.id, cause: 'condition' });
+      pushLog(combatState, { type: 'death', actorId: actor.id, cause: 'condition' });
     }
   }
 }

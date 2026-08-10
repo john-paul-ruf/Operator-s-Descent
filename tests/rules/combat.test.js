@@ -12,6 +12,8 @@ const conditionsData = loadData('conditions');
 const consumablesData = loadData('consumables');
 const baseContext = { protocolsData, conditionsData, consumablesData, runState: {} };
 
+// Adjacent to makeCharacter()'s default {x:0,y:0} so bare attack-resolution fixtures are
+// legal-range melee by default; tests that need a specific distance override explicitly.
 function makeEnemy(overrides = {}) {
   return {
     id: 'enemy_1',
@@ -23,9 +25,15 @@ function makeEnemy(overrides = {}) {
     retreats: false,
     side: 'enemy',
     conditions: [],
-    position: { x: 5, y: 5 },
+    position: { x: 1, y: 0 },
     ...overrides,
   };
+}
+
+// An open 8x16 combat window with no walls between (0,0) and any cell used below — attack
+// tests that need real range/cover geometry attach this to combatState.window explicitly.
+function openWindow() {
+  return openCombatWindow();
 }
 
 function startCombat(party, enemies, seed = 1, firstActorId = null) {
@@ -205,7 +213,7 @@ describe('executeAction guards', () => {
 });
 
 describe('executeAction — attack resolution', () => {
-  it('nat 20 — auto-hit, 2 damage dice, crit:true', () => {
+  it('nat 20 — auto-hit, maximum possible damage (not double dice), crit:true', () => {
     const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' }) })];
     const enemy = makeEnemy({ id: 'enemy_1', defense: 30, hp: 100, hpMax: 100 });
     const seed = findAttackSeed(19, 1, 1);
@@ -215,7 +223,9 @@ describe('executeAction — attack resolution', () => {
     expect(result.crit).toBe(true);
     const atkLog = state.log.find(e => e.type === 'attack');
     expect(atkLog.crit).toBe(true);
-    expect(result.damage).toBeGreaterThanOrEqual(2);
+    // d6 max (6) + modifier(mgt:5)=0 — a single fixed value, not a summed/ranged roll of two dice.
+    expect(result.damage).toBe(6);
+    expect(atkLog.damageRoll).toBeNull();
   });
 
   it('nat 1 — auto-miss even vs defense 1', () => {
@@ -243,23 +253,67 @@ describe('executeAction — attack resolution', () => {
     }
   });
 
-  it('ranged weapon uses modifier(fin) to hit only', () => {
+  it('ranged weapon uses modifier(fin) to hit only, no attribute added to damage', () => {
     const fin = 8;
-    const party = [makeCharacter({ id: 'a', attributes: { mgt: 3, fin, vit: 5, res: 5, foc: 5, sig: 5 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'ranged', accuracyBonus: 0 }) })];
-    const enemy = makeEnemy({ id: 'enemy_1', defense: 10, hp: 100, hpMax: 100 });
-    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
-    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const party = [makeCharacter({ id: 'a', attributes: { mgt: 3, fin, vit: 5, res: 5, foc: 5, sig: 5 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', defense: 0, hp: 100, hpMax: 100 });
+    const seed = findAttackSeed(19, 1, 1);
+    const { state, cursor } = startCombat(party, [enemy], seed, 'a');
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
     const atkLog = state.log.find(e => e.type === 'attack');
     expect(atkLog.roll).toBe(atkLog.naturalRoll + modifier(fin));
+    expect(atkLog.attribute).toBe('fin');
+    // Nat 20 → max d6 (6), ranged damage never adds an attribute modifier.
+    expect(result.damage).toBe(6);
   });
 
   it('weapon.accuracyBonus added to hit', () => {
-    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'ranged', accuracyBonus: 3 }) })];
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 3 }) })];
     const enemy = makeEnemy({ id: 'enemy_1', defense: 10, hp: 100, hpMax: 100 });
     const { state, cursor } = startCombat(party, [enemy], 1, 'a');
     executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
     const atkLog = state.log.find(e => e.type === 'attack');
     expect(atkLog.roll).toBe(atkLog.naturalRoll + modifier(5) + 3);
+    expect(atkLog.weaponAccuracy).toBe(3);
+  });
+
+  it('polearm (adjacent-banded, maxRange 2) still resolves as melee at reach', () => {
+    const mgt = 8;
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, attributes: { mgt, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 }, weapon: makeWeapon({ damageDie: 'd8', rangeBand: 'adjacent', maxRange: 2, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 2, y: 0 }, defense: 10 + modifier(mgt), hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.attribute).toBe('mgt');
+    expect(atkLog.range).toMatchObject({ distance: 2, band: 'adjacent', legal: true });
+    if (result.hit) expect(result.damage).toBeGreaterThanOrEqual(1 + modifier(mgt));
+  });
+
+  it('beyond a weapon\'s maximum range, the attack always misses — even on a natural 20', () => {
+    const seed = findAttackSeed(19, 1, 1);
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 0 }, defense: 0, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], seed, 'a');
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.hit).toBe(false);
+    expect(result.damage).toBe(0);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.range).toMatchObject({ distance: 5, band: 'short', legal: false });
+  });
+
+  it('sniper below minimum range takes the -1 penalty; at/beyond it gets the +1 bonus', () => {
+    const sniper = makeWeapon({ damageDie: 'd8', rangeBand: 'long', minRange: 3, maxRange: 16, accuracyBonus: -1 });
+    const tooClose = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: sniper })];
+    const closeEnemy = makeEnemy({ id: 'enemy_1', position: { x: 2, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state: closeState, cursor: closeCursor } = startCombat(tooClose, [closeEnemy], 1, 'a');
+    executeAction(closeState, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, closeCursor, baseContext);
+    expect(closeState.log.find(e => e.type === 'attack').weaponAccuracy).toBe(-1);
+
+    const atRange = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: sniper })];
+    const farEnemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state: farState, cursor: farCursor } = startCombat(atRange, [farEnemy], 1, 'a');
+    executeAction(farState, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, farCursor, baseContext);
+    expect(farState.log.find(e => e.type === 'attack').weaponAccuracy).toBe(1);
   });
 
   it('marked on target → +2 to hit', () => {
@@ -271,23 +325,65 @@ describe('executeAction — attack resolution', () => {
     expect(atkLog.roll).toBe(atkLog.naturalRoll + modifier(5) + 2);
   });
 
-  it('blinded on target → defense -4', () => {
-    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', accuracyBonus: 0 }) })];
-    const enemy = makeEnemy({ id: 'enemy_1', defense: 20, hp: 100, hpMax: 100, conditions: [{ id: 'blinded', duration: 2, stacks: 1 }] });
+  it('ranged attacker with BLINDED takes -4 to the attack roll', () => {
+    const fin = 8;
+    const party = [makeCharacter({ id: 'a', attributes: { mgt: 3, fin, vit: 5, res: 5, foc: 5, sig: 5 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }), conditions: [{ id: 'blinded', duration: 2, stacks: 1 }] })];
+    const enemy = makeEnemy({ id: 'enemy_1', defense: 10, hp: 100, hpMax: 100 });
     const { state, cursor } = startCombat(party, [enemy], 1, 'a');
     executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
     const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.attribute).toBe('fin');
+    expect(atkLog.blindedPenalty).toBe(-4);
+    expect(atkLog.roll).toBe(atkLog.naturalRoll + modifier(fin) - 4);
+  });
+
+  it('melee attacker with BLINDED takes no ranged penalty', () => {
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', accuracyBonus: 0 }), conditions: [{ id: 'blinded', duration: 2, stacks: 1 }] })];
+    const enemy = makeEnemy({ id: 'enemy_1', defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.blindedPenalty).toBe(0);
     expect(atkLog.roll).toBe(atkLog.naturalRoll + modifier(5));
   });
 
-  it('coverBonus raises target defense', () => {
-    const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' }) })];
-    const enemy = makeEnemy({ id: 'enemy_1', defense: 10, hp: 100, hpMax: 100, coverBonus: 4 });
+  it('edge-crossing cover: a wall between attacker and target grants +2 defense (half cover)', () => {
+    const window = openCombatWindow();
+    window.cells[0][2] = 0; // wall at (2,0) — exactly one blocked cell on the line from (0,0) to (4,0)
+    window.cells[0][3] = 0; // wall at (3,0) — a second blocked cell → full cover
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 4, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
     const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
     executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
     const atkLog = state.log.find(e => e.type === 'attack');
-    const expectedDef = 10 + 4;
-    expect(atkLog.hit).toBe(atkLog.naturalRoll !== 1 && (atkLog.naturalRoll === 20 || atkLog.roll >= expectedDef));
+    expect(atkLog.coverBonus).toBe(4); // two blocked crossings → full cover
+    expect(atkLog.targetDefense).toBe(14); // 10 base + 4 full cover
+  });
+
+  it('edge-crossing cover: a single wall between attacker and target grants +2 (half cover)', () => {
+    const window = openCombatWindow();
+    window.cells[0][2] = 0; // exactly one blocked cell
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 4, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.coverBonus).toBe(2); // one blocked crossing → half cover
+    expect(atkLog.targetDefense).toBe(12);
+  });
+
+  it('no walls between attacker and target → zero cover bonus', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 4, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.coverBonus).toBe(0);
+    expect(atkLog.targetDefense).toBe(10);
   });
 
   it('overloaded target → damage ×1.5 floored', () => {
