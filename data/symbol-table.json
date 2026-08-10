@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "tables": {
+    "class": {
+      "escape": 7,
+      "entries": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"]
+    },
+    "sigil": {
+      "escape": 63,
+      "entries": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59]
+    },
+    "attribute": {
+      "escape": 15,
+      "entries": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    },
+    "hp": {
+      "escape": 127,
+      "entries": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]
+    },
+    "charge": {
+      "escape": 127,
+      "entries": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]
+    },
+    "conditions": {
+      "escape": 63,
+      "entries": ["none", "jammed", "overloaded", "shielded", "blinded", "immobilized", "corroded", "marked", "panicked", "burning"]
+    },
+    "item_id": {
+      "escape": 255,
+      "entries": ["sidearm", "heavy_melee", "polearm", "light_ranged", "heavy_ranged", "sniper", "area_projector", "shield", "none", "light", "medium", "heavy", "repair_patch", "med_kit", "charge_cell", "boost_cell", "purge_spike", "shield_capacitor", "adrenal_injector"]
+    },
+    "equipment": {
+      "escape": 127,
+      "entries": [
+        ["sidearm", "weapon"], ["heavy_melee", "weapon"], ["polearm", "weapon"], ["light_ranged", "weapon"], ["heavy_ranged", "weapon"], ["sniper", "weapon"], ["area_projector", "weapon"], ["shield", "offhand"],
+        ["none", "armor"], ["light", "armor"], ["medium", "armor"], ["heavy", "armor"]
+      ]
+    },
+    "calamity_count": {
+      "escape": 31,
+      "entries": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    },
+    "sigil_tier": {
+      "escape": 7,
+      "entries": [0, 1, 2, 3, 4, 5, 6, 7]
+    },
+    "inventory_default": {
+      "escape": 7,
+      "entries": ["empty"]
+    }
+  }
+}

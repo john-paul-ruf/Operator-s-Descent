@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "themes": [
+    {
+      "id": "cold_storage",
+      "name": "Cold Storage",
+      "accentColor": "#7ec8e3",
+      "archetypeWeights": { "chambers": 3, "caves": 1, "maze": 1, "open": 2, "organic": 1, "bastion": 1, "lattice": 2, "ruin": 1 },
+      "modifierWeights": { "none": 4, "dense": 1, "sparse": 2, "dangerous": 1 },
+      "enemyMixWeights": { "drone": 3, "warden": 2, "stalker": 1, "choir": 1, "null": 1, "construct": 1, "phantom": 1, "apex": 0 },
+      "lootBias": { "containerDensity": 0.8, "rarityShift": 0, "affixPoolBias": {} },
+      "audioMode": "cold-ambient"
+    },
+    {
+      "id": "foundry",
+      "name": "The Foundry",
+      "accentColor": "#e8632a",
+      "archetypeWeights": { "chambers": 3, "caves": 2, "maze": 2, "open": 0, "organic": 1, "bastion": 2, "lattice": 0, "ruin": 1 },
+      "modifierWeights": { "none": 2, "dense": 3, "sparse": 0, "dangerous": 2 },
+      "enemyMixWeights": { "drone": 4, "warden": 2, "stalker": 2, "choir": 1, "null": 1, "construct": 3, "phantom": 0, "apex": 0 },
+      "lootBias": { "containerDensity": 0.6, "rarityShift": 0, "affixPoolBias": {} },
+      "audioMode": "foundry-industrial"
+    },
+    {
+      "id": "data_stream",
+      "name": "Data Stream",
+      "accentColor": "#2ed4c1",
+      "archetypeWeights": { "chambers": 1, "caves": 3, "maze": 0, "open": 4, "organic": 2, "bastion": 0, "lattice": 1, "ruin": 1 },
+      "modifierWeights": { "none": 3, "dense": 1, "sparse": 2, "dangerous": 1 },
+      "enemyMixWeights": { "drone": 2, "warden": 1, "stalker": 3, "choir": 1, "null": 1, "construct": 1, "phantom": 2, "apex": 0 },
+      "lootBias": { "containerDensity": 0.9, "rarityShift": 0, "affixPoolBias": {} },
+      "audioMode": "flowing-cyan"
+    },
+    {
+      "id": "data_cache",
+      "name": "Data Cache",
+      "accentColor": "#e8d23a",
+      "archetypeWeights": { "chambers": 4, "caves": 1, "maze": 3, "open": 0, "organic": 1, "bastion": 2, "lattice": 1, "ruin": 1 },
+      "modifierWeights": { "none": 2, "dense": 4, "sparse": 0, "dangerous": 1 },
+      "enemyMixWeights": { "drone": 2, "warden": 3, "stalker": 1, "choir": 2, "null": 1, "construct": 2, "phantom": 1, "apex": 0 },
+      "lootBias": { "containerDensity": 1.5, "rarityShift": 0.5, "affixPoolBias": {} },
+      "audioMode": "compressed-yellow"
+    },
+    {
+      "id": "archive",
+      "name": "The Archive",
+      "accentColor": "#c4a04e",
+      "archetypeWeights": { "chambers": 2, "caves": 1, "maze": 4, "open": 1, "organic": 0, "bastion": 1, "lattice": 2, "ruin": 2 },
+      "modifierWeights": { "none": 2, "dense": 2, "sparse": 1, "dangerous": 2 },
+      "enemyMixWeights": { "drone": 1, "warden": 4, "stalker": 2, "choir": 1, "null": 2, "construct": 2, "phantom": 1, "apex": 0 },
+      "lootBias": { "containerDensity": 1.0, "rarityShift": 0.1, "affixPoolBias": {} },
+      "audioMode": "labyrinth-amber"
+    },
+    {
+      "id": "hive",
+      "name": "The Hive",
+      "accentColor": "#8ec44a",
+      "archetypeWeights": { "chambers": 1, "caves": 2, "maze": 0, "open": 1, "organic": 4, "bastion": 0, "lattice": 1, "ruin": 1 },
+      "modifierWeights": { "none": 1, "dense": 3, "sparse": 1, "dangerous": 2 },
+      "enemyMixWeights": { "drone": 5, "warden": 1, "stalker": 2, "choir": 1, "null": 1, "construct": 1, "phantom": 1, "apex": 0 },
+      "lootBias": { "containerDensity": 0.8, "rarityShift": 0, "affixPoolBias": {} },
+      "audioMode": "organic-green"
+    },
+    {
+      "id": "void",
+      "name": "The Void",
+      "accentColor": "#b026d4",
+      "archetypeWeights": { "chambers": 1, "caves": 2, "maze": 1, "open": 3, "organic": 1, "bastion": 0, "lattice": 1, "ruin": 2 },
+      "modifierWeights": { "none": 2, "dense": 0, "sparse": 4, "dangerous": 3 },
+      "enemyMixWeights": { "drone": 1, "warden": 1, "stalker": 2, "choir": 1, "null": 2, "construct": 1, "phantom": 4, "apex": 0 },
+      "lootBias": { "containerDensity": 0.5, "rarityShift": 0.2, "affixPoolBias": {} },
+      "audioMode": "abyssal-magenta"
+    },
+    {
+      "id": "lattice",
+      "name": "The Lattice",
+      "accentColor": "#a8e8ff",
+      "archetypeWeights": { "chambers": 1, "caves": 0, "maze": 1, "open": 2, "organic": 0, "bastion": 1, "lattice": 4, "ruin": 1 },
+      "modifierWeights": { "none": 3, "dense": 1, "sparse": 2, "dangerous": 1 },
+      "enemyMixWeights": { "drone": 2, "warden": 2, "stalker": 2, "choir": 2, "null": 1, "construct": 1, "phantom": 1, "apex": 0 },
+      "lootBias": { "containerDensity": 0.9, "rarityShift": 0, "affixPoolBias": {} },
+      "audioMode": "geometric-cyan"
+    },
+    {
+      "id": "stack",
+      "name": "The Stack",
+      "accentColor": "#6a2eb8",
+      "archetypeWeights": { "chambers": 3, "caves": 1, "maze": 2, "open": 1, "organic": 1, "bastion": 2, "lattice": 1, "ruin": 1 },
+      "modifierWeights": { "none": 2, "dense": 2, "sparse": 1, "dangerous": 2 },
+      "enemyMixWeights": { "drone": 1, "warden": 2, "stalker": 2, "choir": 1, "null": 1, "construct": 4, "phantom": 1, "apex": 0 },
+      "lootBias": { "containerDensity": 1.0, "rarityShift": 0.1, "affixPoolBias": {} },
+      "audioMode": "layered-purple"
+    },
+    {
+      "id": "terminal",
+      "name": "The Terminal",
+      "accentColor": "#e83a3a",
+      "archetypeWeights": { "chambers": 2, "caves": 2, "maze": 3, "open": 1, "organic": 1, "bastion": 1, "lattice": 1, "ruin": 3 },
+      "modifierWeights": { "none": 1, "dense": 2, "sparse": 1, "dangerous": 4 },
+      "enemyMixWeights": { "drone": 1, "warden": 2, "stalker": 2, "choir": 2, "null": 3, "construct": 2, "phantom": 2, "apex": 1 },
+      "lootBias": { "containerDensity": 0.7, "rarityShift": 0.3, "affixPoolBias": {} },
+      "audioMode": "corrupted-red"
+    },
+    {
+      "id": "nursery",
+      "name": "The Nursery",
+      "accentColor": "#3ae8a8",
+      "archetypeWeights": { "chambers": 2, "caves": 3, "maze": 0, "open": 1, "organic": 4, "bastion": 0, "lattice": 1, "ruin": 1 },
+      "modifierWeights": { "none": 2, "dense": 2, "sparse": 1, "dangerous": 2 },
+      "enemyMixWeights": { "drone": 2, "warden": 1, "stalker": 4, "choir": 1, "null": 1, "construct": 1, "phantom": 2, "apex": 0 },
+      "lootBias": { "containerDensity": 1.0, "rarityShift": 0, "affixPoolBias": {} },
+      "audioMode": "bioluminescent-teal"
+    },
+    {
+      "id": "crypt",
+      "name": "The Crypt",
+      "accentColor": "#d4d0c8",
+      "archetypeWeights": { "chambers": 3, "caves": 1, "maze": 3, "open": 0, "organic": 1, "bastion": 1, "lattice": 1, "ruin": 3 },
+      "modifierWeights": { "none": 1, "dense": 2, "sparse": 2, "dangerous": 3 },
+      "enemyMixWeights": { "drone": 1, "warden": 2, "stalker": 2, "choir": 1, "null": 3, "construct": 1, "phantom": 4, "apex": 0 },
+      "lootBias": { "containerDensity": 0.8, "rarityShift": 0.2, "affixPoolBias": {} },
+      "audioMode": "ancient-bone"
+    }
+  ]
+}

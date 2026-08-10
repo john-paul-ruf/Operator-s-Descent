@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "weapons": {
+    "sidearm": {
+      "name": "Sidearm",
+      "damageDie": "d6",
+      "rangeBand": "adjacent",
+      "maxRange": 1,
+      "accuracyBonus": 1,
+      "classGates": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"],
+      "creationCost": 1,
+      "slot": "weapon",
+      "salvageValue": 1
+    },
+    "heavy_melee": {
+      "name": "Heavy Melee",
+      "damageDie": "d10",
+      "rangeBand": "adjacent",
+      "maxRange": 1,
+      "accuracyBonus": 0,
+      "classGates": ["breacher", "anchor"],
+      "creationCost": 2,
+      "slot": "weapon",
+      "salvageValue": 2
+    },
+    "polearm": {
+      "name": "Polearm",
+      "damageDie": "d8",
+      "rangeBand": "adjacent",
+      "maxRange": 2,
+      "accuracyBonus": 0,
+      "classGates": ["breacher", "anchor", "operator"],
+      "creationCost": 2,
+      "slot": "weapon",
+      "salvageValue": 2
+    },
+    "light_ranged": {
+      "name": "Light Ranged",
+      "damageDie": "d6",
+      "rangeBand": "short",
+      "maxRange": 4,
+      "accuracyBonus": 1,
+      "classGates": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"],
+      "creationCost": 1,
+      "slot": "weapon",
+      "salvageValue": 1
+    },
+    "heavy_ranged": {
+      "name": "Heavy Ranged",
+      "damageDie": "d10",
+      "rangeBand": "medium",
+      "maxRange": 8,
+      "accuracyBonus": 0,
+      "classGates": ["ghost", "operator"],
+      "creationCost": 3,
+      "slot": "weapon",
+      "salvageValue": 3
+    },
+    "sniper": {
+      "name": "Sniper",
+      "damageDie": "d8",
+      "rangeBand": "long",
+      "minRange": 3,
+      "maxRange": 16,
+      "accuracyBonus": -1,
+      "classGates": ["ghost"],
+      "creationCost": 4,
+      "slot": "weapon",
+      "salvageValue": 4
+    },
+    "area_projector": {
+      "name": "Area Projector",
+      "damageDie": "d6",
+      "rangeBand": "blast",
+      "maxRange": 3,
+      "accuracyBonus": 0,
+      "classGates": ["compiler", "oracle"],
+      "creationCost": 4,
+      "slot": "weapon",
+      "salvageValue": 4
+    },
+    "shield": {
+      "name": "Shield",
+      "damageDie": null,
+      "rangeBand": null,
+      "maxRange": 0,
+      "accuracyBonus": 0,
+      "defenseBonus": 2,
+      "classGates": ["breacher", "anchor", "operator"],
+      "creationCost": 3,
+      "slot": "offhand",
+      "salvageValue": 3
+    }
+  },
+  "armor": {
+    "none": {
+      "name": "None",
+      "defenseBonus": 0,
+      "finPenalty": 0,
+      "classGates": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"],
+      "creationCost": 0,
+      "salvageValue": 0
+    },
+    "light": {
+      "name": "Light Armor",
+      "defenseBonus": 1,
+      "finPenalty": 0,
+      "classGates": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"],
+      "creationCost": 1,
+      "salvageValue": 1
+    },
+    "medium": {
+      "name": "Medium Armor",
+      "defenseBonus": 3,
+      "finPenalty": -1,
+      "classGates": ["breacher", "ghost", "compiler", "anchor", "oracle", "operator"],
+      "creationCost": 2,
+      "salvageValue": 2
+    },
+    "heavy": {
+      "name": "Heavy Armor",
+      "defenseBonus": 5,
+      "finPenalty": -2,
+      "classGates": ["breacher", "anchor"],
+      "creationCost": 3,
+      "salvageValue": 3
+    }
+  }
+}

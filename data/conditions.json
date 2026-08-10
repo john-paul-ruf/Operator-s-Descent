@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "conditions": {
+    "jammed": {
+      "name": "Jammed",
+      "effect": "Target cannot use protocols (CHARGE spending blocked).",
+      "duration": 2,
+      "saveAttribute": "foc",
+      "stackable": false,
+      "effectData": { "blockProtocols": true }
+    },
+    "overloaded": {
+      "name": "Overloaded",
+      "effect": "Target takes +50% damage from all sources.",
+      "duration": 2,
+      "saveAttribute": "res",
+      "stackable": false,
+      "effectData": { "damageMultiplier": 1.5 }
+    },
+    "shielded": {
+      "name": "Shielded",
+      "effect": "Target gains +4 Defense and immunity to the next condition applied. Consumed on use.",
+      "duration": 3,
+      "saveAttribute": null,
+      "stackable": false,
+      "effectData": { "defenseBonus": 4, "consumeOnCondition": true }
+    },
+    "blinded": {
+      "name": "Blinded",
+      "effect": "Target's LOS reduced to 1 cell. Ranged attacks take -4.",
+      "duration": 2,
+      "saveAttribute": "fin",
+      "stackable": false,
+      "effectData": { "losRange": 1, "rangedPenalty": -4 }
+    },
+    "immobilized": {
+      "name": "Immobilized",
+      "effect": "Target cannot move (move action consumed). Can still act with AP.",
+      "duration": 1,
+      "saveAttribute": "mgt",
+      "stackable": false,
+      "effectData": { "blockMove": true }
+    },
+    "corroded": {
+      "name": "Corroded",
+      "effect": "Target loses 2 Defense per turn (cumulative, min Defense 2).",
+      "duration": 3,
+      "saveAttribute": "vit",
+      "stackable": false,
+      "effectData": { "defenseLossPerTurn": 2, "minDefense": 2 }
+    },
+    "marked": {
+      "name": "Marked",
+      "effect": "Target is visible to all hostiles regardless of LOS. Hostiles gain +2 to attack rolls against MARKED target.",
+      "duration": 3,
+      "saveAttribute": null,
+      "stackable": false,
+      "effectData": { "alwaysVisible": true, "attackBonusAgainst": 2 }
+    },
+    "panicked": {
+      "name": "Panicked",
+      "effect": "Target must move away from nearest hostile on its turn (forced retreat). Cannot attack.",
+      "duration": 1,
+      "saveAttribute": "foc",
+      "stackable": false,
+      "effectData": { "forcedRetreat": true, "blockAttack": true }
+    },
+    "burning": {
+      "name": "Burning",
+      "effect": "Target takes d6 damage at the start of its turn for 3 turns. Stacks (renewing duration).",
+      "duration": 3,
+      "saveAttribute": "vit",
+      "stackable": true,
+      "effectData": { "damagePerTurn": "d6" }
+    }
+  }
+}

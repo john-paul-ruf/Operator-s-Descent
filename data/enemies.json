@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "archetypes": {
+    "drone": {
+      "name": "Drone",
+      "role": "Swarm minion",
+      "attributes": { "mgt": 3, "fin": 5, "vit": 2, "res": 1, "foc": 2, "sig": 3 },
+      "hpBonus": 0,
+      "armored": false,
+      "behavior": "aggressive",
+      "protocolAccess": null,
+      "retreats": false,
+      "sigilCodepoints": [57392, 57393, 57394]
+    },
+    "warden": {
+      "name": "Warden",
+      "role": "Guard defender",
+      "attributes": { "mgt": 6, "fin": 3, "vit": 6, "res": 1, "foc": 3, "sig": 2 },
+      "hpBonus": 4,
+      "armored": false,
+      "behavior": "defensive",
+      "protocolAccess": null,
+      "retreats": true,
+      "sigilCodepoints": [57395, 57396, 57397]
+    },
+    "stalker": {
+      "name": "Stalker",
+      "role": "Ambush skirmisher",
+      "attributes": { "mgt": 4, "fin": 7, "vit": 3, "res": 2, "foc": 4, "sig": 4 },
+      "hpBonus": 2,
+      "armored": false,
+      "behavior": "flanking",
+      "protocolAccess": null,
+      "retreats": true,
+      "sigilCodepoints": [57398, 57399, 57400]
+    },
+    "choir": {
+      "name": "Choir",
+      "role": "Caster artillery",
+      "attributes": { "mgt": 2, "fin": 4, "vit": 3, "res": 7, "foc": 5, "sig": 4 },
+      "hpBonus": 0,
+      "armored": false,
+      "behavior": "artillery",
+      "protocolAccess": { "schools": ["disrupt", "scry"], "maxTier": 3 },
+      "retreats": true,
+      "sigilCodepoints": [57401, 57402, 57403]
+    },
+    "null": {
+      "name": "Null",
+      "role": "Disruptor controller",
+      "attributes": { "mgt": 3, "fin": 4, "vit": 4, "res": 3, "foc": 7, "sig": 5 },
+      "hpBonus": 2,
+      "armored": false,
+      "behavior": "controller",
+      "protocolAccess": { "conditions": ["jammed", "overloaded", "immobilized", "panicked", "marked"] },
+      "retreats": true,
+      "sigilCodepoints": [57404, 57405, 57406]
+    },
+    "construct": {
+      "name": "Construct",
+      "role": "Tank bruiser",
+      "attributes": { "mgt": 7, "fin": 2, "vit": 8, "res": 2, "foc": 2, "sig": 2 },
+      "hpBonus": 8,
+      "armored": true,
+      "behavior": "aggressive",
+      "protocolAccess": null,
+      "retreats": false,
+      "sigilCodepoints": [57407, 57408, 57409]
+    },
+    "phantom": {
+      "name": "Phantom",
+      "role": "Ghost elusive",
+      "attributes": { "mgt": 4, "fin": 6, "vit": 3, "res": 3, "foc": 4, "sig": 7 },
+      "hpBonus": 2,
+      "armored": false,
+      "behavior": "phasing",
+      "protocolAccess": null,
+      "retreats": true,
+      "sigilCodepoints": [57410, 57411, 57412]
+    },
+    "apex": {
+      "name": "Apex",
+      "role": "Elite boss",
+      "attributes": { "mgt": 6, "fin": 6, "vit": 7, "res": 5, "foc": 5, "sig": 5 },
+      "hpBonus": 12,
+      "armored": false,
+      "behavior": "multi-action",
+      "protocolAccess": null,
+      "retreats": false,
+      "sigilCodepoints": [57413, 57414, 57415]
+    }
+  }
+}

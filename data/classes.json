@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "classes": [
+    {
+      "id": "breacher",
+      "name": "Breacher",
+      "primaryAttribute": "mgt",
+      "hitDieBase": 16,
+      "chargeBase": 0,
+      "signature": {
+        "id": "breach",
+        "name": "Breach",
+        "tiers": [
+          "Ignores cover when attacking. Cover bonus does not apply against Breacher attacks.",
+          "Breacher attacks also ignore SHIELDED.",
+          "Breacher gains a free melee attack after moving (one per turn, does not consume AP)."
+        ]
+      },
+      "equipmentGates": {
+        "weapons": ["sidearm", "heavy_melee", "polearm", "shield"],
+        "armor": ["none", "light", "medium", "heavy"]
+      },
+      "protocolGates": {
+        "schools": ["disrupt"],
+        "maxTier": 2
+      },
+      "sigilFamily": "breacher",
+      "calibrationOptions": {}
+    },
+    {
+      "id": "ghost",
+      "name": "Ghost",
+      "primaryAttribute": "fin",
+      "hitDieBase": 10,
+      "chargeBase": 2,
+      "signature": {
+        "id": "phase",
+        "name": "Phase",
+        "tiers": [
+          "May move through one wall cell per move action (phasing). Phased movement does not trigger opportunity attacks.",
+          "Ghost gains +2 to initiative.",
+          "Ghost may phase through 2 wall cells per move action."
+        ]
+      },
+      "equipmentGates": {
+        "weapons": ["sidearm", "sniper", "heavy_ranged", "light_ranged"],
+        "armor": ["none", "light"]
+      },
+      "protocolGates": {
+        "schools": ["scry", "disrupt"],
+        "maxTier": 5
+      },
+      "sigilFamily": "ghost",
+      "calibrationOptions": {}
+    },
+    {
+      "id": "compiler",
+      "name": "Compiler",
+      "primaryAttribute": "res",
+      "hitDieBase": 8,
+      "chargeBase": 6,
+      "signature": {
+        "id": "compile",
+        "name": "Compile",
+        "tiers": [
+          "Protocol overclocks cost 1 CHARGE less (minimum 1).",
+          "Failed overclocks do not add corruption (immune to overclock corruption).",
+          "May overclock two tiers at once (triple CHARGE cost, no corruption roll — automatic success)."
+        ]
+      },
+      "equipmentGates": {
+        "weapons": ["sidearm", "area_projector", "polearm"],
+        "armor": ["none", "light"]
+      },
+      "protocolGates": {
+        "schools": ["disrupt", "ward", "scry", "rewrite"],
+        "maxTier": 5
+      },
+      "sigilFamily": "compiler",
+      "calibrationOptions": {}
+    },
+    {
+      "id": "anchor",
+      "name": "Anchor",
+      "primaryAttribute": "vit",
+      "hitDieBase": 14,
+      "chargeBase": 0,
+      "signature": {
+        "id": "hold",
+        "name": "Hold",
+        "tiers": [
+          "The Anchor and all allies within 2 cells gain +2 Defense.",
+          "Bonus extends to 4 cells and allies in range also gain +1 to saves.",
+          "May project HOLD as a WARD protocol (applies SHIELDED to one ally at CHARGE cost 2)."
+        ]
+      },
+      "equipmentGates": {
+        "weapons": ["sidearm", "heavy_melee", "polearm", "shield", "light_ranged"],
+        "armor": ["none", "light", "medium", "heavy"]
+      },
+      "protocolGates": {
+        "schools": ["ward"],
+        "maxTier": 5
+      },
+      "sigilFamily": "anchor",
+      "calibrationOptions": {}
+    },
+    {
+      "id": "oracle",
+      "name": "Oracle",
+      "primaryAttribute": "foc",
+      "hitDieBase": 6,
+      "chargeBase": 8,
+      "signature": {
+        "id": "foresee",
+        "name": "Foresee",
+        "tiers": [
+          "Sees all enemies within SIG × 3 cells regardless of LOS (telepathic detection).",
+          "May reroll one d20 per combat (attack or save) and keep the higher result.",
+          "Reveals all containers and the descent point on floor entry (no exploration required)."
+        ]
+      },
+      "equipmentGates": {
+        "weapons": ["sidearm", "area_projector", "light_ranged"],
+        "armor": ["none", "light"]
+      },
+      "protocolGates": {
+        "schools": ["scry", "rewrite"],
+        "maxTier": 5
+      },
+      "sigilFamily": "oracle",
+      "calibrationOptions": {}
+    },
+    {
+      "id": "operator",
+      "name": "Operator",
+      "primaryAttribute": "sig",
+      "hitDieBase": 12,
+      "chargeBase": 4,
+      "signature": {
+        "id": "overlay",
+        "name": "Overlay",
+        "tiers": [
+          "Boosts one ally's next attack roll by +3 (once per round, free action, does not consume AP).",
+          "May instead boost a protocol roll.",
+          "Grants all allies +1 to all d20 rolls for one turn (once per combat)."
+        ]
+      },
+      "equipmentGates": {
+        "weapons": ["sidearm", "polearm", "light_ranged", "heavy_ranged", "shield"],
+        "armor": ["none", "light", "medium"]
+      },
+      "protocolGates": {
+        "schools": ["disrupt", "ward"],
+        "maxTier": 5
+      },
+      "sigilFamily": "operator",
+      "calibrationOptions": {}
+    }
+  ]
+}

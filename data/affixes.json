@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "affixes": {
+    "reinforced": {
+      "name": "Reinforced",
+      "category": "universal",
+      "class": "minor",
+      "effect": "+1 to core stat (weapon: +1 accuracy; armor: +1 Defense)",
+      "effectData": { "weaponAccuracyBonus": 1, "armorDefenseBonus": 1 }
+    },
+    "overcharged": {
+      "name": "Overcharged",
+      "category": "universal",
+      "class": "minor",
+      "effect": "+2 CHARGE pool while equipped",
+      "effectData": { "chargeBonus": 2 }
+    },
+    "lucky": {
+      "name": "Lucky",
+      "category": "universal",
+      "class": "major",
+      "effect": "Once per floor, reroll one d20 (keep either result)",
+      "effectData": { "rerollPerFloor": 1 }
+    },
+    "phasing": {
+      "name": "Phasing",
+      "category": "universal",
+      "class": "major",
+      "effect": "Ignores cover on attacks (weapon); ignores FIN penalty (armor)",
+      "effectData": { "ignoreCover": true, "ignoreFinPenalty": true }
+    },
+    "edged": {
+      "name": "Edged",
+      "category": "weapon",
+      "class": "major",
+      "effect": "Upgrade damage die one step (d6→d8, d8→d10, d10→d12; capped at d12)",
+      "effectData": { "dieUpgrade": true, "maxDie": "d12" }
+    },
+    "precise": {
+      "name": "Precise",
+      "category": "weapon",
+      "class": "minor",
+      "effect": "+1 accuracy bonus",
+      "effectData": { "accuracyBonus": 1 }
+    },
+    "extended": {
+      "name": "Extended",
+      "category": "weapon",
+      "class": "minor",
+      "effect": "+2 cells max range",
+      "effectData": { "rangeBonus": 2 }
+    },
+    "vampiric": {
+      "name": "Vampiric",
+      "category": "weapon",
+      "class": "major",
+      "effect": "Heal 1 HP on hit",
+      "effectData": { "healOnHit": 1 }
+    },
+    "conducting": {
+      "name": "Conducting",
+      "category": "weapon",
+      "class": "minor",
+      "effect": "+1 to protocol damage while equipped",
+      "effectData": { "protocolDamageBonus": 1 }
+    },
+    "incendiary": {
+      "name": "Incendiary",
+      "category": "weapon",
+      "class": "major",
+      "effect": "Applies BURNING on critical hit (natural 20)",
+      "effectData": { "conditionOnCrit": "burning" }
+    },
+    "corrosive": {
+      "name": "Corrosive",
+      "category": "weapon",
+      "class": "major",
+      "effect": "Applies CORRODED on hit (VIT save negates)",
+      "effectData": { "conditionOnHit": "corroded", "save": "vit" }
+    },
+    "jamming": {
+      "name": "Jamming",
+      "category": "weapon",
+      "class": "major",
+      "effect": "25% chance to apply JAMMED on hit (FOC save negates)",
+      "effectData": { "conditionChance": 0.25, "conditionOnHit": "jammed", "save": "foc" }
+    },
+    "lightweight": {
+      "name": "Lightweight",
+      "category": "armor",
+      "class": "minor",
+      "effect": "Reduces FIN penalty by 1 (minimum 0)",
+      "effectData": { "finPenaltyReduction": 1, "minFinPenalty": 0 }
+    },
+    "shielding": {
+      "name": "Shielding",
+      "category": "armor",
+      "class": "major",
+      "effect": "Grants SHIELDED on floor entry (once per floor)",
+      "effectData": { "shieldOnFloorEntry": true }
+    },
+    "fortified": {
+      "name": "Fortified",
+      "category": "armor",
+      "class": "major",
+      "effect": "+2 Defense",
+      "effectData": { "defenseBonus": 2 }
+    },
+    "resonant": {
+      "name": "Resonant",
+      "category": "armor",
+      "class": "minor",
+      "effect": "+1 to CHARGE regen while equipped",
+      "effectData": { "chargeRegenBonus": 1 }
+    }
+  }
+}

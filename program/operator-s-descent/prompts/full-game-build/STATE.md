@@ -16,7 +16,7 @@
 |---|---------|---------|--------|-----------|-------|
 | 01 | Scaffolding: HTML, CSS, Service Worker, Event Bus | M77-M80, M81, M34, M82(partial) | done | 2026-08-10 | All scaffolding files created. CRT frame renders. Event bus functional. main.js loads data and attempts title mount (expected fail). Service worker registered. Placeholder woff2 font created (8 bytes). |
 | 02 | Core Logic: PRNG, Hash, RNG Cursor | M01, M02, M03 | done | 2026-08-10 | Core logic modules created: PRNG (xorshift128+), FNV-1a hash, RNG cursor with save/restore. All zero-dependency, verified for determinism. Fixed syncTo: when prngState provided, just setState+setCursor (no fast-forward). |
-| 03 | Data Files: All JSON Content + Placeholder Font | M04–M14 | pending | | |
+| 03 | Data Files: All JSON Content + Placeholder Font | M04–M14 | done | 2026-08-10 | All 10 JSON data files created and validated. Sigils (48 player + 24 bestiary), themes (12), classes (6), protocols (20/4 schools), enemies (8 archetypes), equipment (8 weapons + 4 armor), affixes (16: 4 universal/8 weapon/4 armor), conditions (9), consumables (7), symbol-table (11 tables, 324 entries). Schema matches specs/database.md. Placeholder WOFF2 exists (8 bytes). |
 | 04 | Rules Engine Part 1: Attributes, Scaling, Classes, Equipment, Conditions | M15–M19 | pending | | |
 | 05 | Rules Engine Part 2: Protocols, Consumables, Loot, Enemies, Combat, Inventory | M20–M25 | pending | | |
 | 06 | Floor Generation + Run-State Stub | M26–M29, M33(stub) | pending | | |
@@ -130,3 +130,26 @@ Full config in FORGE-CONFIG.md. Key points for this feature:
 - `syncTo` behavior: when `prngState` is provided, it sets state directly and sets cursor (no fast-forward needed — the saved state IS the state at that cursor). When `prngState` is null, it fast-forwards from current position by drawing values.
 - PRNG `hash()` method uses FNV-1a internally and is non-advancing — same as standalone `hash()` from `hash.js`.
 - PRNG seeds: use `hash(worldSeed, "gen")` and `hash(worldSeed, "combat")` to derive stream seeds.
+
+### SESSION-03 → SESSION-04/05/06/08/09/10
+
+**What was built:**
+- `data/sigils.json` — 48 player codepoints (6 families × 8, PUA 0xE000–0xE02F), 24 bestiary codepoints (8 archetypes × 3, PUA 0xE030–0xE047), safe substitution pool (Latin/digits/boxDrawing as codepoint arrays)
+- `data/themes.json` — 12 environment themes matching FR-25 color table (cold_storage through crypt), each with archetypeWeights, modifierWeights, enemyMixWeights, lootBias (containerDensity/rarityShift/affixPoolBias), audioMode
+- `data/classes.json` — 6 class definitions with primaryAttribute, hitDieBase, chargeBase, signature (3-tier descriptions), equipmentGates (weapons/armor arrays), protocolGates (schools/maxTier), sigilFamily, empty calibrationOptions
+- `data/protocols.json` — 20 protocols (4 schools × 5 tiers) with chargeCost = tier × 2, structured effectData for rules engine
+- `data/enemies.json` — 8 archetype stat blocks with attributes, hpBonus, armored flag, behavior, protocolAccess (Choir/Null only), retreats, sigilCodepoints
+- `data/equipment.json` — 8 weapons (sidearm through shield) + 4 armor (none/light/medium/heavy) with damageDie, rangeBand, classGates, creationCost, salvageValue
+- `data/affixes.json` — 16 affixes (4 universal, 8 weapon-only, 4 armor-only) with category, class (minor/major), effectData
+- `data/conditions.json` — 9 conditions with duration, saveAttribute, stackable flag, effectData
+- `data/consumables.json` — 7 consumable types with effectData, minDepth, combatOnly, salvageValue
+- `data/symbol-table.json` — 11 field-level lookup tables for save encoding (class, sigil, attribute, hp, charge, conditions, item_id, equipment, calamity_count, sigil_tier, inventory_default)
+
+**Notes for next sessions:**
+- All data files use the schema from `specs/database.md`. Protocols use the `schools` object shape (not a flat array) — `schools[schoolId].tiers[tierIndex]`. Enemies use the `archetypes` object shape (keyed by archetype ID).
+- Symbol table `item_id` has 19 entries (8 weapons + 4 armor + 7 consumables) — covers 100% of v1 items. The spec's "200 entries" is a forward-looking maximum; actual v1 content fills 19.
+- Symbol table `conditions` has 10 entries (9 conditions + "none") — spec shows "50 entries" as forward-looking max.
+- Equipment `shield` has `slot: "offhand"` and `damageDie: null` — it's a defensive off-hand, not a weapon.
+- Enemy `armored: true` only for Construct (counts as medium armor: +3 Def, -1 FIN). All others unarmored.
+- `calibrationOptions` in classes.json are empty objects — will be populated by SESSION-04 (rules engine) or a later content session.
+- Theme IDs use underscores (`cold_storage`) not hyphens — matching `specs/database.md` table.

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "consumables": {
+    "repair_patch": {
+      "name": "Repair Patch",
+      "effect": "Restore d6 HP to one character.",
+      "effectData": { "type": "heal", "die": "d6", "target": "single" },
+      "minDepth": 1,
+      "combatOnly": false,
+      "salvageValue": 1
+    },
+    "med_kit": {
+      "name": "Med Kit",
+      "effect": "Restore 2d6 HP to one character.",
+      "effectData": { "type": "heal", "die": "d6", "multiplier": 2, "target": "single" },
+      "minDepth": 5,
+      "combatOnly": false,
+      "salvageValue": 2
+    },
+    "charge_cell": {
+      "name": "Charge Cell",
+      "effect": "Restore floor(RES / 2) CHARGE to one character (minimum 2).",
+      "effectData": { "type": "charge_restore", "formula": "floor(res/2)", "minRestore": 2, "target": "single" },
+      "minDepth": 1,
+      "combatOnly": false,
+      "salvageValue": 1
+    },
+    "boost_cell": {
+      "name": "Boost Cell",
+      "effect": "Restore full CHARGE to one character.",
+      "effectData": { "type": "charge_restore_full", "target": "single" },
+      "minDepth": 10,
+      "combatOnly": false,
+      "salvageValue": 3
+    },
+    "purge_spike": {
+      "name": "Purge Spike",
+      "effect": "Remove one condition from one character.",
+      "effectData": { "type": "remove_condition", "target": "single" },
+      "minDepth": 3,
+      "combatOnly": false,
+      "salvageValue": 1
+    },
+    "shield_capacitor": {
+      "name": "Shield Capacitor",
+      "effect": "Apply SHIELDED to one character.",
+      "effectData": { "type": "apply_condition", "condition": "shielded", "target": "single" },
+      "minDepth": 8,
+      "combatOnly": false,
+      "salvageValue": 2
+    },
+    "adrenal_injector": {
+      "name": "Adrenal Injector",
+      "effect": "Restore 1 AP to the active character (usable only in combat).",
+      "effectData": { "type": "ap_restore", "amount": 1, "target": "active" },
+      "minDepth": 5,
+      "combatOnly": true,
+      "salvageValue": 2
+    }
+  }
+}
