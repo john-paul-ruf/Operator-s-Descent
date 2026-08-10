@@ -17,6 +17,8 @@ let grainController = null;
 let currentRunState = null;
 let currentFloor = null;
 let currentFloorKey = null;
+let visualSettings = { glitchEnabled: true, reducedMotion: false };
+let mountSequence = 0;
 
 const DATA_FILES = [
   'data/sigils.json',
@@ -44,30 +46,46 @@ async function loadData() {
   }
 }
 
-export function mountScreen(name, params) {
+export async function mountScreen(name, params) {
+  const sequence = ++mountSequence;
   if (currentScreenController?.unmount) {
     currentScreenController.unmount();
   }
+  if (sequence !== mountSequence) return;
+  currentScreenController = null;
   if (currentScreenContainer) {
     currentScreenContainer.remove();
   }
-  currentScreenContainer = document.createElement('div');
-  currentScreenContainer.className = 'screen-container';
-  document.getElementById('app-root').appendChild(currentScreenContainer);
+  const container = document.createElement('div');
+  container.className = 'screen-container';
+  currentScreenContainer = container;
+  document.getElementById('app-root').appendChild(container);
 
-  import(`./ui/screens/${name}.js`)
-    .then((mod) => {
-      currentScreenController = mod.mount(currentScreenContainer, params || {});
-      if (glitchSystem) {
-        currentScreenContainer.querySelectorAll('[data-glitch]').forEach(el => {
-          const intensity = parseFloat(el.style.intensity || '0.10');
-          glitchSystem.registerElement(el, intensity);
-        });
-      }
-    })
-    .catch((err) => {
-      console.error(`Failed to mount screen '${name}':`, err);
-    });
+  try {
+    const mod = await import(`./ui/screens/${name}.js`);
+    if (sequence !== mountSequence || currentScreenContainer !== container) return;
+
+    const controller = mod.mount(container, params || {});
+    if (sequence !== mountSequence || currentScreenContainer !== container) {
+      controller?.unmount?.();
+      return;
+    }
+
+    currentScreenController = controller;
+    if (glitchSystem) {
+      container.querySelectorAll('[data-glitch]').forEach(el => {
+        const rawIntensity = Number(el.dataset.glitchIntensity || 0.10);
+        const intensity = Number.isFinite(rawIntensity)
+          ? Math.max(0, Math.min(1, rawIntensity))
+          : 0.10;
+        glitchSystem.registerElement(el, intensity);
+      });
+    }
+  } catch (error) {
+    if (sequence === mountSequence) {
+      console.error(`Failed to mount screen '${name}':`, error);
+    }
+  }
 }
 
 function restoreFloorForRun(runState) {
@@ -114,6 +132,10 @@ function hasCurrentFloorForRun(runState) {
   return isValidFloor(currentFloor) && currentFloorKey === getFloorKey(runState);
 }
 
+function applyVisualSettings() {
+  glitchSystem?.setEnabled(visualSettings.glitchEnabled && !visualSettings.reducedMotion);
+}
+
 function setupGrain() {
   const grainCanvas = document.createElement('canvas');
   grainCanvas.id = 'grain-canvas';
@@ -136,10 +158,10 @@ function setupBus() {
       if (!floor) return;
       currentRunState = runState;
       setCurrentFloor(runState, floor);
-      mountScreen('exploration', { ...params, runState, floor });
+      void mountScreen('exploration', { ...params, runState, floor });
       return;
     }
-    mountScreen(screen, params);
+    void mountScreen(screen, params);
   });
 
   bus.on('ui:audio-start', () => {
@@ -159,8 +181,12 @@ function setupBus() {
       audioEngine.setLayerVolume(key.split(':')[1], value);
     } else if (key === 'mute' && audioEngine) {
       audioEngine.setMute(value);
-    } else if (key === 'glitch' && glitchSystem) {
-      glitchSystem.setEnabled(value);
+    } else if (key === 'glitch') {
+      visualSettings.glitchEnabled = Boolean(value);
+      applyVisualSettings();
+    } else if (key === 'reducedMotion') {
+      visualSettings.reducedMotion = Boolean(value);
+      applyVisualSettings();
     } else if (key === 'scanlineGrain' && grainController) {
       grainController.setEnabled(value);
     }
@@ -173,7 +199,7 @@ function setupBus() {
     setCurrentFloor(runState, restoreFloorForRun(runState));
     if (!currentFloor) return;
     saveRun(runState);
-    mountScreen('exploration', { runState, floor: currentFloor });
+    void mountScreen('exploration', { runState, floor: currentFloor });
     audioEngine?.updateState({ depth: runState.depth });
   });
 
@@ -182,7 +208,7 @@ function setupBus() {
     currentRunState = runState;
     setCurrentFloor(runState, isValidFloor(floor) ? floor : restoreFloorForRun(runState));
     if (!currentFloor) return;
-    mountScreen('combat', { runState, floor: currentFloor, lattice });
+    void mountScreen('combat', { runState, floor: currentFloor, lattice });
     audioEngine?.updateState({ combat: true });
   });
 
@@ -192,11 +218,11 @@ function setupBus() {
     if (!hasCurrentFloorForRun(runState)) setCurrentFloor(runState, restoreFloorForRun(runState));
     if (!currentFloor) return;
     saveRun(runState);
-    mountScreen('exploration', { runState, floor: currentFloor });
+    void mountScreen('exploration', { runState, floor: currentFloor });
     audioEngine?.updateState({ combat: false });
   });
 
-  bus.on('state:party-wipe', ({ runState } = {}) => {
+  bus.on('state:party-wipe', ({ runState, summary, combatState } = {}) => {
     if (!runState) return;
     const seed = runState.worldSeed;
     if (runState.creationTimestamp != null) {
@@ -204,8 +230,9 @@ function setupBus() {
     }
     currentRunState = null;
     setCurrentFloor(null, null);
-    mountScreen('scorecard', {
+    void mountScreen('scorecard', {
       runState,
+      summary: summary || combatState?.summary || combatState || {},
       seed,
       depth: runState.depth,
       party: runState.party,
@@ -235,10 +262,14 @@ async function init() {
   initGlitchSafePool(gameData['sigils']);
 
   const settings = loadSettings();
+  visualSettings = {
+    glitchEnabled: Boolean(settings.glitchEnabled),
+    reducedMotion: Boolean(settings.reducedMotion)
+  };
 
   glitchSystem = createGlitchSystem();
-  glitchSystem.setEnabled(settings.glitchEnabled && !settings.reducedMotion);
   glitchSystem.start();
+  applyVisualSettings();
 
   setupGrain();
   if (!settings.scanlineGrainEnabled) grainController.setEnabled(false);
@@ -247,11 +278,11 @@ async function init() {
 
   const hash = window.location.hash;
   if (hash.startsWith('#r=')) {
-    mountScreen('import', { fragment: hash.slice(3) });
+    await mountScreen('import', { fragment: hash.slice(3) });
   } else if (hash.startsWith('#w=')) {
-    mountScreen('creation', { preloadedSeed: hash.slice(3) });
+    await mountScreen('creation', { preloadedSeed: hash.slice(3) });
   } else {
-    mountScreen('title');
+    await mountScreen('title');
   }
 }
 

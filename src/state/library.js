@@ -46,6 +46,9 @@ export function saveRun(runState) {
     worldSeed: runState.worldSeed,
     depth: runState.depth,
     partyCount: runState.party?.length || 0,
+    partySigils: Array.isArray(runState.party)
+      ? runState.party.map(character => character?.sigilCodepoint).filter(Number.isInteger)
+      : [],
     alive: true,
     timestamp: Date.now()
   };

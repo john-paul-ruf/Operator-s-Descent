@@ -11,6 +11,7 @@ export function mount(container, params) {
   title.className = 'display glow-strong';
   title.textContent = "OPERATOR'S DESCENT";
   title.setAttribute('data-glitch', '');
+  title.dataset.glitchIntensity = '0.10';
   container.appendChild(title);
 
   const subtitle = document.createElement('p');

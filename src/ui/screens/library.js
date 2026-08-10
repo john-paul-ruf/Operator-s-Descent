@@ -1,5 +1,5 @@
 import { listRuns, loadRun } from '../../state/library.js';
-import { createButton, createPanel } from '../components.js';
+import { createButton, createPanel, createSigilToken } from '../components.js';
 import { bus } from '../../state/bus.js';
 
 export function mount(container, params) {
@@ -28,6 +28,12 @@ export function mount(container, params) {
       swatch.className = 'accent-swatch';
       swatch.style.background = '#7ec8e3';
       row.appendChild(swatch);
+
+      const partySigils = Array.isArray(run.partySigils) ? run.partySigils : [];
+      for (const codepoint of partySigils) {
+        if (!Number.isInteger(codepoint) || codepoint < 0 || codepoint > 0x10FFFF) continue;
+        row.appendChild(createSigilToken(codepoint, 34));
+      }
 
       const info = document.createElement('span');
       info.className = 'run-info';

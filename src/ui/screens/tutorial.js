@@ -12,7 +12,7 @@ const PAGES = [
   },
   {
     title: 'COMBAT Mode',
-    body: 'COMBAT mode (2) shows available actions: Attack, Cast, Item, Retreat.Combat uses a d20 system — your attack roll + modifiers vs target Defense. Natural 20 is a critical (double damage). Natural 1 is a fumble. Each character has 2 AP per round. Turns follow initiative order.'
+    body: 'COMBAT mode (2) shows available actions: Attack, Cast, Item, Retreat. Combat uses a d20 system — your attack roll + modifiers vs target Defense. Natural 20 is a critical (double damage). Natural 1 is a fumble. Each character has 2 AP per round. Turns follow initiative order.'
   },
   {
     title: 'PARTY / GEAR / TECH',

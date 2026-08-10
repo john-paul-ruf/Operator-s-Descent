@@ -594,7 +594,7 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
 - **Exports:**
   - `saveRun(runState) → void` — Autosaves run to library (keyed by worldSeed + creationTimestamp).
   - `loadRun(key) → RunState | null`
-  - `listRuns() → LibraryEntry[]` — Returns { seed, depth, partySigils, accentSwatch, timestamp } for each run.
+  - `listRuns() → LibraryEntry[]` — Returns { seed, depth, partyCount, partySigils, accentSwatch, timestamp } for each run. New entries persist the party sigil codepoints; legacy entries may omit them.
   - `deleteRunState(key) → void` — Called on party wipe. Removes the run's state from localStorage but does NOT remove the seed — the seed remains available for sharing or restarting.
   - `getSeed(key) → number | null` — Returns the world seed for a wiped run (for scorecard "share world" and "restart with same seed" actions).
   - `saveSettings(settings) → void`
@@ -727,8 +727,8 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
 - **Depends on:** `rules/attributes.js`, `rules/classes.js`, `rules/equipment.js`, `rules/protocols.js`, `state/run-state.js`, `state/party-configs.js`, `data/classes.json`, `data/equipment.json`, `data/protocols.json`, `data/sigils.json`, `ui/components.js`, `ui/input.js`.
 
 ### `ui/screens/scorecard.js`
-- **Owns:** The run-end scorecard. Displays: final depth, party roster with sigils, cause of death, world seed, scrap recovered. Offers four actions: share world link (seed-only `#w=` URL), restart with same seed (mounts `creation.js` with `preloadedSeed`), start new run (mounts `creation.js` with no preloaded seed), return to title. Does NOT offer continue/retry of the dead run — the party wiped, the run state is gone.
-- **Exports:** `mount(container, params) → ScreenController` where `params` includes `{ seed, depth, party, causeOfDeath, scrapCounter }`.
+- **Owns:** The run-end scorecard. Displays: final depth, party roster with sigils, cause of death, world seed, and the eight run-summary metrics (floors descended, calibrations, enemies slain, echoes slain, CORRUPT items, corruption, scrap recovered, and credits remaining). Offers four actions: share world link (seed-only `#w=` URL), restart with same seed (mounts `creation.js` with `preloadedSeed`), start new run (mounts `creation.js` with no preloaded seed), return to title. Does NOT offer continue/retry of the dead run — the party wiped, the run state is gone.
+- **Exports:** `mount(container, params) → ScreenController` where `params` includes `{ seed, depth, party, causeOfDeath, scrapCounter, runState?, summary? }`. Missing summary values render as `0` for backward compatibility.
 - **Depends on:** `state/save-encode.js` (for seed-only link generation), `state/library.js` (for `getSeed`), `ui/components.js`, `ui/input.js`, `data/sigils.json`.
 
 ### `ui/screens/import.js`
@@ -738,6 +738,11 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
 ### `service-worker.js`
 - **Owns:** Cache-first offline strategy. On install, caches the known asset manifest. On fetch, serves from cache, falling back to network (should never happen after first load). Caches: HTML shell, all JS modules, all CSS, WOFF2 font, `data/*.json`.
 - **Depends on:** None (runs in service worker context).
+
+### `main.js`
+- **Owns:** Application bootstrap, screen routing, active run/floor lifecycle, floor restoration, autosave dispatch, and live visual-setting application.
+- **Exports:** `mountScreen(name, params) → Promise<void>` — Unmounts the current screen, imports and mounts the requested screen, and ignores stale dynamic-import results after a newer navigation wins.
+- **Lifecycle:** Screen imports are guarded by a monotonically increasing mount sequence. Callers that do not await a navigation use `void mountScreen(...)`; initial URL routing awaits its mount.
 
 ## Data Flow
 

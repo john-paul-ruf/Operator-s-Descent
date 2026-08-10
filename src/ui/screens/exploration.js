@@ -59,13 +59,19 @@ export function mount(container, params) {
   };
   inputHandler.onAction(actionCb);
 
-  bus.on('state:combat-end', (data) => {
+  const unsubscribeCombatEnd = bus.on('state:combat-end', (data) => {
     if (data?.result === 'victory') {
       reRender();
     }
   });
 
+  let unmounted = false;
+
   return {
-    unmount() {}
+    unmount() {
+      if (unmounted) return;
+      unmounted = true;
+      unsubscribeCombatEnd();
+    }
   };
 }
