@@ -219,6 +219,8 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
       return executeMove(combatState, actor, { direction, targetId }, rngCursor, context);
     case 'swap':
       return executeSwap(combatState, actor, targetId);
+    case 'condition':
+      return executeCondition(combatState, actor, action, rngCursor, context);
     case 'end-turn':
       pushLog(combatState, { type: 'end-turn', actorId });
       actor.ap = 0;
@@ -294,6 +296,31 @@ function executeSwap(combatState, actor, targetId) {
   actor.swapAvailable = false;
   pushLog(combatState, { type: 'swap', actorId: actor.id, withId: ally.id });
   return { success: true };
+}
+
+function executeCondition(combatState, actor, action, rngCursor, context) {
+  const target = combatState.combatants.get(action.targetId);
+  if (!target || target.hp <= 0) return { success: false, reason: 'invalid-target' };
+  const conditionsData = context.conditionsData?.conditions || context.conditionsData;
+  const dc = Number.isFinite(action.dc) ? action.dc : 10 + modifier(actor.attributes?.foc ?? 5);
+  const natural = rngCursor.nextInt('combat', 20) + 1;
+  const saveModifier = modifier(target.attributes?.foc ?? 5);
+  const total = natural + saveModifier;
+  const saved = total >= dc;
+  const attempt = { type: 'condition', actorId: actor.id, targetId: target.id, conditionId: action.conditionId, dc, save: { natural, modifier: saveModifier, total, attribute: 'foc', success: saved } };
+  if (saved) {
+    attempt.applied = false;
+    pushLog(combatState, attempt);
+    actor.ap -= 1;
+    return { success: true, saved: true, applied: false };
+  }
+  const result = applyCondition(target, action.conditionId, { dc, noSave: action.conditionId === 'marked' }, rngCursor, conditionsData);
+  attempt.applied = Boolean(result.applied);
+  attempt.shielded = Boolean(result.shielded);
+  attempt.events = result.events ?? [];
+  pushLog(combatState, attempt);
+  actor.ap -= 1;
+  return { success: true, saved: false, applied: attempt.applied, shielded: attempt.shielded, events: attempt.events };
 }
 
 function pushLog(combatState, entry) {
@@ -530,6 +557,9 @@ function prepareTurn(combatState, actor, context, rngCursor) {
   actor.swapAvailable = true;
   actor.signatureFreeActions = {};
   if (hasCondition(actor, 'immobilized')) actor.moveAvailable = false;
+  if (actor.archetypeId === 'choir' && Number.isFinite(actor.charge) && Number.isFinite(actor.chargeMax)) {
+    actor.charge = Math.min(actor.chargeMax, actor.charge + 1);
+  }
 
   const tickResults = tickConditions(actor, 'start_turn', rngCursor, context.conditionsData?.conditions || context.conditionsData);
   for (const result of tickResults) {

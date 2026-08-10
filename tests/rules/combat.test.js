@@ -478,6 +478,96 @@ describe('executeAction — cast', () => {
   });
 });
 
+describe('executeAction — condition', () => {
+  it('null condition application lands on a missed save and consumes 1 AP, logs save.roll', () => {
+    const foc = 3;
+    const nullEnemy = makeEnemy({
+      id: 'null',
+      archetypeId: 'null',
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc, sig: 5 },
+      hp: 30, hpMax: 30,
+      position: { x: 0, y: 1 },
+    });
+    const party = [makeCharacter({ id: 'a', attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc, sig: 5 } })];
+    const { state, cursor } = startCombat(party, [nullEnemy], 1, 'null');
+    const dc = 10 + modifier(foc);
+    const result = executeAction(state, { type: 'condition', actorId: 'null', targetId: 'a', conditionId: 'jammed', dc, apCost: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(state.combatants.get('null').ap).toBe(1);
+    const log = state.log.find(e => e.type === 'condition');
+    expect(log.conditionId).toBe('jammed');
+    expect(log.dc).toBe(dc);
+    expect(log.save).toBeDefined();
+    expect(Number.isInteger(log.save.natural)).toBe(true);
+    expect(log.save.natural).toBeGreaterThanOrEqual(1);
+    expect(log.save.natural).toBeLessThanOrEqual(20);
+    if (log.save.success) {
+      expect(log.applied).toBe(false);
+      expect(state.combatants.get('a').conditions.findIndex(c => c.conditionId === 'jammed' || c.id === 'jammed')).toBe(-1);
+    } else {
+      expect(log.applied).toBe(true);
+      expect(state.combatants.get('a').conditions.some(c => (c.conditionId ?? c.id) === 'jammed')).toBe(true);
+    }
+  });
+
+  it('marked bypasses the save (noSave: true) when applied via the condition action', () => {
+    const nullEnemy = makeEnemy({
+      id: 'null',
+      archetypeId: 'null',
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+      hp: 30, hpMax: 30,
+      position: { x: 0, y: 1 },
+    });
+    const party = [makeCharacter({ id: 'a' })];
+    const { state, cursor } = startCombat(party, [nullEnemy], 1, 'null');
+    const result = executeAction(state, { type: 'condition', actorId: 'null', targetId: 'a', conditionId: 'marked', dc: 30, apCost: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.applied).toBe(true);
+    expect(state.combatants.get('a').conditions.some(c => (c.conditionId ?? c.id) === 'marked')).toBe(true);
+  });
+
+  it('condition against a dead/missing target returns invalid-target and spends no AP', () => {
+    const nullEnemy = makeEnemy({ id: 'null', archetypeId: 'null', hp: 30, hpMax: 30, position: { x: 0, y: 1 } });
+    const party = [makeCharacter({ id: 'a' })];
+    const { state, cursor } = startCombat(party, [nullEnemy], 1, 'null');
+    const apBefore = state.combatants.get('null').ap;
+    const result = executeAction(state, { type: 'condition', actorId: 'null', targetId: 'ghost', conditionId: 'jammed', dc: 10, apCost: 1 }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'invalid-target' });
+    expect(state.combatants.get('null').ap).toBe(apBefore);
+  });
+});
+
+describe('prepareTurn — Choir CHARGE regeneration', () => {
+  it('choir gains +1 CHARGE each turn up to chargeMax', () => {
+    const party = [makeCharacter({ id: 'a', attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 }, hp: 50, hpMax: 50 })];
+    const choir = makeEnemy({
+      id: 'choir', archetypeId: 'choir',
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+      hp: 30, hpMax: 30, charge: 4, chargeMax: 6,
+      position: { x: 0, y: 1 },
+    });
+    const { state, cursor } = startCombat(party, [choir], 1, 'choir');
+    executeAction(state, { type: 'wait', actorId: 'choir' }, cursor, baseContext);
+    expect(state.combatants.get('choir').charge).toBe(5);
+    state.turnStarted = false;
+    state.currentTurn = state.turnOrder.indexOf('choir');
+    executeAction(state, { type: 'wait', actorId: 'choir' }, cursor, baseContext);
+    expect(state.combatants.get('choir').charge).toBe(6);
+    state.turnStarted = false;
+    state.currentTurn = state.turnOrder.indexOf('choir');
+    executeAction(state, { type: 'wait', actorId: 'choir' }, cursor, baseContext);
+    expect(state.combatants.get('choir').charge).toBe(6);
+  });
+
+  it('non-choir actors do not gain CHARGE from prepareTurn', () => {
+    const party = [makeCharacter({ id: 'a', attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 }, charge: 5, chargeMax: 10 })];
+    const warden = makeEnemy({ id: 'warden', hp: 30, hpMax: 30, position: { x: 0, y: 1 } });
+    const { state, cursor } = startCombat(party, [warden], 1, 'a');
+    executeAction(state, { type: 'wait', actorId: 'a' }, cursor, baseContext);
+    expect(state.combatants.get('a').charge).toBe(5);
+  });
+});
+
 describe('executeAction — item', () => {
   it('consuming by baseType splices inventory item and decrements AP', () => {
     const party = [makeCharacter({ id: 'a', hp: 10, hpMax: 30 })];
