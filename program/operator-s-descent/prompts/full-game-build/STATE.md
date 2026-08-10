@@ -17,7 +17,7 @@
 | 01 | Scaffolding: HTML, CSS, Service Worker, Event Bus | M77-M80, M81, M34, M82(partial) | done | 2026-08-10 | All scaffolding files created. CRT frame renders. Event bus functional. main.js loads data and attempts title mount (expected fail). Service worker registered. Placeholder woff2 font created (8 bytes). |
 | 02 | Core Logic: PRNG, Hash, RNG Cursor | M01, M02, M03 | done | 2026-08-10 | Core logic modules created: PRNG (xorshift128+), FNV-1a hash, RNG cursor with save/restore. All zero-dependency, verified for determinism. Fixed syncTo: when prngState provided, just setState+setCursor (no fast-forward). |
 | 03 | Data Files: All JSON Content + Placeholder Font | M04–M14 | done | 2026-08-10 | All 10 JSON data files created and validated. Sigils (48 player + 24 bestiary), themes (12), classes (6), protocols (20/4 schools), enemies (8 archetypes), equipment (8 weapons + 4 armor), affixes (16: 4 universal/8 weapon/4 armor), conditions (9), consumables (7), symbol-table (11 tables, 324 entries). Schema matches specs/database.md. Placeholder WOFF2 exists (8 bytes). |
-| 04 | Rules Engine Part 1: Attributes, Scaling, Classes, Equipment, Conditions | M15–M19 | pending | | |
+| 04 | Rules Engine Part 1: Attributes, Scaling, Classes, Equipment, Conditions | M15–M19 | done | 2026-08-10 | 5 pure modules: attributes (modifier=N-5, deriveStats with HP/CHARGE/Defense, scaled attribute cost), scaling (threshold formula with 0.15+0.10*floor(d/10)), classes (signature tier, gating, calibration), equipment (affix resolution, range bands, cover), conditions (SHIELDED consumption, BURNING stacking). All import core/ only. All behavioral tests pass. |
 | 05 | Rules Engine Part 2: Protocols, Consumables, Loot, Enemies, Combat, Inventory | M20–M25 | pending | | |
 | 06 | Floor Generation + Run-State Stub | M26–M29, M33(stub) | pending | | |
 | 07 | Exploration: Lattice, Shadowcast, Movement | M30–M32 | pending | | |
@@ -153,3 +153,21 @@ Full config in FORGE-CONFIG.md. Key points for this feature:
 - Enemy `armored: true` only for Construct (counts as medium armor: +3 Def, -1 FIN). All others unarmored.
 - `calibrationOptions` in classes.json are empty objects — will be populated by SESSION-04 (rules engine) or a later content session.
 - Theme IDs use underscores (`cold_storage`) not hyphens — matching `specs/database.md` table.
+
+### SESSION-04 → SESSION-05
+
+**What was built:**
+- `src/rules/attributes.js` — `modifier(rank)` returns `rank - 5` per FR-38. `deriveStats(character, classData)` computes HP (VIT×4 + hitDieBase + calib growth), CHARGE (RES×3 + chargeBase), Defense, Protocol Defense, initiative, accuracy (melee/ranged/protocol), detection radius. `attributeCost` uses tiered pricing: 3-6 = 1pt, 7-8 = 2pt, 9-10 = 3pt per FR-37.
+- `src/rules/scaling.js` — 7 pure functions per FR-40. `enemyStatScale` uses threshold formula `1 + depth × (0.15 + 0.10 × floor(depth/10))`. `lootRarityShift` = `floor(depth/5)`.
+- `src/rules/classes.js` — Signature tier (1/2/3 at cal 0/2/4), equipment/protocol gating (separate weapon/armor gating functions matching `classes.json` shape), deterministic calibration option selection via FNV-1a hash, primary attribute cost reduction.
+- `src/rules/equipment.js` — `resolveWeaponStats`/`resolveArmorStats` apply affix effects (edged upgrades die d6→d8, precise +1 accuracy, extended +2 range, lightweight reduces FIN penalty). `getRangeBand` handles sniper min-range. `getCoverBonus` traces line and counts walls (2+ walls = +4 cover, 1 = +2). `getSalvageValue`.
+- `src/rules/conditions.js` — `applyCondition` handles SHIELDED consumption (shield blocks next condition, consumed), BURNING stacking (stacks++, refresh duration), non-stackable refresh (max duration). `tickConditions` processes BURNING damage and decrements durations. `getConditionBonus` and `hasCondition` helpers.
+
+**Notes for SESSION-05:**
+- `deriveStats` returns `hpMax`/`chargeMax` (not `hp`/`charge`) — current HP/CHARGE are tracked on the character object, not derived.
+- `attributeCost` uses the tiered pricing from FR-37 (1pt for 3-6, 2pt for 7-8, 3pt for 9-10), NOT the linear formula from the session prompt pseudocode.
+- `modifier(rank) = rank - 5` per FR-38 (NOT `rank - 3` as the session prompt pseudocode suggested). FR-38 explicitly says "The attribute modifier for a rank-N attribute is N - 5."
+- `conditions.js` `applyCondition` takes `conditionsData` (the parsed `data/conditions.json` object) as a parameter, not as an import — keeps the module pure and testable.
+- `conditions.js` imports `modifier` from `attributes.js` but doesn't currently use it — save rolls will be handled by `combat.js` (SESSION-05) which calls `applyCondition` after the save is resolved.
+- `equipment.js` `resolveWeaponStats` handles affix by ID (e.g., `affix.id === 'edged'`) for special logic, and by `effectData` fields for generic bonuses.
+- `classes.js` `canEquipWeapon`/`canEquipArmor` take `classData.equipmentGates.weapons`/`.armor` arrays — matching the `classes.json` shape from SESSION-03.
