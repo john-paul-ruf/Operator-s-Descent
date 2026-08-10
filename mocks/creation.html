@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Character Creation — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --accent: #7ec8e3;
+      --bg-base: #0a0612;
+      --bg-panel: #13092a;
+      --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a;
+      --text-primary: #e0d8f0;
+      --text-secondary: #8a7aa8;
+      --text-dim: #5a4a78;
+      --danger: #e83a3a;
+      --warning: #e8632a;
+      --heal: #3ae8a8;
+    }
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0; min-height: 100vh;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .portrait-frame {
+      width: 100%; max-width: 450px;
+      aspect-ratio: 1080/1920; max-height: 100vh;
+      position: relative; background: var(--bg-base);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    /* ═══ CRT / VHS EFFECT SYSTEM (FR-23) ═══ */
+    .crt-scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite; }
+    @keyframes scanline-drift { 0% { transform: translateY(0); } 100% { transform: translateY(2px); } }
+    .crt-grille { position: absolute; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right, rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px, rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px, rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen; opacity: 0.15; }
+    .crt-vignette { position: absolute; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite; }
+    @keyframes vignette-pulse { 0%,100% { opacity: 0.65; } 50% { opacity: 0.92; } }
+    .crt-tracking { position: absolute; left: 0; right: 0; height: 28%; z-index: 57; pointer-events: none;
+      background: rgba(126,200,227,0.05); mix-blend-mode: screen; animation: tracking-loop 7s linear infinite; }
+    @keyframes tracking-loop { 0% { top: -28%; } 100% { top: 100%; } }
+    .crt-grain { position: absolute; inset: 0; pointer-events: none; z-index: 56; opacity: 0.5;
+      background-image: radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px), radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%; animation: grain-rescatter 1s steps(4) infinite; }
+    @keyframes grain-rescatter { 0% { transform: translate(0,0); } 25% { transform: translate(-2px,1px); } 50% { transform: translate(1px,-2px); } 75% { transform: translate(-1px,-1px); } 100% { transform: translate(2px,1px); } }
+    .crt-border { position: absolute; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow: inset 0 0 3px rgba(126,200,227,0.3), inset 0 0 8px rgba(126,200,227,0.15), inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite; }
+    @keyframes border-flicker { 0% { opacity: 0.7; } 35% { opacity: 0.7; } 36% { opacity: 0.5; } 42% { opacity: 0.9; } 50% { opacity: 0.6; } 55% { opacity: 0.8; } 100% { opacity: 0.7; } }
+    .crt-flash { position: absolute; inset: 0; pointer-events: none; z-index: 62; background: rgba(208,38,212,0.05); opacity: 0; animation: frame-flash 3.2s steps(1) infinite; }
+    @keyframes frame-flash { 0%,85% { opacity: 0; } 86% { opacity: 0.05; } 88% { opacity: 0; } 100% { opacity: 0; } }
+    .crt-glitch-bars { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .glitch-bar { position: absolute; left: 0; right: 0; background: rgba(126,200,227,0.3); mix-blend-mode: screen; }
+    .crt-noise-lines { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .noise-line { position: absolute; left: 0; right: 0; font-family: monospace; font-size: 8px; color: rgba(126,200,227,0.4); white-space: nowrap; overflow: hidden; letter-spacing: 1px; line-height: 10px; mix-blend-mode: screen; }
+    .crt-vhs { position: absolute; inset: 0; pointer-events: none; z-index: 61; opacity: 0; overflow: hidden; }
+    .crt-vhs.active { animation: vhs-event 0.2s steps(1); }
+    @keyframes vhs-event { 0% { opacity: 0; } 20% { opacity: 1; transform: translateX(3px); } 40% { opacity: 0.8; transform: translateX(-4px); } 60% { opacity: 1; transform: translateX(2px); } 80% { opacity: 0.5; transform: translateX(-1px); } 100% { opacity: 0; transform: translateX(0); } }
+    .crt-vhs::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to right, rgba(255,0,0,0.08) 0%, transparent 3%, rgba(0,0,255,0.08) 97%, transparent 100%); }
+    .crt-vhs::after { content: ''; position: absolute; left: 0; right: 0; top: 30%; height: 4px; background: rgba(255,255,255,0.15); mix-blend-mode: screen; }
+    /* ═══ END CRT EFFECTS ═══ */
+    /* PER-ELEMENT TEXT GLITCH (FR-23) */
+    [data-glitch] { position: relative; }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text); position: absolute; top: 0; left: 0;
+      width: 100%; pointer-events: none; text-shadow: none;
+    }
+    [data-glitch].text-swapping::before { color: rgba(255,0,0,0.47); transform: translate(-2px,0); }
+    [data-glitch].text-swapping::after { color: rgba(0,0,255,0.47); transform: translate(2px,0); }
+    .glow { text-shadow: 0 0 8px var(--accent); }
+    .glow-strong { text-shadow: 0 0 16px var(--accent); }
+    .accent-border { border-color: var(--accent); }
+    .accent-text { color: var(--accent); }
+    .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+    .panel-elevated { background: var(--bg-panel-elevated); border: 1px solid var(--accent); }
+    .btn-crt {
+      background: var(--bg-panel); border: 1px solid var(--border-dim);
+      color: var(--text-primary); padding: 12px 20px;
+      font-family: inherit; font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.1em; cursor: pointer; transition: all 0.15s ease;
+      text-align: center; min-height: 48px;
+    }
+    .btn-crt:hover, .btn-crt:focus { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); color: var(--accent); outline: none; }
+    .btn-crt:active { background: var(--bg-panel-elevated); }
+    .btn-primary {
+      background: rgba(126,200,227,0.1); border: 2px solid var(--accent); color: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+    .btn-primary:hover { background: rgba(126,200,227,0.2); box-shadow: 0 0 20px var(--accent); }
+    .stepper-btn {
+      width: 32px; height: 32px;
+      background: var(--bg-panel); border: 1px solid var(--border-dim);
+      color: var(--text-primary); font-family: inherit; font-size: 16px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .stepper-btn:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 4px var(--accent); }
+    .stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .bar-track { background: var(--bg-base); height: 4px; border: 1px solid var(--border-dim); }
+    .bar-fill { height: 100%; background: var(--accent); box-shadow: 0 0 4px var(--accent); transition: width 0.3s ease; }
+    .bar-fill-danger { background: var(--danger); box-shadow: 0 0 4px var(--danger); }
+    .bar-fill-warning { background: var(--warning); box-shadow: 0 0 4px var(--warning); }
+    .tab-btn {
+      background: var(--bg-panel); border-bottom: 2px solid transparent;
+      color: var(--text-secondary); padding: 8px 4px;
+      font-family: inherit; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.1em; cursor: pointer; transition: all 0.15s ease;
+      text-align: center; flex: 1; min-height: 48px; display: flex;
+      align-items: center; justify-content: center;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { border-bottom-color: var(--accent); color: var(--accent); text-shadow: 0 0 8px var(--accent); }
+    .class-card { cursor: pointer; transition: all 0.15s ease; }
+    .class-card:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .class-card.selected { border-color: var(--accent); background: var(--bg-panel-elevated); box-shadow: 0 0 12px var(--accent); }
+    /* Sigil placeholder (CSS-drawn since typeface not yet available) */
+    .sigil-placeholder {
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 2px solid var(--accent); border-radius: 50%;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      font-weight: bold; font-family: ui-monospace, monospace;
+    }
+    .sigil-placeholder.large { width: 56px; height: 56px; font-size: 20px; }
+    .sigil-placeholder.small { width: 32px; height: 32px; font-size: 14px; }
+    .sigil-option { cursor: pointer; transition: all 0.15s ease; }
+    .sigil-option:hover { box-shadow: 0 0 12px var(--accent); transform: scale(1.1); }
+    .sigil-option.selected { box-shadow: 0 0 16px var(--accent), 0 0 24px var(--accent); transform: scale(1.1); }
+    .scroll-area { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg-panel); }
+    .scroll-area::-webkit-scrollbar { width: 4px; }
+    .scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
+    .scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .char-slot { border: 1px solid var(--border-dim); transition: all 0.2s ease; }
+    .char-slot:hover { border-color: var(--text-secondary); }
+    .char-slot.active { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="portrait-frame">
+    <div class="crt-grille"></div>
+    <div class="crt-vignette"></div>
+    <div class="crt-tracking"></div>
+    <div class="crt-scanlines"></div>
+    <div class="crt-grain"></div>
+    <div class="crt-border"></div>
+    <div class="crt-flash"></div>
+    <div class="crt-glitch-bars" id="glitch-bars"></div>
+    <div class="crt-noise-lines" id="noise-lines"></div>
+    <div class="crt-vhs" id="vhs-event"></div>
+
+    <div class="relative z-10 flex flex-col h-full">
+      <!-- Header: Points remaining + AP readout -->
+      <div class="panel-elevated px-4 py-3 flex items-center justify-between" style="border-left:0;border-right:0;border-top:0;">
+        <div>
+          <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-secondary);">Points Remaining</div>
+          <div class="text-2xl font-bold accent-text glow">42<span class="text-sm" style="color: var(--text-dim);">/80</span></div>
+        </div>
+        <div class="text-center">
+          <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-secondary);">Credits</div>
+          <div class="text-lg accent-text glow">420</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-secondary);">AP/Round</div>
+          <div class="text-lg accent-text glow">2</div>
+        </div>
+      </div>
+
+      <!-- Character slots row -->
+      <div class="flex gap-2 px-4 py-3 panel" style="border-left:0;border-right:0;">
+        <div class="char-slot active panel-elevated rounded-sm flex flex-col items-center justify-center p-2 cursor-pointer" style="width: 80px; height: 72px;" onclick="selectChar(0)">
+          <div class="sigil-placeholder small">B</div>
+          <div class="text-[9px] mt-1 accent-text">BREACHER</div>
+        </div>
+        <div class="char-slot panel rounded-sm flex flex-col items-center justify-center p-2 cursor-pointer" style="width: 80px; height: 72px;" onclick="selectChar(1)">
+          <div class="sigil-placeholder small" style="opacity:0.5">?</div>
+          <div class="text-[9px] mt-1" style="color: var(--text-dim);">EMPTY</div>
+        </div>
+        <div class="char-slot panel rounded-sm flex flex-col items-center justify-center p-2 cursor-pointer" style="width: 80px; height: 72px;" onclick="selectChar(2)">
+          <div class="sigil-placeholder small" style="opacity:0.3">+</div>
+          <div class="text-[9px] mt-1" style="color: var(--text-dim);">ADD</div>
+        </div>
+        <div class="char-slot panel rounded-sm flex flex-col items-center justify-center p-2 cursor-pointer opacity-50" style="width: 80px; height: 72px;">
+          <div class="sigil-placeholder small" style="opacity:0.3">+</div>
+          <div class="text-[9px] mt-1" style="color: var(--text-dim);">ADD</div>
+        </div>
+      </div>
+
+      <!-- Tab bar for creation sections -->
+      <div class="flex panel" style="border-left:0;border-right:0;">
+        <button class="tab-btn active" onclick="switchTab('class')">CLASS</button>
+        <button class="tab-btn" onclick="switchTab('sigil')">SIGIL</button>
+        <button class="tab-btn" onclick="switchTab('attrs')">ATTRS</button>
+        <button class="tab-btn" onclick="switchTab('gear')">GEAR</button>
+        <button class="tab-btn" onclick="switchTab('tech')">TECH</button>
+      </div>
+
+      <!-- Tab content area -->
+      <div class="flex-1 scroll-area px-4 py-3" id="tab-content">
+        <!-- CLASS TAB -->
+        <div id="tab-class" class="tab-panel">
+          <div class="text-[10px] uppercase tracking-wider mb-2" style="color: var(--text-secondary);">◈ Select Class</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="class-card panel selected p-3" onclick="selectClass(this, 'Breacher')">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="sigil-placeholder small">B</div>
+                <div>
+                  <div class="text-sm accent-text glow font-bold">BREACHER</div>
+                  <div class="text-[10px]" style="color: var(--text-dim);">MGT · Hit Die 16</div>
+                </div>
+              </div>
+              <div class="text-[10px]" style="color: var(--text-secondary);">Frontline armor pen. Ignores cover.</div>
+            </div>
+            <div class="class-card panel p-3" onclick="selectClass(this, 'Ghost')">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="sigil-placeholder small">G</div>
+                <div>
+                  <div class="text-sm font-bold">GHOST</div>
+                  <div class="text-[10px]" style="color: var(--text-dim);">FIN · Hit Die 10</div>
+                </div>
+              </div>
+              <div class="text-[10px]" style="color: var(--text-secondary);">Ranged burst. Phase through walls.</div>
+            </div>
+            <div class="class-card panel p-3" onclick="selectClass(this, 'Compiler')">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="sigil-placeholder small">C</div>
+                <div>
+                  <div class="text-sm font-bold">COMPILER</div>
+                  <div class="text-[10px]" style="color: var(--text-dim);">RES · Hit Die 8</div>
+                </div>
+              </div>
+              <div class="text-[10px]" style="color: var(--text-secondary);">Magic powerhouse. Overclock economy.</div>
+            </div>
+            <div class="class-card panel p-3" onclick="selectClass(this, 'Anchor')">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="sigil-placeholder small">A</div>
+                <div>
+                  <div class="text-sm font-bold">ANCHOR</div>
+                  <div class="text-[10px]" style="color: var(--text-dim);">VIT · Hit Die 14</div>
+                </div>
+              </div>
+              <div class="text-[10px]" style="color: var(--text-secondary);">Defensive anchor. Party protection.</div>
+            </div>
+            <div class="class-card panel p-3" onclick="selectClass(this, 'Oracle')">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="sigil-placeholder small">O</div>
+                <div>
+                  <div class="text-sm font-bold">ORACLE</div>
+                  <div class="text-[10px]" style="color: var(--text-dim);">FOC · Hit Die 6</div>
+                </div>
+              </div>
+              <div class="text-[10px]" style="color: var(--text-secondary);">Information. Telepathic detection.</div>
+            </div>
+            <div class="class-card panel p-3" onclick="selectClass(this, 'Operator')">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="sigil-placeholder small">Op</div>
+                <div>
+                  <div class="text-sm font-bold">OPERATOR</div>
+                  <div class="text-[10px]" style="color: var(--text-dim);">SIG · Hit Die 12</div>
+                </div>
+              </div>
+              <div class="text-[10px]" style="color: var(--text-secondary);">Support buffs. Flexible coverage.</div>
+            </div>
+          </div>
+
+          <!-- Projected stats for selected character -->
+          <div class="mt-4 panel p-3">
+            <div class="text-[10px] uppercase tracking-wider mb-2 accent-text glow">◈ Projected Stats — Breacher</div>
+            <div class="grid grid-cols-3 gap-2 text-[11px]">
+              <div><span style="color: var(--text-secondary);">HP</span> <span class="accent-text font-bold">28</span></div>
+              <div><span style="color: var(--text-secondary);">CHARGE</span> <span class="accent-text font-bold">9</span></div>
+              <div><span style="color: var(--text-secondary);">DEF</span> <span class="accent-text font-bold">10</span></div>
+              <div><span style="color: var(--text-secondary);">INIT</span> <span class="accent-text font-bold">+0</span></div>
+              <div><span style="color: var(--text-secondary);">MGT</span> <span class="accent-text font-bold">5</span></div>
+              <div><span style="color: var(--text-secondary);">FIN</span> <span class="accent-text font-bold">3</span></div>
+            </div>
+            <div class="text-[10px] mt-2" style="color: var(--text-dim);">Signature: BREACH — ignores cover on attacks</div>
+          </div>
+        </div>
+
+        <!-- SIGIL TAB -->
+        <div id="tab-sigil" class="tab-panel" style="display:none;">
+          <div class="text-[10px] uppercase tracking-wider mb-2" style="color: var(--text-secondary);">◈ Select Sigil — Breacher Family</div>
+          <div class="text-[10px] mb-3" style="color: var(--text-dim);">Free with chassis · No two characters may share</div>
+          <div class="grid grid-cols-4 gap-3 justify-items-center">
+            <div class="sigil-option sigil-placeholder large selected">B1</div>
+            <div class="sigil-option sigil-placeholder large">B2</div>
+            <div class="sigil-option sigil-placeholder large">B3</div>
+            <div class="sigil-option sigil-placeholder large">B4</div>
+            <div class="sigil-option sigil-placeholder large">B5</div>
+            <div class="sigil-option sigil-placeholder large">B6</div>
+            <div class="sigil-option sigil-placeholder large">B7</div>
+            <div class="sigil-option sigil-placeholder large">B8</div>
+          </div>
+          <div class="mt-4 text-center text-[10px]" style="color: var(--text-dim);">8 sigils per class family · 220px preview</div>
+        </div>
+
+        <!-- ATTRIBUTES TAB -->
+        <div id="tab-attrs" class="tab-panel" style="display:none;">
+          <div class="text-[10px] uppercase tracking-wider mb-3" style="color: var(--text-secondary);">◈ Attributes — Breacher</div>
+          <div class="text-[10px] mb-3" style="color: var(--text-dim);">Start at rank 3 · 3→6: 1pt · 7→8: 2pt · 9→10: 3pt</div>
+          <!-- Attribute rows -->
+          <div class="space-y-2">
+            <div class="panel p-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <span class="text-xs font-bold accent-text glow">MIGHT</span>
+                  <span class="text-[10px]" style="color: var(--text-dim);"> MGT · Primary</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="text-lg font-bold accent-text w-8 text-center">5</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track mt-2"><div class="bar-fill" style="width: 50%;"></div></div>
+              <div class="text-[10px] mt-1" style="color: var(--text-dim);">Melee dmg, athletics · Modifier: +0</div>
+            </div>
+            <div class="panel p-2">
+              <div class="flex items-center justify-between">
+                <div><span class="text-xs font-bold">FINESSE</span><span class="text-[10px]" style="color: var(--text-dim);"> FIN</span></div>
+                <div class="flex items-center gap-3">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="text-lg font-bold w-8 text-center" style="color: var(--text-primary);">3</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track mt-2"><div class="bar-fill" style="width: 30%;"></div></div>
+              <div class="text-[10px] mt-1" style="color: var(--text-dim);">Ranged acc, initiative · Modifier: −2</div>
+            </div>
+            <div class="panel p-2">
+              <div class="flex items-center justify-between">
+                <div><span class="text-xs font-bold">VITALITY</span><span class="text-[10px]" style="color: var(--text-dim);"> VIT</span></div>
+                <div class="flex items-center gap-3">
+                  <button class="stepper-btn">−</button>
+                  <span class="text-lg font-bold w-8 text-center" style="color: var(--text-primary);">5</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track mt-2"><div class="bar-fill" style="width: 50%;"></div></div>
+              <div class="text-[10px] mt-1" style="color: var(--text-dim);">HP base, stamina · Modifier: +0 · HP: 36</div>
+            </div>
+            <div class="panel p-2">
+              <div class="flex items-center justify-between">
+                <div><span class="text-xs font-bold">RESONANCE</span><span class="text-[10px]" style="color: var(--text-dim);"> RES</span></div>
+                <div class="flex items-center gap-3">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="text-lg font-bold w-8 text-center" style="color: var(--text-primary);">3</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track mt-2"><div class="bar-fill" style="width: 30%;"></div></              >
+              <div class="text-[10px] mt-1" style="color: var(--text-dim);">CHARGE pool, protocol power · Modifier: −2</div>
+            </div>
+            <div class="panel p-2">
+              <div class="flex items-center justify-between">
+                <div><span class="text-xs font-bold">FOCUS</span><span class="text-[10px]" style="color: var(--text-dim);"> FOC</span></div>
+                <div class="flex items-center gap-3">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="text-lg font-bold w-8 text-center" style="color: var(--text-primary);">3</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track mt-2"><div class="bar-fill" style="width: 30%;"></div></div>
+              <div class="text-[10px] mt-1" style="color: var(--text-dim);">Protocol acc, perception · Modifier: −2</div>
+            </div>
+            <div class="panel p-2">
+              <div class="flex items-center justify-between">
+                <div><span class="text-xs font-bold">SIGNAL</span><span class="text-[10px]" style="color: var(--text-dim);"> SIG</span></div>
+                <div class="flex items-center gap-3">
+                  <button class="stepper-btn">−</button>
+                  <span class="text-lg font-bold w-8 text-center" style="color: var(--text-primary);">4</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track mt-2"><div class="bar-fill" style="width: 40%;"></div></div>
+              <div class="text-[10px] mt-1" style="color: var(--text-dim);">Protocol range, detection · Modifier: −1</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GEAR TAB -->
+        <div id="tab-gear" class="tab-panel" style="display:none;">
+          <div class="text-[10px] uppercase tracking-wider mb-2" style="color: var(--text-secondary);">◈ Equipment — Breacher</div>
+          <div class="text-[10px] mb-3" style="color: var(--text-dim);">1 weapon + 1 armor + 1 off-hand</div>
+
+          <div class="text-[11px] uppercase tracking-wider mb-1" style="color: var(--text-secondary);">Weapons</div>
+          <div class="space-y-1">
+            <div class="panel p-2 flex items-center justify-between cursor-pointer hover:border-accent" style="border-color: var(--accent); box-shadow: 0 0 4px var(--accent);">
+              <div>
+                <div class="text-xs accent-text">◈ Heavy Melee — Axe</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">d10 · adjacent · +0 acc</div>
+              </div>
+              <div class="text-xs accent-text font-bold">2pt</div>
+            </div>
+            <div class="panel p-2 flex items-center justify-between cursor-pointer">
+              <div>
+                <div class="text-xs">◈ Sidearm</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">d6 · adjacent · +1 acc</div>
+              </div>
+              <div class="text-xs" style="color: var(--text-secondary);">1pt</div>
+            </div>
+            <div class="panel p-2 flex items-center justify-between cursor-pointer">
+              <div>
+                <div class="text-xs">◈ Polearm</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">d8 · reach 2 · +0 acc</div>
+              </div>
+              <div class="text-xs" style="color: var(--text-secondary);">2pt</div>
+            </div>
+          </div>
+
+          <div class="text-[11px] uppercase tracking-wider mb-1 mt-3" style="color: var(--text-secondary);">Armor</div>
+          <div class="space-y-1">
+            <div class="panel p-2 flex items-center justify-between cursor-pointer">
+              <div>
+                <div class="text-xs">◈ Light Armor</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">+1 DEF · no FIN penalty</div>
+              </div>
+              <div class="text-xs" style="color: var(--text-secondary);">1pt</div>
+            </div>
+            <div class="panel p-2 flex items-center justify-between cursor-pointer" style="border-color: var(--accent);">
+              <div>
+                <div class="text-xs accent-text">◈ Medium Armor</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">+3 DEF · −1 FIN (Breacher ignores)</div>
+              </div>
+              <div class="text-xs accent-text font-bold">2pt</div>
+            </div>
+            <div class="panel p-2 flex items-center justify-between cursor-pointer">
+              <div>
+                <div class="text-xs">◈ Heavy Armor</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">+5 DEF · −2 FIN (Breacher ignores)</div>
+              </div>
+              <div class="text-xs" style="color: var(--text-secondary);">3pt</div>
+            </div>
+          </div>
+
+          <div class="text-[11px] uppercase tracking-wider mb-1 mt-3" style="color: var(--text-secondary);">Off-Hand</div>
+          <div class="space-y-1">
+            <div class="panel p-2 flex items-center justify-between cursor-pointer" style="border-color: var(--accent);">
+              <div>
+                <div class="text-xs accent-text">◈ Shield</div>
+                <div class="text-[10px]" style="color: var(--text-dim);">+2 DEF</div>
+              </div>
+              <div class="text-xs accent-text font-bold">3pt</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TECH TAB -->
+        <div id="tab-tech" class="tab-panel" style="display:none;">
+          <div class="text-[10px] uppercase tracking-wider mb-2" style="color: var(--text-secondary);">◈ Tech Protocols — Breacher</div>
+          <div class="text-[10px] mb-3" style="color: var(--text-dim);">DISRUPT only · Max tier 2 · Deck slots: 3</div>
+          <div class="text-[10px] mb-2" style="color: var(--text-dim);">Slots used: 0 / 3 · Cost: tier × 2 points</div>
+
+          <div class="space-y-1">
+            <div class="panel p-2 flex items-center justify-between cursor-pointer">
+              <div>
+                <div class="text-xs accent-text">SPARK <span class="text-[10px]" style="color: var(--text-dim);">DISRUPT T1</span></div>
+                <div class="text-[10px]" style="color: var(--text-dim);">1d6 + RES mod · range SIG×2</div>
+              </div>
+              <div class="text-xs accent-text font-bold">2pt</div>
+            </div>
+            <div class="panel p-2 flex items-center justify-between cursor-pointer">
+              <div>
+                <div class="text-xs accent-text">SURGE <span class="text-[10px]" style="color: var(--text-dim);">DISRUPT T2</span></div>
+                <div class="text-[10px]" style="color: var(--text-dim);">2d6 + RES mod · splash d4 adjacent</div>
+              </div>
+              <div class="text-xs accent-text font-bold">4pt</div>
+            </div>
+          </div>
+          <div class="mt-3 text-[10px]" style="color: var(--text-dim);">Higher tiers not available for Breacher (gate: tier ≤ 2)</div>
+        </div>
+      </div>
+
+      <!-- Footer: Saved configs + Finalize + Back -->
+      <div class="px-4 py-2 panel" style="border-left:0;border-right:0;">
+        <div class="text-[10px] uppercase tracking-wider mb-1 accent-text glow">◈ Saved Configurations (FR-51)</div>
+        <div class="flex gap-2 mb-2 overflow-x-auto" style="scrollbar-width:thin;">
+          <div class="panel-elevated p-1.5 flex-shrink-0" style="border:1px solid var(--accent); min-width:90px; cursor:pointer;">
+            <div class="text-[9px] accent-text font-bold">Solo Breacher</div>
+            <div class="text-[8px]" style="color: var(--text-dim);">38pt spent · 1 char</div>
+          </div>
+          <div class="panel p-1.5 flex-shrink-0" style="min-width:90px; cursor:pointer;">
+            <div class="text-[9px]" style="color: var(--text-primary);">Quad Assault</div>
+            <div class="text-[8px]" style="color: var(--text-dim);">72pt spent · 4 char</div>
+          </div>
+          <div class="panel p-1.5 flex-shrink-0" style="min-width:60px; cursor:pointer; opacity:0.4;">
+            <div class="text-[9px]" style="color: var(--text-dim);">+ SAVE</div>
+            <div class="text-[8px]" style="color: var(--text-dim);">10 max</div>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 px-4 py-3 panel" style="border-left:0;border-right:0;border-bottom:0;">
+        <a href="title.html" class="btn-crt flex-1">◀ Back</a>
+        <a href="exploration.html" class="btn-crt btn-primary flex-2" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">◈ Finalize &amp; Descend</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+      event.target.closest('.tab-btn') || (document.querySelector(`.tab-btn[onclick*="${name}"]`)).classList.add('active');
+      document.getElementById('tab-' + name).style.display = 'block';
+      // Fix active state
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(name)) {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
+      });
+    }
+    function selectClass(el, name) {
+      document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+    function selectChar(idx) {
+      document.querySelectorAll('.char-slot').forEach(s => s.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+    // ═══ CRT GLITCH SYSTEM ═══
+    const safePool='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+    const gb=document.getElementById('glitch-bars');
+    function sGB(){const d=350+Math.random()*649;setTimeout(()=>{if(Math.random()<0.4){const b=document.createElement('div');b.className='glitch-bar';b.style.cssText=`top:${Math.random()*100}%;height:${1+Math.floor(Math.random()*4)}px;opacity:${0.1+Math.random()*0.4};transform:translateX(${-8+Math.floor(Math.random()*17)}px)`;gb.appendChild(b);setTimeout(()=>b.remove(),80+Math.random()*169)}sGB()},d)}sGB();
+    const nl=document.getElementById('noise-lines');
+    function sNL(){const d=1200+Math.random()*2299;setTimeout(()=>{if(Math.random()<0.3){const l=document.createElement('div');l.className='noise-line';let n='';for(let i=0;i<(8+Math.floor(Math.random()*21))*4;i++)n+=safePool[Math.floor(Math.random()*safePool.length)];l.style.cssText=`top:${Math.random()*100}%`;l.textContent=n;nl.appendChild(l);setTimeout(()=>l.remove(),80+Math.random()*219)}sNL()},d)}sNL();
+    const vh=document.getElementById('vhs-event');
+    function sVH(){const d=4000+Math.random()*5999;setTimeout(()=>{vh.classList.add('active');setTimeout(()=>vh.classList.remove('active'),80+Math.random()*169);sVH()},d)}sVH();
+    // PER-ELEMENT TEXT GLITCH (FR-23)
+    const glitchSafePool='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch(){const sels=['.glow','.glow-strong','.accent-text','.tab-btn','.class-card'];const seen=new Set();sels.forEach(sel=>{document.querySelectorAll(sel).forEach(el=>{if(seen.has(el))return;seen.add(el);const t=el.textContent.trim();if(t.length<2||t.length>60)return;if(el.closest('button'))return;let i=0.06;if(el.classList.contains('accent-text'))i=0.10;else if(el.classList.contains('glow-strong'))i=0.20;else if(el.classList.contains('tab-btn'))i=0.08;else if(el.classList.contains('class-card'))i=0.05;el.dataset.glitch=i;const hb=700+Math.random()*1099;function tk(){setTimeout(()=>{if(el.offsetParent!==null&&Math.random()<parseFloat(el.dataset.glitch))doTS(el);tk()},hb)}tk()})})}
+    function doTS(el){const o=el.textContent;if(o.length<1)return;const n=Math.min(o.length,1+Math.floor(Math.random()*2));const p=[];while(p.length<n&&p.length<o.length){const pos=Math.floor(Math.random()*o.length);if(!p.includes(pos))p.push(pos)}const c=o.split('');p.forEach(pos=>{c[pos]=glitchSafePool[Math.floor(Math.random()*glitchSafePool.length)]});el.textContent=c.join('');el.dataset.ghostText=c.join('');el.classList.add('text-swapping');el.style.transform=`translate(${-3+Math.floor(Math.random()*7)}px,${-1+Math.floor(Math.random()*3)}px)`;setTimeout(()=>{el.textContent=o;el.classList.remove('text-swapping');el.style.transform='';delete el.dataset.ghostText},120+Math.random()*229)}
+    initTextGlitch();
+  </script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run-End Scorecard — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --accent: #7ec8e3; --bg-base: #0a0612; --bg-panel: #13092a; --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a; --text-primary: #e0d8f0; --text-secondary: #8a7aa8; --text-dim: #5a4a78;
+      --danger: #e83a3a; --heal: #3ae8a8; --warning: #e8632a; }
+    body { background: var(--bg-base); color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+    .portrait-frame { width: 100%; max-width: 450px; aspect-ratio: 1080/1920; max-height: 100vh;
+      position: relative; background: var(--bg-base); overflow: hidden; display: flex; flex-direction: column; }
+    /* ═══ CRT / VHS EFFECT SYSTEM (FR-23) ═══ */
+    .crt-scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite; }
+    @keyframes scanline-drift { 0% { transform: translateY(0); } 100% { transform: translateY(2px); } }
+    .crt-grille { position: absolute; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right, rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px, rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px, rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen; opacity: 0.15; }
+    .crt-vignette { position: absolute; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite; }
+    @keyframes vignette-pulse { 0%,100% { opacity: 0.65; } 50% { opacity: 0.92; } }
+    .crt-tracking { position: absolute; left: 0; right: 0; height: 28%; z-index: 57; pointer-events: none;
+      background: rgba(126,200,227,0.05); mix-blend-mode: screen; animation: tracking-loop 7s linear infinite; }
+    @keyframes tracking-loop { 0% { top: -28%; } 100% { top: 100%; } }
+    .crt-grain { position: absolute; inset: 0; pointer-events: none; z-index: 56; opacity: 0.5;
+      background-image: radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px), radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%; animation: grain-rescatter 1s steps(4) infinite; }
+    @keyframes grain-rescatter { 0% { transform: translate(0,0); } 25% { transform: translate(-2px,1px); } 50% { transform: translate(1px,-2px); } 75% { transform: translate(-1px,-1px); } 100% { transform: translate(2px,1px); } }
+    .crt-border { position: absolute; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow: inset 0 0 3px rgba(126,200,227,0.3), inset 0 0 8px rgba(126,200,227,0.15), inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite; }
+    @keyframes border-flicker { 0% { opacity: 0.7; } 35% { opacity: 0.7; } 36% { opacity: 0.5; } 42% { opacity: 0.9; } 50% { opacity: 0.6; } 55% { opacity: 0.8; } 100% { opacity: 0.7; } }
+    .crt-flash { position: absolute; inset: 0; pointer-events: none; z-index: 62; background: rgba(208,38,212,0.05); opacity: 0; animation: frame-flash 3.2s steps(1) infinite; }
+    @keyframes frame-flash { 0%,85% { opacity: 0; } 86% { opacity: 0.05; } 88% { opacity: 0; } 100% { opacity: 0; } }
+    .crt-glitch-bars { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .glitch-bar { position: absolute; left: 0; right: 0; background: rgba(126,200,227,0.3); mix-blend-mode: screen; }
+    .crt-noise-lines { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .noise-line { position: absolute; left: 0; right: 0; font-family: monospace; font-size: 8px; color: rgba(126,200,227,0.4); white-space: nowrap; overflow: hidden; letter-spacing: 1px; line-height: 10px; mix-blend-mode: screen; }
+    .crt-vhs { position: absolute; inset: 0; pointer-events: none; z-index: 61; opacity: 0; overflow: hidden; }
+    .crt-vhs.active { animation: vhs-event 0.2s steps(1); }
+    @keyframes vhs-event { 0% { opacity: 0; } 20% { opacity: 1; transform: translateX(3px); } 40% { opacity: 0.8; transform: translateX(-4px); } 60% { opacity: 1; transform: translateX(2px); } 80% { opacity: 0.5; transform: translateX(-1px); } 100% { opacity: 0; transform: translateX(0); } }
+    .crt-vhs::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to right, rgba(255,0,0,0.08) 0%, transparent 3%, rgba(0,0,255,0.08) 97%, transparent 100%); }
+    .crt-vhs::after { content: ''; position: absolute; left: 0; right: 0; top: 30%; height: 4px; background: rgba(255,255,255,0.15); mix-blend-mode: screen; }
+    /* ═══ END CRT EFFECTS ═══ */
+    /* PER-ELEMENT TEXT GLITCH (FR-23) */
+    [data-glitch] { position: relative; }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text); position: absolute; top: 0; left: 0;
+      width: 100%; pointer-events: none; text-shadow: none;
+    }
+    [data-glitch].text-swapping::before { color: rgba(255,0,0,0.47); transform: translate(-2px,0); }
+    [data-glitch].text-swapping::after { color: rgba(0,0,255,0.47); transform: translate(2px,0); }
+    .glow { text-shadow: 0 0 8px var(--accent); }
+    .glow-danger { text-shadow: 0 0 8px var(--danger), 0 0 16px var(--danger); }
+    .accent-text { color: var(--accent); }
+    .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+    .panel-elevated { background: var(--bg-panel-elevated); }
+    .btn-crt { background: var(--bg-panel); border: 1px solid var(--border-dim); color: var(--text-primary);
+      padding: 14px 20px; font-family: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em;
+      cursor: pointer; transition: all 0.15s ease; text-align: center; min-height: 48px; }
+    .btn-crt:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); color: var(--accent); }
+    .btn-crt.primary { border-color: var(--accent); color: var(--accent); background: rgba(126,200,227,0.1); box-shadow: 0 0 8px var(--accent); }
+    .btn-link { text-decoration: none; display: inline-block; }
+    .scroll-area { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg-panel); }
+    .scroll-area::-webkit-scrollbar { width: 4px; }
+    .scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
+    .scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .sigil-dead {
+      width: 48px; height: 48px; border: 1px solid var(--danger); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold;
+      color: var(--danger); text-shadow: 0 0 4px var(--danger); opacity: 0.4; filter: grayscale(0.5);
+      position: relative;
+    }
+    .sigil-dead::after { content: '✕'; position: absolute; font-size: 24px; color: var(--danger); }
+    .sigil-mini { width: 24px; height: 24px; border: 1px solid var(--accent); border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="portrait-frame">
+    <div class="crt-grille"></div>
+    <div class="crt-vignette"></div>
+    <div class="crt-tracking"></div>
+    <div class="crt-scanlines"></div>
+    <div class="crt-grain"></div>
+    <div class="crt-border"></div>
+    <div class="crt-flash"></div>
+    <div class="crt-glitch-bars" id="glitch-bars"></div>
+    <div class="crt-noise-lines" id="noise-lines"></div>
+    <div class="crt-vhs" id="vhs-event"></div>
+
+    <div class="relative z-10 flex flex-col h-full">
+      <!-- Header -->
+      <div class="text-center pt-8 px-6">
+        <div class="text-[10px] uppercase tracking-[0.3em]" style="color: var(--text-dim);">◈ ◈ ◈</div>
+        <h1 class="text-2xl font-bold uppercase tracking-[0.15em] mt-2 glow-danger" style="color: var(--danger);">
+          PARTY Wipe
+        </h1>
+        <div class="text-[10px] uppercase tracking-wider mt-1" style="color: var(--text-secondary);">Run Concluded</div>
+      </div>
+
+      <div class="flex-1 scroll-area px-4 py-4">
+        <!-- Final depth (the score) -->
+        <div class="panel-elevated p-6 text-center mb-4" style="border: 1px solid var(--accent); box-shadow: 0 0 16px var(--accent);">
+          <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-secondary);">◈ Final Depth</div>
+          <div class="text-5xl font-bold accent-text glow my-2">23</div>
+          <div class="text-[10px]" style="color: var(--text-dim);">Threshold floors cleared: 2 (10, 20)</div>
+        </div>
+
+        <!-- Party roster -->
+        <div class="panel p-4 mb-4">
+          <div class="text-[10px] uppercase tracking-wider mb-3 accent-text glow">◈ Party Roster</div>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="sigil-dead">B</div>
+              <div class="flex-1">
+                <div class="text-[11px] font-bold" style="color: var(--danger);">BREACHER</div>
+                <div class="text-[9px]" style="color: var(--text-dim);">Cal 7 · Lvl 8 · HP 0/52</div>
+              </div>
+              <div class="text-[9px]" style="color: var(--text-dim);">Died F23</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="sigil-dead">A</div>
+              <div class="flex-1">
+                <div class="text-[11px] font-bold" style="color: var(--danger);">ANCHOR</div>
+                <div class="text-[9px]" style="color: var(--text-dim);">Cal 7 · Lvl 8 · HP 0/48</div>
+              </div>
+              <div class="text-[9px]" style="color: var(--text-dim);">Died F23</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="sigil-dead">C</div>
+              <div class="flex-1">
+                <div class="text-[11px] font-bold" style="color: var(--danger);">COMPILER</div>
+                <div class="text-[9px]" style="color: var(--text-dim);">Cal 7 · Lvl 8 · HP 0/38</div>
+              </div>
+              <div class="text-[9px]" style="color: var(--text-dim);">Died F22</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="sigil-dead">Op</div>
+              <div class="flex-1">
+                <div class="text-[11px] font-bold" style="color: var(--danger);">OPERATOR</div>
+                <div class="text-[9px]" style="color: var(--text-dim);">Cal 7 · Lvl 8 · HP 0/44</div>
+              </div>
+              <div class="text-[9px]" style="color: var(--text-dim);">Died F21</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cause of death -->
+        <div class="panel p-4 mb-4">
+          <div class="text-[10px] uppercase tracking-wider mb-2 accent-text glow">◈ Cause of Death</div>
+          <div class="text-[11px]" style="color: var(--text-primary);">
+            Party wiped on floor 23 (The Foundry).<br>
+            <span style="color: var(--text-secondary);">Apex guardian overwhelmed the party after Compiler and Operator fell to a Stalker ambush on floor 22. Breacher and Anchor held for 3 rounds against the Apex before succumbing.</span>
+          </div>
+        </div>
+
+        <!-- Seed -->
+        <div class="panel p-4 mb-4">
+          <div class="text-[10px] uppercase tracking-wider mb-2 accent-text glow">◈ World Seed</div>
+          <div class="text-sm font-bold accent-text glow">B7E1·3D9F</div>
+          <div class="text-[9px] mt-1" style="color: var(--text-dim);">The same seed always yields the same dungeon</div>
+        </div>
+
+        <!-- Share world link -->
+        <div class="panel-elevated p-4 mb-4" style="border: 1px solid var(--accent);">
+          <div class="text-[10px] uppercase tracking-wider mb-2 accent-text glow">◈ Share This World</div>
+          <div class="text-[9px] mb-2" style="color: var(--text-dim);">Link carries the seed only — no run state. Anyone can descend the same dungeon.</div>
+          <div class="flex gap-2">
+            <input type="text" readonly value="https://descent.app/#B7E13D9F" class="flex-1 text-[10px] px-2 py-2" style="background: var(--bg-base); border: 1px solid var(--border-dim); color: var(--accent); font-family: inherit; outline: none;">
+            <button class="btn-crt primary" style="flex-shrink: 0;">COPY</button>
+          </div>
+          <div id="copied" class="text-[10px] accent-text glow mt-2" style="display: none;">◈ LINK COPIED TO CLIPBOARD ◈</div>
+        </div>
+
+        <!-- Run stats summary -->
+        <div class="panel p-4 mb-4">
+          <div class="text-[10px] uppercase tracking-wider mb-2 accent-text glow">◈ Run Summary</div>
+          <div class="grid grid-cols-2 gap-2 text-[10px]">
+            <div><span style="color: var(--text-secondary);">Floors descended</span> <span class="accent-text font-bold">23</span></div>
+            <div><span style="color: var(--text-secondary);">Calibrations</span> <span class="accent-text font-bold">7 each</span></div>
+            <div><span style="color: var(--text-secondary);">Enemies slain</span> <span class="accent-text font-bold">147</span></div>
+            <div><span style="color: var(--text-secondary);">Echoes slain</span> <span class="accent-text font-bold">1</span></div>
+            <div><span style="color: var(--text-secondary);">CORRUPT items</span> <span style="color: var(--warning);" class="font-bold">3</span></div>
+            <div><span style="color: var(--text-secondary);">Corruption</span> <span style="color: var(--warning);" class="font-bold">0.25</span></div>
+            <div><span style="color: var(--text-secondary);">Scrap Recovered</span> <span class="accent-text font-bold">1,840</span></div>
+            <div><span style="color: var(--text-secondary);">Credits remaining</span> <span class="accent-text font-bold">420</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="flex flex-col gap-2 px-4 py-3 panel" style="border-left:0;border-right:0;border-bottom:0;">
+        <a href="creation.html" class="btn-crt btn-link primary">◈ Restart with Same Seed (New Party)</a>
+        <a href="creation.html" class="btn-crt btn-link">◈ New Run (Fresh Seed)</a>
+        <div class="flex gap-2">
+          <a href="title.html" class="btn-crt btn-link flex-1">Title Screen</a>
+          <a href="library.html" class="btn-crt btn-link flex-1">Library</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Copy button feedback
+    document.querySelector('button').addEventListener('click', function() {
+      const link = document.querySelector('input[type="text"]').value;
+      navigator.clipboard?.writeText(link);
+      document.getElementById('copied').style.display = 'block';
+    });
+    // ═══ CRT GLITCH SYSTEM ═══
+    const safePool='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+    const gb=document.getElementById('glitch-bars');
+    function sGB(){const d=350+Math.random()*649;setTimeout(()=>{if(Math.random()<0.4){const b=document.createElement('div');b.className='glitch-bar';b.style.cssText=`top:${Math.random()*100}%;height:${1+Math.floor(Math.random()*4)}px;opacity:${0.1+Math.random()*0.4};transform:translateX(${-8+Math.floor(Math.random()*17)}px)`;gb.appendChild(b);setTimeout(()=>b.remove(),80+Math.random()*169)}sGB()},d)}sGB();
+    const nl=document.getElementById('noise-lines');
+    function sNL(){const d=1200+Math.random()*2299;setTimeout(()=>{if(Math.random()<0.3){const l=document.createElement('div');l.className='noise-line';let n='';for(let i=0;i<(8+Math.floor(Math.random()*21))*4;i++)n+=safePool[Math.floor(Math.random()*safePool.length)];l.style.cssText=`top:${Math.random()*100}%`;l.textContent=n;nl.appendChild(l);setTimeout(()=>l.remove(),80+Math.random()*219)}sNL()},d)}sNL();
+    const vh=document.getElementById('vhs-event');
+    function sVH(){const d=4000+Math.random()*5999;setTimeout(()=>{vh.classList.add('active');setTimeout(()=>vh.classList.remove('active'),80+Math.random()*169);sVH()},d)}sVH();
+    // PER-ELEMENT TEXT GLITCH (FR-23)
+    const glitchSafePool='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch(){const sels=['.glow','.glow-danger','.accent-text','.section-header'];const seen=new Set();sels.forEach(sel=>{document.querySelectorAll(sel).forEach(el=>{if(seen.has(el))return;seen.add(el);const t=el.textContent.trim();if(t.length<2||t.length>40)return;if(el.closest('button'))return;let i=0.06;if(el.classList.contains('accent-text'))i=0.10;else if(el.classList.contains('glow-danger'))i=0.14;else if(el.classList.contains('section-header'))i=0.12;el.dataset.glitch=i;const hb=700+Math.random()*1099;function tk(){setTimeout(()=>{if(el.offsetParent!==null&&Math.random()<parseFloat(el.dataset.glitch))doTS(el);tk()},hb)}tk()})})}
+    function doTS(el){const o=el.textContent;if(o.length<1)return;const n=Math.min(o.length,1+Math.floor(Math.random()*2));const p=[];while(p.length<n&&p.length<o.length){const pos=Math.floor(Math.random()*o.length);if(!p.includes(pos))p.push(pos)}const c=o.split('');p.forEach(pos=>{c[pos]=glitchSafePool[Math.floor(Math.random()*glitchSafePool.length)]});el.textContent=c.join('');el.dataset.ghostText=c.join('');el.classList.add('text-swapping');el.style.transform=`translate(${-3+Math.floor(Math.random()*7)}px,${-1+Math.floor(Math.random()*3)}px)`;setTimeout(()=>{el.textContent=o;el.classList.remove('text-swapping');el.style.transform='';delete el.dataset.ghostText},120+Math.random()*229)}
+    initTextGlitch();
+  </script>
+</body>
+</html>

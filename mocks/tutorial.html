@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tutorial — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --accent: #7ec8e3; --bg-base: #0a0612; --bg-panel: #13092a; --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a; --text-primary: #e0d8f0; --text-secondary: #8a7aa8; --text-dim: #5a4a78;
+      --danger: #e83a3a; --heal: #3ae8a8; --warning: #e8632a; }
+    body { background: var(--bg-base); color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+    .portrait-frame { width: 100%; max-width: 450px; aspect-ratio: 1080/1920; max-height: 100vh;
+      position: relative; background: var(--bg-base); overflow: hidden; display: flex; flex-direction: column; }
+    /* ═══ CRT / VHS EFFECT SYSTEM (FR-23) ═══ */
+    .crt-scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite; }
+    @keyframes scanline-drift { 0% { transform: translateY(0); } 100% { transform: translateY(2px); } }
+    .crt-grille { position: absolute; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right, rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px, rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px, rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen; opacity: 0.15; }
+    .crt-vignette { position: absolute; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite; }
+    @keyframes vignette-pulse { 0%,100% { opacity: 0.65; } 50% { opacity: 0.92; } }
+    .crt-tracking { position: absolute; left: 0; right: 0; height: 28%; z-index: 57; pointer-events: none;
+      background: rgba(126,200,227,0.05); mix-blend-mode: screen; animation: tracking-loop 7s linear infinite; }
+    @keyframes tracking-loop { 0% { top: -28%; } 100% { top: 100%; } }
+    .crt-grain { position: absolute; inset: 0; pointer-events: none; z-index: 56; opacity: 0.5;
+      background-image: radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px), radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px), radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px), radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px), radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px), radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px), radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px), radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px), radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px), radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%; animation: grain-rescatter 1s steps(4) infinite; }
+    @keyframes grain-rescatter { 0% { transform: translate(0,0); } 25% { transform: translate(-2px,1px); } 50% { transform: translate(1px,-2px); } 75% { transform: translate(-1px,-1px); } 100% { transform: translate(2px,1px); } }
+    .crt-border { position: absolute; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow: inset 0 0 3px rgba(126,200,227,0.3), inset 0 0 8px rgba(126,200,227,0.15), inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite; }
+    @keyframes border-flicker { 0% { opacity: 0.7; } 35% { opacity: 0.7; } 36% { opacity: 0.5; } 42% { opacity: 0.9; } 50% { opacity: 0.6; } 55% { opacity: 0.8; } 100% { opacity: 0.7; } }
+    .crt-flash { position: absolute; inset: 0; pointer-events: none; z-index: 62; background: rgba(208,38,212,0.05); opacity: 0; animation: frame-flash 3.2s steps(1) infinite; }
+    @keyframes frame-flash { 0%,85% { opacity: 0; } 86% { opacity: 0.05; } 88% { opacity: 0; } 100% { opacity: 0; } }
+    .crt-glitch-bars { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .glitch-bar { position: absolute; left: 0; right: 0; background: rgba(126,200,227,0.3); mix-blend-mode: screen; }
+    .crt-noise-lines { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .noise-line { position: absolute; left: 0; right: 0; font-family: monospace; font-size: 8px; color: rgba(126,200,227,0.4); white-space: nowrap; overflow: hidden; letter-spacing: 1px; line-height: 10px; mix-blend-mode: screen; }
+    .crt-vhs { position: absolute; inset: 0; pointer-events: none; z-index: 61; opacity: 0; overflow: hidden; }
+    .crt-vhs.active { animation: vhs-event 0.2s steps(1); }
+    @keyframes vhs-event { 0% { opacity: 0; } 20% { opacity: 1; transform: translateX(3px); } 40% { opacity: 0.8; transform: translateX(-4px); } 60% { opacity: 1; transform: translateX(2px); } 80% { opacity: 0.5; transform: translateX(-1px); } 100% { opacity: 0; transform: translateX(0); } }
+    .crt-vhs::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to right, rgba(255,0,0,0.08) 0%, transparent 3%, rgba(0,0,255,0.08) 97%, transparent 100%); }
+    .crt-vhs::after { content: ''; position: absolute; left: 0; right: 0; top: 30%; height: 4px; background: rgba(255,255,255,0.15); mix-blend-mode: screen; }
+    /* ═══ END CRT EFFECTS ═══ */
+    /* PER-ELEMENT TEXT GLITCH (FR-23) */
+    [data-glitch] { position: relative; }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text); position: absolute; top: 0; left: 0;
+      width: 100%; pointer-events: none; text-shadow: none;
+    }
+    [data-glitch].text-swapping::before { color: rgba(255,0,0,0.47); transform: translate(-2px,0); }
+    [data-glitch].text-swapping::after { color: rgba(0,0,255,0.47); transform: translate(2px,0); }
+    .glow { text-shadow: 0 0 8px var(--accent); } .accent-text { color: var(--accent); }
+    .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+    .panel-elevated { background: var(--bg-panel-elevated); }
+    .btn-crt { background: var(--bg-panel); border: 1px solid var(--border-dim); color: var(--text-primary);
+      padding: 14px 20px; font-family: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em;
+      cursor: pointer; transition: all 0.15s ease; text-align: center; min-height: 48px; }
+    .btn-crt:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); color: var(--accent); }
+    .btn-crt.primary { border-color: var(--accent); color: var(--accent); background: rgba(126,200,227,0.1); box-shadow: 0 0 4px var(--accent); }
+    .btn-crt:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-link { text-decoration: none; display: inline-block; }
+    .scroll-area { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg-panel); }
+    .scroll-area::-webkit-scrollbar { width: 4px; }
+    .scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
+    .scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .page { display: none; }
+    .page.active { display: block; }
+    .page-dot { width: 8px; height: 8px; border: 1px solid var(--border-dim); border-radius: 0; display: inline-block; transition: all 0.2s ease; }
+    .page-dot.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 4px var(--accent); }
+    /* Mini illustration area */
+    .illus { background: var(--bg-base); border: 1px solid var(--border-dim); padding: 16px; margin: 12px 0; text-align: center; min-height: 120px; display: flex; align-items: center; justify-content: center; }
+    .illus-console { background: var(--bg-panel); border: 1px solid var(--accent); padding: 8px; font-size: 9px; color: var(--accent); text-shadow: 0 0 4px var(--accent); }
+    .illus-dpad { display: grid; grid-template-columns: repeat(3, 24px); grid-template-rows: repeat(3, 24px); gap: 2px; margin: 0 auto; }
+    .illus-dpad > div { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--accent); }
+    .illus-dpad-center { background: transparent !important; border: 1px dashed var(--border-dim) !important; font-size: 6px !important; color: var(--text-dim) !important; }
+    .illus-grid { display: grid; grid-template-columns: repeat(6, 16px); grid-template-rows: repeat(4, 16px); gap: 0; margin: 0 auto; }
+    .illus-grid > div { border: 1px solid rgba(42,26,74,0.5); font-size: 6px; display: flex; align-items: center; justify-content: center; }
+    .illus-grid > div.wall { background: #0d0418; }
+    .illus-grid > div.player { background: rgba(126,200,227,0.2); color: var(--accent); }
+    .illus-grid > div.enemy { background: rgba(232,58,58,0.2); color: var(--danger); }
+    .illus-tabs { display: flex; gap: 2px; }
+    .illus-tab { flex: 1; padding: 4px; text-align: center; font-size: 7px; border: 1px solid var(--border-dim); color: var(--text-secondary); }
+    .illus-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(126,200,227,0.1); }
+  </style>
+</head>
+<body>
+  <div class="portrait-frame">
+    <div class="crt-grille"></div>
+    <div class="crt-vignette"></div>
+    <div class="crt-tracking"></div>
+    <div class="crt-scanlines"></div>
+    <div class="crt-grain"></div>
+    <div class="crt-border"></div>
+    <div class="crt-flash"></div>
+    <div class="crt-glitch-bars" id="glitch-bars"></div>
+    <div class="crt-noise-lines" id="noise-lines"></div>
+    <div class="crt-vhs" id="vhs-event"></div>
+
+    <div class="relative z-10 flex flex-col h-full">
+      <!-- Header -->
+      <div class="panel-elevated px-4 py-3 text-center" style="border: 0; border-bottom: 1px solid var(--accent);">
+        <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-secondary);">◈ Operator's Manual</div>
+        <div class="text-sm accent-text glow" id="page-title">THE CONSOLE</div>
+      </div>
+
+      <div class="flex-1 scroll-area px-4 py-4">
+        <!-- Page 1: Console Overview -->
+        <div class="page active" id="page-1">
+          <div class="text-[11px] uppercase tracking-wider accent-text glow mb-2">◈ The Single Console</div>
+          <div class="text-[10px] space-y-2" style="color: var(--text-secondary); line-height: 1.6;">
+            <p>Every action in Operator's Descent routes through <span class="accent-text">one console</span> pinned to the bottom of the screen.</p>
+            <p>No context menus. No floating panels. No map-tapping. The playfield is a <span class="accent-text">readout</span>, not a control surface.</p>
+            <p>The console has <span class="accent-text">seven mutually exclusive modes</span>:</p>
+          </div>
+          <div class="illus">
+            <div class="illus-tabs" style="width: 100%;">
+              <div class="illus-tab active">MOVE</div>
+              <div class="illus-tab">CMBT</div>
+              <div class="illus-tab">PARTY</div>
+              <div class="illus-tab">GEAR</div>
+              <div class="illus-tab">TECH</div>
+              <div class="illus-tab">LOOT</div>
+              <div class="illus-tab">LOG</div>
+            </div>
+          </div>
+          <div class="text-[10px] space-y-1" style="color: var(--text-secondary); line-height: 1.6;">
+            <p><span class="accent-text">MOVE</span> — Explore the floor, 8-way movement</p>
+            <p><span class="accent-text">CMBT</span> — Issue combat commands during encounters</p>
+            <p><span class="accent-text">PARTY</span> — Inspect party stats, HP, CHARGE, conditions</p>
+            <p><span class="accent-text">GEAR</span> — Equip/unequip items, manage inventory</p>
+            <p><span class="accent-text">TECH</span> — Cast protocols, manage CHARGE, overclock</p>
+            <p><span class="accent-text">LOOT</span> — Open containers, take items</p>
+            <p><span class="accent-text">LOG</span> — Review recent events, copy share link</p>
+          </div>
+          <div class="text-[10px] mt-3" style="color: var(--text-dim);">
+            ◈ Tap a mode tab to switch. The console expands to a fixed height and dims the playfield behind it. Tap again to collapse.
+          </div>
+        </div>
+
+        <!-- Page 2: MOVE Mode -->
+        <div class="page" id="page-2">
+          <div class="text-[11px] uppercase tracking-wider accent-text glow mb-2">◈ MOVE Mode</div>
+          <div class="text-[10px] space-y-2" style="color: var(--text-secondary); line-height: 1.6;">
+            <p>Move your party through the floor using the directional pad. <span class="accent-text">Eight-way movement</span> with a corner rule — you cannot move diagonally past a blocked corner.</p>
+          </div>
+          <div class="illus">
+            <div class="illus-dpad">
+              <div>↖</div><div>↑</div><div>↗</div>
+              <div>←</div><div class="illus-dpad-center">WAIT</div><div>→</div>
+              <div>↙</div><div>↓</div><div>↘</div>
+            </div>
+          </div>
+          <div class="text-[10px] space-y-1" style="color: var(--text-secondary); line-height: 1.6;">
+            <p><span class="accent-text">Keyboard:</span> Arrow keys, Numpad, or WASD</p>
+            <p><span class="accent-text">Touch:</span> Tap directional buttons</p>
+            <p><span class="accent-text">Auto-stop:</span> Movement halts when a hostile enters line of sight, a container or descent point is discovered, or the party takes damage.</p>
+            <p><span class="accent-text">Fog of war:</span> Unvisited cells are dark. Visited cells dim. In-LOS cells are visible. Line of sight uses shadowcast.</p>
+          </div>
+        </div>
+
+        <!-- Page 3: COMBAT Mode -->
+        <div class="page" id="page-3">
+          <div class="text-[11px] uppercase tracking-wider accent-text glow mb-2">◈ COMBAT Mode</div>
+          <div class="text-[10px] space-y-2" style="color: var(--text-secondary); line-height: 1.6;">
+            <p>When contact is made, the view zooms to an <span class="accent-text">8×16 grid</span> at the contact point. The floor geometry becomes the arena.</p>
+            <p>Combat is turn-based with <span class="accent-text">initiative order</span>. Each character gets <span class="accent-text">one move action + 2 AP</span> per turn.</p>
+          </div>
+          <div class="illus">
+            <div class="illus-grid">
+              <div class="wall"></div><div></div><div></div><div class="enemy">D</div><div></div><div class="wall"></div>
+              <div class="wall"></div><div></div><div></div><div></div><div></div><div class="wall"></div>
+              <div></div><div></div><div></div><div></div><div></div><div></div>
+              <div></div><div></div><div class="player">B</div><div></div><div class="player">G</div><div></div>
+            </div>
+          </div>
+          <div class="text-[10px] space-y-1" style="color: var(--text-secondary); line-height: 1.6;">
+            <p><span class="accent-text">AP cost:</span> Attack 1 AP · Cast protocol 1 AP · Item 1 AP · Overclock 1 AP · Retreat 1 AP</p>
+            <p><span class="accent-text">Free actions:</span> Weapon swap (once/turn) · Class signature</p>
+            <p><span class="accent-text">Targeting:</span> Tap a target, then confirm. Keyboard: Tab to cycle, Enter to confirm.</p>
+            <p><span class="accent-text">Range bands:</span> Adjacent (1) · Short (1-4) · Medium (1-8) · Long (3-16) · Blast (AoE)</p>
+            <p><span class="accent-text">Cover:</span> Determined by edge-crossing between attacker and target.</p>
+          </div>
+        </div>
+
+        <!-- Page 4: PARTY, GEAR, TECH Modes -->
+        <div class="page" id="page-4">
+          <div class="text-[11px] uppercase tracking-wider accent-text glow mb-2">◈ PARTY · GEAR · TECH</div>
+          <div class="text-[10px] space-y-2" style="color: var(--text-secondary); line-height: 1.6;">
+            <p><span class="accent-text">PARTY:</span> View each character's attributes, HP, CHARGE, conditions, class, calibration count, and corruption contribution.</p>
+            <p><span class="accent-text">GEAR:</span> Equip and unequip weapons, armor, and off-hand items. CORRUPT items show a warning before equipping. Consumables are used from here (or in combat).</p>
+            <p><span class="accent-text">TECH:</span> View your protocol deck. See CHARGE available and cost per protocol. Cast protocols (select target if required). Overclock for extra effect at double cost — with a corruption risk on failure.</p>
+          </div>
+          <div class="text-[10px] mt-3 p-2" style="background: rgba(232,99,42,0.1); border: 1px solid var(--warning); color: var(--warning);">
+            ⚠ CORRUPT items are strictly stronger but permanently raise the danger clock rate. The danger clock triggers hunts — ambush encounters where the party is surrounded.
+          </div>
+        </div>
+
+        <!-- Page 5: LOOT & LOG Modes -->
+        <div class="page" id="page-5">
+          <div class="text-[11px] uppercase tracking-wider accent-text glow mb-2">◈ LOOT · LOG</div>
+          <div class="text-[10px] space-y-2" style="color: var(--text-secondary); line-height: 1.6;">
+            <p><span class="accent-text">LOOT:</span> Activates when adjacent to or standing on a container. Shows contents with full item details — stats, rarity, affixes, CORRUPT status. Take items individually or all at once.</p>
+            <p><span class="accent-text">LOG:</span> Scrolling log of recent events — combat rolls, discoveries, damage, deaths. Every d20 roll is recorded with the attribute used, modifier, target, and outcome.</p>
+            <p><span class="accent-text">Share link:</span> In LOG mode, copy your full run state to a URL under 1500 characters. Paste it on any device to resume bit-for-bit.</p>
+          </div>
+        </div>
+
+        <!-- Page 6: Status Strip & Settings -->
+        <div class="page" id="page-6">
+          <div class="text-[11px] uppercase tracking-wider accent-text glow mb-2">◈ Status Strip &amp; Settings</div>
+          <div class="text-[10px] space-y-2" style="color: var(--text-secondary); line-height: 1.6;">
+            <p><span class="accent-text">Status Strip</span> (top of screen): Shows depth, seed, party sigils with HP bars, and danger clock value.</p>
+            <p><span class="accent-text">Accent color:</span> Each floor's environment theme sets the screen's accent color. You read where you are from the color before reading a number.</p>
+            <p><span class="accent-text">Seed:</span> The world seed determines every floor, every loot roll, every encounter. The same seed always yields the same dungeon.</p>
+            <p><span class="accent-text">Settings:</span> Master mute, per-layer audio volume (5 sliders), glitch toggle, reduced-motion override, scanline/grain toggle. All persist in localStorage.</p>
+            <p><span class="accent-text">Depth is the score.</span> There is no win condition. A run resolves on party wipe. The depth reached is the entire result. Every tenth floor is a threshold — guaranteed elite, vault, and new theme.</p>
+          </div>
+          <div class="text-[10px] mt-4 p-3" style="background: rgba(126,200,227,0.05); border: 1px solid var(--accent); color: var(--accent);">
+            ◈ You are now ready to descend. Press BEGIN NEW RUN from the title screen to spend your 80 points and start.
+          </div>
+        </div>
+      </div>
+
+      <!-- Page navigation -->
+      <div class="panel px-4 py-3" style="border-left:0;border-right:0;border-bottom:0;">
+        <div class="flex items-center justify-center gap-1.5 mb-3">
+          <div class="page-dot active" id="dot-1"></div>
+          <div class="page-dot" id="dot-2"></div>
+          <div class="page-dot" id="dot-3"></div>
+          <div class="page-dot" id="dot-4"></div>
+          <div class="page-dot" id="dot-5"></div>
+          <div class="page-dot" id="dot-6"></div>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn-crt flex-1" id="prev-btn" disabled onclick="changePage(-1)">◀ PREV</button>
+          <button class="btn-crt primary flex-1" id="next-btn" onclick="changePage(1)">NEXT ▶</button>
+        </div>
+        <a href="title.html" class="btn-crt btn-link w-full mt-2" style="display:block;">SKIP / BACK TO TITLE</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    let currentPage = 1;
+    const totalPages = 6;
+    const pageTitles = ['THE CONSOLE', 'MOVE MODE', 'COMBAT MODE', 'PARTY · GEAR · TECH', 'LOOT · LOG', 'STATUS & SETTINGS'];
+
+    function changePage(dir) {
+      const newPage = currentPage + dir;
+      if (newPage < 1 || newPage > totalPages) return;
+      document.getElementById('page-' + currentPage).classList.remove('active');
+      document.getElementById('dot-' + currentPage).classList.remove('active');
+      currentPage = newPage;
+      document.getElementById('page-' + currentPage).classList.add('active');
+      document.getElementById('dot-' + currentPage).classList.add('active');
+      document.getElementById('page-title').textContent = pageTitles[currentPage - 1];
+      document.getElementById('prev-btn').disabled = currentPage === 1;
+      document.getElementById('next-btn').textContent = currentPage === totalPages ? '◈ DONE' : 'NEXT ▶';
+      document.querySelector('.scroll-area').scrollTop = 0;
+    }
+    // ═══ CRT GLITCH SYSTEM ═══
+    const safePool='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+    const gb=document.getElementById('glitch-bars');
+    function sGB(){const d=350+Math.random()*649;setTimeout(()=>{if(Math.random()<0.4){const b=document.createElement('div');b.className='glitch-bar';b.style.cssText=`top:${Math.random()*100}%;height:${1+Math.floor(Math.random()*4)}px;opacity:${0.1+Math.random()*0.4};transform:translateX(${-8+Math.floor(Math.random()*17)}px)`;gb.appendChild(b);setTimeout(()=>b.remove(),80+Math.random()*169)}sGB()},d)}sGB();
+    const nl=document.getElementById('noise-lines');
+    function sNL(){const d=1200+Math.random()*2299;setTimeout(()=>{if(Math.random()<0.3){const l=document.createElement('div');l.className='noise-line';let n='';for(let i=0;i<(8+Math.floor(Math.random()*21))*4;i++)n+=safePool[Math.floor(Math.random()*safePool.length)];l.style.cssText=`top:${Math.random()*100}%`;l.textContent=n;nl.appendChild(l);setTimeout(()=>l.remove(),80+Math.random()*219)}sNL()},d)}sNL();
+    const vh=document.getElementById('vhs-event');
+    function sVH(){const d=4000+Math.random()*5999;setTimeout(()=>{vh.classList.add('active');setTimeout(()=>vh.classList.remove('active'),80+Math.random()*169);sVH()},d)}sVH();
+    // PER-ELEMENT TEXT GLITCH (FR-23)
+    const glitchSafePool='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch(){const sels=['.glow','.accent-text','.page'];const seen=new Set();sels.forEach(sel=>{document.querySelectorAll(sel).forEach(el=>{if(seen.has(el))return;seen.add(el);const t=el.textContent.trim();if(t.length<2||t.length>200)return;if(el.closest('button'))return;let i=0.06;if(el.classList.contains('accent-text'))i=0.10;else if(el.classList.contains('page'))i=0.03;el.dataset.glitch=i;const hb=700+Math.random()*1099;function tk(){setTimeout(()=>{if(el.offsetParent!==null&&Math.random()<parseFloat(el.dataset.glitch))doTS(el);tk()},hb)}tk()})})}
+    function doTS(el){const o=el.textContent;if(o.length<1)return;const n=Math.min(o.length,1+Math.floor(Math.random()*2));const p=[];while(p.length<n&&p.length<o.length){const pos=Math.floor(Math.random()*o.length);if(!p.includes(pos))p.push(pos)}const c=o.split('');p.forEach(pos=>{c[pos]=glitchSafePool[Math.floor(Math.random()*glitchSafePool.length)]});el.textContent=c.join('');el.dataset.ghostText=c.join('');el.classList.add('text-swapping');el.style.transform=`translate(${-3+Math.floor(Math.random()*7)}px,${-1+Math.floor(Math.random()*3)}px)`;setTimeout(()=>{el.textContent=o;el.classList.remove('text-swapping');el.style.transform='';delete el.dataset.ghostText},120+Math.random()*229)}
+    initTextGlitch();
+  </script>
+</body>
+</html>

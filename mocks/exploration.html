@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Floor Exploration — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --accent: #7ec8e3;
+      --accent-dim: rgba(126,200,227,0.25);
+      --accent-faint: rgba(126,200,227,0.06);
+      --bg-base: #0a0612;
+      --bg-panel: #13092a;
+      --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a;
+      --text-primary: #e0d8f0;
+      --text-secondary: #8a7aa8;
+      --text-dim: #5a4a78;
+      --danger: #e83a3a;
+      --heal: #3ae8a8;
+      --wall-color: #2a1048;
+      --wall-highlight: #4a2090;
+      --floor-color: #14092e;
+      --floor-visited: #0c061a;
+    }
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0; min-height: 100vh;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .portrait-frame {
+      width: 100%; max-width: 450px;
+      aspect-ratio: 1080/1920; max-height: 100vh;
+      position: relative; background: var(--bg-base);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       CRT / VHS EFFECT SYSTEM (per FR-23 timing constants)
+       ═══════════════════════════════════════════════════ */
+
+    /* — Scanlines: 1px line every 2px, white at 10%, drifts 2px over 4000ms — */
+    .crt-scanlines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom,
+        transparent 0, transparent 1px,
+        rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite;
+    }
+    @keyframes scanline-drift {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(2px); }
+    }
+
+    /* — Aperture grille: 3px RGB triad, screen blend at 50% — */
+    .crt-grille {
+      position: absolute; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right,
+        rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px,
+        rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
+        rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen;
+      opacity: 0.15;
+    }
+
+    /* — Vignette: 4s ease-in-out pulse, opacity 0.65↔0.92 — */
+    .crt-vignette {
+      position: absolute; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center,
+        transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite;
+    }
+    @keyframes vignette-pulse {
+      0%, 100% { opacity: 0.65; }
+      50% { opacity: 0.92; }
+    }
+
+    /* — Tracking band: 7s linear loop, 28% viewport height, 5% white-blue, screen blend — */
+    .crt-tracking {
+      position: absolute; left: 0; right: 0; height: 28%; z-index: 57;
+      pointer-events: none;
+      background: rgba(126,200,227,0.05);
+      mix-blend-mode: screen;
+      animation: tracking-loop 7s linear infinite;
+    }
+    @keyframes tracking-loop {
+      0% { top: -28%; }
+      100% { top: 100%; }
+    }
+
+    /* — Grain: dot-scatter, 10px cell grid, ~15% fill, 2×2px dots, re-scattered once per second — */
+    .crt-grain {
+      position: absolute; inset: 0; pointer-events: none; z-index: 56;
+      opacity: 0.5;
+      background-image:
+        radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px),
+        radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%;
+      animation: grain-rescatter 1s steps(4) infinite;
+    }
+    @keyframes grain-rescatter {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-2px, 1px); }
+      50% { transform: translate(1px, -2px); }
+      75% { transform: translate(-1px, -1px); }
+      100% { transform: translate(2px, 1px); }
+    }
+
+    /* — Border flicker overlay: 400-1099ms period, 35% fire, 40-159ms, opacity 0.5-0.9 — */
+    .crt-border {
+      position: absolute; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow:
+        inset 0 0 3px rgba(126,200,227,0.3),
+        inset 0 0 8px rgba(126,200,227,0.15),
+        inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite;
+    }
+    @keyframes border-flicker {
+      0% { opacity: 0.7; }
+      35% { opacity: 0.7; }
+      36% { opacity: 0.5; }
+      42% { opacity: 0.9; }
+      50% { opacity: 0.6; }
+      55% { opacity: 0.8; }
+      100% { opacity: 0.7; }
+    }
+
+    /* — Frame flash: 1800-4499ms, 12% fire, 30-89ms, magenta at 5% — */
+    .crt-flash {
+      position: absolute; inset: 0; pointer-events: none; z-index: 62;
+      background: rgba(208,38,212,0.05);
+      opacity: 0;
+      animation: frame-flash 3.2s steps(1) infinite;
+    }
+    @keyframes frame-flash {
+      0%, 85% { opacity: 0; }
+      86% { opacity: 0.05; }
+      88% { opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    /* — Glitch bars container (JS-driven, per FR-23: 350-999ms, 40% fire, 80-249ms) — */
+    .crt-glitch-bars {
+      position: absolute; inset: 0; pointer-events: none; z-index: 61;
+      overflow: hidden;
+    }
+    .glitch-bar {
+      position: absolute; left: 0; right: 0;
+      background: rgba(126,200,227,0.3);
+      mix-blend-mode: screen;
+    }
+
+    /* — Noise lines container (JS-driven, per FR-23: 1200-3499ms, 30% fire, 80-299ms) — */
+    .crt-noise-lines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 61;
+      overflow: hidden;
+    }
+    .noise-line {
+      position: absolute; left: 0; right: 0;
+      font-family: monospace; font-size: 8px;
+      color: rgba(126,200,227,0.4);
+      white-space: nowrap; overflow: hidden;
+      letter-spacing: 1px; line-height: 10px;
+      mix-blend-mode: screen;
+    }
+
+    /* — VHS event overlay (JS-driven, per FR-23: 4000-9999ms, 80-249ms) — */
+    .crt-vhs {
+      position: absolute; inset: 0; pointer-events: none; z-index: 61;
+      opacity: 0; overflow: hidden;
+    }
+    .crt-vhs.active {
+      animation: vhs-event 0.2s steps(1);
+    }
+    @keyframes vhs-event {
+      0% { opacity: 0; }
+      20% { opacity: 1; transform: translateX(3px); }
+      40% { opacity: 0.8; transform: translateX(-4px); }
+      60% { opacity: 1; transform: translateX(2px); }
+      80% { opacity: 0.5; transform: translateX(-1px); }
+      100% { opacity: 0; transform: translateX(0); }
+    }
+    .crt-vhs::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to right,
+        rgba(255,0,0,0.08) 0%, transparent 3%,
+        rgba(0,0,255,0.08) 97%, transparent 100%);
+    }
+    .crt-vhs::after {
+      content: ''; position: absolute; left: 0; right: 0; top: 30%;
+      height: 4px; background: rgba(255,255,255,0.15);
+      mix-blend-mode: screen;
+    }
+
+    /* — Chromatic ghost text effect (static representation) — */
+    .chroma-text {
+      position: relative;
+      text-shadow: 0 0 8px var(--accent);
+    }
+    .chroma-text.ghosting::before,
+    .chroma-text.ghosting::after {
+      content: attr(data-text);
+      position: absolute; top: 0; left: 0; width: 100%;
+      pointer-events: none;
+    }
+    .chroma-text.ghosting::before {
+      color: rgba(255,0,0,0.47); transform: translate(-2px, 0);
+      animation: chroma-ghost 0.25s steps(1) infinite;
+    }
+    .chroma-text.ghosting::after {
+      color: rgba(0,0,255,0.47); transform: translate(2px, 0);
+      animation: chroma-ghost 0.25s steps(1) infinite;
+    }
+    @keyframes chroma-ghost {
+      0%, 70% { opacity: 0; }
+      71% { opacity: 0.47; }
+      85% { opacity: 0.47; }
+      86% { opacity: 0; }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       END CRT EFFECT SYSTEM
+       ═══════════════════════════════════════════════════ */
+
+    .glow { text-shadow: 0 0 8px var(--accent); }
+    .glow-strong { text-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent); }
+    .accent-text { color: var(--accent); }
+    .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+
+    /* ── Lattice grid ── */
+    .lattice {
+      display: grid;
+      grid-template-columns: repeat(20, 1fr);
+      gap: 0;
+      background: var(--bg-base);
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .cell {
+      aspect-ratio: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 6px;
+      position: relative;
+    }
+
+    /* ── Wall cells ── */
+    .cell.wall {
+      background: var(--wall-color);
+      background-image:
+        radial-gradient(circle at 30% 40%, rgba(0,0,0,0.3) 1px, transparent 1px),
+        radial-gradient(circle at 70% 60%, rgba(0,0,0,0.2) 1px, transparent 1px),
+        radial-gradient(circle at 50% 20%, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 4px 4px, 5px 5px, 3px 3px;
+    }
+
+    /* ── Floor cells ── */
+    .cell.floor {
+      background: var(--floor-color);
+      background-image: radial-gradient(circle at 60% 50%, rgba(126,200,227,0.015) 1px, transparent 1px);
+      background-size: 3px 3px;
+    }
+
+    /* ── Visibility states ── */
+    .cell.visible { filter: brightness(1.0); }
+    .cell.visible.floor {
+      background-color: var(--floor-color);
+      box-shadow: inset 0 0 2px rgba(126,200,227,0.05);
+    }
+    .cell.visited { filter: brightness(0.4); }
+    .cell.visited.floor { background-color: var(--floor-visited); }
+    .cell.unvisited {
+      filter: brightness(0);
+      background-color: #040108 !important;
+      background-image: none !important;
+    }
+    .cell.unvisited::before, .cell.unvisited::after { display: none !important; }
+
+    /* ── Special cells ── */
+    .cell.descent {
+      background-color: rgba(58,232,168,0.12) !important;
+      box-shadow: inset 0 0 6px var(--heal), 0 0 4px rgba(58,232,168,0.3);
+    }
+    .cell.container {
+      background-color: rgba(232,210,58,0.1) !important;
+      box-shadow: inset 0 0 4px #e8d23a;
+    }
+    .cell.pillar {
+      background: var(--wall-color) !important;
+      background-image: radial-gradient(circle at center, var(--wall-highlight) 30%, var(--wall-color) 70%) !important;
+      box-shadow: inset 0 0 4px var(--accent-dim);
+    }
+    .cell.rubble {
+      background-color: var(--floor-color) !important;
+      background-image:
+        radial-gradient(circle at 30% 30%, rgba(74,32,144,0.6) 2px, transparent 2px),
+        radial-gradient(circle at 70% 60%, rgba(42,16,72,0.5) 1.5px, transparent 1.5px) !important;
+      background-size: 4px 4px, 5px 5px !important;
+    }
+    .cell.hazard {
+      background-color: rgba(232,58,58,0.06) !important;
+      background-image: repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(232,58,58,0.08) 2px, rgba(232,58,58,0.08) 3px) !important;
+    }
+
+    /* ── Wall edge lines ── */
+    .wall-n { box-shadow: inset 0 1px 0 var(--accent-dim); }
+    .wall-s { box-shadow: inset 0 -1px 0 var(--accent-dim); }
+    .wall-e { box-shadow: inset -1px 0 0 var(--accent-dim); }
+    .wall-w { box-shadow: inset 1px 0 0 var(--accent-dim); }
+
+    /* ── Tokens & markers ── */
+    .party-token {
+      width: 78%; height: 78%;
+      border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent), 0 0 24px rgba(126,200,227,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: bold; color: var(--bg-base);
+      border: 2px solid rgba(255,255,255,0.4);
+      z-index: 5;
+    }
+    .enemy-marker {
+      width: 70%; height: 70%;
+      border-radius: 50%; background: var(--danger);
+      box-shadow: 0 0 6px var(--danger), 0 0 12px rgba(232,58,58,0.3);
+      font-size: 6px; display: flex; align-items: center; justify-content: center;
+      color: #fff; border: 1px solid rgba(255,255,255,0.3);
+      z-index: 4;
+    }
+    .descent-icon {
+      color: var(--heal); font-size: 9px; font-weight: bold;
+      text-shadow: 0 0 6px var(--heal), 0 0 12px var(--heal);
+      z-index: 3;
+    }
+    .container-icon {
+      color: #e8d23a; font-size: 8px; font-weight: bold;
+      text-shadow: 0 0 4px #e8d23a, 0 0 8px rgba(232,210,58,0.5);
+      z-index: 3;
+    }
+
+    /* ── Console ── */
+    .console-bar {
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-dim);
+      z-index: 20;
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.6), 0 -1px 4px rgba(126,200,227,0.1);
+    }
+    .mode-tab {
+      flex: 1; padding: 10px 4px; text-align: center;
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-secondary); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      min-height: 48px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .mode-tab:hover { color: var(--text-primary); }
+    .mode-tab.active {
+      border-bottom-color: var(--accent); color: var(--accent);
+      text-shadow: 0 0 8px var(--accent); background: var(--accent-faint);
+      box-shadow: inset 0 -4px 8px rgba(126,200,227,0.1);
+    }
+    .mode-tab.disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* ── D-pad ── */
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 4px; width: 180px; height: 180px; margin: 0 auto;
+    }
+    .dpad-btn {
+      background: var(--bg-panel-elevated);
+      border: 1px solid var(--border-dim);
+      color: var(--accent); font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 48px; transition: all 0.1s ease;
+      box-shadow: 0 0 4px rgba(0,0,0,0.4);
+    }
+    .dpad-btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent), inset 0 0 8px rgba(126,200,227,0.1);
+    }
+    .dpad-btn:active { background: var(--accent-faint); box-shadow: 0 0 12px var(--accent); }
+    .dpad-center {
+      background: transparent; border: 1px solid var(--border-dim);
+      font-size: 8px; color: var(--text-dim);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .bar-track { background: var(--bg-base); height: 3px; border: 1px solid var(--border-dim); }
+    .bar-fill { height: 100%; background: var(--accent); box-shadow: 0 0 2px var(--accent); }
+    .bar-fill-danger { background: var(--danger); box-shadow: 0 0 2px var(--danger); }
+    .sigil-mini {
+      width: 24px; height: 24px;
+      border: 1px solid var(--accent); border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--accent); font-size: 9px; font-weight: bold;
+      text-shadow: 0 0 4px var(--accent);
+      box-shadow: 0 0 4px var(--accent);
+    }
+    .console-expanded {
+      max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+    }
+    .console-expanded.open { max-height: 400px; }
+    .alert-banner {
+      background: rgba(232,58,58,0.15);
+      border: 1px solid var(--danger);
+      box-shadow: 0 0 8px var(--danger), 0 0 16px rgba(232,58,58,0.2);
+    }
+    .theme-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--accent-faint);
+      border: 1px solid var(--accent-dim);
+      color: var(--accent); border-radius: 2px;
+      box-shadow: 0 0 4px var(--accent-dim);
+    }
+
+    /* Element jitter class (JS-applied) */
+    .jitter-target {
+      will-change: transform;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       PER-ELEMENT TEXT GLITCH (FR-23)
+       Character substitution + chromatic ghosts
+       ═══════════════════════════════════════════════════ */
+
+    /* Elements marked with data-glitch are candidates for text glitching.
+       Each element declares its own per-element intensity constant
+       via the data-glitch attribute value (e.g., data-glitch="0.20").
+       The JS draws a fixed heartbeat (700-1799ms) once at construction.
+       On each tick, if random() < intensity, 1-2 chars swap to safe-pool
+       characters for 120-349ms with ±3px x / ±1px y displacement.
+       During the swap, chromatic ghosts (red -2px / blue +2px at 47%) appear. */
+
+    [data-glitch] {
+      position: relative;
+    }
+    [data-glitch].text-swapping {
+      /* The element's textContent has been swapped to safe-pool chars */
+    }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text);
+      position: absolute; top: 0; left: 0; width: 100%;
+      pointer-events: none;
+      text-shadow: none; /* ghosts don't get the glow */
+    }
+    [data-glitch].text-swapping::before {
+      color: rgba(255, 0, 0, 0.47);
+      transform: translate(-2px, 0);
+    }
+    [data-glitch].text-swapping::after {
+      color: rgba(0, 0, 255, 0.47);
+      transform: translate(2px, 0);
+    }
+
+    /* ═══════════════════════════════════════════════════
+       END PER-ELEMENT TEXT GLITCH
+       ═══════════════════════════════════════════════════ */
+  </style>
+</head>
+<body>
+  <div class="portrait-frame">
+    <!-- ═══ CRT EFFECT LAYERS ═══ -->
+    <div class="crt-grille"></div>
+    <div class="crt-vignette"></div>
+    <div class="crt-tracking"></div>
+    <div class="crt-scanlines"></div>
+    <div class="crt-grain"></div>
+    <div class="crt-border"></div>
+    <div class="crt-flash"></div>
+    <div class="crt-glitch-bars" id="glitch-bars"></div>
+    <div class="crt-noise-lines" id="noise-lines"></div>
+    <div class="crt-vhs" id="vhs-event"></div>
+
+    <div class="relative z-10 flex flex-col h-full">
+      <!-- Status Strip -->
+      <div class="panel flex items-center justify-between px-3 py-2" style="border-left:0;border-right:0;border-top:0; gap: 6px;">
+        <div class="flex flex-col">
+          <div class="text-[9px] uppercase tracking-wider" style="color: var(--text-secondary);">Depth</div>
+          <div class="text-lg font-bold accent-text glow-strong leading-none chroma-text" data-text="07">07</div>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[9px] uppercase tracking-wider" style="color: var(--text-secondary);">Seed</div>
+          <div class="text-[10px] accent-text glow">A4F2·9C1E</div>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[9px] uppercase tracking-wider" style="color: var(--text-secondary);">Party</div>
+          <div class="flex gap-1 items-center">
+            <div class="sigil-mini jitter-target" title="Breacher HP 28/36">B</div>
+            <div class="sigil-mini jitter-target" title="Ghost HP 18/22" style="opacity:0.8">G</div>
+          </div>
+        </div>
+        <div class="flex flex-col items-end">
+          <div class="text-[9px] uppercase tracking-wider" style="color: var(--text-secondary);">CLK</div>
+          <div class="text-[10px] glow" style="color: #e8632a;">0.32</div>
+        </div>
+      </div>
+
+      <!-- Theme + danger bar -->
+      <div class="flex items-center justify-between px-3 py-1" style="background: var(--bg-panel); border-bottom: 1px solid var(--border-dim);">
+        <div class="theme-badge">◈ Cold Storage</div>
+        <div class="flex items-center gap-2">
+          <span class="text-[8px] uppercase tracking-wider" style="color: var(--text-dim);">Danger</span>
+          <div class="bar-track" style="width: 60px;">
+            <div class="bar-fill bar-fill-danger" style="width: 64%;"></div>
+          </div>
+          <span class="text-[9px]" style="color: var(--danger);">0.32</span>
+        </div>
+      </div>
+
+      <!-- Auto-stop alert (transient) — links to combat -->
+      <a href="combat.html" style="text-decoration:none; display:block;">
+      <div class="alert-banner px-3 py-1.5 text-center text-[10px] glow" style="color: var(--danger);">
+        ◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE
+      </div>
+      </a>
+
+      <!-- Playfield / Lattice -->
+      <div class="lattice" id="lattice">
+        <!-- 20 columns × 32 rows. Generated by JS -->
+      </div>
+
+      <!-- Console -->
+      <div class="console-bar">
+        <!-- Mode tabs -->
+        <div class="flex">
+          <a href="exploration.html" class="mode-tab active" style="text-decoration:none;">MOVE</a>
+          <div class="mode-tab disabled">CMBT</div>
+          <a href="console-party.html" class="mode-tab" style="text-decoration:none;">PARTY</a>
+          <a href="console-gear.html" class="mode-tab" style="text-decoration:none;">GEAR</a>
+          <a href="console-tech.html" class="mode-tab" style="text-decoration:none;">TECH</a>
+          <a href="console-loot.html" class="mode-tab" style="text-decoration:none;">LOOT</a>
+          <a href="console-log.html" class="mode-tab" style="text-decoration:none;">LOG</a>
+        </div>
+
+        <!-- Expanded content: MOVE mode D-pad -->
+        <div class="console-expanded open px-4 py-4" id="console-content">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-[10px] uppercase tracking-wider accent-text glow-strong">◈ MOVE MODE</div>
+            <div class="text-[9px]" style="color: var(--text-dim);">Arrows / WASD / Numpad</div>
+          </div>
+          <div class="dpad">
+            <div class="dpad-btn">↖</div>
+            <div class="dpad-btn">↑</div>
+            <div class="dpad-btn">↗</div>
+            <div class="dpad-btn">←</div>
+            <div class="dpad-center">WAIT</div>
+            <div class="dpad-btn">→</div>
+            <div class="dpad-btn">↙</div>
+            <div class="dpad-btn">↓</div>
+            <div class="dpad-btn">↘</div>
+          </div>
+          <div class="flex justify-between mt-3 text-[9px]" style="color: var(--text-dim);">
+            <span>TAP TO COLLAPSE</span>
+            <span>Auto-Stop: ON</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════
+    //  CRT GLITCH SYSTEM (per FR-23 timing constants)
+    // ═══════════════════════════════════════════════
+
+    // Safe pool for character substitution (Latin, digits, box-drawing)
+    const safePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+
+    // — Glitch bars: 350-999ms period, 40% fire, 80-249ms duration, 1-4px tall, ±8px offset, alpha 0.1-0.5 —
+    const glitchBarsEl = document.getElementById('glitch-bars');
+    function scheduleGlitchBar() {
+      const delay = 350 + Math.random() * 649; // 350-999ms
+      setTimeout(() => {
+        if (Math.random() < 0.40) { // 40% fire
+          const bar = document.createElement('div');
+          bar.className = 'glitch-bar';
+          const height = 1 + Math.floor(Math.random() * 4); // 1-4px
+          const offset = -8 + Math.floor(Math.random() * 17); // ±8px
+          const alpha = 0.1 + Math.random() * 0.4; // 0.1-0.5
+          const top = Math.random() * 100;
+          bar.style.cssText = `top: ${top}%; height: ${height}px; opacity: ${alpha}; transform: translateX(${offset}px);`;
+          glitchBarsEl.appendChild(bar);
+          setTimeout(() => bar.remove(), 80 + Math.random() * 169); // 80-249ms
+        }
+        scheduleGlitchBar();
+      }, delay);
+    }
+    scheduleGlitchBar();
+
+    // — Noise lines: 1200-3499ms, 30% fire, 80-299ms, 8-28 chars at 8px —
+    const noiseLinesEl = document.getElementById('noise-lines');
+    function scheduleNoiseLine() {
+      const delay = 1200 + Math.random() * 2299; // 1200-3499ms
+      setTimeout(() => {
+        if (Math.random() < 0.30) { // 30% fire
+          const line = document.createElement('div');
+          line.className = 'noise-line';
+          const charCount = 8 + Math.floor(Math.random() * 21); // 8-28 chars
+          let noise = '';
+          for (let i = 0; i < charCount * 4; i++) {
+            noise += safePool[Math.floor(Math.random() * safePool.length)];
+          }
+          const top = Math.random() * 100;
+          line.style.cssText = `top: ${top}%;`;
+          line.textContent = noise;
+          noiseLinesEl.appendChild(line);
+          setTimeout(() => line.remove(), 80 + Math.random() * 219); // 80-299ms
+        }
+        scheduleNoiseLine();
+      }, delay);
+    }
+    scheduleNoiseLine();
+
+    // — VHS events: 4000-9999ms, 80-249ms duration —
+    const vhsEl = document.getElementById('vhs-event');
+    function scheduleVHSEvent() {
+      const delay = 4000 + Math.random() * 5999; // 4000-9999ms
+      setTimeout(() => {
+        vhsEl.classList.add('active');
+        setTimeout(() => vhsEl.classList.remove('active'), 80 + Math.random() * 169);
+        scheduleVHSEvent();
+      }, delay);
+    }
+    scheduleVHSEvent();
+
+    // — Element jitter: 500-1399ms, 30% fire, 70-199ms, ±3px x, ±2px y —
+    const jitterTargets = document.querySelectorAll('.jitter-target');
+    function scheduleJitter() {
+      const delay = 500 + Math.random() * 899; // 500-1399ms
+      setTimeout(() => {
+        jitterTargets.forEach(el => {
+          if (Math.random() < 0.30) { // 30% fire per element
+            const dx = -3 + Math.floor(Math.random() * 7); // ±3px x
+            const dy = -2 + Math.floor(Math.random() * 5); // ±2px y
+            el.style.transform = `translate(${dx}px, ${dy}px)`;
+            setTimeout(() => { el.style.transform = ''; }, 70 + Math.random() * 129); // 70-199ms
+          }
+        });
+        scheduleJitter();
+      }, delay);
+    }
+    scheduleJitter();
+
+    // ═══════════════════════════════════════════════
+    //  PER-ELEMENT TEXT GLITCH (FR-23)
+    //  Character substitution + chromatic ghosts
+    //  Each element gets a fixed heartbeat (700-1799ms)
+    //  and a per-element intensity constant.
+    // ═══════════════════════════════════════════════
+    const glitchSafePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch() {
+      const sels = ['.glow','.glow-strong','.accent-text','.chroma-text','.mode-tab','.theme-badge'];
+      const seen = new Set();
+      sels.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          if (seen.has(el)) return; seen.add(el);
+          const text = el.textContent.trim();
+          if (text.length < 2 || text.length > 40) return;
+          if (el.closest('button,.dpad-btn,.action-btn,.stepper-btn')) return;
+          let intensity = 0.06;
+          if (el.classList.contains('glow-strong') || el.classList.contains('chroma-text')) intensity = 0.20;
+          else if (el.classList.contains('accent-text')) intensity = 0.10;
+          else if (el.classList.contains('mode-tab')) intensity = 0.08;
+          else if (el.classList.contains('theme-badge')) intensity = 0.12;
+          el.dataset.glitch = intensity;
+          const heartbeat = 700 + Math.random() * 1099;
+          function tick() {
+            setTimeout(() => {
+              if (el.offsetParent !== null && Math.random() < parseFloat(el.dataset.glitch)) {
+                doTextSwap(el);
+              }
+              tick();
+            }, heartbeat);
+          }
+          tick();
+        });
+      });
+    }
+    function doTextSwap(el) {
+      const orig = el.textContent;
+      if (orig.length < 1) return;
+      const numSwaps = Math.min(orig.length, 1 + Math.floor(Math.random() * 2));
+      const positions = [];
+      while (positions.length < numSwaps && positions.length < orig.length) {
+        const pos = Math.floor(Math.random() * orig.length);
+        if (!positions.includes(pos)) positions.push(pos);
+      }
+      const chars = orig.split('');
+      positions.forEach(pos => {
+        chars[pos] = glitchSafePool[Math.floor(Math.random() * glitchSafePool.length)];
+      });
+      el.textContent = chars.join('');
+      el.dataset.ghostText = chars.join('');
+      el.classList.add('text-swapping');
+      el.style.transform = `translate(${-3 + Math.floor(Math.random() * 7)}px, ${-1 + Math.floor(Math.random() * 3)}px)`;
+      setTimeout(() => {
+        el.textContent = orig;
+        el.classList.remove('text-swapping');
+        el.style.transform = '';
+        delete el.dataset.ghostText;
+      }, 120 + Math.random() * 229);
+    }
+    initTextGlitch();
+
+    // ═══════════════════════════════════════════════
+    //  LATTICE GENERATION
+    // ═══════════════════════════════════════════════
+
+    const lattice = document.getElementById('lattice');
+    const cols = 20, rows = 32;
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      grid.push(new Array(cols).fill(0));
+    }
+
+    const rooms = [];
+    function carveRoom(r, c, h, w) {
+      for (let y = r; y < r + h && y < rows; y++) {
+        for (let x = c; x < c + w && x < cols; x++) {
+          grid[y][x] = 1;
+        }
+      }
+      rooms.push({ r, c, h, w });
+    }
+
+    carveRoom(2, 2, 5, 6);
+    for (let y = 4; y < 7; y++) grid[y][8] = 1;
+    grid[5][9] = 1;
+    carveRoom(3, 10, 4, 5);
+    for (let y = 7; y < 14; y++) grid[y][5] = 1;
+    carveRoom(9, 2, 5, 5);
+    for (let x = 7; x < 12; x++) grid[11][x] = 1;
+    carveRoom(10, 12, 5, 6);
+    for (let y = 14; y < 20; y++) grid[y][4] = 1;
+    carveRoom(16, 2, 6, 6);
+    for (let x = 8; x < 13; x++) grid[19][x] = 1;
+    carveRoom(17, 13, 6, 5);
+    for (let x = 15; x < 19; x++) grid[5][x] = 1;
+    carveRoom(2, 15, 4, 4);
+    carveRoom(12, 13, 3, 4);
+    carveRoom(24, 6, 5, 8);
+    carveRoom(24, 15, 5, 3);
+    for (let y = 7; y < 10; y++) grid[y][12] = 1;
+    for (let x = 5; x < 8; x++) grid[15][x] = 1;
+    for (let y = 20; y < 24; y++) grid[y][5] = 1;
+    for (let x = 6; x < 14; x++) grid[22][x] = 1;
+
+    function addPillar(r, c) { if (grid[r] && grid[r][c] === 1) grid[r][c] = 2; }
+    addPillar(4, 4); addPillar(4, 6); addPillar(6, 4); addPillar(6, 6);
+    addPillar(12, 4);
+    addPillar(12, 14); addPillar(14, 16);
+    addPillar(19, 4); addPillar(19, 6); addPillar(21, 4); addPillar(21, 6);
+    addPillar(26, 8); addPillar(26, 11);
+
+    function addRubble(r, c) { if (grid[r] && grid[r][c] === 1) grid[r][c] = 3; }
+    addRubble(3, 3); addRubble(5, 5); addRubble(10, 3); addRubble(13, 15);
+    addRubble(18, 14); addRubble(20, 16); addRubble(25, 7); addRubble(27, 12);
+
+    function addHazard(r, c) { if (grid[r] && grid[r][c] === 1) grid[r][c] = 4; }
+    addHazard(11, 9); addHazard(11, 10);
+    addHazard(25, 5); addHazard(25, 6);
+
+    const partyC = 5, partyR = 11;
+    const descC = 16, descR = 3;
+    const contC = 4, contR = 4;
+    const cont2C = 14, contR2 = 12;
+    const enemyC = 13, enemyR = 11;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const val = grid[r][c];
+        const dist = Math.max(Math.abs(c - partyC), Math.abs(r - partyR));
+        let visibility = 'unvisited';
+        if (dist <= 6) visibility = 'visible';
+        else if (dist <= 11) visibility = 'visited';
+
+        if (val === 0) {
+          cell.classList.add('wall', visibility);
+          if (r > 0 && grid[r-1][c] >= 1) cell.classList.add('wall-n');
+          if (r < rows-1 && grid[r+1][c] >= 1) cell.classList.add('wall-s');
+          if (c < cols-1 && grid[r][c+1] >= 1) cell.classList.add('wall-e');
+          if (c > 0 && grid[r][c-1] >= 1) cell.classList.add('wall-w');
+        } else if (val === 1) {
+          cell.classList.add('floor', visibility);
+        } else if (val === 2) {
+          cell.classList.add('pillar', visibility);
+          cell.classList.add('wall-n', 'wall-s', 'wall-e', 'wall-w');
+        } else if (val === 3) {
+          cell.classList.add('rubble', visibility);
+        } else if (val === 4) {
+          cell.classList.add('hazard', visibility);
+        }
+
+        if (c === partyC && r === partyR) {
+          cell.className = 'cell visible floor';
+          cell.innerHTML = '<div class="party-token">◈</div>';
+        }
+        if (c === descC && r === descR && visibility !== 'unvisited') {
+          cell.classList.add('descent');
+          cell.innerHTML = '<span class="descent-icon">▼</span>';
+        }
+        if ((c === contC && r === contR || c === cont2C && r === contR2) && visibility !== 'unvisited') {
+          cell.classList.add('container');
+          cell.innerHTML = '<span class="container-icon">▣</span>';
+        }
+        if (c === enemyC && r === enemyR && visibility === 'visible') {
+          cell.innerHTML = '<div class="enemy-marker">✕</div>';
+        }
+        lattice.appendChild(cell);
+      }
+    }
+
+    // ═══════════════════════════════════════════════
+    //  CONSOLE INTERACTION
+    // ═══════════════════════════════════════════════
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', function(e) {
+        if (this.classList.contains('disabled')) return;
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+    document.querySelectorAll('.dpad-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        this.style.background = 'var(--accent-faint)';
+        setTimeout(() => { this.style.background = ''; }, 150);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Title Screen — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --accent: #7ec8e3;
+      --bg-base: #0a0612;
+      --bg-panel: #13092a;
+      --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a;
+      --text-primary: #e0d8f0;
+      --text-secondary: #8a7aa8;
+      --text-dim: #5a4a78;
+      --danger: #e83a3a;
+    }
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0; min-height: 100vh;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .portrait-frame {
+      width: 100%; max-width: 450px;
+      aspect-ratio: 1080/1920; max-height: 100vh;
+      position: relative; background: var(--bg-base);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+
+    /* ═══ CRT / VHS EFFECT SYSTEM ═══ */
+    .crt-scanlines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom,
+        transparent 0, transparent 1px,
+        rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite;
+    }
+    @keyframes scanline-drift { 0% { transform: translateY(0); } 100% { transform: translateY(2px); } }
+
+    .crt-grille {
+      position: absolute; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right,
+        rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px,
+        rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
+        rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen;
+      opacity: 0.15;
+    }
+
+    .crt-vignette {
+      position: absolute; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center,
+        transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite;
+    }
+    @keyframes vignette-pulse { 0%,100% { opacity: 0.65; } 50% { opacity: 0.92; } }
+
+    .crt-tracking {
+      position: absolute; left: 0; right: 0; height: 28%; z-index: 57;
+      pointer-events: none;
+      background: rgba(126,200,227,0.05);
+      mix-blend-mode: screen;
+      animation: tracking-loop 7s linear infinite;
+    }
+    @keyframes tracking-loop { 0% { top: -28%; } 100% { top: 100%; } }
+
+    .crt-grain {
+      position: absolute; inset: 0; pointer-events: none; z-index: 56;
+      opacity: 0.5;
+      background-image:
+        radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px),
+        radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%;
+      animation: grain-rescatter 1s steps(4) infinite;
+    }
+    @keyframes grain-rescatter {
+      0% { transform: translate(0,0); } 25% { transform: translate(-2px,1px); }
+      50% { transform: translate(1px,-2px); } 75% { transform: translate(-1px,-1px); }
+      100% { transform: translate(2px,1px); }
+    }
+
+    .crt-border {
+      position: absolute; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow:
+        inset 0 0 3px rgba(126,200,227,0.3),
+        inset 0 0 8px rgba(126,200,227,0.15),
+        inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite;
+    }
+    @keyframes border-flicker {
+      0% { opacity: 0.7; } 35% { opacity: 0.7; } 36% { opacity: 0.5; }
+      42% { opacity: 0.9; } 50% { opacity: 0.6; } 55% { opacity: 0.8; }
+      100% { opacity: 0.7; }
+    }
+
+    .crt-flash {
+      position: absolute; inset: 0; pointer-events: none; z-index: 62;
+      background: rgba(208,38,212,0.05);
+      opacity: 0;
+      animation: frame-flash 3.2s steps(1) infinite;
+    }
+    @keyframes frame-flash {
+      0%,85% { opacity: 0; } 86% { opacity: 0.05; } 88% { opacity: 0; } 100% { opacity: 0; }
+    }
+
+    .crt-glitch-bars { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .glitch-bar { position: absolute; left: 0; right: 0; background: rgba(126,200,227,0.3); mix-blend-mode: screen; }
+
+    .crt-noise-lines { position: absolute; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .noise-line { position: absolute; left: 0; right: 0; font-family: monospace; font-size: 8px;
+      color: rgba(126,200,227,0.4); white-space: nowrap; overflow: hidden;
+      letter-spacing: 1px; line-height: 10px; mix-blend-mode: screen; }
+
+    .crt-vhs { position: absolute; inset: 0; pointer-events: none; z-index: 61; opacity: 0; overflow: hidden; }
+    .crt-vhs.active { animation: vhs-event 0.2s steps(1); }
+    @keyframes vhs-event {
+      0% { opacity: 0; } 20% { opacity: 1; transform: translateX(3px); }
+      40% { opacity: 0.8; transform: translateX(-4px); } 60% { opacity: 1; transform: translateX(2px); }
+      80% { opacity: 0.5; transform: translateX(-1px); } 100% { opacity: 0; transform: translateX(0); }
+    }
+    .crt-vhs::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to right, rgba(255,0,0,0.08) 0%, transparent 3%, rgba(0,0,255,0.08) 97%, transparent 100%);
+    }
+    .crt-vhs::after {
+      content: ''; position: absolute; left: 0; right: 0; top: 30%;
+      height: 4px; background: rgba(255,255,255,0.15); mix-blend-mode: screen;
+    }
+
+    /* ═══ END CRT EFFECTS ═══ */
+
+    /* PER-ELEMENT TEXT GLITCH (FR-23) */
+    [data-glitch] { position: relative; }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text); position: absolute; top: 0; left: 0;
+      width: 100%; pointer-events: none; text-shadow: none;
+    }
+    [data-glitch].text-swapping::before { color: rgba(255,0,0,0.47); transform: translate(-2px,0); }
+    [data-glitch].text-swapping::after { color: rgba(0,0,255,0.47); transform: translate(2px,0); }
+
+    .glow { text-shadow: 0 0 8px var(--accent); }
+    .glow-strong { text-shadow: 0 0 16px var(--accent), 0 0 24px var(--accent); }
+    .glow-border { box-shadow: 0 0 8px var(--accent); }
+    .glow-border-strong { box-shadow: 0 0 16px var(--accent), 0 0 24px var(--accent); }
+    .accent-border { border-color: var(--accent); }
+    .accent-text { color: var(--accent); }
+    .ornament::before { content: '◈'; margin-right: 0.5em; }
+    .ornament::after { content: '◈'; margin-left: 0.5em; }
+
+    .title-glitch {
+      position: relative;
+      display: inline-block;
+    }
+    .title-glitch::before, .title-glitch::after {
+      content: attr(data-text);
+      position: absolute; top: 0; left: 0; width: 100%;
+      opacity: 0.47;
+      animation: chroma-ghost 3s steps(1) infinite;
+    }
+    .title-glitch::before { color: #ff0000; transform: translate(-2px, 0); }
+    .title-glitch::after { color: #0000ff; transform: translate(2px, 0); }
+    @keyframes chroma-ghost {
+      0%, 70% { opacity: 0; }
+      71% { opacity: 0.47; }
+      85% { opacity: 0.47; }
+      86% { opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    .btn-crt {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      color: var(--text-primary);
+      padding: 14px 24px;
+      font-family: inherit;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+      box-shadow: 0 0 4px rgba(0,0,0,0.4);
+    }
+    .btn-crt:hover, .btn-crt:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent), inset 0 0 8px rgba(126,200,227,0.1);
+      color: var(--accent);
+      outline: none;
+    }
+    .btn-crt:active { background: var(--bg-panel-elevated); }
+    .btn-start {
+      background: transparent;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      padding: 20px 48px;
+      font-size: 24px;
+      letter-spacing: 0.3em;
+      box-shadow: 0 0 16px var(--accent), inset 0 0 16px rgba(126,200,227,0.1);
+      animation: start-pulse 2s ease-in-out infinite;
+    }
+    @keyframes start-pulse {
+      0%,100% { box-shadow: 0 0 16px var(--accent), inset 0 0 16px rgba(126,200,227,0.1); }
+      50% { box-shadow: 0 0 24px var(--accent), inset 0 0 24px rgba(126,200,227,0.15); }
+    }
+    .btn-start:hover { background: rgba(126,200,227,0.1); box-shadow: 0 0 32px var(--accent); }
+    .btn-link { text-decoration: none; display: inline-block; }
+    .hidden-branch { display: none; }
+  </style>
+</head>
+<body>
+  <div class="portrait-frame">
+    <div class="crt-grille"></div>
+    <div class="crt-vignette"></div>
+    <div class="crt-tracking"></div>
+    <div class="crt-scanlines"></div>
+    <div class="crt-grain"></div>
+    <div class="crt-border"></div>
+    <div class="crt-flash"></div>
+    <div class="crt-glitch-bars" id="glitch-bars"></div>
+    <div class="crt-noise-lines" id="noise-lines"></div>
+    <div class="crt-vhs" id="vhs-event"></div>
+
+    <div class="relative z-10 flex flex-col items-center justify-between h-full py-12 px-6">
+      <div class="text-center mt-8">
+        <div class="text-xs uppercase tracking-[0.3em] accent-text glow" style="color: var(--text-secondary);">Glitch Forgeworks</div>
+      </div>
+
+      <div class="flex flex-col items-center gap-12">
+        <div class="text-center">
+          <div class="ornament text-sm accent-text glow mb-3" style="color: var(--text-secondary);"></div>
+          <h1 class="text-4xl font-bold uppercase tracking-[0.15em] accent-text glow-strong title-glitch" data-text="OPERATOR'S">OPERATOR'S</h1>
+          <h1 class="text-4xl font-bold uppercase tracking-[0.15em] accent-text glow-strong title-glitch" data-text="DESCENT">DESCENT</h1>
+          <div class="ornament text-sm accent-text glow mt-3" style="color: var(--text-secondary);"></div>
+          <p class="text-xs mt-4" style="color: var(--text-dim); letter-spacing: 0.1em;">DEPTH IS THE SCORE</p>
+        </div>
+
+        <button class="btn-crt btn-start glow-border-strong" onclick="toggleBranches()">START</button>
+
+        <div id="branches" class="hidden-branch flex flex-col gap-3 w-full max-w-[280px]">
+          <a href="creation.html" class="btn-crt btn-link">◈ Begin New Run</a>
+          <a href="library.html" class="btn-crt btn-link">◈ Run Library</a>
+          <a href="import.html" class="btn-crt btn-link">◈ Import Link</a>
+          <div class="flex gap-3">
+            <a href="tutorial.html" class="btn-crt btn-link flex-1">Tutorial</a>
+            <a href="settings.html" class="btn-crt btn-link flex-1">Settings</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center">
+        <p class="text-[10px]" style="color: var(--text-dim); letter-spacing: 0.1em;">v1.0 · BUILD · OFFLINE READY</p>
+        <p class="text-[10px] mt-1" style="color: var(--text-dim);">PRESS START TO POWER ON</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ═══ CRT GLITCH SYSTEM ═══
+    const safePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+    const glitchBarsEl = document.getElementById('glitch-bars');
+    function scheduleGlitchBar() {
+      const delay = 350 + Math.random() * 649;
+      setTimeout(() => {
+        if (Math.random() < 0.40) {
+          const bar = document.createElement('div');
+          bar.className = 'glitch-bar';
+          bar.style.cssText = `top: ${Math.random()*100}%; height: ${1+Math.floor(Math.random()*4)}px; opacity: ${0.1+Math.random()*0.4}; transform: translateX(${-8+Math.floor(Math.random()*17)}px);`;
+          glitchBarsEl.appendChild(bar);
+          setTimeout(() => bar.remove(), 80 + Math.random() * 169);
+        }
+        scheduleGlitchBar();
+      }, delay);
+    }
+    scheduleGlitchBar();
+
+    const noiseLinesEl = document.getElementById('noise-lines');
+    function scheduleNoiseLine() {
+      const delay = 1200 + Math.random() * 2299;
+      setTimeout(() => {
+        if (Math.random() < 0.30) {
+          const line = document.createElement('div');
+          line.className = 'noise-line';
+          let noise = '';
+          for (let i = 0; i < (8+Math.floor(Math.random()*21))*4; i++) noise += safePool[Math.floor(Math.random() * safePool.length)];
+          line.style.cssText = `top: ${Math.random()*100}%;`;
+          line.textContent = noise;
+          noiseLinesEl.appendChild(line);
+          setTimeout(() => line.remove(), 80 + Math.random() * 219);
+        }
+        scheduleNoiseLine();
+      }, delay);
+    }
+    scheduleNoiseLine();
+
+    const vhsEl = document.getElementById('vhs-event');
+    function scheduleVHSEvent() {
+      const delay = 4000 + Math.random() * 5999;
+      setTimeout(() => {
+        vhsEl.classList.add('active');
+        setTimeout(() => vhsEl.classList.remove('active'), 80 + Math.random() * 169);
+        scheduleVHSEvent();
+      }, delay);
+    }
+    scheduleVHSEvent();
+
+    function toggleBranches() {
+      const el = document.getElementById('branches');
+      el.style.display = el.style.display === 'none' || !el.style.display ? 'flex' : 'none';
+    }
+
+    // PER-ELEMENT TEXT GLITCH (FR-23)
+    const glitchSafePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch() {
+      const sels = ['.glow', '.glow-strong', '.accent-text', '.btn-crt', '.ornament'];
+      const seen = new Set();
+      sels.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          if (seen.has(el)) return; seen.add(el);
+          const text = el.textContent.trim();
+          if (text.length < 2 || text.length > 40) return;
+          if (el.closest('button') && !el.classList.contains('btn-crt')) return;
+          let intensity = 0.06;
+          if (el.classList.contains('glow-strong')) intensity = 0.20;
+          else if (el.classList.contains('accent-text')) intensity = 0.10;
+          else if (el.classList.contains('btn-crt')) intensity = 0.05;
+          else if (el.classList.contains('ornament')) intensity = 0.08;
+          el.dataset.glitch = intensity;
+          const heartbeat = 700 + Math.random() * 1099;
+          function tick() {
+            setTimeout(() => {
+              if (el.offsetParent !== null && Math.random() < parseFloat(el.dataset.glitch)) doTextSwap(el);
+              tick();
+            }, heartbeat);
+          }
+          tick();
+        });
+      });
+    }
+    function doTextSwap(el) {
+      const orig = el.textContent;
+      if (orig.length < 1) return;
+      const numSwaps = Math.min(orig.length, 1 + Math.floor(Math.random() * 2));
+      const positions = [];
+      while (positions.length < numSwaps && positions.length < orig.length) {
+        const pos = Math.floor(Math.random() * orig.length);
+        if (!positions.includes(pos)) positions.push(pos);
+      }
+      const chars = orig.split('');
+      positions.forEach(pos => { chars[pos] = glitchSafePool[Math.floor(Math.random() * glitchSafePool.length)]; });
+      el.textContent = chars.join('');
+      el.dataset.ghostText = chars.join('');
+      el.classList.add('text-swapping');
+      el.style.transform = `translate(${-3 + Math.floor(Math.random() * 7)}px, ${-1 + Math.floor(Math.random() * 3)}px)`;
+      setTimeout(() => {
+        el.textContent = orig; el.classList.remove('text-swapping'); el.style.transform = ''; delete el.dataset.ghostText;
+      }, 120 + Math.random() * 229);
+    }
+    initTextGlitch();
+  </script>
+</body>
+</html>
