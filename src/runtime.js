@@ -1,4 +1,5 @@
-import { gameData } from './main.js';
+import { setGameDataCompatibility } from './main.js';
+import { loadGameData } from './data-loader.js';
 import { bus } from './state/bus.js';
 import { loadSettings, saveRun, deleteRunState } from './state/library.js';
 import { createAudioEngine } from './audio/engine.js';
@@ -22,31 +23,7 @@ let mountSequence = 0;
 let gestureAudioContext = null;
 let busUnsubscribers = [];
 
-const DATA_FILES = [
-  'data/sigils.json',
-  'data/themes.json',
-  'data/classes.json',
-  'data/protocols.json',
-  'data/enemies.json',
-  'data/equipment.json',
-  'data/affixes.json',
-  'data/conditions.json',
-  'data/consumables.json',
-  'data/symbol-table.json',
-];
-
-async function loadData() {
-  const results = await Promise.all(
-    DATA_FILES.map(async (path) => {
-      const res = await fetch(path);
-      if (!res.ok) console.warn(`Failed to load ${path}`);
-      return [path, await res.json().catch(() => null)];
-    })
-  );
-  for (const [path, data] of results) {
-    if (data) gameData[path.replace('data/', '').replace('.json', '')] = data;
-  }
-}
+let gameData = null;
 
 export async function mountScreen(name, params = {}) {
   const sequence = ++mountSequence;
@@ -67,7 +44,7 @@ export async function mountScreen(name, params = {}) {
     const mod = await import(`./ui/screens/${name}.js`);
     if (sequence !== mountSequence || currentScreenContainer !== container) return;
 
-    const controller = mod.mount(container, params || {});
+    const controller = mod.mount(container, { ...params, data: gameData });
     if (sequence !== mountSequence || currentScreenContainer !== container) {
       controller?.unmount?.();
       return;
@@ -263,10 +240,16 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
     });
   }
 
-  await loadData();
+  try {
+    gameData = await loadGameData();
+  } catch (error) {
+    mountDataFailure(error);
+    return;
+  }
+  setGameDataCompatibility(gameData);
 
-  initEncoder(gameData['symbol-table']);
-  initGlitchSafePool(gameData['sigils']);
+  initEncoder(gameData.symbolTable);
+  initGlitchSafePool(gameData.sigils);
 
   const settings = loadSettings();
   visualSettings = {
@@ -293,6 +276,24 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
   }
 }
 
+function mountDataFailure(error) {
+  const root = document.getElementById('app-root');
+  if (!root) return;
+  const screen = document.createElement('main');
+  const message = document.createElement('p');
+  message.textContent = `DATA LOAD FAILED — ${error?.file || 'data'} / ${error?.code || 'unknown'}`;
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.textContent = 'RETRY';
+  retry.addEventListener('click', () => window.location.reload());
+  const returnButton = document.createElement('button');
+  returnButton.type = 'button';
+  returnButton.textContent = 'RETURN';
+  returnButton.addEventListener('click', () => window.location.reload());
+  screen.append(message, retry, returnButton);
+  root.replaceChildren(screen);
+}
+
 
 export function shutdownRuntime() {
   mountSequence += 1;
@@ -314,4 +315,6 @@ export function shutdownRuntime() {
   }
   currentRunState = null;
   setCurrentFloor(null, null);
+  gameData = null;
+  setGameDataCompatibility(null);
 }

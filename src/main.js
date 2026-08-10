@@ -1,4 +1,18 @@
-export const gameData = {};
+let activeGameData = null;
+
+export const gameData = new Proxy({}, {
+  get(_target, property) {
+    if (!activeGameData) return undefined;
+    return property === 'symbol-table' ? activeGameData.symbolTable : activeGameData[property];
+  },
+  set() {
+    return false;
+  }
+});
+
+export function setGameDataCompatibility(registry) {
+  activeGameData = registry;
+}
 
 let activationPromise = null;
 let pendingAudioContext = null;

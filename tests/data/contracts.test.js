@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadData } from '../helpers/data.js';
 import { ARCHETYPES } from '../../src/floor/archetypes.js';
+import { validateGameData } from '../../src/data-loader.js';
 
 const NAMES = ['sigils', 'themes', 'classes', 'protocols', 'enemies', 'equipment', 'affixes', 'conditions', 'consumables', 'symbol-table'];
 
@@ -14,6 +15,7 @@ const affixes = loadData('affixes');
 const conditions = loadData('conditions');
 const consumables = loadData('consumables');
 const symbolTable = loadData('symbol-table');
+const registry = { sigils, themes, classes, protocols, enemies, equipment, affixes, conditions, consumables, symbolTable };
 
 const PROTOCOL_SCHOOL_IDS = Object.keys(protocols.schools);
 const CONDITION_IDS = Object.keys(conditions.conditions);
@@ -33,6 +35,19 @@ function allCodepointsInRange(codepoints, lo, hi) {
 }
 
 describe('universal data checks', () => {
+  it('passes the complete static content ABI', () => {
+    expect(validateGameData(registry)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('reports invalid data deterministically', () => {
+    const invalid = structuredClone(registry);
+    invalid.classes.classes[0].equipmentGates.weapons[0] = 'missing_weapon';
+    expect(validateGameData(invalid)).toEqual({
+      valid: false,
+      errors: [{ code: 'invalid_reference', file: 'data/classes.json', details: 'Invalid gate or sigil family for breacher.' }]
+    });
+  });
+
   for (const name of NAMES) {
     it(`${name}.json has version >= 1`, () => {
       const data = loadData(name);

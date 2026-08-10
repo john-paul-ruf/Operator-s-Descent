@@ -15,11 +15,15 @@ describe('cold START boundary', () => {
     expect(source).not.toMatch(/createRNG|Math\.random|createGlitch|createGrain/);
   });
 
-  it('keeps service-worker, data loading, and visual services inside the hot runtime', async () => {
-    const source = await readSource('../../src/runtime.js');
+  it('keeps service-worker, deferred data loading, and visual services inside the hot runtime', async () => {
+    const [source, loader] = await Promise.all([
+      readSource('../../src/runtime.js'),
+      readSource('../../src/data-loader.js')
+    ]);
 
     expect(source).toContain("navigator.serviceWorker.register('./service-worker.js')");
-    expect(source).toContain('DATA_FILES');
+    expect(source).toContain('loadGameData');
+    expect(loader).toContain('DATA_FILES');
     expect(source).toContain('createGlitchSystem');
     expect(source).toContain('createGrain');
     expect(source).toContain('createRNGCursorForRun');
