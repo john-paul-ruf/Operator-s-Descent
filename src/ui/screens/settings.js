@@ -33,10 +33,10 @@ export function mount(container, params) {
     saveSettings(settings);
     bus.dispatch('state:settings-change', { key: 'glitch', value: v });
   }));
-  visualPanel.appendChild(createToggle('REDUCED MOTION', settings.reducedMotion, (v) => {
-    settings.reducedMotion = v;
+  visualPanel.appendChild(createToggle('REDUCED MOTION', settings.reducedMotion === 'reduce', (v) => {
+    settings.reducedMotion = v ? 'reduce' : 'full';
     saveSettings(settings);
-    bus.dispatch('state:settings-change', { key: 'reducedMotion', value: v });
+    bus.dispatch('state:settings-change', { key: 'reducedMotion', value: settings.reducedMotion });
   }));
   visualPanel.appendChild(createToggle('SCANLINES & GRAIN', settings.scanlineGrainEnabled, (v) => {
     settings.scanlineGrainEnabled = v;

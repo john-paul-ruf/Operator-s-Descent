@@ -5,135 +5,210 @@ const KEY_RUNS = 'od_runs';
 const KEY_SETTINGS = 'od_settings';
 const KEY_FLAGS = 'od_flags';
 const RUN_PREFIX = 'od_run_';
+const LAYERS = ['drone', 'pulse', 'sparkle', 'lead', 'noiseBed'];
 
 function getStorage() {
-  try {
-    return typeof localStorage !== 'undefined' ? localStorage : null;
-  } catch {
-    return null;
-  }
+  try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
 }
 
-function readIndex() {
-  const storage = getStorage();
-  if (!storage) return [];
-  try {
-    return JSON.parse(storage.getItem(KEY_RUNS) || '[]');
-  } catch {
-    return [];
-  }
+function storageError(error) {
+  return error?.name === 'QuotaExceededError' || /quota/i.test(error?.message || '') ? 'quota_exceeded' : 'storage_failed';
 }
 
-function writeIndex(index) {
-  const storage = getStorage();
-  if (!storage) return;
-  storage.setItem(KEY_RUNS, JSON.stringify(index));
+function read(storage, key) {
+  try { return { success: true, value: storage.getItem(key) }; } catch (error) { return { success: false, error: storageError(error) }; }
 }
 
-export function saveRun(runState) {
-  const result = encodeRun(runState);
-  if (!result.success) return result;
+function write(storage, key, value) {
+  try { storage.setItem(key, value); return { success: true }; } catch (error) { return { success: false, error: storageError(error) }; }
+}
 
-  const storage = getStorage();
-  if (!storage) return { success: false, error: 'no_storage' };
+function remove(storage, key) {
+  try { storage.removeItem(key); return { success: true }; } catch (error) { return { success: false, error: storageError(error) }; }
+}
 
-  const key = `${runState.worldSeed}_${runState.creationTimestamp || Date.now()}`;
-  storage.setItem(RUN_PREFIX + key, result.fragment);
+function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function integer(value, min, max, fallback) { return Number.isInteger(value) && value >= min && value <= max ? value : fallback; }
+function safeString(value, fallback = '', max = 128) { return typeof value === 'string' && value.length <= max ? value : fallback; }
+function safeCodepoints(value) { return Array.isArray(value) ? value.filter((codepoint) => Number.isInteger(codepoint) && codepoint >= 0 && codepoint <= 0x10ffff).slice(0, 4) : []; }
 
-  const index = readIndex();
-  const entry = {
+function normalizeEntry(entry) {
+  if (!isObject(entry)) return null;
+  const key = safeString(entry.key);
+  if (!key) return null;
+  const timestamp = integer(entry.creationTimestamp ?? entry.timestamp, 0, Number.MAX_SAFE_INTEGER, 0);
+  const migrated = {
+    ...entry,
     key,
-    worldSeed: runState.worldSeed,
-    depth: runState.depth,
-    partyCount: runState.party?.length || 0,
-    partySigils: Array.isArray(runState.party)
-      ? runState.party.map(character => character?.sigilCodepoint).filter(Number.isInteger)
-      : [],
-    alive: true,
-    timestamp: Date.now()
+    worldSeed: integer(entry.worldSeed, 0, 0xffffffff, 0),
+    creationTimestamp: timestamp,
+    depth: integer(entry.depth, 1, 1_000_000, 1),
+    partySigils: safeCodepoints(entry.partySigils),
+    partyClasses: Array.isArray(entry.partyClasses) ? entry.partyClasses.map((id) => safeString(id, '', 64)).filter(Boolean).slice(0, 4) : [],
+    accentSwatch: safeString(entry.accentSwatch, '#7ec8e3', 32),
+    theme: safeString(entry.theme, '', 64),
+    alive: entry.alive !== false,
+    lastPlayed: integer(entry.lastPlayed ?? entry.timestamp, 0, Number.MAX_SAFE_INTEGER, timestamp)
   };
-
-  const existing = index.findIndex(e => e.key === key);
-  if (existing >= 0) index[existing] = entry;
-  else index.push(entry);
-  writeIndex(index);
-
-  return { success: true, key, length: result.length };
+  return migrated;
 }
 
-export function loadRun(key) {
-  const storage = getStorage();
-  if (!storage) return { success: false, error: 'no_storage' };
-
-  const raw = storage.getItem(RUN_PREFIX + key);
-  if (!raw) return { success: false, error: 'not_found' };
-
-  const result = decodeRun(raw);
-  return result;
-}
-
-export function listRuns() {
-  return readIndex().filter(e => e.alive);
-}
-
-export function deleteRunState(key) {
-  const storage = getStorage();
-  if (!storage) return;
-
-  storage.removeItem(RUN_PREFIX + key);
-  const index = readIndex();
-  const entry = index.find(e => e.key === key);
-  if (entry) {
-    entry.alive = false;
-    writeIndex(index);
-  }
-}
-
-export function getSeed(key) {
-  const index = readIndex();
-  const entry = index.find(e => e.key === key);
-  return entry?.worldSeed || null;
-}
-
-export function saveSettings(settings) {
-  const storage = getStorage();
-  if (!storage) return;
-  storage.setItem(KEY_SETTINGS, JSON.stringify(settings));
-}
-
-export function loadSettings() {
-  const storage = getStorage();
-  if (!storage) return defaultSettings();
-  const raw = storage.getItem(KEY_SETTINGS);
-  if (!raw) return defaultSettings();
+function readIndex(storage) {
+  const result = read(storage, KEY_RUNS);
+  if (!result.success) return result;
+  if (!result.value) return { success: true, index: [] };
   try {
-    return { ...defaultSettings(), ...JSON.parse(raw) };
-  } catch {
-    return defaultSettings();
-  }
+    const parsed = JSON.parse(result.value);
+    if (!Array.isArray(parsed)) return { success: true, index: [] };
+    return { success: true, index: parsed.map(normalizeEntry).filter(Boolean) };
+  } catch { return { success: true, index: [] }; }
 }
 
-export function getFlag(key) {
-  const storage = getStorage();
-  if (!storage) return null;
-  const flags = JSON.parse(storage.getItem(KEY_FLAGS) || '{}');
-  return flags[key];
-}
-
-export function setFlag(key, value) {
-  const storage = getStorage();
-  if (!storage) return;
-  const flags = JSON.parse(storage.getItem(KEY_FLAGS) || '{}');
-  flags[key] = value;
-  storage.setItem(KEY_FLAGS, JSON.stringify(flags));
-}
+function writeIndex(storage, index) { return write(storage, KEY_RUNS, JSON.stringify(index)); }
 
 function defaultSettings() {
   return {
     masterMute: false,
     layerVolumes: { drone: 75, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 },
     glitchEnabled: true,
-    reducedMotion: false,
+    reducedMotion: 'system',
     scanlineGrainEnabled: true
   };
+}
+
+function normalizeSettings(value) {
+  const input = isObject(value) ? value : {};
+  const defaults = defaultSettings();
+  const layers = isObject(input.layerVolumes) ? input.layerVolumes : {};
+  const reducedMotion = input.reducedMotion === true ? 'reduce'
+    : input.reducedMotion === false ? 'full'
+      : ['system', 'reduce', 'full'].includes(input.reducedMotion) ? input.reducedMotion : defaults.reducedMotion;
+  return {
+    ...input,
+    masterMute: typeof input.masterMute === 'boolean' ? input.masterMute : defaults.masterMute,
+    layerVolumes: {
+      ...layers,
+      ...Object.fromEntries(LAYERS.map((layer) => [layer, Math.max(0, Math.min(100, Number.isFinite(layers[layer]) ? Math.round(layers[layer]) : defaults.layerVolumes[layer]))]))
+    },
+    glitchEnabled: typeof input.glitchEnabled === 'boolean' ? input.glitchEnabled : defaults.glitchEnabled,
+    reducedMotion,
+    scanlineGrainEnabled: typeof input.scanlineGrainEnabled === 'boolean' ? input.scanlineGrainEnabled : defaults.scanlineGrainEnabled
+  };
+}
+
+function readObject(storage, key) {
+  const result = read(storage, key);
+  if (!result.success) return result;
+  if (!result.value) return { success: true, value: {} };
+  try {
+    const parsed = JSON.parse(result.value);
+    return { success: true, value: isObject(parsed) ? parsed : {} };
+  } catch { return { success: true, value: {} }; }
+}
+
+export function saveRun(runState, metadata = {}) {
+  let encoded;
+  try { encoded = encodeRun(runState); } catch (error) { return { success: false, error: error?.message === 'save_budget_exceeded' ? 'save_too_large' : 'encode_failed' }; }
+  if (!encoded.success) return encoded;
+  const storage = getStorage();
+  if (!storage) return { success: false, error: 'no_storage' };
+  const creationTimestamp = integer(runState?.creationTimestamp, 0, Number.MAX_SAFE_INTEGER, Date.now());
+  const key = `${runState.worldSeed}_${creationTimestamp}`;
+  const stateWrite = write(storage, RUN_PREFIX + key, encoded.fragment);
+  if (!stateWrite.success) return stateWrite;
+  const indexResult = readIndex(storage);
+  if (!indexResult.success) return indexResult;
+  const now = Date.now();
+  const party = Array.isArray(runState?.party) ? runState.party : [];
+  const entry = {
+    ...(isObject(metadata) ? metadata : {}),
+    key,
+    worldSeed: runState.worldSeed >>> 0,
+    creationTimestamp,
+    depth: integer(runState.depth, 1, 1_000_000, 1),
+    partySigils: party.map((character) => character?.sigilCodepoint ?? character?.sigilId).filter((sigil) => Number.isInteger(sigil)),
+    partyClasses: party.map((character) => character?.classId).filter((classId) => typeof classId === 'string'),
+    accentSwatch: safeString(metadata?.accentSwatch ?? metadata?.accent, '#7ec8e3', 32),
+    theme: safeString(metadata?.theme ?? metadata?.themeId, '', 64),
+    alive: true,
+    lastPlayed: now
+  };
+  const index = indexResult.index;
+  const existing = index.findIndex((item) => item.key === key);
+  if (existing >= 0) index[existing] = { ...index[existing], ...entry };
+  else index.push(entry);
+  const indexWrite = writeIndex(storage, index);
+  return indexWrite.success ? { success: true, key, length: encoded.length, metadata: normalizeEntry(entry) } : indexWrite;
+}
+
+export function loadRun(key) {
+  const storage = getStorage();
+  if (!storage) return { success: false, error: 'no_storage' };
+  const raw = read(storage, RUN_PREFIX + safeString(key));
+  if (!raw.success) return raw;
+  if (!raw.value) return { success: false, error: 'not_found' };
+  return decodeRun(raw.value);
+}
+
+export function listRuns() {
+  const storage = getStorage();
+  if (!storage) return [];
+  const result = readIndex(storage);
+  return result.success ? result.index.filter((entry) => entry.alive) : [];
+}
+
+export function deleteRunState(key) {
+  const storage = getStorage();
+  if (!storage) return { success: false, error: 'no_storage' };
+  const removed = remove(storage, RUN_PREFIX + safeString(key));
+  if (!removed.success) return removed;
+  const indexResult = readIndex(storage);
+  if (!indexResult.success) return indexResult;
+  const entry = indexResult.index.find((item) => item.key === key);
+  if (!entry) return { success: true, key, tombstoned: false };
+  entry.alive = false;
+  entry.lastPlayed = Date.now();
+  const saved = writeIndex(storage, indexResult.index);
+  return saved.success ? { success: true, key, tombstoned: true } : saved;
+}
+
+export function getSeed(key) {
+  const storage = getStorage();
+  if (!storage) return null;
+  const result = readIndex(storage);
+  return result.success ? result.index.find((entry) => entry.key === key)?.worldSeed ?? null : null;
+}
+
+export function saveSettings(settings) {
+  const storage = getStorage();
+  if (!storage) return { success: false, error: 'no_storage' };
+  const existing = readObject(storage, KEY_SETTINGS);
+  if (!existing.success) return existing;
+  const normalized = normalizeSettings({ ...existing.value, ...(isObject(settings) ? settings : {}) });
+  const result = write(storage, KEY_SETTINGS, JSON.stringify(normalized));
+  return result.success ? { success: true, settings: normalized } : result;
+}
+
+export function loadSettings() {
+  const storage = getStorage();
+  if (!storage) return defaultSettings();
+  const result = readObject(storage, KEY_SETTINGS);
+  return result.success ? normalizeSettings(result.value) : defaultSettings();
+}
+
+export function getFlag(key) {
+  const storage = getStorage();
+  if (!storage) return null;
+  const result = readObject(storage, KEY_FLAGS);
+  return result.success && typeof key === 'string' ? result.value[key] : undefined;
+}
+
+export function setFlag(key, value) {
+  const storage = getStorage();
+  if (!storage) return { success: false, error: 'no_storage' };
+  if (typeof key !== 'string' || !key) return { success: false, error: 'invalid_key' };
+  const current = readObject(storage, KEY_FLAGS);
+  if (!current.success) return current;
+  const result = write(storage, KEY_FLAGS, JSON.stringify({ ...current.value, [key]: value }));
+  return result.success ? { success: true } : result;
 }

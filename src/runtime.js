@@ -18,7 +18,7 @@ let grainController = null;
 let currentRunState = null;
 let currentFloor = null;
 let currentFloorKey = null;
-let visualSettings = { glitchEnabled: true, reducedMotion: false };
+let visualSettings = { glitchEnabled: true, reducedMotion: 'system' };
 let mountSequence = 0;
 let gestureAudioContext = null;
 let busUnsubscribers = [];
@@ -112,7 +112,10 @@ function hasCurrentFloorForRun(runState) {
 }
 
 function applyVisualSettings() {
-  glitchSystem?.setEnabled(visualSettings.glitchEnabled && !visualSettings.reducedMotion);
+  const followsSystem = visualSettings.reducedMotion === 'system';
+  let systemReducedMotion = false;
+  try { systemReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false; } catch {}
+  glitchSystem?.setEnabled(visualSettings.glitchEnabled && visualSettings.reducedMotion !== 'reduce' && !(followsSystem && systemReducedMotion));
 }
 
 function setupGrain() {
@@ -167,7 +170,7 @@ function setupBus() {
       visualSettings.glitchEnabled = Boolean(value);
       applyVisualSettings();
     } else if (key === 'reducedMotion') {
-      visualSettings.reducedMotion = Boolean(value);
+      visualSettings.reducedMotion = ['system', 'reduce', 'full'].includes(value) ? value : (value ? 'reduce' : 'full');
       applyVisualSettings();
     } else if (key === 'scanlineGrain' && grainController) {
       grainController.setEnabled(value);
@@ -254,7 +257,7 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
   const settings = loadSettings();
   visualSettings = {
     glitchEnabled: Boolean(settings.glitchEnabled),
-    reducedMotion: Boolean(settings.reducedMotion)
+    reducedMotion: settings.reducedMotion
   };
 
   glitchSystem = createGlitchSystem();
