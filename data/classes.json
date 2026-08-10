@@ -14,6 +14,11 @@
           "Ignores cover when attacking. Cover bonus does not apply against Breacher attacks.",
           "Breacher attacks also ignore SHIELDED.",
           "Breacher gains a free melee attack after moving (one per turn, does not consume AP)."
+        ],
+        "effects": [
+          { "tier": 1, "id": "ignore_cover", "hook": "attack", "parameters": { "ignoreCover": true } },
+          { "tier": 2, "id": "ignore_shielded", "hook": "attack", "parameters": { "ignoreShielded": true } },
+          { "tier": 3, "id": "free_melee_after_move", "hook": "after_move", "parameters": { "freeMeleeAttack": true }, "usage": { "scope": "turn", "limit": 1 } }
         ]
       },
       "equipmentGates": {
@@ -25,7 +30,14 @@
         "maxTier": 2
       },
       "sigilFamily": "breacher",
-      "calibrationOptions": {}
+      "calibrationOptions": {
+        "default": [
+          { "id": "breacher_mgt", "name": "Crushing Force", "type": "attribute", "effect": { "attribute": "mgt", "amount": 1 } },
+          { "id": "breacher_vit", "name": "Reinforced Frame", "type": "attribute", "effect": { "attribute": "vit", "amount": 1 } },
+          { "id": "breacher_deck", "name": "Tactical Socket", "type": "deck_slot", "effect": { "amount": 1 } },
+          { "id": "breacher_range", "name": "Ranged Drill", "type": "proficiency", "effect": { "equipment": "light_ranged" } }
+        ]
+      }
     },
     {
       "id": "ghost",
@@ -40,10 +52,15 @@
           "May move through one wall cell per move action (phasing). Phased movement does not trigger opportunity attacks.",
           "Ghost gains +2 to initiative.",
           "Ghost may phase through 2 wall cells per move action."
+        ],
+        "effects": [
+          { "tier": 1, "id": "phase_wall", "hook": "move", "parameters": { "wallCells": 1, "ignoreOpportunityAttacks": true } },
+          { "tier": 2, "id": "phase_initiative", "hook": "initiative", "parameters": { "bonus": 2 } },
+          { "tier": 3, "id": "phase_deep_wall", "hook": "move", "parameters": { "wallCells": 2, "ignoreOpportunityAttacks": true } }
         ]
       },
       "equipmentGates": {
-        "weapons": ["sidearm", "sniper", "heavy_ranged", "light_ranged"],
+        "weapons": ["sidearm", "sniper", "heavy_ranged"],
         "armor": ["none", "light"]
       },
       "protocolGates": {
@@ -51,7 +68,14 @@
         "maxTier": 5
       },
       "sigilFamily": "ghost",
-      "calibrationOptions": {}
+      "calibrationOptions": {
+        "default": [
+          { "id": "ghost_fin", "name": "Reflex Thread", "type": "attribute", "effect": { "attribute": "fin", "amount": 1 } },
+          { "id": "ghost_sig", "name": "Signal Veil", "type": "attribute", "effect": { "attribute": "sig", "amount": 1 } },
+          { "id": "ghost_deck", "name": "Ghost Cache", "type": "deck_slot", "effect": { "amount": 1 } },
+          { "id": "ghost_polearm", "name": "Reach Training", "type": "proficiency", "effect": { "equipment": "polearm" } }
+        ]
+      }
     },
     {
       "id": "compiler",
@@ -66,6 +90,11 @@
           "Protocol overclocks cost 1 CHARGE less (minimum 1).",
           "Failed overclocks do not add corruption (immune to overclock corruption).",
           "May overclock two tiers at once (triple CHARGE cost, no corruption roll — automatic success)."
+        ],
+        "effects": [
+          { "tier": 1, "id": "overclock_discount", "hook": "overclock", "parameters": { "chargeDiscount": 1, "minimumCharge": 1 } },
+          { "tier": 2, "id": "overclock_clean", "hook": "overclock", "parameters": { "ignoreCorruption": true } },
+          { "tier": 3, "id": "overclock_double", "hook": "overclock", "parameters": { "additionalTiers": 2, "chargeMultiplier": 3, "automatic": true } }
         ]
       },
       "equipmentGates": {
@@ -77,7 +106,14 @@
         "maxTier": 5
       },
       "sigilFamily": "compiler",
-      "calibrationOptions": {}
+      "calibrationOptions": {
+        "default": [
+          { "id": "compiler_res", "name": "Resonance Stack", "type": "attribute", "effect": { "attribute": "res", "amount": 1 } },
+          { "id": "compiler_foc", "name": "Focused Parse", "type": "attribute", "effect": { "attribute": "foc", "amount": 1 } },
+          { "id": "compiler_deck", "name": "Compile Cache", "type": "deck_slot", "effect": { "amount": 1 } },
+          { "id": "compiler_shield", "name": "Shield Driver", "type": "proficiency", "effect": { "equipment": "shield" } }
+        ]
+      }
     },
     {
       "id": "anchor",
@@ -92,6 +128,11 @@
           "The Anchor and all allies within 2 cells gain +2 Defense.",
           "Bonus extends to 4 cells and allies in range also gain +1 to saves.",
           "May project HOLD as a WARD protocol (applies SHIELDED to one ally at CHARGE cost 2)."
+        ],
+        "effects": [
+          { "tier": 1, "id": "hold_defense", "hook": "defense_aura", "parameters": { "range": 2, "defenseBonus": 2, "targets": "self_allies" } },
+          { "tier": 2, "id": "hold_extended", "hook": "defense_aura", "parameters": { "range": 4, "defenseBonus": 2, "saveBonus": 1, "targets": "self_allies" } },
+          { "tier": 3, "id": "hold_project", "hook": "signature_action", "parameters": { "protocol": "ward", "condition": "shielded", "chargeCost": 2, "target": "ally" } }
         ]
       },
       "equipmentGates": {
@@ -103,7 +144,14 @@
         "maxTier": 5
       },
       "sigilFamily": "anchor",
-      "calibrationOptions": {}
+      "calibrationOptions": {
+        "default": [
+          { "id": "anchor_vit", "name": "Load-bearing Core", "type": "attribute", "effect": { "attribute": "vit", "amount": 1 } },
+          { "id": "anchor_mgt", "name": "Brace", "type": "attribute", "effect": { "attribute": "mgt", "amount": 1 } },
+          { "id": "anchor_deck", "name": "Ward Socket", "type": "deck_slot", "effect": { "amount": 1 } },
+          { "id": "anchor_projector", "name": "Projector Drill", "type": "proficiency", "effect": { "equipment": "area_projector" } }
+        ]
+      }
     },
     {
       "id": "oracle",
@@ -118,6 +166,11 @@
           "Sees all enemies within SIG × 3 cells regardless of LOS (telepathic detection).",
           "May reroll one d20 per combat (attack or save) and keep the higher result.",
           "Reveals all containers and the descent point on floor entry (no exploration required)."
+        ],
+        "effects": [
+          { "tier": 1, "id": "foresee_detection", "hook": "detection", "parameters": { "attribute": "sig", "radiusMultiplier": 3, "ignoreLos": true } },
+          { "tier": 2, "id": "foresee_reroll", "hook": "reroll", "parameters": { "keep": "higher", "rolls": ["attack", "save"] }, "usage": { "scope": "combat", "limit": 1 } },
+          { "tier": 3, "id": "foresee_entry", "hook": "floor_entry", "parameters": { "revealContainers": true, "revealDescent": true } }
         ]
       },
       "equipmentGates": {
@@ -129,7 +182,14 @@
         "maxTier": 5
       },
       "sigilFamily": "oracle",
-      "calibrationOptions": {}
+      "calibrationOptions": {
+        "default": [
+          { "id": "oracle_foc", "name": "Clear Sight", "type": "attribute", "effect": { "attribute": "foc", "amount": 1 } },
+          { "id": "oracle_sig", "name": "Far Signal", "type": "attribute", "effect": { "attribute": "sig", "amount": 1 } },
+          { "id": "oracle_deck", "name": "Oracle Cache", "type": "deck_slot", "effect": { "amount": 1 } },
+          { "id": "oracle_shield", "name": "Shield Theory", "type": "proficiency", "effect": { "equipment": "shield" } }
+        ]
+      }
     },
     {
       "id": "operator",
@@ -144,6 +204,11 @@
           "Boosts one ally's next attack roll by +3 (once per round, free action, does not consume AP).",
           "May instead boost a protocol roll.",
           "Grants all allies +1 to all d20 rolls for one turn (once per combat)."
+        ],
+        "effects": [
+          { "tier": 1, "id": "overlay_attack", "hook": "signature_action", "parameters": { "target": "ally", "nextAttackBonus": 3 }, "usage": { "scope": "round", "limit": 1 } },
+          { "tier": 2, "id": "overlay_protocol", "hook": "signature_action", "parameters": { "target": "ally", "nextProtocolBonus": 3 }, "usage": { "scope": "round", "limit": 1 } },
+          { "tier": 3, "id": "overlay_party", "hook": "signature_action", "parameters": { "target": "party", "d20Bonus": 1, "duration": 1 }, "usage": { "scope": "combat", "limit": 1 } }
         ]
       },
       "equipmentGates": {
@@ -155,7 +220,14 @@
         "maxTier": 5
       },
       "sigilFamily": "operator",
-      "calibrationOptions": {}
+      "calibrationOptions": {
+        "default": [
+          { "id": "operator_sig", "name": "Signal Relay", "type": "attribute", "effect": { "attribute": "sig", "amount": 1 } },
+          { "id": "operator_res", "name": "Charge Relay", "type": "attribute", "effect": { "attribute": "res", "amount": 1 } },
+          { "id": "operator_deck", "name": "Relay Cache", "type": "deck_slot", "effect": { "amount": 1 } },
+          { "id": "operator_projector", "name": "Projector Liaison", "type": "proficiency", "effect": { "equipment": "area_projector" } }
+        ]
+      }
     }
   ]
 }

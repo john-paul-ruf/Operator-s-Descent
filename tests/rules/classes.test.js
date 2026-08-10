@@ -9,6 +9,10 @@ import {
   autoUpgradeSignature,
   primaryAttributeCostReduction,
   getCalibrationOptions,
+  getSignatureCapabilities,
+  applySignatureModifier,
+  canEquip,
+  canPrepareProtocol,
 } from '../../src/rules/classes.js';
 import { makeClassData, findSeed } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
@@ -137,4 +141,60 @@ describe('real class data pass', () => {
       expect(sig).toBeDefined();
     });
   }
+});
+
+describe('structured signatures', () => {
+  const classes = loadData('classes').classes;
+  const expectedHooks = {
+    breacher: ['attack', 'attack', 'after_move'],
+    ghost: ['move', 'initiative', 'move'],
+    compiler: ['overclock', 'overclock', 'overclock'],
+    anchor: ['defense_aura', 'defense_aura', 'signature_action'],
+    oracle: ['detection', 'reroll', 'floor_entry'],
+    operator: ['signature_action', 'signature_action', 'signature_action'],
+  };
+
+  for (const classData of classes) {
+    it(`${classData.id} exposes each tier's capability hooks`, () => {
+      for (const [calibrations, count] of [[0, 1], [2, 2], [4, 3]]) {
+        const capabilities = getSignatureCapabilities({ calibrationCount: calibrations }, classData);
+        expect(capabilities.tier).toBe(count);
+        expect(capabilities.effects.map(effect => effect.hook)).toEqual(expectedHooks[classData.id].slice(0, count));
+      }
+    });
+  }
+
+  it('tracks limited signature actions without mutating the source ledger', () => {
+    const operator = classes.find(entry => entry.id === 'operator');
+    const capabilities = getSignatureCapabilities({ calibrationCount: 4 }, operator);
+    const first = applySignatureModifier('signature_action', { consume: true, effectId: 'overlay_attack', usageLedger: {} }, capabilities);
+    const second = applySignatureModifier('signature_action', { consume: true, effectId: 'overlay_attack', usageLedger: first.context.usageLedger }, capabilities);
+    expect(first.effects).toHaveLength(1);
+    expect(second.effects).toEqual([]);
+    expect(first.context.usageLedger).toEqual({ 'overlay:overlay_attack': 1 });
+  });
+
+  it('merges hooks into a mechanics-ready parameter set', () => {
+    const breacher = classes.find(entry => entry.id === 'breacher');
+    const result = applySignatureModifier('attack', {}, getSignatureCapabilities({ calibrationCount: 2 }, breacher));
+    expect(result.context.signatureParameters).toEqual({ ignoreCover: true, ignoreShielded: true });
+  });
+});
+
+describe('generalized gates', () => {
+  const classes = loadData('classes').classes;
+  const breacher = classes.find(entry => entry.id === 'breacher');
+  const ghost = classes.find(entry => entry.id === 'ghost');
+
+  it('enforces Breacher and Ghost exclusions while allowing earned proficiencies', () => {
+    expect(canEquip(breacher, { baseType: 'light_ranged', category: 'weapon' })).toBe(false);
+    expect(canEquip(ghost, { baseType: 'light_ranged', category: 'weapon' })).toBe(false);
+    expect(canEquip(breacher, { baseType: 'light_ranged', category: 'weapon' }, ['light_ranged'])).toBe(true);
+  });
+
+  it('enforces protocol gate tiers and optional earned preparation', () => {
+    expect(canPrepareProtocol(breacher, { school: 'disrupt', tier: 3 })).toBe(false);
+    expect(canPrepareProtocol(breacher, { school: 'ward', tier: 1 })).toBe(false);
+    expect(canPrepareProtocol(breacher, { school: 'ward', tier: 1 }, ['protocol:ward'])).toBe(true);
+  });
 });
