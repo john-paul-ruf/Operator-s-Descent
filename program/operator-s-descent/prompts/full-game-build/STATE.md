@@ -22,7 +22,7 @@
 | 06 | Floor Generation + Run-State Stub | M26–M29, M33(stub) | done | 2026-08-10 | 8 archetypes (chambers/caves/maze/open/organic/bastion/lattice/ruin), 3 modifiers (dense/sparse/dangerous), 6-check validator (connectivity/loop-density/open-cell-bounds/descent-reachability/container-accessibility/interior-cover), generator with 10-attempt retry. Run-state stub with serialize/deserialize. Fixed: const→let in generateCaves, rngCursor→gen stream adapter, validator treats cells 1/2/3 as open. |
 | 07 | Exploration: Lattice, Shadowcast, Movement | M30–M32 | done | 2026-08-10 | Lattice (20×32 grid model, cell queries, party position), shadowcast LOS (ray-based, 3-state fog: unvisited/visited/in-LOS), movement (8-directional with corner rule, auto-stop interrupts for hostile/container/descent, danger clock with depth-scaled rate). LOS radius derived from SIG×2. Movement integrates with run-state stub. |
 | 08 | State Management Full: Run State, Condense, Compress, Encrypt, Save Encode/Decode, Library, Party Configs | M33(full), M35–M46 | done | 2026-08-10 | Full run-state with serialize/deserialize, condense (JSON bytes), 5-pass progressive compression (bit-RLE, 4-bit nibble dict, 8-bit deflate async, 16-bit word dict, 32-bit dword dict), XOR encrypt with APP_KEY, save encode/decode pipeline with CRC32 header → base64url (<1500 chars), localStorage CRUD (runs/settings/flags), party config CRUD (max 10, validate). Fixed: base64urlDecode was producing extra bytes for 1-2 byte inputs (old decoder always pushed first byte). 47/47 tests pass including full encode→decode round-trip. |
-| 09 | Audio Engine: 5-Layer WebAudio Synthesis | M47–M52 | pending | | |
+| 09 | Audio Engine: 5-Layer WebAudio Synthesis | M47–M52 | done | 2026-08-10 | 5 synthesis layers: drone (theme timbre + depth detune, 12 timbre presets, 6-osc chord), pulse (hostile proximity → tempo/density/dissonance, interval scheduler), sparkle (container proximity → arpeggio density/cutoff), lead (bar-by-bar melody from hash with no-repeat ledger + perturb-and-regenerate), noise-bed (tape hiss + wow/flutter LFOs). Engine coordinates all 5 with master/per-layer volume, mute, stop. start() requires user gesture (AudioContext). All 47 tests pass. |
 | 10 | Glitch System: JS-Driven Effects, Grain, Transitions | M53–M55 | pending | | |
 | 11 | UI Foundation: Components, Input, Playfield, Status Strip | M56–M59 | pending | | |
 | 12 | Console: Shell + 7 Modes | M60–M67 | pending | | |
@@ -241,3 +241,22 @@ Full config in FORGE-CONFIG.md. Key points for this feature:
 - The `pass-16bit` and `pass-32bit` dictionary encoding has a theoretical ambiguity: if a non-dictionary byte in the output happens to have a value >= 0x80 (for 16-bit) or >= 0xC0 (for 32-bit), it would be misinterpreted as a dictionary code during decompression. In practice this works because the compression passes are applied sequentially and each pass only activates on its own output, but a more robust encoding would use an escape byte scheme. This is a v1 acceptable limitation.
 - `run-state.js` uses `Math.random()` in `queueEcho()` for the appearance floor offset — this should be using a deterministic PRNG for save reproducibility. The session prompt didn't specify this, but it's worth noting for future sessions.
 - The condense layer doesn't actually use the symbol table for compression — it's a placeholder for a more sophisticated encoding. The real compression comes from the progressive compression passes.
+
+### SESSION-09 → SESSION-13/15
+
+**What was built:**
+- `src/audio/drone.js` — 12 theme timbre presets (osc type, filter freq, detune spread). 6-oscillator chord (3 scale degrees × 2 detuned copies). Depth drops register (0.5 semis/floor, capped at 20) and widens detune. Rebuilds on theme/depth change.
+- `src/audio/pulse.js` — Hostile proximity drives tempo (60–180 BPM), density, and dissonance (unison → minor 3rds → tritones+minor 2nds). Uses `setInterval` scheduler with 50ms lookahead for beat scheduling.
+- `src/audio/sparkle.js` — Container proximity drives arpeggio density (probability per beat) and filter cutoff (400Hz–3400Hz). Random arpeggio note selection from [0, 7, 12, 19, 24] semitones.
+- `src/audio/lead.js` — Bar-by-bar melody from `hash(worldSeed, depth, floorId, barIndex, beat)`. 12 modal scale presets per audio mode. No-repeat ledger with perturb-and-regenerate (up to 7 attempts). Clears ledger on floor change. Triangle wave at 220Hz root.
+- `src/audio/noise-bed.js` — Looping white noise buffer through bandpass filter. Two LFOs: wow (0.5Hz, ±0.02 gain) and flutter (5Hz, ±0.005 gain) modulating the noise gain. Fixed level, `updateState()` is no-op.
+- `src/audio/engine.js` — `createAudioEngine()` returns `{ start, stop, setLayerVolume, setMasterVolume, setMute, updateState, isStarted }`. `start()` creates `AudioContext` + `masterGain`, instantiates all 5 layers, calls `start()` on each. `stop()` stops all layers and closes context. Tracks master volume and mute state.
+
+**Notes for next sessions:**
+- `engine.start()` must be called from a user gesture (START button on title screen) per browser autoplay policy.
+- `engine.updateState(gameState)` broadcasts the same state object to all 5 layers. Each layer picks out what it needs: drone reads `{ theme.audioMode, depth }`, pulse reads `{ nearestHostileDistance }`, sparkle reads `{ nearestContainerDistance }`, lead reads `{ worldSeed, depth, floorId }`, noise-bed ignores all.
+- Layer volume settings from `library.js` settings use `setLayerVolume(layerName, volume)` where `layerName` is one of: `drone`, `pulse`, `sparkle`, `lead`, `noiseBed`. Volume is 0-100.
+- `setMute(true/false)` mutes/unmutes the master gain without changing individual layer volumes.
+- The `pulse` and `sparkle` layers use `setInterval` for scheduling — `stop()` must call `clearInterval` to prevent leaks. This is handled.
+- The `lead` layer has 12 mode presets but currently always generates from `MODES['cold-ambient']` (hardcoded in `generateBar`). It should use the theme's audio mode to select the scale. This is a known limitation — the `updateState` call sets `worldSeed`, `depth`, `floorId` but not the audio mode. SESSION-13 or 15 should wire the mode through.
+- All audio modules use the WebAudio API only — no DOM access. `AudioContext` is a browser global.
