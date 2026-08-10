@@ -9,6 +9,9 @@
   "engines": { "node": ">=18" },
   "scripts": {
     "serve": "node scripts/server.js",
+    "start": "node scripts/start.js",
+    "stop": "node scripts/stop.js",
+    "restart": "node scripts/stop.js && node scripts/start.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
