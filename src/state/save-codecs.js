@@ -163,7 +163,7 @@ function readConditions(reader) {
 }
 
 export function writeItem(writer, item, symbols) {
-  if (!isObject(item) || !CATEGORIES.includes(item.category) || !RARITIES.includes(item.rarity) || !Array.isArray(item.affixes) || item.affixes.length > MAX_AFFIXES || !Number.isFinite(item.salvageValue) || item.salvageValue < 0 || item.salvageValue > 1_000_000 || (item.count !== undefined && (!Number.isInteger(item.count) || item.count < 1 || item.count > 100))) fail('invalid_item');
+  if (!isObject(item) || !CATEGORIES.includes(item.category) || !RARITIES.includes(item.rarity) || !Array.isArray(item.affixes) || item.affixes.length > MAX_AFFIXES || !Number.isFinite(item.salvageValue) || item.salvageValue < 0 || item.salvageValue > 1_000_000 || (item.count !== undefined && (!Number.isInteger(item.count) || item.count < 1 || item.count > 100)) || (item.corruptionValue !== undefined && (!Number.isFinite(item.corruptionValue) || item.corruptionValue < 0 || item.corruptionValue > 1_000_000))) fail('invalid_item');
   writeString(writer, item.id);
   writer.writeUint(CATEGORIES.indexOf(item.category), 2);
   writeField(writer, symbols, 'item_id', item.baseType, (value) => writeString(writer, value));
@@ -171,6 +171,8 @@ export function writeItem(writer, item, symbols) {
   writer.writeUint(item.affixes.length, 4);
   for (const affix of item.affixes) writeField(writer, symbols, 'affix_id', affix, (value) => writeString(writer, value, 64));
   writer.writeBool(Boolean(item.corrupt));
+  writer.writeBool(item.corruptionValue !== undefined);
+  if (item.corruptionValue !== undefined) writeNumber(writer, item.corruptionValue);
   writeNumber(writer, item.salvageValue);
   writer.writeBool(Boolean(item.junkTagged));
   writer.writeBool(item.count !== undefined);
@@ -192,6 +194,8 @@ export function readItem(reader, symbols) {
   const affixes = Array.from({ length: affixLength }, () => readField(reader, symbols, 'affix_id', () => readString(reader, 64)));
   if (new Set(affixes).size !== affixes.length) fail('duplicate_affix');
   const corrupt = reader.readBool();
+  const corruptionValue = reader.readBool() ? readNumber(reader) : undefined;
+  if (corruptionValue !== undefined && (corruptionValue < 0 || corruptionValue > 1_000_000)) fail('invalid_item');
   const salvageValue = readNumber(reader);
   if (salvageValue < 0 || salvageValue > 1_000_000) fail('invalid_item');
   const junkTagged = reader.readBool();
@@ -200,7 +204,7 @@ export function readItem(reader, symbols) {
   if (!isObject(stats)) fail('invalid_item');
   const extensions = reader.readBool() ? readValue(reader) : undefined;
   if (extensions !== undefined && !isObject(extensions)) fail('invalid_item');
-  return { id, category, baseType, rarity, affixes, corrupt, stats, salvageValue, junkTagged, ...(count === undefined ? {} : { count }), ...(extensions === undefined ? {} : { extensions }) };
+  return { id, category, baseType, rarity, affixes, corrupt, ...(corruptionValue === undefined ? {} : { corruptionValue }), stats, salvageValue, junkTagged, ...(count === undefined ? {} : { count }), ...(extensions === undefined ? {} : { extensions }) };
 }
 
 export function writeCharacter(writer, character, symbols) {

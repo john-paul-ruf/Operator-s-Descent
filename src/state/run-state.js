@@ -7,6 +7,8 @@ const FOG_BYTES = 80;
 const MAX_DEPTH = 255;
 const MAX_INVENTORY = 100;
 const MAX_ECHOES = 2;
+const MAX_CORRUPT_IMPLANTS = 118;
+const MAX_AFFIX_LEDGER_IDS = 12;
 const MAX_EVENTS = 64;
 const MAX_BITFIELD = (1n << 64n) - 1n;
 const MAX_EXTENSION_BYTES = 2048;
@@ -83,6 +85,7 @@ function normalizeItem(value) {
   if (!Array.isArray(value.affixes) || value.affixes.length > 8 || !value.affixes.every(id => typeof id === 'string' && id.length <= 64)) return null;
   if (!Number.isFinite(value.salvageValue) || value.salvageValue < 0 || value.salvageValue > 1_000_000) return null;
   if (value.count !== undefined && !finiteInteger(value.count, 1, 100)) return null;
+  if (value.corruptionValue !== undefined && (!Number.isFinite(value.corruptionValue) || value.corruptionValue < 0 || value.corruptionValue > 1_000_000)) return null;
   const item = {
     id: value.id,
     category: value.category,
@@ -95,6 +98,7 @@ function normalizeItem(value) {
     junkTagged: Boolean(value.junkTagged)
   };
   if (value.count !== undefined) item.count = value.count;
+  if (value.corruptionValue !== undefined) item.corruptionValue = value.corruptionValue;
   const known = new Set([...Object.keys(item), 'extensions']);
   const extensions = cloneExtensions(value.extensions);
   for (const [key, entry] of Object.entries(value)) {
@@ -265,6 +269,12 @@ function serializedState(state) {
     rngState: state.rngState ? cloneBounded(state.rngState, MAX_EXTENSION_BYTES) : null,
     flags: { version: 2, calibrationFloorsReached: [...state.flags.calibrationFloorsReached] }
   };
+  if (state.appliedCorruptItemIds.length) output.appliedCorruptItemIds = [...state.appliedCorruptItemIds];
+  if (state.affixFloorLedger.reroll.length || state.affixFloorLedger.floorEntry.length) output.affixFloorLedger = {
+    floor: state.affixFloorLedger.floor,
+    reroll: [...state.affixFloorLedger.reroll],
+    floorEntry: [...state.affixFloorLedger.floorEntry]
+  };
   if (state.activeCombat) output.activeCombat = cloneBounded(state.activeCombat, MAX_COMBAT_BYTES);
   if (state.recentEvents.length) output.recentEvents = state.recentEvents.map(event => cloneBounded(event, MAX_EXTENSION_BYTES));
   if (Object.values(state.stats).some(value => value !== 0)) output.stats = { ...state.stats };
@@ -286,6 +296,7 @@ function buildRunState(data) {
       this.defeatedEnemies = 0n;
       this.dangerClockProgress = 0;
       this.activeCombat = null;
+      this.affixFloorLedger = { floor: this.depth, reroll: [], floorEntry: [] };
       this.stats.floorsDescended += 1;
       for (const character of this.party) character.conditions = [];
       return { advanced: true, depth: this.depth };
@@ -294,6 +305,23 @@ function buildRunState(data) {
       if (!Number.isFinite(amount) || amount < 0) return { added: false, reason: 'invalid_amount' };
       this.corruption = Math.min(1_000_000, this.corruption + amount);
       return { added: true, corruption: this.corruption };
+    },
+    applyCorruptImplant(itemId, amount) {
+      if (typeof itemId !== 'string' || itemId.length < 1 || itemId.length > 96 || !Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) return false;
+      if (this.appliedCorruptItemIds.includes(itemId)) return true;
+      if (this.appliedCorruptItemIds.length >= MAX_CORRUPT_IMPLANTS) return false;
+      this.appliedCorruptItemIds.push(itemId);
+      this.corruption = Math.min(1_000_000, this.corruption + amount);
+      return true;
+    },
+    claimAffixUse(kind, itemId) {
+      if (!['reroll', 'floor_entry'].includes(kind) || typeof itemId !== 'string' || itemId.length < 1 || itemId.length > 96) return { claimed: false, reason: 'invalid_affix_use' };
+      if (this.affixFloorLedger.floor !== this.depth) this.affixFloorLedger = { floor: this.depth, reroll: [], floorEntry: [] };
+      const ledger = this.affixFloorLedger[kind === 'floor_entry' ? 'floorEntry' : kind];
+      if (ledger.includes(itemId)) return { claimed: false, reason: 'already_used' };
+      if (ledger.length >= MAX_AFFIX_LEDGER_IDS) return { claimed: false, reason: 'ledger_full' };
+      ledger.push(itemId);
+      return { claimed: true };
     },
     queueEcho(deadCharacter, deathFloor, rngCursor) {
       if (this.echoQueue.length >= MAX_ECHOES) return { queued: false, reason: 'queue_full' };
@@ -387,6 +415,10 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
   if (input.rngState !== null && input.rngState !== undefined && !rngState) return null;
   const flags = input.flags ?? {};
   if (!isPlainObject(flags) || !Array.isArray(flags.calibrationFloorsReached ?? []) || flags.calibrationFloorsReached.length > 16 || !(flags.calibrationFloorsReached ?? []).every(floor => finiteInteger(floor, 1, MAX_DEPTH))) return null;
+  const appliedCorruptItemIds = input.appliedCorruptItemIds ?? [];
+  if (!Array.isArray(appliedCorruptItemIds) || appliedCorruptItemIds.length > MAX_CORRUPT_IMPLANTS || !appliedCorruptItemIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 96) || new Set(appliedCorruptItemIds).size !== appliedCorruptItemIds.length) return null;
+  const affixFloorLedger = input.affixFloorLedger ?? { floor: input.depth, reroll: [], floorEntry: [] };
+  if (!isPlainObject(affixFloorLedger) || affixFloorLedger.floor !== input.depth || !['reroll', 'floorEntry'].every(key => Array.isArray(affixFloorLedger[key]) && affixFloorLedger[key].length <= MAX_AFFIX_LEDGER_IDS && affixFloorLedger[key].every(id => typeof id === 'string' && id.length > 0 && id.length <= 96) && new Set(affixFloorLedger[key]).size === affixFloorLedger[key].length)) return null;
   const activeCombat = input.activeCombat == null ? null : cloneBounded(input.activeCombat, MAX_COMBAT_BYTES);
   if (input.activeCombat != null && activeCombat === undefined) return null;
   const stats = input.stats ?? {};
@@ -400,7 +432,7 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
   const known = new Set([
     'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed', 'partyPosition', 'fogOfWar', 'openedContainers', 'defeatedEnemies',
     'dangerClockProgress', 'party', 'inventory', 'corruption', 'credits', 'scrapCounter', 'themesSeen', 'echoQueue', 'rngState',
-    'flags', 'activeCombat', 'stats', 'recentEvents', 'extensions'
+    'flags', 'activeCombat', 'stats', 'recentEvents', 'extensions', 'appliedCorruptItemIds', 'affixFloorLedger'
   ]);
   const extensions = cloneExtensions(input.extensions);
   for (const [key, value] of Object.entries(input)) {
@@ -425,6 +457,8 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
     echoQueue,
     rngState,
     flags: { version: 2, calibrationFloorsReached: [...(flags.calibrationFloorsReached ?? [])] },
+    appliedCorruptItemIds: [...appliedCorruptItemIds],
+    affixFloorLedger: { floor: affixFloorLedger.floor, reroll: [...affixFloorLedger.reroll], floorEntry: [...affixFloorLedger.floorEntry] },
     activeCombat,
     stats: summary,
     recentEvents,
@@ -452,6 +486,8 @@ export function createRunState(worldSeed, party, options = {}) {
     echoQueue: options.echoQueue ?? [],
     rngState: options.rngState ?? null,
     flags: options.flags ?? { version: 2, calibrationFloorsReached: [] },
+    appliedCorruptItemIds: options.appliedCorruptItemIds ?? [],
+    affixFloorLedger: options.affixFloorLedger ?? { floor: options.depth ?? 1, reroll: [], floorEntry: [] },
     activeCombat: options.activeCombat ?? null,
     stats: options.stats ?? { enemiesSlain: 0, echoesSlain: 0, corruptItemsEquipped: 0, floorsDescended: 0 },
     recentEvents: options.recentEvents ?? [],

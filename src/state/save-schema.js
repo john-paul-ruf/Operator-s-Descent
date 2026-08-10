@@ -9,7 +9,7 @@ export const RUN_SCHEMA_FIELDS = Object.freeze([
   'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',
   'partyPosition', 'fogOfWar', 'openedContainers', 'defeatedEnemies', 'dangerClockProgress',
   'party', 'inventory', 'corruption', 'credits', 'scrapCounter', 'themesSeen', 'echoQueue',
-  'rngState', 'calibrationFloorsReached', 'stats', 'recentEvents', 'extensions', 'activeCombat'
+  'rngState', 'calibrationFloorsReached', 'appliedCorruptItemIds', 'affixFloorLedger', 'stats', 'recentEvents', 'extensions', 'activeCombat'
 ]);
 
 const MAX_DEPTH = 255;
@@ -18,6 +18,8 @@ const MAX_INVENTORY = 100;
 const MAX_ECHOES = 2;
 const MAX_THEMES = 12;
 const MAX_EVENTS = 64;
+const MAX_CORRUPT_IMPLANTS = 118;
+const MAX_AFFIX_LEDGER_IDS = 12;
 const MAX_VALUE_DEPTH = 8;
 const MAX_VALUE_ENTRIES = 2048;
 const MAX_VALUE_BYTES = 2048;
@@ -237,6 +239,15 @@ export function encodeRunPayload(runState) {
   writeRngState(writer, state.rngState);
   writer.writeUint(state.flags.calibrationFloorsReached.length, 5);
   for (const floor of state.flags.calibrationFloorsReached) writer.writeUint(floor, 8);
+  const appliedCorruptItemIds = state.appliedCorruptItemIds ?? [];
+  const affixFloorLedger = state.affixFloorLedger ?? { floor: state.depth, reroll: [], floorEntry: [] };
+  writer.writeUint(appliedCorruptItemIds.length, 7);
+  for (const itemId of appliedCorruptItemIds) writeString(writer, itemId, 96);
+  writer.writeUint(affixFloorLedger.floor, 8);
+  for (const key of ['reroll', 'floorEntry']) {
+    writer.writeUint(affixFloorLedger[key].length, 4);
+    for (const itemId of affixFloorLedger[key]) writeString(writer, itemId, 96);
+  }
   for (const key of ['enemiesSlain', 'echoesSlain', 'corruptItemsEquipped', 'floorsDescended']) writer.writeVarUint(state.stats?.[key] ?? 0);
   writer.writeUint(state.recentEvents?.length ?? 0, 7);
   for (const event of state.recentEvents ?? []) writeValue(writer, event);
@@ -282,6 +293,15 @@ export function decodeRunPayload(bytes, bitLength, options = {}) {
     state.rngState = readRngState(reader);
     const calibrationLength = integer(reader.readUint(5), 0, 16, 'invalid_flags');
     state.flags = { version: RUN_SCHEMA_VERSION, calibrationFloorsReached: Array.from({ length: calibrationLength }, () => integer(reader.readUint(8), 1, MAX_DEPTH, 'invalid_flags')) };
+    const implantLength = integer(reader.readUint(7), 0, MAX_CORRUPT_IMPLANTS, 'invalid_corrupt_implants');
+    state.appliedCorruptItemIds = Array.from({ length: implantLength }, () => readString(reader, 96));
+    if (new Set(state.appliedCorruptItemIds).size !== state.appliedCorruptItemIds.length) fail('duplicate_corrupt_implant');
+    state.affixFloorLedger = { floor: integer(reader.readUint(8), 1, MAX_DEPTH, 'invalid_affix_ledger'), reroll: [], floorEntry: [] };
+    for (const key of ['reroll', 'floorEntry']) {
+      const length = integer(reader.readUint(4), 0, MAX_AFFIX_LEDGER_IDS, 'invalid_affix_ledger');
+      state.affixFloorLedger[key] = Array.from({ length }, () => readString(reader, 96));
+      if (new Set(state.affixFloorLedger[key]).size !== state.affixFloorLedger[key].length) fail('duplicate_affix_ledger');
+    }
     state.stats = Object.fromEntries(['enemiesSlain', 'echoesSlain', 'corruptItemsEquipped', 'floorsDescended'].map((key) => [key, integer(reader.readVarUint(), 0, 1_000_000_000, 'invalid_stats')]));
     const eventLength = integer(reader.readUint(7), 0, MAX_EVENTS, 'invalid_events');
     state.recentEvents = Array.from({ length: eventLength }, () => readValue(reader));

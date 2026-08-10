@@ -49,7 +49,7 @@ function combat() {
 
 describe('save codecs', () => {
   it('round-trips an item including stack counts and bounded structured metadata', () => {
-    const value = item({ category: 'consumable', baseType: 'med_kit', rarity: 'stock', affixes: [], count: 7, extensions: { source: 'cache' } });
+    const value = item({ category: 'consumable', baseType: 'med_kit', rarity: 'stock', affixes: [], count: 7, corruptionValue: 0.1, extensions: { source: 'cache' } });
     expect(roundTrip(writeItem, readItem, value)).toEqual(value);
   });
 

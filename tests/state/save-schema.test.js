@@ -22,7 +22,7 @@ describe('RunState v2 binary schema', () => {
       'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',
       'partyPosition', 'fogOfWar', 'openedContainers', 'defeatedEnemies', 'dangerClockProgress',
       'party', 'inventory', 'corruption', 'credits', 'scrapCounter', 'themesSeen', 'echoQueue',
-      'rngState', 'calibrationFloorsReached', 'stats', 'recentEvents', 'extensions', 'activeCombat'
+      'rngState', 'calibrationFloorsReached', 'appliedCorruptItemIds', 'affixFloorLedger', 'stats', 'recentEvents', 'extensions', 'activeCombat'
     ]);
     for (let seed = 1; seed <= 25; seed++) {
       const state = buildRealisticRun(seed, { depth: (seed % 20) + 1, inventoryItems: seed % 12, fogCells: seed * 7, echoes: seed % 3 });
@@ -36,6 +36,13 @@ describe('RunState v2 binary schema', () => {
     const payload = roundTrip(state);
     expect(payload.bytes.length).toBeGreaterThan(0);
     expect(payload.bitLength).toBeLessThanOrEqual(payload.bytes.length * 8);
+  });
+
+  it('round-trips bounded CORRUPT and per-floor affix ledgers without a schema bump', () => {
+    const state = buildRealisticRun(42);
+    state.appliedCorruptItemIds = ['corrupt-item'];
+    state.affixFloorLedger = { floor: state.depth, reroll: ['lucky-item'], floorEntry: ['shield-item'] };
+    roundTrip(state);
   });
 
   it('rejects incompatible versions, duplicate IDs, impossible counts, and non-zero trailing data', () => {
@@ -63,6 +70,10 @@ describe('RunState v2 binary schema', () => {
     impossibleParty.writeUint(0, 32);
     impossibleParty.writeUint(0, 32);
     impossibleParty.writeBytes(new Uint8Array(8));
+    impossibleParty.writeUint(0, 7);
+    impossibleParty.writeUint(1, 8);
+    impossibleParty.writeUint(0, 4);
+    impossibleParty.writeUint(0, 4);
     impossibleParty.writeUint(0, 3);
     expect(() => decodeRunPayload(impossibleParty.toUint8Array(), impossibleParty.bitLength)).toThrow('invalid_party');
     const readerPayload = encodeRunPayload(buildRealisticRun(6));

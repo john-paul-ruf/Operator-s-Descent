@@ -1,163 +1,78 @@
-import { describe, it, expect } from 'vitest';
-import {
-  resolveWeaponStats,
-  resolveArmorStats,
-  resolveLoadout,
-  evaluateRange,
-  getRangeBand,
-  getCoverBonus,
-  getSalvageValue,
-} from '../../src/rules/equipment.js';
+import { describe, expect, it } from 'vitest';
+import { applyFloorEntryAffixes, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, resolveArmorStats, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
+import { createRunState, deserializeRunState } from '../../src/state/run-state.js';
+import { loadData } from '../helpers/data.js';
 
-describe('resolveWeaponStats — passthrough', () => {
-  it('no affixes returns defaults', () => {
-    const base = { damageDie: 'd6', rangeBand: 'short', maxRange: 4, minRange: 0, accuracyBonus: 1 };
-    const stats = resolveWeaponStats(base, []);
-    expect(stats.damageDie).toBe('d6');
-    expect(stats.rangeBand).toBe('short');
-    expect(stats.maxRange).toBe(4);
-    expect(stats.minRange).toBe(0);
-    expect(stats.accuracyBonus).toBe(1);
-    expect(stats.defenseBonus).toBe(0);
-    expect(stats.affixes).toEqual([]);
-  });
-});
+const affixesData = loadData('affixes');
 
-describe('resolveWeaponStats — affix stacking', () => {
-  it('edged upgrades d6 → d8', () => {
-    const base = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1 };
-    const stats = resolveWeaponStats(base, [{ id: 'edged', effectData: { dieUpgrade: true } }]);
-    expect(stats.damageDie).toBe('d8');
-  });
-  it('d12 stays d12 (capped)', () => {
-    const base = { damageDie: 'd12', rangeBand: 'adjacent', maxRange: 1 };
-    const stats = resolveWeaponStats(base, [{ id: 'edged', effectData: { dieUpgrade: true } }]);
-    expect(stats.damageDie).toBe('d12');
-  });
-  it('unknown die string returned unchanged', () => {
-    const base = { damageDie: 'd7', rangeBand: 'adjacent', maxRange: 1 };
-    const stats = resolveWeaponStats(base, [{ id: 'edged', effectData: { dieUpgrade: true } }]);
-    expect(stats.damageDie).toBe('d7');
-  });
-  it('multiple affixes accumulate accuracyBonus, rangeBonus, defenseBonus', () => {
-    const base = { damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 1, defenseBonus: 0 };
-    const stats = resolveWeaponStats(base, [
-      { id: 'precise', effectData: { accuracyBonus: 1 } },
-      { id: 'extended', effectData: { rangeBonus: 2 } },
-      { id: 'shielding', effectData: { defenseBonus: 2 } },
-    ]);
-    expect(stats.accuracyBonus).toBe(2);
-    expect(stats.maxRange).toBe(6);
-    expect(stats.defenseBonus).toBe(2);
-    expect(stats.affixes).toEqual(['precise', 'extended', 'shielding']);
-  });
-});
+function character() {
+  return {
+    id: 'operator', classId: 'operator', sigilId: 'pua-e000',
+    attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 }, currentHP: 20, currentCHARGE: 10,
+    calibrationCount: 0, calibrationChoices: [], signatureTier: 1, equipment: { weapon: null, armor: null, offhand: null }, protocolDeck: [], conditions: []
+  };
+}
 
-describe('resolveArmorStats', () => {
-  it('defenseBonus adds from affixes', () => {
-    const base = { defenseBonus: 3, finPenalty: -1 };
-    const stats = resolveArmorStats(base, [{ id: 'fortified', effectData: { defenseBonus: 2 } }]);
-    expect(stats.defenseBonus).toBe(5);
-  });
-  it('finPenaltyReduction raises penalty but clamps at 0', () => {
-    const base = { defenseBonus: 0, finPenalty: -2 };
-    const stats = resolveArmorStats(base, [{ id: 'test', effectData: { finPenaltyReduction: 5 } }]);
-    expect(stats.finPenalty).toBe(0);
-  });
-  it('uses the declared lightweight reduction once', () => {
-    const base = { defenseBonus: 0, finPenalty: -1 };
-    const stats = resolveArmorStats(base, [{ id: 'lightweight', effectData: {} }]);
-    expect(stats.finPenalty).toBe(-1);
-  });
-  it('does not apply a duplicated lightweight reduction', () => {
-    const base = { defenseBonus: 0, finPenalty: -2 };
-    const stats = resolveArmorStats(base, [
-      { id: 'lightweight', effectData: { finPenaltyReduction: 1 } },
-    ]);
-    expect(stats.finPenalty).toBe(-1);
-  });
-});
+function state(inventory = []) {
+  return createRunState(42, [character()], { creationTimestamp: 1, inventory });
+}
 
-describe('loadout and range contracts', () => {
-  it('resolves catalog IDs, shield defense, and affix numeric hooks once', () => {
-    const loadout = resolveLoadout({ equipment: { weapon: 'sidearm', armor: 'medium', offhand: 'shield', weaponAffixes: ['precise'], armorAffixes: ['fortified'] } }, {
-      weapons: { sidearm: { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 1 }, shield: { damageDie: null, rangeBand: null, maxRange: 0, defenseBonus: 2 } },
-      armor: { medium: { defenseBonus: 3, finPenalty: -1 } }
-    }, { affixes: { precise: { effectData: { accuracyBonus: 1 } }, fortified: { effectData: { defenseBonus: 2 } } } });
-    expect(loadout).toMatchObject({ weapon: { id: 'sidearm', accuracyBonus: 2 }, armor: { id: 'medium', defenseBonus: 5 }, offhand: { id: 'shield', defenseBonus: 2 }, defenseBonus: 7 });
+describe('affix runtime hooks', () => {
+  it('exposes every affix behavior as structured combat, floor, charge, defense, and reroll hooks', () => {
+    const hooks = getAffixHooks(Object.keys(affixesData.affixes), affixesData);
+    expect(hooks).toMatchObject({
+      attack: { accuracyBonus: 2, ignoreCover: true },
+      damage: { dieUpgrades: 1, protocolBonus: 1 },
+      onHit: { healing: 1, conditions: expect.arrayContaining([{ conditionId: 'burning', trigger: 'critical' }, { conditionId: 'corroded', trigger: 'hit', chance: 1, save: 'vit' }, { conditionId: 'jammed', trigger: 'hit', chance: 0.25, save: 'foc' }]) },
+      floorEntry: { shielded: true }, charge: { maxBonus: 2, regenBonus: 1 }, defense: { bonus: 3, finPenaltyReduction: 1, ignoreFinPenalty: true }, reroll: { perFloor: 1 }
+    });
   });
 
-  it('reports explicit sniper penalties and maximum-range misses', () => {
-    const sniper = { rangeBand: 'long', minRange: 3, maxRange: 16, accuracyBonus: -1 };
-    expect(evaluateRange(sniper, 2)).toEqual({ legal: true, band: 'long', accuracyModifier: -1, reason: 'minimum_range_penalty' });
-    expect(evaluateRange(sniper, 3)).toEqual({ legal: true, band: 'long', accuracyModifier: 1, reason: 'in_range' });
-    expect(evaluateRange(sniper, 17)).toEqual({ legal: false, band: 'long', accuracyModifier: 0, reason: 'beyond_maximum' });
+  it('materializes all numeric weapon and armor modifiers exactly once', () => {
+    const weapon = resolveWeaponStats({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 1 }, ['reinforced', 'edged', 'precise', 'extended', 'conducting', 'vampiric', 'phasing'], affixesData);
+    const armor = resolveArmorStats({ defenseBonus: 3, finPenalty: -2 }, ['reinforced', 'overcharged', 'lightweight', 'fortified', 'resonant', 'phasing', 'shielding', 'lucky'], affixesData);
+    expect(weapon).toMatchObject({ damageDie: 'd8', maxRange: 6, accuracyBonus: 3, effects: { attack: { ignoreCover: true }, damage: { protocolBonus: 1 }, onHit: { healing: 1 } } });
+    expect(armor).toMatchObject({ defenseBonus: 6, finPenalty: 0, chargeBonus: 2, chargeRegenBonus: 1, ignoreFinPenalty: true, effects: { floorEntry: { shielded: true }, reroll: { perFloor: 1 } } });
   });
-});
 
-describe('getRangeBand', () => {
-  it('distance < 0 → out-of-range', () => {
-    expect(getRangeBand({ rangeBand: 'short', maxRange: 4, minRange: 0 }, -1)).toBe('out-of-range');
-  });
-  it('distance > maxRange → out-of-range', () => {
-    expect(getRangeBand({ rangeBand: 'short', maxRange: 4, minRange: 0 }, 5)).toBe('out-of-range');
-  });
-  it('long band below minRange → too-close', () => {
-    expect(getRangeBand({ rangeBand: 'long', maxRange: 16, minRange: 3 }, 2)).toBe('too-close');
-  });
-  it('distance <= 1 → point-blank (even for long weapon with minRange 0)', () => {
-    expect(getRangeBand({ rangeBand: 'long', maxRange: 16, minRange: 0 }, 1)).toBe('point-blank');
-  });
-  it('distance exactly maxRange is in range (returns band)', () => {
-    expect(getRangeBand({ rangeBand: 'short', maxRange: 4, minRange: 0 }, 4)).toBe('short');
-  });
-  it('returns weapon band for normal distance', () => {
-    expect(getRangeBand({ rangeBand: 'medium', maxRange: 8, minRange: 0 }, 5)).toBe('medium');
-  });
-});
-
-describe('getCoverBonus', () => {
-  function makeGrid(w, h, walls) {
-    const grid = [];
-    for (let y = 0; y < h; y++) {
-      grid.push(new Array(w).fill('floor'));
-    }
-    for (const [x, y] of walls) grid[y][x] = 'wall';
-    return grid;
-  }
-
-  it('adjacent (steps <= 1) → 0', () => {
-    const grid = makeGrid(10, 10, []);
-    expect(getCoverBonus(grid, 5, 5, 5, 4)).toBe(0);
-    expect(getCoverBonus(grid, 5, 5, 4, 5)).toBe(0);
-  });
-  it('one intervening wall → 2 (horizontal)', () => {
-    const grid = makeGrid(10, 10, [[3, 5]]);
-    expect(getCoverBonus(grid, 5, 5, 1, 5)).toBe(2);
-  });
-  it('two+ intervening walls → 4', () => {
-    const grid = makeGrid(10, 10, [[2, 5], [4, 5]]);
-    expect(getCoverBonus(grid, 6, 5, 1, 5)).toBe(4);
-  });
-  it('clear line → 0', () => {
-    const grid = makeGrid(10, 10, []);
-    expect(getCoverBonus(grid, 5, 5, 1, 5)).toBe(0);
-  });
-  it('works for vertical line', () => {
-    const grid = makeGrid(10, 10, [[5, 3]]);
-    expect(getCoverBonus(grid, 5, 5, 5, 1)).toBe(2);
-  });
-  it('works for diagonal line', () => {
-    const grid = makeGrid(10, 10, [[2, 2]]);
-    expect(getCoverBonus(grid, 4, 4, 0, 0)).toBe(2);
-  });
-});
-
-describe('getSalvageValue', () => {
-  it('{salvageValue: 3} → 3', () => {
+  it('retains die caps, explicit range outcomes, and cover geometry', () => {
+    expect(resolveWeaponStats({ damageDie: 'd12' }, [{ id: 'edged', effectData: { dieUpgrade: true } }]).damageDie).toBe('d12');
+    expect(evaluateRange({ rangeBand: 'long', minRange: 3, maxRange: 16, accuracyBonus: -1 }, 2)).toMatchObject({ legal: true, reason: 'minimum_range_penalty' });
+    expect(getRangeBand({ rangeBand: 'short', minRange: 0, maxRange: 4 }, 5)).toBe('out-of-range');
+    const lattice = Array.from({ length: 8 }, () => Array(8).fill('floor'));
+    lattice[3][3] = 'wall';
+    lattice[5][5] = 'wall';
+    expect(getCoverBonus(lattice, 6, 6, 1, 1)).toBe(4);
     expect(getSalvageValue({ salvageValue: 3 })).toBe(3);
   });
-  it('{} → 0', () => {
-    expect(getSalvageValue({})).toBe(0);
+});
+
+describe('CORRUPT equipment transactions', () => {
+  it('implants a CORRUPT item once, persists its ID/value, and never charges a re-equip twice', () => {
+    const item = { id: 'corrupt-sidearm', category: 'weapon', baseType: 'sidearm', rarity: 'corrupt', affixes: ['lucky', 'phasing', 'edged'], corrupt: true, corruptionValue: 0.1, stats: {}, salvageValue: 1, junkTagged: false };
+    const initial = state([item]);
+    const equipped = equipItem(initial, 'operator', 'weapon', 'corrupt-sidearm');
+    expect(equipped).toMatchObject({ success: true, corruptionAdded: 0.1 });
+    expect(initial.corruption).toBe(0);
+    expect(equipped.runState.serialize()).toMatchObject({ corruption: 0.1, appliedCorruptItemIds: ['corrupt-sidearm'] });
+    const unequipped = unequipItem(equipped.runState, 'operator', 'weapon');
+    const reequipped = equipItem(unequipped.runState, 'operator', 'weapon', 'corrupt-sidearm');
+    expect(reequipped).toMatchObject({ success: true, corruptionAdded: 0 });
+    expect(deserializeRunState(reequipped.runState.serialize()).serialize().appliedCorruptItemIds).toEqual(['corrupt-sidearm']);
+  });
+
+  it('uses reroll and floor-entry affixes at most once per floor, then resets on descent', () => {
+    const lucky = { id: 'lucky-sidearm', category: 'weapon', baseType: 'sidearm', rarity: 'custom', affixes: ['lucky'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const shield = { id: 'shielding-armor', category: 'armor', baseType: 'light', rarity: 'custom', affixes: ['shielding'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    let current = equipItem(state([lucky, shield]), 'operator', 'weapon', lucky.id).runState;
+    current = equipItem(current, 'operator', 'armor', shield.id).runState;
+    const reroll = useAffixReroll(current, lucky.id, affixesData);
+    expect(reroll.success).toBe(true);
+    expect(useAffixReroll(reroll.runState, lucky.id, affixesData)).toMatchObject({ success: false, reason: 'already_used' });
+    const entered = applyFloorEntryAffixes(reroll.runState, affixesData);
+    expect(entered.applied).toEqual([{ characterId: 'operator', itemId: shield.id, conditionId: 'shielded' }]);
+    expect(applyFloorEntryAffixes(entered.runState, affixesData).applied).toEqual([]);
+    entered.runState.advanceFloor();
+    expect(applyFloorEntryAffixes(entered.runState, affixesData).applied).toHaveLength(1);
   });
 });

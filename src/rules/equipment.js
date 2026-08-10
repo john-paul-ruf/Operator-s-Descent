@@ -1,3 +1,5 @@
+import { deserializeRunState } from '../state/run-state.js';
+
 const DIE_STEPS = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
 function upgradeDie(die) {
@@ -6,66 +8,75 @@ function upgradeDie(die) {
 }
 
 function resolveAffixes(affixes, affixesData) {
-  return (affixes || []).map((affix) => typeof affix === 'string' ? { id: affix, ...(affixesData?.affixes?.[affix] || {}) } : affix).filter((affix) => affix?.id);
+  return (affixes ?? []).map((affix) => typeof affix === 'string' ? { id: affix, ...(affixesData?.affixes?.[affix] ?? {}) } : affix).filter((affix) => affix?.id && affix.effectData);
+}
+
+export function getAffixHooks(affixes = [], affixesData) {
+  const hooks = {
+    attack: { accuracyBonus: 0, ignoreCover: false },
+    damage: { dieUpgrades: 0, protocolBonus: 0 },
+    onHit: { healing: 0, conditions: [] },
+    floorEntry: { shielded: false },
+    charge: { maxBonus: 0, regenBonus: 0 },
+    defense: { bonus: 0, finPenaltyReduction: 0, ignoreFinPenalty: false },
+    reroll: { perFloor: 0 }
+  };
+  for (const affix of resolveAffixes(affixes, affixesData)) {
+    const effect = affix.effectData;
+    hooks.attack.accuracyBonus += effect.accuracyBonus ?? effect.weaponAccuracyBonus ?? 0;
+    hooks.attack.ignoreCover ||= effect.ignoreCover === true;
+    hooks.damage.dieUpgrades += effect.dieUpgrade ? 1 : 0;
+    hooks.damage.protocolBonus += effect.protocolDamageBonus ?? 0;
+    hooks.onHit.healing += effect.healOnHit ?? 0;
+    if (effect.conditionOnCrit) hooks.onHit.conditions.push({ conditionId: effect.conditionOnCrit, trigger: 'critical' });
+    if (effect.conditionOnHit) hooks.onHit.conditions.push({ conditionId: effect.conditionOnHit, trigger: 'hit', chance: effect.conditionChance ?? 1, save: effect.save ?? null });
+    hooks.floorEntry.shielded ||= effect.shieldOnFloorEntry === true;
+    hooks.charge.maxBonus += effect.chargeBonus ?? 0;
+    hooks.charge.regenBonus += effect.chargeRegenBonus ?? 0;
+    hooks.defense.bonus += effect.defenseBonus ?? effect.armorDefenseBonus ?? 0;
+    hooks.defense.finPenaltyReduction += effect.finPenaltyReduction ?? 0;
+    hooks.defense.ignoreFinPenalty ||= effect.ignoreFinPenalty === true;
+    hooks.reroll.perFloor += effect.rerollPerFloor ?? 0;
+  }
+  return hooks;
 }
 
 export function resolveWeaponStats(baseWeapon = {}, affixes = [], affixesData) {
-  const resolvedAffixes = resolveAffixes(affixes, affixesData);
-  const stats = {
+  const hooks = getAffixHooks(affixes, affixesData);
+  let damageDie = baseWeapon.damageDie ?? null;
+  for (let index = 0; index < hooks.damage.dieUpgrades; index++) damageDie = upgradeDie(damageDie);
+  return {
     id: baseWeapon.id,
-    damageDie: baseWeapon.damageDie ?? null,
+    damageDie,
     rangeBand: baseWeapon.rangeBand ?? null,
     minRange: baseWeapon.minRange ?? 1,
-    maxRange: baseWeapon.maxRange ?? 0,
-    accuracyBonus: baseWeapon.accuracyBonus ?? 0,
-    defenseBonus: baseWeapon.defenseBonus ?? 0,
-    affixes: resolvedAffixes.map((affix) => affix.id),
-    effects: {}
+    maxRange: (baseWeapon.maxRange ?? 0) + resolveAffixes(affixes, affixesData).reduce((sum, affix) => sum + (affix.effectData.rangeBonus ?? 0), 0),
+    accuracyBonus: (baseWeapon.accuracyBonus ?? 0) + hooks.attack.accuracyBonus,
+    defenseBonus: (baseWeapon.defenseBonus ?? 0) + hooks.defense.bonus,
+    affixes: resolveAffixes(affixes, affixesData).map((affix) => affix.id),
+    effects: hooks
   };
-  for (const affix of resolvedAffixes) {
-    const effect = affix.effectData || {};
-    if (effect.dieUpgrade) stats.damageDie = upgradeDie(stats.damageDie);
-    stats.accuracyBonus += effect.accuracyBonus || effect.weaponAccuracyBonus || 0;
-    stats.maxRange += effect.rangeBonus || 0;
-    stats.defenseBonus += effect.defenseBonus || 0;
-    for (const [key, value] of Object.entries(effect)) {
-      if (!['dieUpgrade', 'accuracyBonus', 'weaponAccuracyBonus', 'rangeBonus', 'defenseBonus'].includes(key)) stats.effects[key] = value;
-    }
-  }
-  return stats;
 }
 
 export function resolveArmorStats(baseArmor = {}, affixes = [], affixesData) {
-  const resolvedAffixes = resolveAffixes(affixes, affixesData);
-  const stats = {
+  const hooks = getAffixHooks(affixes, affixesData);
+  return {
     id: baseArmor.id,
-    defenseBonus: baseArmor.defenseBonus ?? 0,
-    finPenalty: baseArmor.finPenalty ?? 0,
-    chargeBonus: 0,
-    chargeRegenBonus: 0,
-    ignoreFinPenalty: false,
-    affixes: resolvedAffixes.map((affix) => affix.id),
-    effects: {}
+    defenseBonus: (baseArmor.defenseBonus ?? 0) + hooks.defense.bonus,
+    finPenalty: hooks.defense.ignoreFinPenalty ? 0 : Math.min(0, (baseArmor.finPenalty ?? 0) + hooks.defense.finPenaltyReduction),
+    chargeBonus: hooks.charge.maxBonus,
+    chargeRegenBonus: hooks.charge.regenBonus,
+    ignoreFinPenalty: hooks.defense.ignoreFinPenalty,
+    affixes: resolveAffixes(affixes, affixesData).map((affix) => affix.id),
+    effects: hooks
   };
-  for (const affix of resolvedAffixes) {
-    const effect = affix.effectData || {};
-    stats.defenseBonus += effect.defenseBonus || effect.armorDefenseBonus || 0;
-    stats.chargeBonus += effect.chargeBonus || 0;
-    stats.chargeRegenBonus += effect.chargeRegenBonus || 0;
-    stats.finPenalty = Math.min(0, stats.finPenalty + (effect.finPenaltyReduction || 0));
-    stats.ignoreFinPenalty ||= effect.ignoreFinPenalty === true;
-    for (const [key, value] of Object.entries(effect)) {
-      if (!['defenseBonus', 'armorDefenseBonus', 'chargeBonus', 'chargeRegenBonus', 'finPenaltyReduction', 'ignoreFinPenalty', 'minFinPenalty'].includes(key)) stats.effects[key] = value;
-    }
-  }
-  return stats;
 }
 
 function equipped(character, key, catalog, affixesData) {
   const source = character?.equipment?.[key] ?? character?.[key];
   const item = typeof source === 'string' && catalog?.[source] ? { id: source, ...catalog[source] } : source;
   if (!item) return null;
-  const affixes = item.affixes || character?.equipment?.[`${key}Affixes`] || [];
+  const affixes = item.affixes ?? character?.equipment?.[`${key}Affixes`] ?? [];
   return key === 'armor' ? resolveArmorStats(item, affixes, affixesData) : resolveWeaponStats(item, affixes, affixesData);
 }
 
@@ -73,7 +84,7 @@ export function resolveLoadout(character, equipmentData, affixesData) {
   const weapon = equipped(character, 'weapon', equipmentData?.weapons, affixesData);
   const armor = equipped(character, 'armor', equipmentData?.armor, affixesData);
   const offhand = equipped(character, 'offhand', equipmentData?.weapons, affixesData);
-  return { weapon, armor, offhand, defenseBonus: (armor?.defenseBonus || 0) + (offhand?.defenseBonus || 0) };
+  return { weapon, armor, offhand, defenseBonus: (armor?.defenseBonus ?? 0) + (offhand?.defenseBonus ?? 0) };
 }
 
 export function evaluateRange(weaponStats, distance) {
@@ -100,12 +111,73 @@ export function getCoverBonus(lattice, targetX, targetY, attackerX, attackerY) {
   const steps = Math.max(dx, dy);
   if (steps <= 1) return 0;
   let coverCells = 0;
-  for (let index = 1; index < steps; index++) {
-    const x = Math.round(attackerX + sx * (dx / steps) * index);
-    const y = Math.round(attackerY + sy * (dy / steps) * index);
-    if (lattice[y] && lattice[y][x] === 'wall') coverCells++;
-  }
+  for (let index = 1; index < steps; index++) if (lattice[Math.round(attackerY + sy * (dy / steps) * index)]?.[Math.round(attackerX + sx * (dx / steps) * index)] === 'wall') coverCells++;
   return coverCells >= 2 ? 4 : coverCells === 1 ? 2 : 0;
+}
+
+function cloneState(runState) {
+  const state = deserializeRunState(typeof runState?.serialize === 'function' ? runState.serialize() : runState);
+  return state ?? null;
+}
+
+function inventoryUnits(inventory) {
+  return inventory.reduce((total, item) => total + (item.count ?? 1), 0);
+}
+
+function itemForEquip(state, item) {
+  return typeof item === 'string' ? state.inventory.find((entry) => entry.id === item) : item;
+}
+
+export function equipItem(runState, characterId, slot, item) {
+  const state = cloneState(runState);
+  const character = state?.party.find((entry) => entry.id === characterId);
+  const selected = itemForEquip(state, item);
+  if (!state || !character || !['weapon', 'armor', 'offhand'].includes(slot) || !selected || (slot === 'armor' ? selected.category !== 'armor' : selected.category !== 'weapon')) return { success: false, reason: 'invalid_equip', runState };
+  const isNewImplant = selected.corrupt && !state.appliedCorruptItemIds.includes(selected.id);
+  if (isNewImplant && !state.applyCorruptImplant(selected.id, selected.corruptionValue)) return { success: false, reason: 'invalid_corrupt_item', runState };
+  const inventoryIndex = state.inventory.findIndex((entry) => entry.id === selected.id);
+  if (inventoryIndex >= 0) state.inventory.splice(inventoryIndex, 1);
+  const replaced = character.equipment[slot];
+  character.equipment[slot] = structuredClone(selected);
+  if (replaced) state.inventory.push(replaced);
+  state.stats.corruptItemsEquipped += isNewImplant ? 1 : 0;
+  return { success: true, runState: state, corruptionAdded: isNewImplant ? selected.corruptionValue : 0, replacedItem: replaced ?? null };
+}
+
+export function unequipItem(runState, characterId, slot) {
+  const state = cloneState(runState);
+  const character = state?.party.find((entry) => entry.id === characterId);
+  const item = character?.equipment?.[slot];
+  if (!state || !character || !['weapon', 'armor', 'offhand'].includes(slot) || !item) return { success: false, reason: 'invalid_unequip', runState };
+  if (inventoryUnits(state.inventory) + (item.count ?? 1) > 100) return { success: false, reason: 'inventory_full', runState };
+  character.equipment[slot] = null;
+  state.inventory.push(structuredClone(item));
+  return { success: true, runState: state, item: structuredClone(item) };
+}
+
+export function useAffixReroll(runState, itemId, affixesData) {
+  const state = cloneState(runState);
+  const item = state?.party.flatMap((character) => Object.values(character.equipment)).find((entry) => entry?.id === itemId);
+  if (!state || !item || getAffixHooks(item.affixes, affixesData).reroll.perFloor < 1) return { success: false, reason: 'no_reroll', runState };
+  const claim = state.claimAffixUse('reroll', itemId);
+  return claim.claimed ? { success: true, runState: state } : { success: false, reason: claim.reason, runState };
+}
+
+export function applyFloorEntryAffixes(runState, affixesData) {
+  const state = cloneState(runState);
+  if (!state) return { success: false, reason: 'invalid_run_state', runState };
+  const applied = [];
+  for (const character of state.party) {
+    for (const item of Object.values(character.equipment)) {
+      if (!item || !getAffixHooks(item.affixes, affixesData).floorEntry.shielded) continue;
+      if (!state.claimAffixUse('floor_entry', item.id).claimed) continue;
+      const existing = character.conditions.find((condition) => condition.conditionId === 'shielded');
+      if (existing) existing.duration = Math.max(existing.duration, 3);
+      else character.conditions.push({ conditionId: 'shielded', duration: 3 });
+      applied.push({ characterId: character.id, itemId: item.id, conditionId: 'shielded' });
+    }
+  }
+  return { success: true, runState: state, applied };
 }
 
 export function getSalvageValue(item) {

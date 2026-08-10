@@ -2,105 +2,98 @@ import { hash } from '../core/hash.js';
 import { createPRNG } from '../core/prng.js';
 import { lootRarityShift } from './scaling.js';
 
+export const CORRUPT_IMPLANT_CORRUPTION = 0.1;
+
 const RARITIES = ['stock', 'tuned', 'custom', 'prototype', 'corrupt'];
+const CATEGORY_WEIGHTS = { weapon: 55, armor: 30, consumable: 15 };
 
-function rollRarity(prng, rarityShift, themeLootBias) {
-  let baseRoll = prng.nextInt(100);
-  baseRoll += (rarityShift * 10) + (themeLootBias?.rarityShift || 0) * 10;
-  if (baseRoll >= 90) return 4;
-  if (baseRoll >= 70) return 3;
-  if (baseRoll >= 40) return 2;
-  if (baseRoll >= 15) return 1;
-  return 0;
-}
-
-function rollCategory(prng) {
-  const r = prng.nextInt(100);
-  if (r < 50) return 'weapon';
-  if (r < 70) return 'armor';
-  return 'consumable';
-}
-
-function getAffixesForRarity(rarity, prng, affixesData, category) {
-  if (rarity === 0) return [];
-
-  const allAffixes = Object.entries(affixesData.affixes).map(([id, a]) => ({ id, ...a }));
-  const usable = allAffixes.filter(a =>
-    a.category === 'universal' || a.category === category
-  );
-
-  const minor = usable.filter(a => a.class === 'minor');
-  const major = usable.filter(a => a.class === 'major');
-
-  const result = [];
-  const pick = (pool) => pool.length > 0 ? pool[prng.nextInt(pool.length)] : null;
-
-  if (rarity === 1) {
-    const a = pick(minor);
-    if (a) result.push({ id: a.id, name: a.name, effect: a.effect, effectData: a.effectData });
-  } else if (rarity === 2) {
-    const maj = pick(major);
-    const min = pick(minor.filter(a => !result.find(r => r.id === maj?.id)));
-    if (maj) result.push({ id: maj.id, name: maj.name, effect: maj.effect, effectData: maj.effectData });
-    if (min) result.push({ id: min.id, name: min.name, effect: min.effect, effectData: min.effectData });
-  } else if (rarity === 3) {
-    for (let i = 0; i < 2; i++) {
-      const m = pick(major.filter(a => !result.find(r => r.id === a.id)));
-      if (m) result.push({ id: m.id, name: m.name, effect: m.effect, effectData: m.effectData });
-    }
-    const mi = pick(minor.filter(a => !result.find(r => r.id === a.id)));
-    if (mi) result.push({ id: mi.id, name: mi.name, effect: mi.effect, effectData: mi.effectData });
-  } else if (rarity === 4) {
-    for (let i = 0; i < 3; i++) {
-      const m = pick(major.filter(a => !result.find(r => r.id === a.id)));
-      if (m) result.push({ id: m.id, name: m.name, effect: m.effect, effectData: m.effectData });
-    }
+function weightedPick(prng, entries) {
+  const total = entries.reduce((sum, entry) => sum + Math.max(0, entry.weight), 0);
+  if (total <= 0) return null;
+  let roll = prng.next() * total;
+  for (const entry of entries) {
+    roll -= Math.max(0, entry.weight);
+    if (roll < 0) return entry.value;
   }
-  return result;
+  return entries.at(-1)?.value ?? null;
 }
 
-export function generateLoot(worldSeed, depth, floorId, containerId, themeLootBias, equipmentData, affixesData, consumablesData) {
+function maximumRarity(depth, isVault) {
+  if (depth >= 20 || (isVault && depth >= 10)) return 4;
+  if (depth >= 10) return 3;
+  if (depth >= 5) return 2;
+  return 1;
+}
+
+function rollRarity(prng, depth, bias, isVault) {
+  const shift = lootRarityShift(depth) + Number(bias?.rarityShift ?? 0) + (isVault ? 1 : 0);
+  const roll = prng.nextInt(100) + Math.floor(shift * 20);
+  const rarity = roll >= 90 ? 4 : roll >= 70 ? 3 : roll >= 40 ? 2 : roll >= 15 ? 1 : 0;
+  return Math.min(rarity, maximumRarity(depth, isVault));
+}
+
+function rollCategory(prng, bias) {
+  const weights = bias?.categoryWeights ?? bias?.categoryBias ?? {};
+  return weightedPick(prng, Object.entries(CATEGORY_WEIGHTS).map(([value, weight]) => ({ value, weight: weight * Math.max(0, Number(weights[value] ?? 1)) })));
+}
+
+function selectAffixes(rarity, prng, affixesData, category, bias) {
+  const countByRarity = [[0, 0], [0, 1], [1, 1], [2, 1], [3, 0]];
+  const [majorCount, minorCount] = countByRarity[rarity] ?? [0, 0];
+  const eligible = Object.entries(affixesData?.affixes ?? {})
+    .map(([id, affix]) => ({ id, ...affix }))
+    .filter((affix) => affix.category === 'universal' || affix.category === category);
+  const selected = [];
+  const pick = (classification) => {
+    const candidates = eligible
+      .filter((affix) => affix.class === classification && !selected.includes(affix.id))
+      .map((affix) => ({ value: affix.id, weight: Math.max(0, Number(bias?.affixPoolBias?.[affix.id] ?? 1)) }));
+    const id = weightedPick(prng, candidates);
+    if (id) selected.push(id);
+  };
+  for (let index = 0; index < majorCount; index++) pick('major');
+  for (let index = 0; index < minorCount; index++) pick('minor');
+  return selected;
+}
+
+function chooseBaseType(prng, category, depth, equipmentData, consumablesData) {
+  if (category === 'weapon') return weightedPick(prng, Object.keys(equipmentData?.weapons ?? {}).filter((id) => id !== 'shield').map((value) => ({ value, weight: 1 })));
+  if (category === 'armor') return weightedPick(prng, Object.keys(equipmentData?.armor ?? {}).filter((id) => id !== 'none').map((value) => ({ value, weight: 1 })));
+  return weightedPick(prng, Object.entries(consumablesData?.consumables ?? {})
+    .filter(([, consumable]) => depth >= consumable.minDepth)
+    .map(([value]) => ({ value, weight: 1 })));
+}
+
+function salvageValue(category, baseType, equipmentData, consumablesData) {
+  if (category === 'weapon') return equipmentData?.weapons?.[baseType]?.salvageValue ?? 0;
+  if (category === 'armor') return equipmentData?.armor?.[baseType]?.salvageValue ?? 0;
+  return consumablesData?.consumables?.[baseType]?.salvageValue ?? 0;
+}
+
+export function generateLoot(worldSeed, depth, floorId, containerId, themeLootBias, equipmentData, affixesData, consumablesData, options = {}) {
   const seed = hash(worldSeed, depth, floorId, containerId);
   const prng = createPRNG(seed);
-  const rarityShift = lootRarityShift(depth);
-
-  const densityMult = themeLootBias?.containerDensity || 1.0;
-  const count = Math.max(1, Math.floor((1 + prng.nextInt(3)) * densityMult));
-
+  const isVault = options.containerType === 'vault' || themeLootBias?.containerType === 'vault';
+  const density = Math.max(0, Number(themeLootBias?.containerDensity ?? 1));
+  const count = Math.max(1, Math.floor((1 + prng.nextInt(3)) * density));
   const items = [];
-  for (let i = 0; i < count; i++) {
-    const rarity = rollRarity(prng, rarityShift, themeLootBias);
-    const category = rollCategory(prng);
-    const corrupt = rarity === 4;
-
-    let baseType = null;
-    let salvageValue = 1;
-
-    if (category === 'weapon') {
-      const weaponIds = Object.keys(equipmentData.weapons).filter(w => w !== 'shield');
-      baseType = weaponIds[prng.nextInt(weaponIds.length)];
-      salvageValue = equipmentData.weapons[baseType]?.salvageValue || 1;
-    } else if (category === 'armor') {
-      const armorIds = Object.keys(equipmentData.armor).filter(a => a !== 'none');
-      baseType = armorIds[prng.nextInt(armorIds.length)];
-      salvageValue = equipmentData.armor[baseType]?.salvageValue || 1;
-    } else {
-      const consumableIds = Object.keys(consumablesData.consumables);
-      baseType = consumableIds[prng.nextInt(consumableIds.length)];
-      salvageValue = consumablesData.consumables[baseType]?.salvageValue || 1;
-    }
-
-    const affixes = category !== 'consumable' ? getAffixesForRarity(rarity, prng, affixesData, category) : [];
-
+  for (let index = 0; index < count; index++) {
+    const category = rollCategory(prng, themeLootBias);
+    const baseType = chooseBaseType(prng, category, depth, equipmentData, consumablesData);
+    if (!category || !baseType) continue;
+    const isConsumable = category === 'consumable';
+    const rarityTier = isConsumable ? 0 : rollRarity(prng, depth, themeLootBias, isVault);
+    const corrupt = rarityTier === 4;
     items.push({
-      id: `${containerId}_item_${i}`,
+      id: `loot-${hash(worldSeed, depth, floorId, containerId, index).toString(36)}-${index}`,
       category,
       baseType,
-      rarity: RARITIES[rarity],
-      rarityTier: rarity,
-      affixes,
+      rarity: RARITIES[rarityTier],
+      rarityTier,
+      affixes: isConsumable ? [] : selectAffixes(rarityTier, prng, affixesData, category, themeLootBias),
       corrupt,
-      salvageValue
+      ...(corrupt ? { corruptionValue: CORRUPT_IMPLANT_CORRUPTION } : {}),
+      salvageValue: salvageValue(category, baseType, equipmentData, consumablesData)
     });
   }
   return items;
