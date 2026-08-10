@@ -1,3 +1,5 @@
+import { createPRNG } from './prng.js';
+
 export function createRNGCursor(genPRNG, combatPRNG) {
   const cursors = new Map();
   const prngs = new Map();
@@ -49,4 +51,17 @@ export function createRNGCursor(genPRNG, combatPRNG) {
   }
 
   return { next, nextInt, getCursor, syncTo, getState };
+}
+
+export function createRNGCursorForRun(worldSeed, rngState = null) {
+  const genPRNG = createPRNG(worldSeed);
+  const combatPRNG = createPRNG((worldSeed ^ 0xC0FFEE) >>> 0);
+  const cursor = createRNGCursor(genPRNG, combatPRNG);
+
+  if (rngState) {
+    cursor.syncTo('gen', rngState.gen?.cursor || 0, rngState.gen?.prngState);
+    cursor.syncTo('combat', rngState.combat?.cursor || 0, rngState.combat?.prngState);
+  }
+
+  return cursor;
 }

@@ -151,12 +151,14 @@ src/
 - **Owns:** Tracking the PRNG's position in the roll sequence for both independent streams (generation and combat) so that save/resume produces identical rolls. Wraps two PRNG instances and records a monotonic cursor counter for each.
 - **Exports:**
   - `createRNGCursor(genPRNG, combatPRNG) → RNGCursor`
+  - `createRNGCursorForRun(worldSeed, rngState = null) → RNGCursor` — Creates the independent generation and combat streams and restores optional saved cursor/PRNG state.
   - `RNGCursor.next(stream: 'gen' | 'combat') → number` — Draws from the specified stream's PRNG, increments that stream's cursor.
   - `RNGCursor.nextInt(stream, max) → number`
   - `RNGCursor.getCursor(stream) → number` — Returns current cursor position for the specified stream.
   - `RNGCursor.syncTo(stream, cursor, prngState) → void` — Fast-forwards or restores the specified stream's PRNG to a saved position.
   - `RNGCursor.getState() → { gen: {cursor, prngState}, combat: {cursor, prngState} }` — Returns full state for save serialization.
 - **Depends on:** `core/prng.js`.
+- **Usage:** Resume and combat paths use `createRNGCursorForRun` as the authoritative construction path for a run's deterministic streams.
 
 ### `floor/generator.js`
 - **Owns:** Orchestrating floor generation: derive sub-seed from `(worldSeed, floorN)`, select archetype/modifiers/theme via weighted draws, generate grid, validate, regenerate with incremented sub-seed on failure.
