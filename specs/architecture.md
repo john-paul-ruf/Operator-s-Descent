@@ -623,7 +623,8 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
   - `bus.on(event, handler) → unsubscribe`
   - `bus.dispatch(event, payload) → void`
 - **Depends on:** None.
-- **Key events:** `state:floor-change`, `state:combat-start`, `state:combat-end`, `state:character-death`, `state:party-wipe`, `state:corruption-change`, `state:danger-clock-tick`, `state:settings-change`, `ui:mode-change`, `ui:console-expand`, `ui:console-collapse`.
+- **Key events:** `state:floor-change`, `state:combat-start`, `state:combat-end`, `state:character-death`, `state:party-wipe`, `state:corruption-change`, `state:danger-clock-tick`, `state:settings-change`, `ui:navigate`, `ui:mode-change`, `ui:console-expand`, `ui:console-collapse`.
+- **Navigation contract:** `ui:navigate` carries `{ screen, params }`. Exploration navigation may include `{ runState, floor?, resume? }`; `main.js` restores a missing floor before mounting and keeps the active run and floor references synchronized.
 
 ### `exploration/lattice.js`
 - **Owns:** The 20×32 grid model. Cell types (wall, floor, container, descent point, feature). Party token position. Cell queries.

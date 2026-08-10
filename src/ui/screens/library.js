@@ -47,7 +47,7 @@ export function mount(container, params) {
       row.addEventListener('click', () => {
         const result = loadRun(run.key);
         if (result.success) {
-          bus.dispatch('ui:navigate', { screen: 'exploration', params: { runState: result.runState } });
+          bus.dispatch('ui:navigate', { screen: 'exploration', params: { runState: result.runState, resume: true } });
         }
       });
 

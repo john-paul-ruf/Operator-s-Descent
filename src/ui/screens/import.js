@@ -91,7 +91,7 @@ export function mount(container, params) {
 
     resultArea.appendChild(createButton('RESUME RUN', {
       primary: true,
-      onClick: () => bus.dispatch('ui:navigate', { screen: 'exploration', params: { runState } })
+      onClick: () => bus.dispatch('ui:navigate', { screen: 'exploration', params: { runState, resume: true } })
     }));
   }
 
