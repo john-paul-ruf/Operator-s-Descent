@@ -6,16 +6,26 @@ import { applyConsumable } from './consumables.js';
 
 const AP_PER_TURN = 2;
 
-export function initiateCombat(party, enemies, rngCursor) {
+const DIRECTIONS = {
+  n: { dx: 0, dy: -1 },
+  ne: { dx: 1, dy: -1 },
+  e: { dx: 1, dy: 0 },
+  se: { dx: 1, dy: 1 },
+  s: { dx: 0, dy: 1 },
+  sw: { dx: -1, dy: 1 },
+  w: { dx: -1, dy: 0 },
+  nw: { dx: -1, dy: -1 }
+};
+const DIRECTION_ORDER = Object.keys(DIRECTIONS);
+
+function buildCombatants(party, enemies) {
   const combatants = new Map();
+  for (const c of party) combatants.set(c.id, { ...c, side: 'party', ap: 2, moveAvailable: true, swapAvailable: true, conditions: c.conditions ? [...c.conditions] : [] });
+  for (const e of enemies) combatants.set(e.id, { ...e, side: 'enemy', ap: 2, moveAvailable: true, swapAvailable: true, conditions: e.conditions ? [...e.conditions] : [] });
+  return combatants;
+}
 
-  for (const c of party) {
-    combatants.set(c.id, { ...c, side: 'party', ap: 2, conditions: c.conditions ? [...c.conditions] : [] });
-  }
-  for (const e of enemies) {
-    combatants.set(e.id, { ...e, side: 'enemy', ap: 2, conditions: e.conditions ? [...e.conditions] : [] });
-  }
-
+function buildTurnOrder(combatants, rngCursor) {
   const initiatives = [];
   for (const [id, c] of combatants) {
     const initRoll = rngCursor.nextInt('combat', 20) + 1;
@@ -23,11 +33,44 @@ export function initiateCombat(party, enemies, rngCursor) {
     c.initiative = initRoll + initMod;
     initiatives.push({ id, initiative: c.initiative });
   }
+  initiatives.sort((a, b) => b.initiative - a.initiative || String(a.id).localeCompare(String(b.id)));
+  let order = initiatives.map(entry => entry.id);
+  // Apex actors act twice per round; the second slot is spaced roughly opposite the first.
+  for (const c of combatants.values()) {
+    if (c.actionSlotsPerRound !== 2) continue;
+    const firstIndex = order.indexOf(c.id);
+    if (firstIndex < 0) continue;
+    const insertAt = Math.min(order.length, firstIndex + Math.max(1, Math.floor(order.length / 2)));
+    order = [...order.slice(0, insertAt), c.id, ...order.slice(insertAt)];
+  }
+  return order;
+}
 
-  initiatives.sort((a, b) => b.initiative - a.initiative);
-  const turnOrder = initiatives.map(i => i.id);
+// Accepts either the SESSION-19 encounter contract initiateCombat(encounter, rngCursor, context)
+// or the legacy roster contract initiateCombat(party, enemies, rngCursor) used before deployment existed.
+export function initiateCombat(first, second, third) {
+  const isEncounter = Boolean(first) && !Array.isArray(first) && Array.isArray(first.actors);
+  let party, enemies, rngCursor, window, meta;
+  if (isEncounter) {
+    party = first.actors.filter(actor => actor.side === 'party');
+    enemies = first.actors.filter(actor => actor.side === 'enemy');
+    rngCursor = second;
+    window = first.window || null;
+    meta = { id: first.id ?? null, kind: first.kind ?? 'standard', forfeitableLoot: first.forfeitableLoot || [] };
+  } else {
+    party = first;
+    enemies = second;
+    rngCursor = third;
+    window = null;
+    meta = { id: null, kind: 'legacy', forfeitableLoot: [] };
+  }
+
+  const combatants = buildCombatants(party, enemies);
+  const turnOrder = buildTurnOrder(combatants, rngCursor);
 
   return {
+    ...meta,
+    window,
     round: 1,
     currentTurn: 0,
     turnOrder,
@@ -39,8 +82,115 @@ export function initiateCombat(party, enemies, rngCursor) {
   };
 }
 
+function isOpenCell(window, x, y) {
+  if (!window) return false;
+  if (x < 0 || y < 0 || x >= window.width || y >= window.height) return false;
+  return window.cells[y][x] !== 0;
+}
+
+function legalStep(window, from, delta) {
+  if (!window || !from) return false;
+  if (delta.dx !== 0 && delta.dy !== 0) {
+    const hOpen = isOpenCell(window, from.x + delta.dx, from.y);
+    const vOpen = isOpenCell(window, from.x, from.y + delta.dy);
+    if (!hOpen && !vOpen) return false;
+  }
+  return isOpenCell(window, from.x + delta.dx, from.y + delta.dy);
+}
+
+function cellOccupied(combatants, x, y, excludeId) {
+  for (const actor of combatants.values()) {
+    if (actor.id !== excludeId && actor.hp > 0 && actor.position && actor.position.x === x && actor.position.y === y) return true;
+  }
+  return false;
+}
+
+function legalDirectionsFrom(combatState, actor) {
+  if (!actor.position || !combatState.window) return [];
+  return DIRECTION_ORDER.filter(name => {
+    const delta = DIRECTIONS[name];
+    if (!legalStep(combatState.window, actor.position, delta)) return false;
+    const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
+    return !cellOccupied(combatState.combatants, dest.x, dest.y, actor.id);
+  });
+}
+
+function chebyshevPos(a, b) {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+function nearestHostile(combatState, actor) {
+  let nearest = null;
+  let nearestDistance = Infinity;
+  for (const other of combatState.combatants.values()) {
+    if (other.id === actor.id || other.hp <= 0 || other.side === actor.side || !other.position || !actor.position) continue;
+    const distance = chebyshevPos(actor.position, other.position);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = other;
+    }
+  }
+  return nearest;
+}
+
+// PANICKED overrides any requested direction/target with the step that maximizes distance from the nearest hostile.
+function fleeDirection(combatState, actor) {
+  const hostile = nearestHostile(combatState, actor);
+  if (!hostile || !actor.position) return null;
+  let best = null;
+  let bestScore = -Infinity;
+  for (const name of DIRECTION_ORDER) {
+    const delta = DIRECTIONS[name];
+    if (!legalStep(combatState.window, actor.position, delta)) continue;
+    const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
+    if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) continue;
+    const score = chebyshevPos(dest, hostile.position);
+    if (score > bestScore) {
+      bestScore = score;
+      best = name;
+    }
+  }
+  return best;
+}
+
+// AI convenience: greedily steps toward a target instead of requiring an explicit direction.
+function stepToward(combatState, actor, targetId) {
+  const target = combatState.combatants.get(targetId);
+  if (!target || !target.position || !actor.position) return null;
+  let best = null;
+  let bestDistance = chebyshevPos(actor.position, target.position);
+  for (const name of DIRECTION_ORDER) {
+    const delta = DIRECTIONS[name];
+    if (!legalStep(combatState.window, actor.position, delta)) continue;
+    const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
+    if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) continue;
+    const distance = chebyshevPos(dest, target.position);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = name;
+    }
+  }
+  return best;
+}
+
+export function getLegalActions(combatState, actorId, context = {}) {
+  const actor = combatState.combatants.get(actorId);
+  if (!actor || actor.hp <= 0) return { canAct: false, actions: [], legalMoveDirections: [] };
+  const isTurn = combatState.turnOrder[combatState.currentTurn] === actorId;
+  const actions = [];
+  if (isTurn && actor.ap > 0) {
+    if (!hasCondition(actor, 'panicked')) actions.push('attack');
+    if (!hasCondition(actor, 'jammed')) actions.push('cast', 'overclock');
+    actions.push('item');
+  }
+  if (isTurn && actor.moveAvailable && !hasCondition(actor, 'immobilized')) actions.push('move');
+  if (isTurn && actor.swapAvailable) actions.push('swap');
+  if (isTurn) actions.push('retreat', 'wait', 'end-turn');
+  return { canAct: isTurn, actions, legalMoveDirections: isTurn ? legalDirectionsFrom(combatState, actor) : [] };
+}
+
 export function executeAction(combatState, action, rngCursor, context = {}) {
-  const { type, actorId, targetId, school, tier, consumableId } = action || {};
+  const { type, actorId, targetId, school, tier, consumableId, direction } = action || {};
   const actor = combatState.combatants.get(actorId);
   if (!actor || actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
   if (combatState.turnOrder[combatState.currentTurn] !== actorId) {
@@ -48,7 +198,7 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
   }
   prepareTurn(combatState, actor, context, rngCursor);
   if (actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
-  if (actor.ap <= 0) return { success: false, reason: 'no-ap' };
+  if (type !== 'move' && type !== 'swap' && type !== 'end-turn' && actor.ap <= 0) return { success: false, reason: 'no-ap' };
   if (hasCondition(actor, 'jammed') && (type === 'cast' || type === 'overclock')) {
     return { success: false, reason: 'jammed' };
   }
@@ -65,6 +215,14 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
       return executeProtocol(combatState, actor, school, tier, targetId, true, rngCursor, context);
     case 'item':
       return executeItem(combatState, actor, targetId, consumableId, rngCursor, context);
+    case 'move':
+      return executeMove(combatState, actor, { direction, targetId });
+    case 'swap':
+      return executeSwap(combatState, actor, targetId);
+    case 'end-turn':
+      combatState.log.push({ type: 'end-turn', actorId });
+      actor.ap = 0;
+      return { success: true };
     case 'retreat': {
       const roll = rngCursor.nextInt('combat', 20) + 1;
       const success = roll >= 15;
@@ -79,6 +237,49 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
     default:
       return { success: false, reason: 'invalid-action' };
   }
+}
+
+export function endTurn(combatState, actorId, context = {}) {
+  const actor = combatState.combatants.get(actorId);
+  if (!actor || actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
+  if (combatState.turnOrder[combatState.currentTurn] !== actorId) return { success: false, reason: 'invalid-turn' };
+  combatState.log.push({ type: 'end-turn', actorId });
+  actor.ap = 0;
+  return { success: true };
+}
+
+function executeMove(combatState, actor, { direction, targetId }) {
+  if (!actor.moveAvailable) return { success: false, reason: 'no-move' };
+  if (hasCondition(actor, 'immobilized')) return { success: false, reason: 'immobilized' };
+  if (!combatState.window) return { success: false, reason: 'no-window' };
+
+  let chosenDirection = hasCondition(actor, 'panicked') ? fleeDirection(combatState, actor) : direction;
+  if (!chosenDirection && targetId) chosenDirection = stepToward(combatState, actor, targetId);
+  const delta = DIRECTIONS[chosenDirection];
+  if (!delta) return { success: false, reason: 'invalid-direction' };
+  if (!legalStep(combatState.window, actor.position, delta)) return { success: false, reason: 'illegal-cell' };
+
+  const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
+  if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) return { success: false, reason: 'illegal-cell' };
+
+  actor.position = dest;
+  actor.moveAvailable = false;
+  combatState.log.push({ type: 'move', actorId: actor.id, direction: chosenDirection, to: { ...dest } });
+  return { success: true, position: { ...dest } };
+}
+
+function executeSwap(combatState, actor, targetId) {
+  if (!actor.swapAvailable) return { success: false, reason: 'no-swap' };
+  const ally = combatState.combatants.get(targetId);
+  if (!ally || ally.id === actor.id || ally.hp <= 0 || ally.side !== actor.side) return { success: false, reason: 'invalid-target' };
+  if (!actor.position || !ally.position || chebyshevPos(actor.position, ally.position) !== 1) return { success: false, reason: 'not-adjacent' };
+
+  const actorPosition = actor.position;
+  actor.position = ally.position;
+  ally.position = actorPosition;
+  actor.swapAvailable = false;
+  combatState.log.push({ type: 'swap', actorId: actor.id, withId: ally.id });
+  return { success: true };
 }
 
 function executeAttack(combatState, actor, targetId, rngCursor, context) {
@@ -203,7 +404,7 @@ export function resolveTurn(combatState, rngCursor, context = {}) {
 
     if (actor.side === 'enemy') {
       while (actor.ap > 0 && actor.hp > 0 && !combatState.ended) {
-        const action = enemyAI(actor, combatState, rngCursor);
+        const action = enemyAI(actor, combatState, rngCursor, context);
         const actionResult = executeAction(combatState, action, rngCursor, context);
         if (!actionResult.success) actor.ap = 0;
         const end = checkCombatEnd(combatState);
@@ -224,6 +425,10 @@ function prepareTurn(combatState, actor, context, rngCursor) {
   if (combatState.turnStarted) return;
   combatState.turnStarted = true;
   actor.ap = AP_PER_TURN;
+  actor.moveAvailable = true;
+  actor.swapAvailable = true;
+  actor.signatureFreeActions = {};
+  if (hasCondition(actor, 'immobilized')) actor.moveAvailable = false;
 
   const tickResults = tickConditions(actor, 'start_turn', rngCursor, context.conditionsData?.conditions || context.conditionsData);
   for (const result of tickResults) {

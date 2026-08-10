@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { initiateCombat, executeAction, resolveTurn, checkCombatEnd } from '../../src/rules/combat.js';
+import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd } from '../../src/rules/combat.js';
+import { createStandardEncounter } from '../../src/rules/encounters.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { modifier } from '../../src/rules/attributes.js';
 import { makeCharacter, makeWeapon, makeParty, findSeed } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
+import { contactWindowFloor, blockedCornerWindow, openCombatWindow } from '../helpers/grids.js';
 
 const protocolsData = loadData('protocols');
 const conditionsData = loadData('conditions');
@@ -524,5 +526,272 @@ describe('checkCombatEnd', () => {
     const { state } = startCombat(party, [makeEnemy({ hp: 0 })]);
     const result = checkCombatEnd(state);
     expect(result.result).toBe('victory');
+  });
+});
+
+describe('initiateCombat — encounter contract (deployment window)', () => {
+  it('accepts a createStandardEncounter result and carries its window/id/kind', () => {
+    const floor = contactWindowFloor();
+    const cursor = createRNGCursorForRun(1);
+    const encounter = createStandardEncounter(floor, { x: 12, y: 12 }, [makeCharacter({ id: 'a' })], [makeEnemy({ id: 'enemy_1' })], cursor);
+    const state = initiateCombat(encounter, cursor);
+    expect(state.window).toBe(encounter.window);
+    expect(state.id).toBe(encounter.id);
+    expect(state.kind).toBe('standard');
+    expect(state.combatants.get('a').position).toEqual(encounter.actors.find(a => a.id === 'a').position);
+  });
+
+  it('deploys party/hostile bands on distinct legal cells, 9-12 cells apart when geometry permits', () => {
+    const floor = contactWindowFloor();
+    const cursor = createRNGCursorForRun(1);
+    const party = [makeCharacter({ id: 'a' }), makeCharacter({ id: 'b' })];
+    const enemies = [makeEnemy({ id: 'e1' }), makeEnemy({ id: 'e2' })];
+    const encounter = createStandardEncounter(floor, { x: 12, y: 12 }, party, enemies, cursor);
+    const positions = encounter.actors.map(a => `${a.position.x},${a.position.y}`);
+    expect(new Set(positions).size).toBe(positions.length);
+    const partyPositions = encounter.actors.filter(a => a.side === 'party').map(a => a.position);
+    const hostilePositions = encounter.actors.filter(a => a.side === 'enemy').map(a => a.position);
+    let minSeparation = Infinity;
+    for (const p of partyPositions) for (const h of hostilePositions) {
+      minSeparation = Math.min(minSeparation, Math.max(Math.abs(p.x - h.x), Math.abs(p.y - h.y)));
+    }
+    expect(minSeparation).toBeGreaterThanOrEqual(9);
+    expect(minSeparation).toBeLessThanOrEqual(12);
+  });
+
+  it('never invents cells outside the carved geometry — every actor lands on an open window cell', () => {
+    const floor = contactWindowFloor();
+    const cursor = createRNGCursorForRun(1);
+    const encounter = createStandardEncounter(floor, { x: 12, y: 12 }, makeParty(3), [makeEnemy({ id: 'e1' }), makeEnemy({ id: 'e2' })], cursor);
+    for (const actor of encounter.actors) {
+      expect(encounter.window.cells[actor.position.y][actor.position.x]).not.toBe(0);
+    }
+  });
+
+  it('legacy roster contract initiateCombat(party, enemies, cursor) still works with window null', () => {
+    const { state } = startCombat([makeCharacter()], [makeEnemy()]);
+    expect(state.window).toBeNull();
+    expect(state.kind).toBe('legacy');
+  });
+});
+
+describe('initiateCombat — Apex double initiative slot', () => {
+  it('an actor with actionSlotsPerRound 2 appears twice in turnOrder, spaced roughly evenly', () => {
+    const party = makeParty(2);
+    const apex = makeEnemy({ id: 'apex_1', actionSlotsPerRound: 2 });
+    const { state } = startCombat(party, [apex]);
+    const occurrences = state.turnOrder.reduce((count, id) => count + (id === 'apex_1' ? 1 : 0), 0);
+    expect(occurrences).toBe(2);
+    expect(state.turnOrder.length).toBe(4);
+    const indices = state.turnOrder.reduce((acc, id, i) => (id === 'apex_1' ? [...acc, i] : acc), []);
+    expect(indices[1] - indices[0]).toBeGreaterThanOrEqual(1);
+  });
+
+  it('non-apex actors appear exactly once', () => {
+    const party = makeParty(2);
+    const { state } = startCombat(party, [makeEnemy({ id: 'e1' })]);
+    for (const id of ['char_a', 'char_b', 'e1']) {
+      expect(state.turnOrder.filter(entry => entry === id).length).toBe(1);
+    }
+  });
+});
+
+describe('getLegalActions', () => {
+  it('dead actor → canAct false, no actions', () => {
+    const party = [makeCharacter({ id: 'a', hp: 0 })];
+    const { state } = startCombat(party, [makeEnemy()]);
+    expect(getLegalActions(state, 'a')).toEqual({ canAct: false, actions: [], legalMoveDirections: [] });
+  });
+
+  it('not this actor\'s turn → canAct false', () => {
+    const party = [makeCharacter({ id: 'a' }), makeCharacter({ id: 'b' })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    expect(getLegalActions(state, 'b').canAct).toBe(false);
+  });
+
+  it('active actor with full AP → includes attack/cast/overclock/item/move/swap/retreat/wait/end-turn', () => {
+    const party = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    const legal = getLegalActions(state, 'a');
+    expect(legal.canAct).toBe(true);
+    for (const action of ['attack', 'cast', 'overclock', 'item', 'move', 'swap', 'retreat', 'wait', 'end-turn']) {
+      expect(legal.actions).toContain(action);
+    }
+  });
+
+  it('panicked actor → attack excluded from legal actions', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    state.combatants.get('a').conditions = [{ id: 'panicked', duration: 1, stacks: 1 }];
+    expect(getLegalActions(state, 'a').actions).not.toContain('attack');
+  });
+
+  it('jammed actor → cast/overclock excluded', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    state.combatants.get('a').conditions = [{ id: 'jammed', duration: 1, stacks: 1 }];
+    const actions = getLegalActions(state, 'a').actions;
+    expect(actions).not.toContain('cast');
+    expect(actions).not.toContain('overclock');
+  });
+
+  it('immobilized actor → move excluded', () => {
+    const party = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    state.combatants.get('a').conditions = [{ id: 'immobilized', duration: 1, stacks: 1 }];
+    expect(getLegalActions(state, 'a').actions).not.toContain('move');
+  });
+});
+
+describe('executeAction — move', () => {
+  function windowState(actorPosition, window = blockedCornerWindow()) {
+    const party = [makeCharacter({ id: 'a', position: actorPosition })];
+    const { state, cursor } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+    return { state, cursor };
+  }
+
+  it('moves exactly one legal cell and consumes moveAvailable, not AP', () => {
+    const { state, cursor } = windowState({ x: 3, y: 3 });
+    const before = state.combatants.get('a').ap;
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'e' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 4, y: 3 });
+    expect(state.combatants.get('a').position).toEqual({ x: 4, y: 3 });
+    expect(state.combatants.get('a').ap).toBe(before);
+    expect(state.combatants.get('a').moveAvailable).toBe(false);
+  });
+
+  it('second move same turn fails — moveAvailable already spent', () => {
+    const { state, cursor } = windowState({ x: 3, y: 3 });
+    executeAction(state, { type: 'move', actorId: 'a', direction: 'e' }, cursor, baseContext);
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'e' }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'no-move' });
+  });
+
+  it('corner rule blocks a diagonal step when both orthogonal neighbors are walls', () => {
+    const { state, cursor } = windowState({ x: 0, y: 0 });
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'se' }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'illegal-cell' });
+    expect(state.combatants.get('a').position).toEqual({ x: 0, y: 0 });
+  });
+
+  it('cannot move onto a cell occupied by a living actor', () => {
+    const { state, cursor } = windowState({ x: 3, y: 3 });
+    const occupant = makeEnemy({ id: 'blocker', position: { x: 4, y: 3 } });
+    state.combatants.set('blocker', { ...occupant, side: 'enemy' });
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'e' }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'illegal-cell' });
+  });
+
+  it('immobilized actor cannot move', () => {
+    const { state, cursor } = windowState({ x: 3, y: 3 });
+    state.combatants.get('a').conditions = [{ id: 'immobilized', duration: 1, stacks: 1 }];
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'e' }, cursor, baseContext);
+    expect(result.success).toBe(false);
+  });
+
+  it('panicked actor always flees away from the nearest hostile, ignoring the requested direction', () => {
+    const { state, cursor } = windowState({ x: 3, y: 3 });
+    // duration:2 so the condition survives prepareTurn's once-per-turn tick before executeMove reads it.
+    state.combatants.get('a').conditions = [{ id: 'panicked', duration: 2, stacks: 1 }];
+    const before = state.combatants.get('a').position;
+    const hostile = [...state.combatants.values()].find(c => c.side === 'enemy');
+    const beforeDistance = Math.max(Math.abs(before.x - hostile.position.x), Math.abs(before.y - hostile.position.y));
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'w' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    const afterDistance = Math.max(Math.abs(result.position.x - hostile.position.x), Math.abs(result.position.y - hostile.position.y));
+    expect(afterDistance).toBeGreaterThan(beforeDistance);
+  });
+
+  it('targetId without an explicit direction steps toward the target', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 1, y: 0 });
+  });
+});
+
+describe('executeAction — swap', () => {
+  it('swaps positions with an adjacent living ally at 0 AP cost, once per turn', () => {
+    const party = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } }), makeCharacter({ id: 'b', position: { x: 1, y: 2 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy()], 1, 'a');
+    const apBefore = state.combatants.get('a').ap;
+    const result = executeAction(state, { type: 'swap', actorId: 'a', targetId: 'b' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(state.combatants.get('a').position).toEqual({ x: 1, y: 2 });
+    expect(state.combatants.get('b').position).toEqual({ x: 1, y: 1 });
+    expect(state.combatants.get('a').ap).toBe(apBefore);
+    expect(state.combatants.get('a').swapAvailable).toBe(false);
+  });
+
+  it('second swap same turn fails', () => {
+    const party = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } }), makeCharacter({ id: 'b', position: { x: 1, y: 2 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy()], 1, 'a');
+    executeAction(state, { type: 'swap', actorId: 'a', targetId: 'b' }, cursor, baseContext);
+    const result = executeAction(state, { type: 'swap', actorId: 'a', targetId: 'b' }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'no-swap' });
+  });
+
+  it('rejects a non-adjacent or hostile target', () => {
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } }), makeCharacter({ id: 'b', position: { x: 5, y: 5 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy({ position: { x: 0, y: 1 } })], 1, 'a');
+    expect(executeAction(state, { type: 'swap', actorId: 'a', targetId: 'b' }, cursor, baseContext)).toEqual({ success: false, reason: 'not-adjacent' });
+    expect(executeAction(state, { type: 'swap', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext)).toEqual({ success: false, reason: 'invalid-target' });
+  });
+});
+
+describe('executeAction / endTurn — end-turn does not force a second action', () => {
+  it('end-turn action zeroes AP even when AP is already full, and works without spending an action', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const { state, cursor } = startCombat(party, [makeEnemy()], 1, 'a');
+    const result = executeAction(state, { type: 'end-turn', actorId: 'a' }, cursor, baseContext);
+    expect(result).toEqual({ success: true });
+    expect(state.combatants.get('a').ap).toBe(0);
+    expect(state.log.find(e => e.type === 'end-turn')).toBeDefined();
+  });
+
+  it('a partial turn (one attack, then end-turn) is legal — never forces two actions', () => {
+    const party = [makeCharacter({ id: 'a', weapon: makeWeapon() })];
+    const enemy = makeEnemy({ id: 'enemy_1', hp: 1000, hpMax: 1000 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(state.combatants.get('a').ap).toBe(1);
+    const result = executeAction(state, { type: 'end-turn', actorId: 'a' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(state.combatants.get('a').ap).toBe(0);
+  });
+
+  it('standalone endTurn() export validates actor/turn and zeroes AP', () => {
+    const party = [makeCharacter({ id: 'a' }), makeCharacter({ id: 'b' })];
+    const { state, cursor } = startCombat(party, [makeEnemy()], 1, 'a');
+    executeAction(state, { type: 'wait', actorId: 'a' }, cursor, baseContext);
+    expect(endTurn(state, 'b')).toEqual({ success: false, reason: 'invalid-turn' });
+    const party2 = [makeCharacter({ id: 'x' })];
+    const { state: state2 } = startCombat(party2, [makeEnemy()], 1, 'x');
+    expect(endTurn(state2, 'x')).toEqual({ success: true });
+    expect(state2.combatants.get('x').ap).toBe(0);
+  });
+});
+
+describe('initiateCombat — initiative tie-break', () => {
+  it('equal initiative resolves by stable ascending actor-id order', () => {
+    // Both combatants share fin:5 (modifier 0), so equal initiative reduces to equal raw d20 draws.
+    const seed = findSeed(candidate => {
+      const c = createRNGCursorForRun(candidate);
+      const first = c.nextInt('combat', 20);
+      const second = c.nextInt('combat', 20);
+      return first === second;
+    });
+    const party = [makeCharacter({ id: 'zzz', attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 } })];
+    const enemy = makeEnemy({ id: 'aaa', attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 } });
+    const cursor = createRNGCursorForRun(seed);
+    const state = initiateCombat(party, [enemy], cursor);
+    expect(state.combatants.get('zzz').initiative).toBe(state.combatants.get('aaa').initiative);
+    expect(state.turnOrder).toEqual(['aaa', 'zzz']);
   });
 });

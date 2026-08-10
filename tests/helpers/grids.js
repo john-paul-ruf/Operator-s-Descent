@@ -70,3 +70,25 @@ export function corridorReshapeFloor() {
     containers: [{ x: 6, y: 3 }]
   };
 }
+
+// A wide-open floor big enough that createStandardEncounter's 8x16 contact window fits entirely inside it,
+// so deployment bands can reach the full 9-12 cell separation target.
+export function contactWindowFloor() {
+  const cells = makeGrid(24, 24, 1);
+  return { cells, startPoint: { x: 0, y: 0 }, descentPoint: { x: 23, y: 23 }, containers: [] };
+}
+
+// A fully open 8x16 combat window (matches createStandardEncounter's fixed size), no walls.
+export function openCombatWindow() {
+  return { originX: 0, originY: 0, width: 8, height: 16, cells: makeGrid(8, 16, 1) };
+}
+
+// An 8x16 combat window (matches createStandardEncounter's fixed size). An actor standing at (0,0)
+// has both orthogonal neighbors of a diagonal step to (1,1) walled off, so the corner rule must
+// reject that diagonal move even though (1,1) itself is open.
+export function blockedCornerWindow() {
+  const cells = makeGrid(8, 16, 1);
+  cells[0][1] = 0; // (1,0): the horizontal neighbor on the way from (0,0) to (1,1)
+  cells[1][0] = 0; // (0,1): the vertical neighbor on the way from (0,0) to (1,1)
+  return { originX: 0, originY: 0, width: 8, height: 16, cells };
+}
