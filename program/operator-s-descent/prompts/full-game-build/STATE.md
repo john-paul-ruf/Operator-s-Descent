@@ -18,7 +18,7 @@
 | 02 | Core Logic: PRNG, Hash, RNG Cursor | M01, M02, M03 | done | 2026-08-10 | Core logic modules created: PRNG (xorshift128+), FNV-1a hash, RNG cursor with save/restore. All zero-dependency, verified for determinism. Fixed syncTo: when prngState provided, just setState+setCursor (no fast-forward). |
 | 03 | Data Files: All JSON Content + Placeholder Font | M04–M14 | done | 2026-08-10 | All 10 JSON data files created and validated. Sigils (48 player + 24 bestiary), themes (12), classes (6), protocols (20/4 schools), enemies (8 archetypes), equipment (8 weapons + 4 armor), affixes (16: 4 universal/8 weapon/4 armor), conditions (9), consumables (7), symbol-table (11 tables, 324 entries). Schema matches specs/database.md. Placeholder WOFF2 exists (8 bytes). |
 | 04 | Rules Engine Part 1: Attributes, Scaling, Classes, Equipment, Conditions | M15–M19 | done | 2026-08-10 | 5 pure modules: attributes (modifier=N-5, deriveStats with HP/CHARGE/Defense, scaled attribute cost), scaling (threshold formula with 0.15+0.10*floor(d/10)), classes (signature tier, gating, calibration), equipment (affix resolution, range bands, cover), conditions (SHIELDED consumption, BURNING stacking). All import core/ only. All behavioral tests pass. |
-| 05 | Rules Engine Part 2: Protocols, Consumables, Loot, Enemies, Combat, Inventory | M20–M25 | pending | | |
+| 05 | Rules Engine Part 2: Protocols, Consumables, Loot, Enemies, Combat, Inventory | M20–M25 | done | 2026-08-10 | 6 modules: protocols (casting/overclock with CHARGE economy, FOC vs threshold), consumables (heal/charge/condition/AP restore), loot (deterministic rarity/category/affix rolls), enemies (scaling, AI, Echo creation), combat (d20 attack/protocol/item, initiative, AP, victory/wipe detection), inventory (100-item cap, junk salvage). All 11 rules modules complete. |
 | 06 | Floor Generation + Run-State Stub | M26–M29, M33(stub) | pending | | |
 | 07 | Exploration: Lattice, Shadowcast, Movement | M30–M32 | pending | | |
 | 08 | State Management Full: Run State, Condense, Compress, Encrypt, Save Encode/Decode, Library, Party Configs | M33(full), M35–M46 | pending | | |
@@ -171,3 +171,23 @@ Full config in FORGE-CONFIG.md. Key points for this feature:
 - `conditions.js` imports `modifier` from `attributes.js` but doesn't currently use it — save rolls will be handled by `combat.js` (SESSION-05) which calls `applyCondition` after the save is resolved.
 - `equipment.js` `resolveWeaponStats` handles affix by ID (e.g., `affix.id === 'edged'`) for special logic, and by `effectData` fields for generic bonuses.
 - `classes.js` `canEquipWeapon`/`canEquipArmor` take `classData.equipmentGates.weapons`/`.armor` arrays — matching the `classes.json` shape from SESSION-03.
+
+### SESSION-05 → SESSION-06/07/08
+
+**What was built:**
+- `src/rules/protocols.js` — `castProtocol(caster, school, tier, target, protocolsData, conditionsData, rngCursor)` — resolves damage/heal/condition effects using RES modifier per FR-47. `overclockProtocol` rolls d20+FOC vs `11+(2×tier)`, success adds extra tier, failure adds 0.05 corruption. `protocolChargeCost`, `deckSlotCost`, `deckSlotCapacity`.
+- `src/rules/consumables.js` — `applyConsumable(target, consumableData, context)` — handles heal (d6 die rolls), charge_restore (floor(RES/2)), charge_restore_full, remove_condition, apply_condition, ap_restore. Enforces `combatOnly` flag.
+- `src/rules/loot.js` — `generateLoot(worldSeed, depth, floorId, containerId, themeLootBias, equipmentData, affixesData, consumablesData)` — deterministic from `hash(worldSeed, depth, floorId, containerId)`. Rolls rarity (shifted by depth+theme), category (50% weapon/20% armor/30% consumable), base type, affixes per rarity (1 minor @ Tuned, 1 major+1 minor @ Custom, 2 major+1 minor @ Prototype, 3 major @ CORRUPT).
+- `src/rules/enemies.js` — `createEnemy(archetypeId, depth, rngCursor, enemiesData)` — scales attributes (capped at 10), computes HP from VIT×4+hpBonus+depth, defense with armor, selects sigil codepoint. `enemyAI` — behavior-based (aggressive/defensive/artillery/controller/retreat/echo). `createEcho` — scales dead character's HP/Defense/Protocol Defense by depth formula.
+- `src/rules/combat.js` — `initiateCombat(party, enemies, rngCursor)` — rolls d20+FIN init, sorts turn order. `executeAction` dispatches attack/cast/overclock/item/retreat. Attack: d20 + attr mod + weapon bonus vs defense, natural 20 = crit (2d damage), natural 1 = fumble. AP decrements. `resolveTurn` auto-executes enemy AI, ticks conditions (BURNING damage), checks victory/wipe. `checkCombatEnd`.
+- `src/rules/inventory.js` — `INVENTORY_CAP=100`, `addItem` (fails at cap), `removeItem`, `toggleJunkTag`, `junkAllTagged` (sums salvage, returns updated scrap counter), `getSalvageValue`, `getInventoryCount`, `isFull`.
+
+**Notes for SESSION-06+:**
+- `combat.js` `executeAction` takes a `context` object with `{ conditionsData, protocolsData, consumablesData }` for protocol/item resolution — these are passed through from the caller (UI or game state).
+- `combat.js` `resolveTurn` only auto-executes enemy turns — player turns require UI input via `executeAction`. The combat loop is: `initiateCombat` → UI calls `executeAction` for player → `resolveTurn` for enemy turn → repeat.
+- `loot.js` takes all data files as parameters (equipmentData, affixesData, consumablesData) — keeps it pure and testable.
+- `enemies.js` `createEnemy` takes `rngCursor` (not a standalone PRNG) — uses cursor to track which stream draws from. Uses 'gen' stream for sigil selection.
+- `enemies.js` `enemyAI` computes distance via `position` property on combatants — positions are set by the floor/movement system (SESSION-07).
+- `enemyAI` for Choir (artillery) checks if has charge for tier-2 DISRUPT. For Null (controller) returns `apply_condition` action type. Combat.js handles these actions.
+- `combat.js` `executeAttack` currently has a `coverBonus` placeholder (0) — will need lattice integration from SESSION-07 for real cover calculation. The `getCoverBonus` function from `equipment.js` exists separately for the lattice version.
+- All context objects (`conditionsData`, `protocolsData`, `consumablesData`, `equipmentData`, `affixesData`, `enemiesData`) are the parsed JSON objects from `data/*.json` — loaded once at startup and passed through.
