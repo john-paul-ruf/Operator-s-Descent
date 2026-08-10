@@ -1,5 +1,5 @@
 import { condense, initCondenser } from './condense.js';
-import { compressSync, decompressSync } from './compress/progressive.js';
+import { compressLegacySync } from './compress/progressive.js';
 import { encrypt } from './encrypt.js';
 
 const SAVE_VERSION = 1;
@@ -63,7 +63,7 @@ function buildHeader(version, layers, checksum) {
 export function encodeRun(runState) {
   const serialized = runState.serialize();
   const condensed = condense(serialized);
-  const compressed = compressSync(condensed.data, (d) => base64urlEncode(d).length < BUDGET - 20);
+  const compressed = compressLegacySync(condensed.data, (d) => base64urlEncode(d).length < BUDGET - 20);
   const encrypted = encrypt(compressed.data, SAVE_VERSION);
 
   const checksum = crc32(encrypted);

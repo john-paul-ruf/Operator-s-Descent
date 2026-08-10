@@ -1,29 +1,26 @@
-export function compress(data) {
-  const runs = [];
-  let i = 0;
-  while (i < data.length) {
-    let runLen = 1;
-    while (i + runLen < data.length && data[i + runLen] === data[i] && runLen < 255) {
-      runLen++;
-    }
-    runs.push(runLen, data[i]);
-    i += runLen;
+function fail(code) { const error = new RangeError(code); error.code = code; throw error; }
+
+export function compress(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length === 0) return null;
+  const output = [];
+  for (let index = 0; index < bytes.length;) {
+    let count = 1;
+    while (count < 255 && index + count < bytes.length && bytes[index + count] === bytes[index]) count++;
+    output.push(count, bytes[index]);
+    index += count;
   }
-
-  if (runs.length >= data.length) return null;
-
-  const dict = new Uint8Array(0);
-  const out = new Uint8Array(runs.length);
-  for (let j = 0; j < runs.length; j++) out[j] = runs[j];
-  return { data: out, dict };
+  const data = Uint8Array.from(output);
+  return data.length < bytes.length ? { data, metadata: new Uint8Array(), encodedSize: data.length } : null;
 }
 
-export function decompress(data, dict) {
-  const out = [];
-  for (let i = 0; i < data.length; i += 2) {
-    const count = data[i];
-    const value = data[i + 1];
-    for (let j = 0; j < count; j++) out.push(value);
+export function decompress(data, metadata = new Uint8Array(), { maxOutput = 1_000_000, expectedLength } = {}) {
+  if (!(data instanceof Uint8Array) || !(metadata instanceof Uint8Array) || metadata.length || data.length % 2) fail('malformed_compression');
+  const output = [];
+  for (let index = 0; index < data.length; index += 2) {
+    const count = data[index];
+    if (!count || output.length + count > maxOutput) fail('compression_limit');
+    output.push(...Array(count).fill(data[index + 1]));
   }
-  return new Uint8Array(out);
+  if (expectedLength !== undefined && output.length !== expectedLength) fail('invalid_compression_length');
+  return Uint8Array.from(output);
 }
