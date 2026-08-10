@@ -1,0 +1,273 @@
+/* CRT / VHS Effect Layers */
+
+/* Scanlines: 1px line every 2px, white at 10% opacity, drifts 2px over 4s */
+.crt-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: repeating-linear-gradient(to bottom,
+    transparent 0, transparent 1px,
+    rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+  animation: scanline-drift 4s linear infinite;
+}
+@keyframes scanline-drift {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(2px); }
+}
+
+/* Aperture grille: 3px RGB triad stripes, screen blend at 15% opacity */
+.crt-grille {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 51;
+  background: repeating-linear-gradient(to right,
+    rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px,
+    rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
+    rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+  mix-blend-mode: screen;
+  opacity: 0.15;
+}
+
+/* Vignette: radial gradient, 4s ease-in-out pulse, opacity 0.65↔0.92 */
+.crt-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 52;
+  background: radial-gradient(ellipse at center,
+    transparent 30%, rgba(0,0,0,0.65) 100%);
+  animation: vignette-pulse 4s ease-in-out infinite;
+}
+@keyframes vignette-pulse {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 0.92; }
+}
+
+/* Tracking band: 28% viewport height, 5% white-blue, screen blend, 7s linear loop */
+.crt-tracking {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 28%;
+  z-index: 53;
+  pointer-events: none;
+  background: rgba(126,200,227,0.05);
+  mix-blend-mode: screen;
+  animation: tracking-loop 7s linear infinite;
+}
+@keyframes tracking-loop {
+  0% { top: -28%; }
+  100% { top: 100%; }
+}
+
+/* Grain: radial-gradient dot-scatter, ~15% fill, 2×2px dots, 1s steps(4) re-scatter */
+.crt-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 54;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+    radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+    radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px),
+    radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+    radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+    radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+    radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+    radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+    radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+    radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+    radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+    radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+    radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+    radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+    radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+    radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+    radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+    radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+    radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+    radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+    radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+    radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+    radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+    radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+    radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+    radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+    radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+    radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+    radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+    radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+  background-size: 100% 100%;
+  animation: grain-rescatter 1s steps(4) infinite;
+}
+@keyframes grain-rescatter {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(1px, -2px); }
+  75% { transform: translate(-1px, -1px); }
+  100% { transform: translate(2px, 1px); }
+}
+
+/* Border flicker: inset box-shadow CRT bezel, 0.8s steps(1), opacity 0.5–0.9 */
+.crt-border {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 55;
+  box-shadow:
+    inset 0 0 3px rgba(126,200,227,0.3),
+    inset 0 0 8px rgba(126,200,227,0.15),
+    inset 0 0 20px rgba(0,0,0,0.4);
+  animation: border-flicker 0.8s steps(1) infinite;
+}
+@keyframes border-flicker {
+  0% { opacity: 0.7; }
+  35% { opacity: 0.7; }
+  36% { opacity: 0.5; }
+  42% { opacity: 0.9; }
+  50% { opacity: 0.6; }
+  55% { opacity: 0.8; }
+  100% { opacity: 0.7; }
+}
+
+/* Frame flash: full-screen magenta at 5% opacity, 3.2s steps(1), fires at ~86% */
+.crt-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 56;
+  background: rgba(208,38,212,0.05);
+  opacity: 0;
+  animation: frame-flash 3.2s steps(1) infinite;
+}
+@keyframes frame-flash {
+  0%, 85% { opacity: 0; }
+  86% { opacity: 0.05; }
+  88% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* Glitch bar containers (JS-driven, Phase 7) */
+.crt-glitch-bars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 61;
+  overflow: hidden;
+}
+.glitch-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(126,200,227,0.3);
+  mix-blend-mode: screen;
+}
+
+/* Noise line containers (JS-driven) */
+.crt-noise-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 61;
+  overflow: hidden;
+}
+.noise-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  font-family: monospace;
+  font-size: 8px;
+  color: rgba(126,200,227,0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  letter-spacing: 1px;
+  line-height: 10px;
+  mix-blend-mode: screen;
+}
+
+/* VHS event container (JS-driven) */
+.crt-vhs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 61;
+  opacity: 0;
+  overflow: hidden;
+}
+.crt-vhs.active {
+  animation: vhs-event 0.2s steps(1);
+}
+@keyframes vhs-event {
+  0% { opacity: 0; }
+  20% { opacity: 1; transform: translateX(3px); }
+  40% { opacity: 0.8; transform: translateX(-4px); }
+  60% { opacity: 1; transform: translateX(2px); }
+  80% { opacity: 0.5; transform: translateX(-1px); }
+  100% { opacity: 0; transform: translateX(0); }
+}
+.crt-vhs::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right,
+    rgba(255,0,0,0.08) 0%, transparent 3%,
+    rgba(0,0,255,0.08) 97%, transparent 100%);
+}
+.crt-vhs::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 30%;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  mix-blend-mode: screen;
+}
+
+/* Per-element text glitch — base attribute selector */
+[data-glitch] {
+  position: relative;
+}
+
+[data-glitch].text-swapping::before,
+[data-glitch].text-swapping::after {
+  content: attr(data-ghost-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  text-shadow: none;
+}
+
+[data-glitch].text-swapping::before {
+  color: rgba(255,0,0,0.47);
+  transform: translate(-2px, 0);
+}
+
+[data-glitch].text-swapping::after {
+  color: rgba(0,0,255,0.47);
+  transform: translate(2px, 0);
+}
+
+/* Reduced motion fallback */
+@media (prefers-reduced-motion: reduce) {
+  .crt-scanlines,
+  .crt-grille,
+  .crt-vignette,
+  .crt-tracking,
+  .crt-grain,
+  .crt-border,
+  .crt-flash,
+  .crt-vhs,
+  [data-glitch] {
+    animation: none !important;
+  }
+  .crt-grain { display: none; }
+  .crt-tracking { display: none; }
+  .crt-flash { display: none; }
+}

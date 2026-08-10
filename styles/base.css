@@ -1,0 +1,206 @@
+:root {
+  --bg-base: #0a0612;
+  --bg-panel: #13092a;
+  --bg-panel-elevated: #1a0e36;
+  --border-dim: #2a1a4a;
+  --border-active: var(--accent);
+  --text-primary: #e0d8f0;
+  --text-secondary: #8a7aa8;
+  --text-dim: #5a4a78;
+  --accent: #7ec8e3;
+  --danger: #e83a3a;
+  --warning: #e8632a;
+  --heal: #3ae8a8;
+  --sigil-player: var(--accent);
+  --sigil-enemy: #e83a3a;
+  --sigil-echo: #e83a3a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  color: var(--text-primary);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+#portrait-frame {
+  width: 1080px;
+  height: 1920px;
+  max-width: 100vw;
+  max-height: 100vh;
+  aspect-ratio: 1080 / 1920;
+  margin: auto;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+#app-root {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
+}
+
+.screen-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Typography */
+.display { font-size: 48px; font-weight: 700; letter-spacing: 0.15em; }
+.heading { font-size: 24px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+.subheading { font-size: 18px; font-weight: 600; text-transform: uppercase; }
+.body-text { font-size: 14px; font-weight: 400; }
+.caption { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+.micro { font-size: 10px; font-weight: 400; color: var(--text-dim); }
+
+/* Spacing utility classes */
+.s-1 { padding: 4px; }
+.s-2 { padding: 8px; }
+.s-3 { padding: 12px; }
+.s-4 { padding: 16px; }
+.s-6 { padding: 24px; }
+.s-8 { padding: 32px; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+/* Glow system */
+.glow { text-shadow: 0 0 8px var(--accent); }
+.glow-strong { text-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent); }
+.glow-danger { text-shadow: 0 0 8px var(--danger); }
+.accent-text { color: var(--accent); }
+
+/* Ornament — ◈ decorative element (CSS-drawn, never a sigil bank glyph) */
+.ornament::before {
+  content: '◈';
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
+}
+
+/* Panel */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-dim);
+}
+
+.panel-elevated {
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--accent);
+}
+
+/* Buttons */
+.btn-crt {
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--border-dim);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  font-family: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  min-height: 48px;
+  border-radius: 4px;
+}
+
+.btn-crt:hover,
+.btn-crt:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.btn-crt:active {
+  background: var(--bg-panel-elevated);
+}
+
+.btn-primary {
+  background: rgba(126,200,227,0.1);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  padding: 20px 48px;
+  font-size: 24px;
+  letter-spacing: 0.3em;
+}
+
+.btn-primary:hover {
+  background: rgba(126,200,227,0.2);
+  box-shadow: 0 0 20px var(--accent);
+}
+
+.btn-link {
+  text-decoration: none;
+  display: inline-block;
+}
+
+/* Sigil sizes */
+.sigil-mini {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: bold;
+  text-shadow: 0 0 4px var(--accent);
+}
+
+.sigil-34 { font-size: 34px; }
+.sigil-72 { font-size: 72px; }
+.sigil-108 { font-size: 108px; }
+.sigil-220 { font-size: 220px; }
+
+/* Bar */
+.bar-track {
+  background: var(--bg-base);
+  height: 4px;
+  border: 1px solid var(--border-dim);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+  transition: width 0.3s ease;
+}
+
+.bar-fill-hp { background: var(--danger); box-shadow: 0 0 4px var(--danger); }
+.bar-fill-warning { background: var(--warning); box-shadow: 0 0 4px var(--warning); }
+.bar-fill-heal { background: var(--heal); box-shadow: 0 0 4px var(--heal); }
+
+/* Scroll area */
+.scroll-area {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--bg-panel);
+}
+
+.scroll-area::-webkit-scrollbar { width: 4px; }
+.scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
+.scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+
+/* Corner radius utilities */
+.radius-btn { border-radius: 4px; }
+.radius-control { border-radius: 2px; }
