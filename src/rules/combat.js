@@ -152,12 +152,13 @@ function executeItem(combatState, actor, targetId, consumableId, rngCursor, cont
   const target = targetId == null ? actor : combatState.combatants.get(targetId);
   if (!target || target.hp <= 0) return { success: false, reason: 'invalid-target' };
 
-  const result = applyConsumable(target, context.consumablesData?.consumables?.[itemId], { inCombat: true, rngCursor, activeCharacter: actor });
+  const result = applyConsumable(target, context.consumablesData?.consumables?.[itemId], { inCombat: true, rngCursor, activeCharacter: actor, conditionsData: context.conditionsData, inventory, itemId: inventoryItem?.id });
   if (result.success) {
     combatState.log.push({ type: 'item', actorId: actor.id, targetId, consumableId: itemId, result });
     actor.ap--;
-    if (inventory && inventoryItem) {
-      inventory.splice(inventory.indexOf(inventoryItem), 1);
+    if (inventory && result.inventory) {
+      inventory.splice(0, inventory.length, ...result.inventory);
+      context.runState.inventory = inventory;
     }
   }
   return result;

@@ -1,48 +1,46 @@
-import { modifier } from './attributes.js';
+import { applyCondition } from './conditions.js';
+import { removeItem } from './inventory.js';
 
-export function applyConsumable(target, consumableData, context) {
-  if (!consumableData) return { success: false, reason: 'invalid-consumable' };
-  if (consumableData.combatOnly && !context.inCombat) {
-    return { success: false, reason: 'combat-only' };
-  }
+function value(target, canonical, legacy) { return target?.[canonical] ?? target?.[legacy] ?? 0; }
+function setValue(target, canonical, legacy, next) { target[canonical in target ? canonical : legacy] = next; }
+function rollDice(rngCursor, count, sides) { return rngCursor?.nextInt ? Array.from({ length: count }, () => rngCursor.nextInt('combat', sides) + 1) : null; }
 
-  const e = consumableData.effectData || {};
-  const result = { success: true, effect: consumableData.effect };
-
-  if (e.type === 'heal') {
-    const dieBase = parseInt(e.die?.slice(1) || '6', 10);
-    const count = dieBase * (e.multiplier || 1);
-    let healed = 0;
-    for (let i = 0; i < count; i++) {
-      healed += Math.floor(context.rngCursor.nextInt('combat', 6)) + 1;
-    }
-    target.hp = Math.min((target.hpMax || target.hp + healed), target.hp + healed);
+export function applyConsumable(target, consumableData, context = {}) {
+  if (!consumableData || !target) return { success: false, reason: 'invalid_consumable' };
+  if (consumableData.combatOnly && !context.inCombat) return { success: false, reason: 'combat_only' };
+  const effect = consumableData.effectData ?? {};
+  const result = { success: true, effect: consumableData.effect, events: [] };
+  if (effect.type === 'heal') {
+    const rolls = rollDice(context.rngCursor, effect.multiplier ?? 1, Number(effect.die?.slice(1)) || 6);
+    if (!rolls) return { success: false, reason: 'invalid_rng' };
+    const healed = rolls.reduce((sum, die) => sum + die, 0);
+    setValue(target, 'currentHP', 'hp', Math.min(target.hpMax ?? Infinity, value(target, 'currentHP', 'hp') + healed));
     result.healed = healed;
-  } else if (e.type === 'charge_restore') {
-    const resVal = target.attributes?.res || 3;
-    const amount = Math.max(e.minRestore || 2, Math.floor(resVal / 2));
-    target.charge = Math.min((target.chargeMax || target.charge + amount), target.charge + amount);
-    result.chargeRestored = amount;
-  } else if (e.type === 'charge_restore_full') {
-    const max = target.chargeMax || target.charge;
-    const restored = max - target.charge;
-    target.charge = max;
-    result.chargeRestored = restored;
-  } else if (e.type === 'remove_condition') {
-    if (target.conditions && target.conditions.length > 0) {
-      target.conditions.shift();
-      result.conditionRemoved = true;
-    }
-  } else if (e.type === 'apply_condition' && e.condition) {
-    if (!target.conditions) target.conditions = [];
-    target.conditions.push({ id: e.condition, duration: 3, stacks: 1 });
-    result.conditionApplied = e.condition;
-  } else if (e.type === 'ap_restore') {
-    if (context.activeCharacter) {
-      context.activeCharacter.ap = (context.activeCharacter.ap || 0) + (e.amount || 1);
-    }
-    result.apRestored = e.amount || 1;
+  } else if (effect.type === 'charge_restore' || effect.type === 'charge_restore_full') {
+    const current = value(target, 'currentCHARGE', 'charge');
+    const maximum = target.chargeMax ?? current;
+    const amount = effect.type === 'charge_restore_full' ? maximum - current : Math.max(effect.minRestore ?? 2, Math.floor((target.attributes?.res ?? 3) / 2));
+    setValue(target, 'currentCHARGE', 'charge', Math.min(maximum, current + amount));
+    result.chargeRestored = Math.max(0, amount);
+  } else if (effect.type === 'remove_condition') {
+    const index = target.conditions?.findIndex(entry => (entry.conditionId ?? entry.id) === context.conditionId) ?? -1;
+    if (index < 0) return { success: false, reason: 'invalid_condition' };
+    result.conditionRemoved = target.conditions[index].conditionId ?? target.conditions[index].id;
+    target.conditions.splice(index, 1);
+  } else if (effect.type === 'apply_condition') {
+    const applied = applyCondition(target, effect.condition, { noSave: true }, context.rngCursor, context.conditionsData);
+    if (!applied.applied) return { success: false, reason: applied.reason ?? 'condition_blocked', condition: applied };
+    result.conditionApplied = effect.condition;
+  } else if (effect.type === 'ap_restore') {
+    if (!context.activeCharacter) return { success: false, reason: 'missing_active_character' };
+    context.activeCharacter.ap = Math.min(2, (context.activeCharacter.ap ?? 0) + (effect.amount ?? 1));
+    result.apRestored = effect.amount ?? 1;
+  } else return { success: false, reason: 'invalid_effect' };
+  if (context.inventory && context.itemId) {
+    const removed = removeItem(context.inventory, context.itemId);
+    if (!removed.success) return { success: false, reason: removed.reason };
+    result.inventory = removed.inventory;
+    result.consumedUnits = 1;
   }
-
   return result;
 }
