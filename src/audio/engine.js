@@ -4,7 +4,7 @@ import { createSparkle } from './sparkle.js';
 import { createLead } from './lead.js';
 import { createNoiseBed } from './noise-bed.js';
 
-export function createAudioEngine() {
+export function createAudioEngine(initialAudioContext = null) {
   let audioContext = null;
   let masterGain = null;
   const layers = {};
@@ -15,7 +15,7 @@ export function createAudioEngine() {
   return {
     start() {
       if (started) return;
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContext = initialAudioContext || new (window.AudioContext || window.webkitAudioContext)();
       masterGain = audioContext.createGain();
       masterGain.connect(audioContext.destination);
       masterGain.gain.value = muted ? 0 : masterVolume / 100;
