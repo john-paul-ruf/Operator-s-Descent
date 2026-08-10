@@ -1,5 +1,5 @@
 import { modifier } from './attributes.js';
-import { tickConditions, hasCondition, getConditionBonus } from './conditions.js';
+import { tickConditions, hasCondition, getConditionEffects } from './conditions.js';
 import { enemyAI } from './enemies.js';
 import { castProtocol, overclockProtocol } from './protocols.js';
 import { applyConsumable } from './consumables.js';
@@ -46,7 +46,7 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
   if (combatState.turnOrder[combatState.currentTurn] !== actorId) {
     return { success: false, reason: 'invalid-turn' };
   }
-  prepareTurn(combatState, actor, context);
+  prepareTurn(combatState, actor, context, rngCursor);
   if (actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
   if (actor.ap <= 0) return { success: false, reason: 'no-ap' };
   if (hasCondition(actor, 'jammed') && (type === 'cast' || type === 'overclock')) {
@@ -95,7 +95,8 @@ function executeAttack(combatState, actor, targetId, rngCursor, context) {
   const markedBonus = hasCondition(target, 'marked') ? 2 : 0;
   const total = roll + attrMod + weaponBonus + markedBonus;
 
-  const defense = (target.defense || 10) + getCoverBonus(target) - (hasCondition(target, 'blinded') ? 4 : 0);
+  const conditionEffects = getConditionEffects(target, context.conditionsData?.conditions || context.conditionsData);
+  const defense = Math.max(conditionEffects.defenseFloor, (target.defense || 10) + getCoverBonus(target) + conditionEffects.defenseBonus + conditionEffects.defensePenalty);
 
   const isCrit = roll === 20;
   const isFumble = roll === 1;
@@ -191,7 +192,7 @@ export function resolveTurn(combatState, rngCursor, context = {}) {
       continue;
     }
 
-    prepareTurn(combatState, actor, context);
+    prepareTurn(combatState, actor, context, rngCursor);
     const afterConditions = checkCombatEnd(combatState);
     if (afterConditions.ended) return afterConditions;
     if (actor.hp <= 0) {
@@ -218,12 +219,12 @@ export function resolveTurn(combatState, rngCursor, context = {}) {
   return checkCombatEnd(combatState);
 }
 
-function prepareTurn(combatState, actor, context) {
+function prepareTurn(combatState, actor, context, rngCursor) {
   if (combatState.turnStarted) return;
   combatState.turnStarted = true;
   actor.ap = AP_PER_TURN;
 
-  const tickResults = tickConditions(actor, context.conditionsData?.conditions || context.conditionsData);
+  const tickResults = tickConditions(actor, 'start_turn', rngCursor, context.conditionsData?.conditions || context.conditionsData);
   for (const result of tickResults) {
     if (result.type !== 'damage' || result.amount <= 0) continue;
     actor.hp -= result.amount;
