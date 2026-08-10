@@ -2,6 +2,29 @@ import { modifier, overclockTarget, protocolSaveDC } from './attributes.js';
 import { canPrepareProtocol, getSignatureCapabilities } from './classes.js';
 import { applyCondition } from './conditions.js';
 
+const EFFECT_HANDLERS = {
+  damage_single: applyDamageSingle,
+  damage_splash: applyDamageSplash,
+  damage_area: applyDamageArea,
+  damage_chain: applyDamageChain,
+  damage_ignore_defense: applyDamageIgnoreDefense,
+  heal: applyHeal,
+  shield: applyShield,
+  shield_area: applyShieldArea,
+  regen: applyRegen,
+  fortress: applyFortress,
+  reveal: applyReveal,
+  mark: applyMark,
+  blind: applyBlind,
+  reveal_full: applyRevealFull,
+  reveal_marked: applyRevealMarked,
+  swap: applySwap,
+  purge: applyPurge,
+  panic: applyPanic,
+  ap_penalty: applyApPenalty,
+  reshape: applyReshape
+};
+
 function boundedTier(tier) {
   return Number.isInteger(tier) && tier >= 1 && tier <= 5 ? tier : null;
 }
@@ -26,7 +49,7 @@ function protocolFor(protocolRef, context) {
 }
 
 function targetKind(protocolRef, protocol) {
-  if (protocol.effectData?.target === 'floor' || protocol.effectData?.target === 'all_enemies' || protocol.effectData?.target === 'enemies') return 'none';
+  if (protocol.effectData?.target === 'floor' || protocol.effectData?.target === 'all_enemies' || protocol.effectData?.target === 'enemies' || protocol.effectData?.target === 'aoe') return 'none';
   if (protocol.effectData?.type === 'reshape') return 'none';
   if (protocolRef.school === 'ward' || ['swap', 'remove_condition'].includes(protocol.effectData?.type)) return 'ally';
   return 'hostile';
@@ -64,7 +87,7 @@ function hasLineOfSight(caster, target, context) {
 
 function targetError(caster, targets, protocolRef, protocol, context) {
   const kind = targetKind(protocolRef, protocol);
-  if (kind === 'none') return targets.length === 0 ? null : 'invalid-target-count';
+  if (kind === 'none') return targets.length <= 1 ? null : 'invalid-target-count';
   if (targets.length !== 1 || !targets[0]) return 'invalid-target-count';
   const target = targets[0];
   if (kind === 'ally' && isHostileTarget(caster, target, context)) return 'invalid-target-side';
@@ -190,7 +213,7 @@ export function resolveProtocolAction(caster, protocolRef, targets = [], options
     effectiveTier: effectSucceeds ? overclock.effectiveTier : resolved.tier,
     corruptionDelta,
     stateDelta: { caster: nextCaster, runState, corruption: corruptionDelta },
-    effectRequest: effectSucceeds && (!hostile || hit) ? { protocol: resolved.protocol, school: resolved.school, tier: resolved.tier, effectiveTier: overclock.effectiveTier, targets: selectedTargets, dc: protocolSaveDC(caster, overclock.effectiveTier) } : null
+    effectRequest: effectSucceeds && (!hostile || hit) ? { protocol: resolved.protocol, effectId: resolved.protocol.effectData.effectId, school: resolved.school, tier: resolved.tier, effectiveTier: overclock.effectiveTier, targets: selectedTargets, dc: protocolSaveDC(caster, overclock.effectiveTier), attackRoll } : null
   };
 }
 
@@ -200,23 +223,319 @@ function rollDice(rngCursor, count, sides) {
   return total;
 }
 
-function applyLegacyEffect(caster, request, conditionsData, rngCursor) {
-  const effect = request.effectRequest?.protocol.effectData ?? {};
-  const target = request.effectRequest?.targets?.[0];
-  const result = { damage: 0, healed: 0, conditionsApplied: [], protocolName: request.protocol.name };
-  if (effect.type === 'damage' && target) {
-    const sides = Number(effect.die?.slice(1)) || 6;
-    result.damage = rollDice(rngCursor, request.effectiveTier, sides) + modifier(caster.attributes?.res);
-    if (target.hp !== undefined) target.hp = Math.max(0, target.hp - result.damage);
-  } else if (effect.type === 'heal' && target) {
-    const sides = Number(effect.die?.slice(1)) || 6;
-    result.healed = rollDice(rngCursor, request.effectiveTier, sides) + modifier(caster.attributes?.res);
-    if (target.hp !== undefined) target.hp = Math.min(target.hpMax ?? Infinity, target.hp + result.healed);
-  } else if (effect.type === 'condition' && target) {
-    const applied = applyCondition(target, effect.condition, { dc: request.effectRequest.dc }, rngCursor, conditionsData);
-    result.conditionsApplied.push({ target: target.id, condition: effect.condition, ...applied });
+function effectActors(caster, request, context) {
+  const supplied = context.actors instanceof Map ? [...context.actors.values()] : Array.isArray(context.actors) ? context.actors : context.combatants instanceof Map ? [...context.combatants.values()] : [];
+  const actors = [caster, ...supplied, ...(request.targets ?? [])].filter(Boolean);
+  return [...new Map(actors.map(actor => [actor.id ?? actor, actor])).values()];
+}
+
+function actorHp(actor) {
+  return actor?.currentHP ?? actor?.hp ?? 0;
+}
+
+function withActorHp(actor, hp) {
+  return 'currentHP' in actor ? { ...actor, currentHP: hp } : { ...actor, hp };
+}
+
+function actorHpMax(actor) {
+  return actor?.maxHP ?? actor?.hpMax ?? Infinity;
+}
+
+function cloneActor(actor) {
+  return { ...actor, position: actor?.position ? { ...actor.position } : actor?.position, conditions: (actor?.conditions ?? []).map(condition => ({ ...condition })) };
+}
+
+function chebyshev(a, b) {
+  if (!a?.position || !b?.position) return Infinity;
+  return Math.max(Math.abs(a.position.x - b.position.x), Math.abs(a.position.y - b.position.y));
+}
+
+function createEffectState(caster, request, context) {
+  const originals = effectActors(caster, request, context);
+  const updates = new Map();
+  const get = actor => {
+    const id = actor?.id;
+    if (id === undefined) return actor;
+    if (!updates.has(id)) updates.set(id, cloneActor(actor));
+    return updates.get(id);
+  };
+  const all = () => originals.map(get);
+  return { originals, updates, get, all, events: [], markers: {}, temporaryEffects: {}, apDebt: {}, grid: null };
+}
+
+function actorById(state, actor) {
+  return state.get(state.originals.find(entry => entry.id === actor?.id) ?? actor);
+}
+
+function living(actor) {
+  return actorHp(actor) > 0;
+}
+
+function hostileActors(caster, state, context) {
+  return state.all().filter(actor => actor.id !== caster.id && living(actor) && isHostileTarget(caster, actor, context));
+}
+
+function alliedActors(caster, state, context) {
+  return state.all().filter(actor => living(actor) && !isHostileTarget(caster, actor, context));
+}
+
+function effectDamage(caster, target, request, state, rngCursor, { count = request.effectiveTier, sides = 6, maximum = false, label = 'damage' } = {}) {
+  const rolls = maximum ? Array.from({ length: count }, () => sides) : Array.from({ length: count }, () => rngCursor.nextInt('combat', sides) + 1);
+  const amount = Math.max(0, rolls.reduce((total, roll) => total + roll, 0) + modifier(caster.attributes?.res));
+  const next = actorById(state, target);
+  const hp = Math.max(0, actorHp(next) - amount);
+  const updated = withActorHp(next, hp);
+  state.updates.set(updated.id, updated);
+  state.events.push({ type: label, targetId: updated.id, rolls, amount, died: hp === 0 });
+  return updated;
+}
+
+function effectHeal(caster, target, request, state, rngCursor, count = request.effectiveTier) {
+  const rolls = Array.from({ length: count }, () => rngCursor.nextInt('combat', 6) + 1);
+  const amount = Math.max(0, rolls.reduce((total, roll) => total + roll, 0) + modifier(caster.attributes?.res));
+  const next = actorById(state, target);
+  const healed = Math.min(actorHpMax(next), actorHp(next) + amount);
+  const updated = withActorHp(next, healed);
+  state.updates.set(updated.id, updated);
+  state.events.push({ type: 'heal', targetId: updated.id, rolls, amount: healed - actorHp(next) });
+  return updated;
+}
+
+function areaCenter(caster, request) {
+  return request.targets?.[0] ?? caster;
+}
+
+function targetsInRadius(caster, request, state, context, side, radius) {
+  const center = areaCenter(caster, request);
+  const actors = side === 'ally' ? alliedActors(caster, state, context) : hostileActors(caster, state, context);
+  return actors
+    .filter(actor => chebyshev(center, actor) <= radius)
+    .sort((a, b) => chebyshev(center, a) - chebyshev(center, b) || String(a.id).localeCompare(String(b.id)));
+}
+
+function applyConditionEffect(caster, target, conditionId, request, state, context, rngCursor) {
+  const next = actorById(state, target);
+  const applied = applyCondition(next, conditionId, { dc: request.dc, noSave: conditionId === 'marked' }, rngCursor, context.conditionsData?.conditions ?? context.conditionsData);
+  state.updates.set(next.id, next);
+  state.events.push(...(applied.events ?? []));
+  return applied;
+}
+
+function applyDamageSingle(caster, request, state, context, rngCursor) {
+  effectDamage(caster, request.targets[0], request, state, rngCursor, { maximum: request.attackRoll?.natural === 20 });
+}
+
+function applyDamageSplash(caster, request, state, context, rngCursor) {
+  const primary = effectDamage(caster, request.targets[0], request, state, rngCursor, { maximum: request.attackRoll?.natural === 20 });
+  for (const target of hostileActors(caster, state, context).filter(actor => actor.id !== primary.id && chebyshev(primary, actor) <= 1)) {
+    effectDamage(caster, target, request, state, rngCursor, { count: 1, sides: 4, label: 'splash' });
   }
-  return result;
+}
+
+function applyDamageArea(caster, request, state, context, rngCursor) {
+  for (const target of targetsInRadius(caster, request, state, context, 'hostile', request.protocol.effectData.radius)) {
+    effectDamage(caster, target, request, state, rngCursor, { maximum: request.attackRoll?.natural === 20 });
+  }
+}
+
+function applyDamageChain(caster, request, state, context, rngCursor) {
+  let target = request.targets[0];
+  while (target && living(target)) {
+    const defeated = effectDamage(caster, target, request, state, rngCursor, { maximum: request.attackRoll?.natural === 20 });
+    if (living(defeated)) break;
+    target = hostileActors(caster, state, context)
+      .filter(actor => actor.id !== defeated.id)
+      .sort((a, b) => chebyshev(defeated, a) - chebyshev(defeated, b) || String(a.id).localeCompare(String(b.id)))[0];
+  }
+}
+
+function applyDamageIgnoreDefense(caster, request, state, context, rngCursor) {
+  effectDamage(caster, request.targets[0], request, state, rngCursor, { maximum: request.attackRoll?.natural === 20, label: 'damage_ignore_defense' });
+}
+
+function applyHeal(caster, request, state, context, rngCursor) {
+  effectHeal(caster, request.targets[0], request, state, rngCursor);
+}
+
+function applyShield(caster, request, state, context, rngCursor) {
+  applyConditionEffect(caster, request.targets[0], 'shielded', request, state, context, rngCursor);
+}
+
+function applyShieldArea(caster, request, state, context, rngCursor) {
+  for (const target of targetsInRadius(caster, request, state, context, 'ally', request.protocol.effectData.radius)) {
+    applyConditionEffect(caster, target, 'shielded', request, state, context, rngCursor);
+    state.temporaryEffects[target.id] = { defenseBonus: request.protocol.effectData.defenseBonus, duration: request.protocol.effectData.duration };
+  }
+}
+
+function applyRegen(caster, request, state) {
+  const target = actorById(state, request.targets[0]);
+  state.temporaryEffects[target.id] = { regen: { die: 'd6', modifier: modifier(caster.attributes?.res), duration: request.effectiveTier } };
+  state.events.push({ type: 'regen_applied', targetId: target.id, duration: request.effectiveTier });
+}
+
+function applyFortress(caster, request, state, context) {
+  for (const target of targetsInRadius(caster, request, state, context, 'ally', request.protocol.effectData.radius)) {
+    state.temporaryEffects[target.id] = { defenseBonus: request.protocol.effectData.defenseBonus, conditionImmunity: true, duration: request.protocol.effectData.duration };
+    state.events.push({ type: 'fortress_applied', targetId: target.id, duration: request.protocol.effectData.duration });
+  }
+}
+
+function applyReveal(caster, request, state, context) {
+  state.markers.revealedEnemies = hostileActors(caster, state, context).filter(actor => chebyshev(caster, actor) <= request.protocol.effectData.radius).map(actor => actor.id);
+  state.markers.revealDuration = request.effectiveTier;
+  state.events.push({ type: 'reveal', targetIds: state.markers.revealedEnemies, duration: request.effectiveTier });
+}
+
+function applyMark(caster, request, state, context, rngCursor) {
+  applyConditionEffect(caster, request.targets[0], 'marked', request, state, context, rngCursor);
+}
+
+function applyBlind(caster, request, state, context, rngCursor) {
+  applyConditionEffect(caster, request.targets[0], 'blinded', request, state, context, rngCursor);
+}
+
+function applyRevealFull(caster, request, state, context) {
+  state.markers.revealFloor = true;
+  state.markers.revealContainers = true;
+  state.markers.revealDescent = true;
+  state.events.push({ type: 'reveal_full' });
+}
+
+function applyRevealMarked(caster, request, state, context, rngCursor) {
+  const targets = hostileActors(caster, state, context);
+  state.markers.revealedEnemies = targets.map(target => target.id);
+  state.markers.revealDuration = request.protocol.effectData.duration;
+  for (const target of targets) applyConditionEffect(caster, target, 'marked', request, state, context, rngCursor);
+}
+
+function legalCell(position, state, context, ignoreIds) {
+  if (!position || !Number.isInteger(position.x) || !Number.isInteger(position.y)) return false;
+  if (typeof context.isLegalCell === 'function' && !context.isLegalCell(position)) return false;
+  const grid = context.floor?.cells ?? context.grid ?? context.lattice?.getGrid?.();
+  if (grid && (position.y < 0 || position.y >= grid.length || position.x < 0 || position.x >= grid[0].length || grid[position.y][position.x] === 0)) return false;
+  return !state.all().some(actor => !ignoreIds.includes(actor.id) && actor.position?.x === position.x && actor.position?.y === position.y);
+}
+
+function applySwap(caster, request, state, context) {
+  const source = actorById(state, caster);
+  const target = actorById(state, request.targets[0]);
+  if (!legalCell(source.position, state, context, [source.id, target.id]) || !legalCell(target.position, state, context, [source.id, target.id])) {
+    state.events.push({ type: 'swap_rejected', reason: 'illegal_cells' });
+    return;
+  }
+  state.updates.set(source.id, { ...source, position: { ...target.position } });
+  state.updates.set(target.id, { ...target, position: { ...source.position } });
+  state.events.push({ type: 'swap', sourceId: source.id, targetId: target.id });
+}
+
+function applyPurge(caster, request, state) {
+  const target = actorById(state, request.targets[0]);
+  const conditionId = request.conditionId ?? target.conditions?.[0]?.id ?? target.conditions?.[0]?.conditionId;
+  if (!conditionId) return;
+  const updated = { ...target, conditions: target.conditions.filter(condition => (condition.id ?? condition.conditionId) !== conditionId) };
+  state.updates.set(updated.id, updated);
+  state.events.push({ type: 'condition_cleared', conditionId, targetId: updated.id });
+}
+
+function applyPanic(caster, request, state, context, rngCursor) {
+  applyConditionEffect(caster, request.targets[0], 'panicked', request, state, context, rngCursor);
+}
+
+function applyApPenalty(caster, request, state, context) {
+  for (const target of targetsInRadius(caster, request, state, context, 'hostile', request.protocol.effectData.radius)) {
+    state.apDebt[target.id] = (state.apDebt[target.id] ?? 0) + request.protocol.effectData.apLoss;
+    state.events.push({ type: 'ap_debt', targetId: target.id, amount: request.protocol.effectData.apLoss });
+  }
+}
+
+function reachabilityPreserved(floor, cells) {
+  const grid = cells;
+  const open = (x, y) => grid[y]?.[x] !== undefined && grid[y][x] !== 0;
+  const start = floor.startPoint ?? floor.partyPosition ?? floor.descentPoint;
+  const origin = start && open(start.x, start.y) ? start : (() => {
+    for (let y = 0; y < grid.length; y++) for (let x = 0; x < grid[0].length; x++) if (open(x, y)) return { x, y };
+    return null;
+  })();
+  if (!origin) return false;
+  const visited = new Set([`${origin.x},${origin.y}`]);
+  const queue = [origin];
+  for (let index = 0; index < queue.length; index++) {
+    const { x, y } = queue[index];
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      const next = { x: x + dx, y: y + dy };
+      const key = `${next.x},${next.y}`;
+      if (open(next.x, next.y) && !visited.has(key)) {
+        visited.add(key);
+        queue.push(next);
+      }
+    }
+  }
+  const required = [floor.descentPoint, ...(floor.containers ?? [])].filter(Boolean);
+  return required.every(point => open(point.x, point.y) && visited.has(`${point.x},${point.y}`));
+}
+
+function applyReshape(caster, request, state, context) {
+  const floor = context.floor ?? { cells: context.grid, descentPoint: context.descentPoint, containers: context.containers };
+  const grid = floor?.cells;
+  const center = request.areaCenter ?? context.areaCenter ?? request.targets?.[0]?.position;
+  if (!Array.isArray(grid) || !center || center.x < 1 || center.y < 1 || center.y >= grid.length - 1 || center.x >= grid[0].length - 1) {
+    state.events.push({ type: 'reshape_rejected', reason: 'invalid_area' });
+    return;
+  }
+  const cells = grid.map(row => [...row]);
+  const mode = request.reshapeMode ?? context.reshapeMode;
+  const targetValue = mode === 'wall' ? 0 : mode === 'floor' ? 1 : grid[center.y][center.x] === 0 ? 1 : 0;
+  for (let y = center.y - 1; y <= center.y + 1; y++) for (let x = center.x - 1; x <= center.x + 1; x++) {
+    if (state.all().some(actor => actor.position?.x === x && actor.position?.y === y)) {
+      state.events.push({ type: 'reshape_rejected', reason: 'occupied' });
+      return;
+    }
+    cells[y][x] = targetValue;
+  }
+  if (!reachabilityPreserved(floor, cells)) {
+    state.events.push({ type: 'reshape_rejected', reason: 'connectivity' });
+    return;
+  }
+  state.grid = cells;
+  state.events.push({ type: 'reshape', areaCenter: { ...center }, mode: targetValue === 0 ? 'wall' : 'floor' });
+}
+
+export function applyProtocolEffect(caster, request, context = {}, rngCursor) {
+  const effectRequest = request?.effectRequest ?? request;
+  const effectId = effectRequest?.effectId ?? effectRequest?.protocol?.effectData?.effectId;
+  const handler = EFFECT_HANDLERS[effectId];
+  if (!caster || !handler || !rngCursor?.nextInt) return { success: false, reason: !handler ? 'invalid-effect' : 'invalid-rng' };
+  const state = createEffectState(caster, effectRequest, context);
+  handler(caster, effectRequest, state, context, rngCursor);
+  return {
+    success: true,
+    effectId,
+    events: state.events,
+    stateDelta: {
+      actors: [...state.updates.values()],
+      markers: state.markers,
+      temporaryEffects: state.temporaryEffects,
+      apDebt: state.apDebt,
+      ...(state.grid ? { grid: state.grid } : {})
+    }
+  };
+}
+
+function applyLegacyEffect(caster, request, conditionsData, rngCursor) {
+  const targets = request.effectRequest?.targets ?? [];
+  const applied = applyProtocolEffect(caster, request, { conditionsData, actors: [caster, ...targets] }, rngCursor);
+  if (!applied.success) return applied;
+  const originals = new Map([caster, ...targets].map(actor => [actor.id, actor]));
+  for (const actor of applied.stateDelta.actors) Object.assign(originals.get(actor.id), actor);
+  const events = applied.events;
+  return {
+    damage: events.filter(event => event.type === 'damage' || event.type === 'splash' || event.type === 'damage_ignore_defense').reduce((total, event) => total + (event.amount ?? 0), 0),
+    healed: events.filter(event => event.type === 'heal').reduce((total, event) => total + (event.amount ?? 0), 0),
+    conditionsApplied: events.filter(event => event.type.startsWith('condition_')),
+    protocolName: request.protocol.name,
+    ...applied
+  };
 }
 
 function applyLegacyCharge(caster, nextCaster) {

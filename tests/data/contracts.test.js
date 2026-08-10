@@ -252,6 +252,12 @@ describe('protocols.json', () => {
   });
 
   it('every tier has name and effectData', () => {
+    const effectIds = new Set([
+      'damage_single', 'damage_splash', 'damage_area', 'damage_chain', 'damage_ignore_defense',
+      'heal', 'shield', 'shield_area', 'regen', 'fortress', 'reveal', 'mark', 'blind',
+      'reveal_full', 'reveal_marked', 'swap', 'purge', 'panic', 'ap_penalty', 'reshape',
+    ]);
+    const seen = new Set();
     for (const school of Object.values(protocols.schools)) {
       const validTypes = new Set([
         'damage', 'heal', 'condition', 'heal_over_time', 'buff',
@@ -262,9 +268,12 @@ describe('protocols.json', () => {
         expect(tier).toHaveProperty('name');
         expect(tier).toHaveProperty('effectData');
         expect(tier.effectData).toHaveProperty('type');
+        expect(effectIds.has(tier.effectData.effectId)).toBe(true);
+        seen.add(tier.effectData.effectId);
         expect(validTypes.has(tier.effectData.type)).toBe(true);
       }
     }
+    expect(seen).toEqual(effectIds);
   });
 
   it('every effectData.condition referenced exists in conditions.json', () => {

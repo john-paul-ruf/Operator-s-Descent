@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { deckSlotCapacity, deckSlotCost, protocolChargeCost, resolveProtocolAction, validateProtocolDeck } from '../../src/rules/protocols.js';
+import { applyProtocolEffect, deckSlotCapacity, deckSlotCost, protocolChargeCost, resolveProtocolAction, validateProtocolDeck } from '../../src/rules/protocols.js';
 import { loadData } from '../helpers/data.js';
+import { corridorReshapeFloor, reshapeFloor } from '../helpers/grids.js';
 
 const protocolsData = loadData('protocols');
 const classesData = loadData('classes');
+const conditionsData = loadData('conditions');
 
 function cursor(...rolls) {
   return { nextInt: () => rolls.shift() ?? 0 };
@@ -23,6 +25,31 @@ function enemy(overrides = {}) {
 }
 
 const context = { protocolsData, classesData, hasLineOfSight: () => true };
+
+function effectRequest(school, tier, targets = [], extra = {}) {
+  const protocol = protocolsData.schools[school].tiers[tier - 1];
+  return { protocol, effectId: protocol.effectData.effectId, school, tier, effectiveTier: tier, targets, dc: 11, ...extra };
+}
+
+function effectActor(id, side, position, overrides = {}) {
+  return {
+    id, side, position, hp: 20, hpMax: 20,
+    attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 4 }, conditions: [],
+    ...overrides
+  };
+}
+
+function applyEffect(school, tier, { actor = effectActor('caster', 'party', { x: 0, y: 0 }), targets = [], actors = [], rolls = [], extra = {} } = {}) {
+  return applyProtocolEffect(actor, effectRequest(school, tier, targets, extra), {
+    actors: [actor, ...actors, ...targets], conditionsData,
+    isHostile: (source, target) => source.side !== target.side,
+    ...extra
+  }, cursor(...rolls));
+}
+
+function changed(result, id) {
+  return result.stateDelta.actors.find(actor => actor.id === id);
+}
 
 describe('protocol preparation', () => {
   it('uses tier-sized deck slots with the minimum three-slot capacity', () => {
@@ -113,4 +140,116 @@ describe('resolveProtocolAction', () => {
     expect(doubled).toMatchObject({ costs: { charge: 5 }, overclocked: true, effectiveTier: 3 });
     expect(doubled.rolls.overclock).toBeNull();
   });
+});
+
+describe('protocol effect handlers', () => {
+  const target = effectActor('target', 'enemy', { x: 2, y: 0 });
+  const ally = effectActor('ally', 'party', { x: 2, y: 0 }, { hp: 10, hpMax: 20 });
+  const nearby = effectActor('nearby', 'enemy', { x: 3, y: 0 });
+
+  const scenarios = [
+    ['SPARK deals tier-scaled d6 damage', () => {
+      const result = applyEffect('disrupt', 1, { targets: [target] });
+      expect(changed(result, 'target').hp).toBe(19);
+    }],
+    ['SURGE damages the target and adjacent hostiles', () => {
+      const result = applyEffect('disrupt', 2, { targets: [target], actors: [nearby] });
+      expect(changed(result, 'target').hp).toBe(18);
+      expect(changed(result, 'nearby').hp).toBe(19);
+    }],
+    ['STORM selects hostile targets in its Chebyshev area', () => {
+      const result = applyEffect('disrupt', 3, { targets: [target], actors: [nearby] });
+      expect(result.events.filter(event => event.type === 'damage').map(event => event.targetId)).toEqual(['target', 'nearby']);
+    }],
+    ['CASCADE chains to the nearest hostile only after a kill', () => {
+      const first = effectActor('target', 'enemy', { x: 2, y: 0 }, { hp: 1 });
+      const second = effectActor('second', 'enemy', { x: 3, y: 0 }, { hp: 20 });
+      const result = applyEffect('disrupt', 4, { targets: [first], actors: [second] });
+      expect(changed(result, 'target').hp).toBe(0);
+      expect(changed(result, 'second').hp).toBe(16);
+    }],
+    ['OBLITERATE emits its defense-ignoring damage event', () => {
+      const result = applyEffect('disrupt', 5, { targets: [target] });
+      expect(result.events[0]).toMatchObject({ type: 'damage_ignore_defense', amount: 5 });
+    }],
+    ['PATCH clamps healing at the target maximum', () => {
+      const result = applyEffect('ward', 1, { targets: [ally] });
+      expect(changed(result, 'ally').hp).toBe(11);
+    }],
+    ['BARRIER applies SHIELDED', () => {
+      const result = applyEffect('ward', 2, { targets: [ally] });
+      expect(changed(result, 'ally').conditions[0].id).toBe('shielded');
+    }],
+    ['BULWARK shields allies and returns a timed defense delta', () => {
+      const actor = effectActor('caster', 'party', { x: 0, y: 0 });
+      const closeAlly = effectActor('ally', 'party', { x: 1, y: 0 });
+      const result = applyEffect('ward', 3, { actor, actors: [closeAlly] });
+      expect(result.stateDelta.temporaryEffects.ally).toEqual({ defenseBonus: 2, duration: 2 });
+      expect(changed(result, 'ally').conditions[0].id).toBe('shielded');
+    }],
+    ['REGEN returns a tier-duration ongoing heal formula', () => {
+      const result = applyEffect('ward', 4, { targets: [ally] });
+      expect(result.stateDelta.temporaryEffects.ally).toEqual({ regen: { die: 'd6', modifier: 0, duration: 4 } });
+    }],
+    ['FORTRESS returns area condition immunity and defense', () => {
+      const actor = effectActor('caster', 'party', { x: 0, y: 0 });
+      const closeAlly = effectActor('ally', 'party', { x: 1, y: 0 });
+      const result = applyEffect('ward', 5, { actor, actors: [closeAlly] });
+      expect(result.stateDelta.temporaryEffects.ally).toEqual({ defenseBonus: 4, conditionImmunity: true, duration: 2 });
+    }],
+    ['PING returns revealed enemies without LOS', () => {
+      const result = applyEffect('scry', 1, { actors: [target, nearby] });
+      expect(result.stateDelta.markers).toMatchObject({ revealedEnemies: ['target', 'nearby'], revealDuration: 1 });
+    }],
+    ['TAG applies MARKED without a save', () => {
+      const result = applyEffect('scry', 2, { targets: [target] });
+      expect(changed(result, 'target').conditions[0].id).toBe('marked');
+    }],
+    ['BLIND respects the FIN save', () => {
+      const result = applyEffect('scry', 3, { targets: [target], rolls: [0] });
+      expect(changed(result, 'target').conditions[0].id).toBe('blinded');
+    }],
+    ['REVEAL returns explicit whole-floor markers', () => {
+      const result = applyEffect('scry', 4);
+      expect(result.stateDelta.markers).toEqual({ revealFloor: true, revealContainers: true, revealDescent: true });
+    }],
+    ['ORACLE marks and reveals every hostile', () => {
+      const result = applyEffect('scry', 5, { actors: [target, nearby] });
+      expect(result.stateDelta.markers.revealedEnemies).toEqual(['target', 'nearby']);
+      expect(changed(result, 'nearby').conditions[0].id).toBe('marked');
+    }],
+    ['FLIP swaps two legal ally cells', () => {
+      const actor = effectActor('caster', 'party', { x: 0, y: 0 });
+      const result = applyEffect('rewrite', 1, { actor, targets: [ally] });
+      expect(changed(result, 'caster').position).toEqual({ x: 2, y: 0 });
+      expect(changed(result, 'ally').position).toEqual({ x: 0, y: 0 });
+    }],
+    ['PURGE removes one condition only', () => {
+      const afflicted = effectActor('ally', 'party', { x: 2, y: 0 }, { conditions: [{ id: 'jammed' }, { id: 'burning' }] });
+      const result = applyEffect('rewrite', 2, { targets: [afflicted] });
+      expect(changed(result, 'ally').conditions).toEqual([{ id: 'burning' }]);
+    }],
+    ['OVERRIDE applies PANICKED when the FOC save fails', () => {
+      const result = applyEffect('rewrite', 3, { targets: [target], rolls: [0] });
+      expect(changed(result, 'target').conditions[0].id).toBe('panicked');
+    }],
+    ['NULLIFY returns AP debt for each hostile in the area', () => {
+      const result = applyEffect('rewrite', 4, { actors: [target, nearby] });
+      expect(result.stateDelta.apDebt).toEqual({ target: 2, nearby: 2 });
+    }],
+    ['REFORMAT returns only a connected, unoccupied 3×3 mutation', () => {
+      const floor = reshapeFloor();
+      const actor = effectActor('caster', 'party', { x: 0, y: 0 });
+      const result = applyEffect('rewrite', 5, { actor, extra: { floor, areaCenter: { x: 3, y: 3 }, reshapeMode: 'floor' } });
+      expect(result.stateDelta.grid[3][3]).toBe(1);
+      expect(result.events).toEqual([{ type: 'reshape', areaCenter: { x: 3, y: 3 }, mode: 'floor' }]);
+      expect(floor.cells[3][3]).toBe(0);
+      const blocked = applyEffect('rewrite', 5, { actor, extra: { floor: corridorReshapeFloor(), areaCenter: { x: 3, y: 3 }, reshapeMode: 'wall' } });
+      expect(blocked.events).toEqual([{ type: 'reshape_rejected', reason: 'connectivity' }]);
+      const occupied = applyEffect('rewrite', 5, { actor: effectActor('caster', 'party', { x: 3, y: 3 }), extra: { floor: reshapeFloor(), areaCenter: { x: 3, y: 3 }, reshapeMode: 'floor' } });
+      expect(occupied.events).toEqual([{ type: 'reshape_rejected', reason: 'occupied' }]);
+    }]
+  ];
+
+  it.each(scenarios)('%s', (_, run) => run());
 });

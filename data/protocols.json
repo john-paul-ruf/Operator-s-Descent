@@ -4,41 +4,41 @@
     "disrupt": {
       "name": "Disrupt",
       "tiers": [
-        { "tier": 1, "name": "SPARK", "chargeCost": 2, "range": "SIG×2", "effect": "Deal 1d6 + RES modifier damage to one target.", "effectData": { "type": "damage", "die": "d6", "multiplier": 1, "target": "single" } },
-        { "tier": 2, "name": "SURGE", "chargeCost": 4, "range": "SIG×2", "effect": "Deal 2d6 + RES modifier to one target; d4 splash to all enemies adjacent to target.", "effectData": { "type": "damage", "die": "d6", "multiplier": 2, "target": "single", "splash": { "die": "d4", "radius": 1 } } },
-        { "tier": 3, "name": "STORM", "chargeCost": 6, "range": "3-cell radius", "effect": "Deal 3d6 + RES modifier to all enemies in radius.", "effectData": { "type": "damage", "die": "d6", "multiplier": 3, "target": "aoe", "radius": 3 } },
-        { "tier": 4, "name": "CASCADE", "chargeCost": 8, "range": "SIG×2", "effect": "Deal 4d6 + RES modifier to one target; if target dies, chain 4d6 to nearest enemy (repeats until no kill).", "effectData": { "type": "damage", "die": "d6", "multiplier": 4, "target": "chain" } },
-        { "tier": 5, "name": "OBLITERATE", "chargeCost": 10, "range": "SIG×2", "effect": "Deal 5d6 + RES modifier to one target; ignores Defense bonuses (armor, cover, SHIELDED).", "effectData": { "type": "damage", "die": "d6", "multiplier": 5, "target": "single", "ignoreDefense": true } }
+        { "tier": 1, "name": "SPARK", "chargeCost": 2, "range": "SIG×2", "effect": "Deal 1d6 + RES modifier damage to one target.", "effectData": { "effectId": "damage_single", "type": "damage", "die": "d6", "multiplier": 1, "target": "single" } },
+        { "tier": 2, "name": "SURGE", "chargeCost": 4, "range": "SIG×2", "effect": "Deal 2d6 + RES modifier to one target; d4 splash to all enemies adjacent to target.", "effectData": { "effectId": "damage_splash", "type": "damage", "die": "d6", "multiplier": 2, "target": "single", "splash": { "die": "d4", "radius": 1 } } },
+        { "tier": 3, "name": "STORM", "chargeCost": 6, "range": "3-cell radius", "effect": "Deal 3d6 + RES modifier to all enemies in radius.", "effectData": { "effectId": "damage_area", "type": "damage", "die": "d6", "multiplier": 3, "target": "aoe", "radius": 3 } },
+        { "tier": 4, "name": "CASCADE", "chargeCost": 8, "range": "SIG×2", "effect": "Deal 4d6 + RES modifier to one target; if target dies, chain 4d6 to nearest enemy (repeats until no kill).", "effectData": { "effectId": "damage_chain", "type": "damage", "die": "d6", "multiplier": 4, "target": "chain" } },
+        { "tier": 5, "name": "OBLITERATE", "chargeCost": 10, "range": "SIG×2", "effect": "Deal 5d6 + RES modifier to one target; ignores Defense bonuses (armor, cover, SHIELDED).", "effectData": { "effectId": "damage_ignore_defense", "type": "damage", "die": "d6", "multiplier": 5, "target": "single", "ignoreDefense": true } }
       ]
     },
     "ward": {
       "name": "Ward",
       "tiers": [
-        { "tier": 1, "name": "PATCH", "chargeCost": 2, "range": "adjacent", "effect": "Heal 1d6 + RES modifier HP to one ally.", "effectData": { "type": "heal", "die": "d6", "multiplier": 1, "target": "single" } },
-        { "tier": 2, "name": "BARRIER", "chargeCost": 4, "range": "SIG×2", "effect": "Apply SHIELDED to one ally.", "effectData": { "type": "condition", "condition": "shielded", "target": "single" } },
-        { "tier": 3, "name": "BULWARK", "chargeCost": 6, "range": "3-cell radius", "effect": "Apply SHIELDED to all allies in radius; +2 Defense for 2 turns.", "effectData": { "type": "condition", "condition": "shielded", "target": "aoe", "radius": 3, "defenseBonus": 2, "duration": 2 } },
-        { "tier": 4, "name": "REGEN", "chargeCost": 8, "range": "SIG×2", "effect": "Target ally heals 1d6 + RES modifier HP at start of each turn for a number of turns equal to tier (4 turns).", "effectData": { "type": "heal_over_time", "die": "d6", "multiplier": 1, "duration": 4, "target": "single" } },
-        { "tier": 5, "name": "FORTRESS", "chargeCost": 10, "range": "4-cell radius", "effect": "All allies in radius gain +4 Defense and condition immunity for 2 turns.", "effectData": { "type": "buff", "defenseBonus": 4, "conditionImmunity": true, "duration": 2, "target": "aoe", "radius": 4 } }
+        { "tier": 1, "name": "PATCH", "chargeCost": 2, "range": "adjacent", "effect": "Heal 1d6 + RES modifier HP to one ally.", "effectData": { "effectId": "heal", "type": "heal", "die": "d6", "multiplier": 1, "target": "single" } },
+        { "tier": 2, "name": "BARRIER", "chargeCost": 4, "range": "SIG×2", "effect": "Apply SHIELDED to one ally.", "effectData": { "effectId": "shield", "type": "condition", "condition": "shielded", "target": "single" } },
+        { "tier": 3, "name": "BULWARK", "chargeCost": 6, "range": "3-cell radius", "effect": "Apply SHIELDED to all allies in radius; +2 Defense for 2 turns.", "effectData": { "effectId": "shield_area", "type": "condition", "condition": "shielded", "target": "aoe", "radius": 3, "defenseBonus": 2, "duration": 2 } },
+        { "tier": 4, "name": "REGEN", "chargeCost": 8, "range": "SIG×2", "effect": "Target ally heals 1d6 + RES modifier HP at start of each turn for a number of turns equal to tier (4 turns).", "effectData": { "effectId": "regen", "type": "heal_over_time", "die": "d6", "multiplier": 1, "duration": 4, "target": "single" } },
+        { "tier": 5, "name": "FORTRESS", "chargeCost": 10, "range": "4-cell radius", "effect": "All allies in radius gain +4 Defense and condition immunity for 2 turns.", "effectData": { "effectId": "fortress", "type": "buff", "defenseBonus": 4, "conditionImmunity": true, "duration": 2, "target": "aoe", "radius": 4 } }
       ]
     },
     "scry": {
       "name": "Scry",
       "tiers": [
-        { "tier": 1, "name": "PING", "chargeCost": 2, "range": "5 cells", "effect": "Reveal all enemies in range (ignores LOS) for 1 turn.", "effectData": { "type": "reveal", "target": "enemies", "radius": 5, "duration": 1 } },
-        { "tier": 2, "name": "TAG", "chargeCost": 4, "range": "SIG×2", "effect": "Apply MARKED to one enemy.", "effectData": { "type": "condition", "condition": "marked", "target": "single" } },
-        { "tier": 3, "name": "BLIND", "chargeCost": 6, "range": "SIG×2", "effect": "Apply BLINDED to one enemy (FIN save negates).", "effectData": { "type": "condition", "condition": "blinded", "target": "single", "save": "fin" } },
-        { "tier": 4, "name": "REVEAL", "chargeCost": 8, "range": "full floor", "effect": "Reveal entire floor layout, all containers, and descent point.", "effectData": { "type": "reveal_full", "target": "floor" } },
-        { "tier": 5, "name": "ORACLE", "chargeCost": 10, "range": "full floor", "effect": "All enemies revealed and MARKED for 3 turns.", "effectData": { "type": "reveal_marked", "target": "all_enemies", "duration": 3 } }
+        { "tier": 1, "name": "PING", "chargeCost": 2, "range": "5 cells", "effect": "Reveal all enemies in range (ignores LOS) for 1 turn.", "effectData": { "effectId": "reveal", "type": "reveal", "target": "enemies", "radius": 5, "duration": 1 } },
+        { "tier": 2, "name": "TAG", "chargeCost": 4, "range": "SIG×2", "effect": "Apply MARKED to one enemy.", "effectData": { "effectId": "mark", "type": "condition", "condition": "marked", "target": "single" } },
+        { "tier": 3, "name": "BLIND", "chargeCost": 6, "range": "SIG×2", "effect": "Apply BLINDED to one enemy (FIN save negates).", "effectData": { "effectId": "blind", "type": "condition", "condition": "blinded", "target": "single", "save": "fin" } },
+        { "tier": 4, "name": "REVEAL", "chargeCost": 8, "range": "full floor", "effect": "Reveal entire floor layout, all containers, and descent point.", "effectData": { "effectId": "reveal_full", "type": "reveal_full", "target": "floor" } },
+        { "tier": 5, "name": "ORACLE", "chargeCost": 10, "range": "full floor", "effect": "All enemies revealed and MARKED for 3 turns.", "effectData": { "effectId": "reveal_marked", "type": "reveal_marked", "target": "all_enemies", "duration": 3 } }
       ]
     },
     "rewrite": {
       "name": "Rewrite",
       "tiers": [
-        { "tier": 1, "name": "FLIP", "chargeCost": 2, "range": "4 cells", "effect": "Swap positions with one ally.", "effectData": { "type": "swap", "target": "single", "range": 4 } },
-        { "tier": 2, "name": "PURGE", "chargeCost": 4, "range": "SIG×2", "effect": "Remove one condition from one ally.", "effectData": { "type": "remove_condition", "target": "single" } },
-        { "tier": 3, "name": "OVERRIDE", "chargeCost": 6, "range": "SIG×2", "effect": "Apply PANICKED to one enemy (FOC save negates).", "effectData": { "type": "condition", "condition": "panicked", "target": "single", "save": "foc" } },
-        { "tier": 4, "name": "NULLIFY", "chargeCost": 8, "range": "4-cell radius", "effect": "All enemies in radius lose 2 AP on their next turn.", "effectData": { "type": "ap_penalty", "apLoss": 2, "target": "aoe", "radius": 4 } },
-        { "tier": 5, "name": "REFORMAT", "chargeCost": 10, "range": "3×3 cells", "effect": "Reshape one 3×3 area: convert wall cells to floor or floor to wall. Cannot create disconnected areas.", "effectData": { "type": "reshape", "area": [3, 3] } }
+        { "tier": 1, "name": "FLIP", "chargeCost": 2, "range": "4 cells", "effect": "Swap positions with one ally.", "effectData": { "effectId": "swap", "type": "swap", "target": "single", "range": 4 } },
+        { "tier": 2, "name": "PURGE", "chargeCost": 4, "range": "SIG×2", "effect": "Remove one condition from one ally.", "effectData": { "effectId": "purge", "type": "remove_condition", "target": "single" } },
+        { "tier": 3, "name": "OVERRIDE", "chargeCost": 6, "range": "SIG×2", "effect": "Apply PANICKED to one enemy (FOC save negates).", "effectData": { "effectId": "panic", "type": "condition", "condition": "panicked", "target": "single", "save": "foc" } },
+        { "tier": 4, "name": "NULLIFY", "chargeCost": 8, "range": "4-cell radius", "effect": "All enemies in radius lose 2 AP on their next turn.", "effectData": { "effectId": "ap_penalty", "type": "ap_penalty", "apLoss": 2, "target": "aoe", "radius": 4 } },
+        { "tier": 5, "name": "REFORMAT", "chargeCost": 10, "range": "3×3 cells", "effect": "Reshape one 3×3 area: convert wall cells to floor or floor to wall. Cannot create disconnected areas.", "effectData": { "effectId": "reshape", "type": "reshape", "area": [3, 3] } }
       ]
     }
   }

@@ -48,3 +48,25 @@ export function reachable(grid, sx, sy) {
   }
   return visited;
 }
+
+export function reshapeFloor() {
+  const cells = makeGrid(7, 7, 1);
+  carve(cells, 2, 2, 3, 3, 0);
+  return {
+    cells,
+    startPoint: { x: 0, y: 0 },
+    descentPoint: { x: 6, y: 6 },
+    containers: [{ x: 6, y: 0 }]
+  };
+}
+
+export function corridorReshapeFloor() {
+  const cells = makeGrid(7, 7, 0);
+  carve(cells, 0, 3, 7, 1);
+  return {
+    cells,
+    startPoint: { x: 0, y: 3 },
+    descentPoint: { x: 6, y: 3 },
+    containers: [{ x: 6, y: 3 }]
+  };
+}

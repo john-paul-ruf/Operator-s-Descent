@@ -26,6 +26,7 @@ const CONSUMABLE_IDS = ['repair_patch', 'med_kit', 'charge_cell', 'boost_cell', 
 const SYMBOL_TABLE_IDS = ['class', 'sigil_id', 'sigil_codepoint', 'attribute', 'hp', 'charge', 'condition_mask', 'item_id', 'equipment', 'calibration_count', 'signature_tier', 'theme_id', 'protocol_ref', 'affix_id', 'inventory_default'];
 const DICE = new Set(['d4', 'd6', 'd8', 'd10', 'd12']);
 const EFFECT_TYPES = new Set(['damage', 'heal', 'condition', 'heal_over_time', 'buff', 'reveal', 'reveal_full', 'reveal_marked', 'swap', 'remove_condition', 'ap_penalty', 'reshape']);
+const PROTOCOL_EFFECT_IDS = new Set(['damage_single', 'damage_splash', 'damage_area', 'damage_chain', 'damage_ignore_defense', 'heal', 'shield', 'shield_area', 'regen', 'fortress', 'reveal', 'mark', 'blind', 'reveal_full', 'reveal_marked', 'swap', 'purge', 'panic', 'ap_penalty', 'reshape']);
 const CONSUMABLE_EFFECT_TYPES = new Set(['heal', 'charge_restore', 'charge_restore_full', 'remove_condition', 'apply_condition', 'ap_restore']);
 
 let activeRegistry = null;
@@ -189,7 +190,7 @@ function validateProtocols(data, errors, registry) {
       continue;
     }
     school.tiers.forEach((tier, index) => {
-      if (!hasFields(tier, ['tier', 'name', 'chargeCost', 'range', 'effect', 'effectData']) || tier.tier !== index + 1 || tier.chargeCost !== (index + 1) * 2 || !isString(tier.name) || !isString(tier.range) || !isString(tier.effect) || !isObject(tier.effectData) || !EFFECT_TYPES.has(tier.effectData.type) || (tier.effectData.condition && !conditionIds.has(tier.effectData.condition)) || (tier.effectData.save && !ATTRIBUTES.includes(tier.effectData.save)) || (tier.effectData.die && !DICE.has(tier.effectData.die))) {
+      if (!hasFields(tier, ['tier', 'name', 'chargeCost', 'range', 'effect', 'effectData']) || tier.tier !== index + 1 || tier.chargeCost !== (index + 1) * 2 || !isString(tier.name) || !isString(tier.range) || !isString(tier.effect) || !isObject(tier.effectData) || !PROTOCOL_EFFECT_IDS.has(tier.effectData.effectId) || !EFFECT_TYPES.has(tier.effectData.type) || (tier.effectData.condition && !conditionIds.has(tier.effectData.condition)) || (tier.effectData.save && !ATTRIBUTES.includes(tier.effectData.save)) || (tier.effectData.die && !DICE.has(tier.effectData.die))) {
         addError(errors, 'invalid_schema', file, `Invalid tier ${index + 1} for ${id}.`);
       }
     });
