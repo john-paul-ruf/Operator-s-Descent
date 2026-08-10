@@ -19,7 +19,7 @@
 | 03 | Data Files: All JSON Content + Placeholder Font | M04–M14 | done | 2026-08-10 | All 10 JSON data files created and validated. Sigils (48 player + 24 bestiary), themes (12), classes (6), protocols (20/4 schools), enemies (8 archetypes), equipment (8 weapons + 4 armor), affixes (16: 4 universal/8 weapon/4 armor), conditions (9), consumables (7), symbol-table (11 tables, 324 entries). Schema matches specs/database.md. Placeholder WOFF2 exists (8 bytes). |
 | 04 | Rules Engine Part 1: Attributes, Scaling, Classes, Equipment, Conditions | M15–M19 | done | 2026-08-10 | 5 pure modules: attributes (modifier=N-5, deriveStats with HP/CHARGE/Defense, scaled attribute cost), scaling (threshold formula with 0.15+0.10*floor(d/10)), classes (signature tier, gating, calibration), equipment (affix resolution, range bands, cover), conditions (SHIELDED consumption, BURNING stacking). All import core/ only. All behavioral tests pass. |
 | 05 | Rules Engine Part 2: Protocols, Consumables, Loot, Enemies, Combat, Inventory | M20–M25 | done | 2026-08-10 | 6 modules: protocols (casting/overclock with CHARGE economy, FOC vs threshold), consumables (heal/charge/condition/AP restore), loot (deterministic rarity/category/affix rolls), enemies (scaling, AI, Echo creation), combat (d20 attack/protocol/item, initiative, AP, victory/wipe detection), inventory (100-item cap, junk salvage). All 11 rules modules complete. |
-| 06 | Floor Generation + Run-State Stub | M26–M29, M33(stub) | pending | | |
+| 06 | Floor Generation + Run-State Stub | M26–M29, M33(stub) | done | 2026-08-10 | 8 archetypes (chambers/caves/maze/open/organic/bastion/lattice/ruin), 3 modifiers (dense/sparse/dangerous), 6-check validator (connectivity/loop-density/open-cell-bounds/descent-reachability/container-accessibility/interior-cover), generator with 10-attempt retry. Run-state stub with serialize/deserialize. Fixed: const→let in generateCaves, rngCursor→gen stream adapter, validator treats cells 1/2/3 as open. |
 | 07 | Exploration: Lattice, Shadowcast, Movement | M30–M32 | pending | | |
 | 08 | State Management Full: Run State, Condense, Compress, Encrypt, Save Encode/Decode, Library, Party Configs | M33(full), M35–M46 | pending | | |
 | 09 | Audio Engine: 5-Layer WebAudio Synthesis | M47–M52 | pending | | |
@@ -191,3 +191,21 @@ Full config in FORGE-CONFIG.md. Key points for this feature:
 - `enemyAI` for Choir (artillery) checks if has charge for tier-2 DISRUPT. For Null (controller) returns `apply_condition` action type. Combat.js handles these actions.
 - `combat.js` `executeAttack` currently has a `coverBonus` placeholder (0) — will need lattice integration from SESSION-07 for real cover calculation. The `getCoverBonus` function from `equipment.js` exists separately for the lattice version.
 - All context objects (`conditionsData`, `protocolsData`, `consumablesData`, `equipmentData`, `affixesData`, `enemiesData`) are the parsed JSON objects from `data/*.json` — loaded once at startup and passed through.
+
+### SESSION-06 → SESSION-07
+
+**What was built:**
+- `src/floor/archetypes.js` — 8 grid generators (chambers, caves, maze, open, organic, bastion, lattice, ruin), each produces 20×32 grid. Cell types: 0=wall, 1=floor, 2=container, 3=descent.
+- `src/floor/modifiers.js` — 3 modifiers (dense=adds walls, sparse=removes walls, dangerous=dense+extra pits). Weighted selection from theme's modifierWeights.
+- `src/floor/validator.js` — 6 checks: connectivity (flood fill), loop-density (3+ junctions), open-cell-bounds (max 200), descent-reachability, container-accessibility, interior-cover. Treats cells 1/2/3 as open/passable.
+- `src/floor/generator.js` — `generateFloor(worldSeed, floorNumber, rngCursor, themesData) → Floor`. 10-attempt retry loop, wraps rngCursor 'gen' stream for archetype/modifier functions. Theme selection deterministic via sub-seed hash. Falls back to last generated floor if all attempts fail validation.
+- `src/state/run-state.js` (stub) — `createRunState(worldSeed, party)` and `deserializeRunState(data)`. Includes all run-state fields from architecture spec (fogOfWar as Uint8Array(80) — 640 bits, openedContainers/defeatedEnemies as BigInt bitfields, serialize/deserialize, advanceFloor, addCorruption, markCellVisited, etc.)
+
+**Notes for SESSION-07:**
+- `generateFloor` takes an `rngCursor` (not a raw PRNG) — internally wraps the 'gen' stream via `wrapGenStream()`. The 'combat' stream is untouched.
+- The `placeFeatures` function uses a separate PRNG (seeded from `hash(worldSeed, floorNumber, attempt)`) for container/enemy/descent placement — independent from the grid generation stream.
+- `run-state.js` is a STUB — `serialize()` returns a plain object, `deserializeRunState` reconstructs. Full implementation with proper condensing/compression comes in SESSION-08.
+- `fogOfWar` is `Uint8Array(80)` = 640 bits (20×32 = 640 cells). `markCellVisited(x, y)` sets the bit at index `y*20+x`.
+- The Floor object shape: `{ cells: 20×32 grid, descentPoint: {x,y}, containers: [{id,x,y}], enemySpawns: [{id,x,y,archetypeId}], themeId, archetypeId, modifiers: [] }`
+- Archetype function names in `ARCHETYPES` object match theme `archetypeWeights` keys: `chambers/caves/maze/open/organic/bastion/lattice/ruin` (NOT `cathedrals/spines/fractured/rings/shards` from session prompt pseudocode — used the actual theme data IDs)
+- Modifier IDs match theme `modifierWeights` keys: `none/dense/sparse/dangerous` (NOT `scattered/voids/pillars` from session prompt pseudocode)
