@@ -397,6 +397,7 @@ function buildRunState(data) {
       if (!combatResult || !combatResult.result) return { applied: false, reason: 'invalid-result' };
       if (combatResult.result === 'victory') {
         this.activeCombat = null;
+        this.dangerClockProgress = 0;
         if (combatResult.victoryPayload?.defeatedSpawnIds) {
           for (const id of combatResult.victoryPayload.defeatedSpawnIds) this.stats.enemiesSlain += 1;
         }

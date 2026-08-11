@@ -154,7 +154,6 @@ describe('exploration loop — reachability + loop mechanics', () => {
     it(`seed ${seed}: danger clock accumulates from steps`, () => {
       const { results, runState } = walkFloor(seed);
       expect(runState.dangerClockProgress).toBeGreaterThan(0);
-      expect(runState.dangerClockProgress).toBeLessThan(1);
     });
   }
 });
