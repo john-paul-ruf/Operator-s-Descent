@@ -1,4 +1,5 @@
 import { createButton, createScrollArea } from '../components.js';
+import { encodeRun, initEncoder } from '../../state/save-encode.js';
 
 const EVENT_TYPES = {
   combat: '#e83a3a',
@@ -6,49 +7,151 @@ const EVENT_TYPES = {
   damage: '#e8c63a',
   death: '#ff0040',
   heal: '#7ec8e3',
+  loot: '#e8d23a',
+  progression: '#c63ae8',
+  save: '#7ec8e3',
+  diagnostic: '#aaa',
   info: '#aaa',
   move: '#888'
 };
+const stateByRun = new WeakMap();
 
-export function render(container, context) {
-  container.innerHTML = '';
-  const logs = context?.logEntries || [];
-
-  const logArea = createScrollArea();
-  logArea.className = 'log-area';
-
-  for (const entry of logs) {
-    const el = document.createElement('div');
-    el.className = 'log-entry';
-    el.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
-    const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '';
-    el.textContent = `[${ts}] ${entry.message}`;
-    logArea.appendChild(el);
-  }
-
-  if (logs.length === 0) {
-    logArea.textContent = 'No events logged.';
-  }
-
-  container.appendChild(logArea);
-
-  const copyBtn = createButton('COPY LINK', {
-    onClick: async () => {
-      try {
-        const url = window.location.href;
-        if (navigator.clipboard) {
-          await navigator.clipboard.writeText(url);
-        }
-        const feedback = document.createElement('span');
-        feedback.textContent = ' LINK COPIED';
-        feedback.style.color = '#2ed4c1';
-        feedback.style.fontWeight = 'bold';
-        copyBtn.parentNode?.appendChild(feedback);
-        setTimeout(() => feedback.remove(), 2000);
-      } catch {}
-    }
-  });
-  container.appendChild(copyBtn);
+function clear(container) {
+  if (typeof container.replaceChildren === 'function') container.replaceChildren();
+  else while (container.firstChild) container.removeChild(container.firstChild);
 }
 
-export function handleInput(event, context) {}
+function stateFor(runState) {
+  const key = runState || globalThis;
+  if (!stateByRun.has(key)) stateByRun.set(key, { notice: '', error: '', link: '' });
+  return stateByRun.get(key);
+}
+
+function lineText(entry, index) {
+  const order = entry.sequence ?? entry.turn ?? entry.eventIndex ?? index + 1;
+  const type = String(entry.type || 'info').toUpperCase();
+  const message = entry.message || entry.summary || entry.reason || JSON.stringify(entry.entry || entry);
+  return `[E${order}] ${type} · ${message}`;
+}
+
+function collectLogs(context = {}) {
+  return [...(context.runState?.recentEvents || []), ...(context.logEntries || [])]
+    .map((entry, index) => ({ ...entry, _index: index }))
+    .sort((left, right) => (left.sequence ?? left.turn ?? left.eventIndex ?? left._index) - (right.sequence ?? right.turn ?? right.eventIndex ?? right._index))
+    .slice(-64);
+}
+
+function baseUrl() {
+  const location = globalThis.window?.location || globalThis.location;
+  if (!location) return '';
+  if (location.origin && location.pathname) return `${location.origin}${location.pathname}${location.search || ''}`;
+  return String(location.href || '').split('#')[0];
+}
+
+function livingRun(runState) {
+  return Boolean(runState?.party?.some((member) => (member.currentHP ?? member.hp ?? 0) > 0));
+}
+
+function fallbackCopy(container, link) {
+  const field = document.createElement('textarea');
+  field.className = 'log-link-fallback';
+  field.dataset.testid = 'log-link-fallback';
+  field.value = link;
+  field.textContent = link;
+  field.setAttribute('readonly', 'readonly');
+  container.appendChild(field);
+  field.select?.();
+  try { return Boolean(document.execCommand?.('copy')); } catch { return false; }
+}
+
+async function copyLink(container, context) {
+  const state = stateFor(context.runState);
+  if (!livingRun(context.runState) || context.runWiped) {
+    state.error = 'RUN WIPED — full-state link unavailable.';
+    state.notice = '';
+    state.link = '';
+    context.refresh?.() || render(container, context);
+    return false;
+  }
+  try {
+    if (context.data?.symbolTable) initEncoder(context.data.symbolTable);
+    const result = context.encodeRun ? context.encodeRun(context.runState) : encodeRun(context.runState);
+    const fragment = typeof result === 'string' ? result : result.fragment;
+    const length = result.length ?? fragment.length;
+    if (!fragment || length >= 1500) throw new RangeError('save_budget_exceeded');
+    const link = `${baseUrl()}#r=${fragment}`;
+    state.link = link;
+    let copied = false;
+    try {
+      if (globalThis.navigator?.clipboard?.writeText) {
+        await globalThis.navigator.clipboard.writeText(link);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied) copied = fallbackCopy(container, link);
+    state.notice = copied ? `LINK COPIED · ${length} chars` : 'CLIPBOARD UNAVAILABLE — SELECT LINK';
+    state.error = '';
+  } catch (error) {
+    state.error = error?.message || error?.code || 'link_encode_failed';
+    state.notice = '';
+    state.link = '';
+  }
+  context.refresh?.() || render(container, context);
+  return !state.error;
+}
+
+export function render(container, context = {}) {
+  clear(container);
+  const state = stateFor(context.runState);
+  const logs = collectLogs(context);
+  const logArea = createScrollArea({ label: 'Recent event log', focusable: true });
+  logArea.className = 'log-area';
+  logArea.dataset.testid = 'log-area';
+
+  if (!logs.length) logArea.appendChild(Object.assign(document.createElement('div'), { className: 'log-empty console-row', textContent: 'No events logged.' }));
+  for (let index = 0; index < logs.length; index++) {
+    const entry = logs[index];
+    const el = document.createElement('div');
+    el.className = `log-entry log-${entry.type || 'info'} console-row`;
+    el.dataset.testid = `log-entry-${index}`;
+    el.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
+    el.textContent = lineText(entry, index);
+    logArea.appendChild(el);
+  }
+  container.appendChild(logArea);
+
+  const copyBtn = createButton('COPY LINK', { primary: true, disabled: !livingRun(context.runState) || context.runWiped, description: !livingRun(context.runState) || context.runWiped ? 'Full-state link unavailable after wipe.' : '', onClick: () => copyLink(container, context) });
+  copyBtn.dataset.testid = 'log-copy-link';
+  container.appendChild(copyBtn);
+  if (state.link) {
+    const fallback = document.createElement('textarea');
+    fallback.className = 'log-link-text console-row';
+    fallback.dataset.testid = 'log-link-text';
+    fallback.value = state.link;
+    fallback.textContent = state.link;
+    fallback.setAttribute('readonly', 'readonly');
+    container.appendChild(fallback);
+  }
+  if (state.notice) {
+    const notice = document.createElement('div');
+    notice.className = 'log-notice console-row';
+    notice.dataset.testid = 'log-notice';
+    notice.textContent = state.notice;
+    container.appendChild(notice);
+  }
+  if (state.error) {
+    const error = document.createElement('div');
+    error.className = 'log-error console-row';
+    error.dataset.testid = 'log-error';
+    error.textContent = state.error;
+    container.appendChild(error);
+  }
+}
+
+export function handleInput(event, context = {}) {
+  if (event.action !== 'confirm') return null;
+  context.logCopy?.();
+  return true;
+}
