@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeLOS, updateFogOfWar } from '../../src/exploration/shadowcast.js';
+import { computeLOS, updateFogOfWar, createFogState, syncVisitedBitmap } from '../../src/exploration/shadowcast.js';
 import { createLattice } from '../../src/exploration/lattice.js';
 import { makeGrid, carve } from '../helpers/grids.js';
 
@@ -21,18 +21,18 @@ describe('computeLOS — open room', () => {
     expect(vis.has('11,10')).toBe(true);
   });
 
-  it('no visible cell farther than radius + 2 in Euclidean distance', () => {
+  it('all visible cells within radius (Chebyshev)', () => {
     const vis = computeLOS(lat, 10, 10, 4);
     for (const key of vis) {
       const [x, y] = key.split(',').map(Number);
-      const dist = Math.sqrt((x - 10) ** 2 + (y - 10) ** 2);
-      expect(dist).toBeLessThanOrEqual(6);
+      const dist = Math.max(Math.abs(x - 10), Math.abs(y - 10));
+      expect(dist).toBeLessThanOrEqual(4);
     }
   });
 });
 
 describe('computeLOS — wall occlusion', () => {
-  it('wall cell visible, cell behind it not', () => {
+  it('wall cell visible, cell directly behind it not', () => {
     const grid = makeGrid(20, 20, 0);
     carve(grid, 1, 1, 18, 18, 1);
     grid[10][12] = 0;
@@ -40,6 +40,45 @@ describe('computeLOS — wall occlusion', () => {
     const vis = computeLOS(lat, 10, 10, 8);
     expect(vis.has('12,10')).toBe(true);
     expect(vis.has('13,10')).toBe(false);
+  });
+
+  it('diagonal wall blocks beyond', () => {
+    const grid = makeGrid(20, 20, 0);
+    carve(grid, 1, 1, 18, 18, 1);
+    grid[10][12] = 0;
+    const lat = createLattice({ cells: grid });
+    const vis = computeLOS(lat, 10, 10, 8);
+    expect(vis.has('12,10')).toBe(true);
+  });
+
+  it('pillar blocks cells behind it', () => {
+    const grid = makeGrid(20, 20, 1);
+    grid[10][10] = 0;
+    const lat = createLattice({ cells: grid });
+    const vis = computeLOS(lat, 5, 10, 10);
+    expect(vis.has('10,10')).toBe(true);
+    expect(vis.has('13,10')).toBe(false);
+  });
+});
+
+describe('computeLOS — symmetry', () => {
+  it('if A sees B then B sees A (open room)', () => {
+    const grid = makeGrid(20, 20, 1);
+    const lat = createLattice({ cells: grid });
+    const visA = computeLOS(lat, 5, 5, 8);
+    const visB = computeLOS(lat, 10, 10, 8);
+    if (visA.has('10,10')) {
+      expect(visB.has('5,5')).toBe(true);
+    }
+  });
+
+  it('symmetric around a pillar', () => {
+    const grid = makeGrid(20, 20, 1);
+    grid[8][7] = 0;
+    const lat = createLattice({ cells: grid });
+    const visA = computeLOS(lat, 5, 5, 10);
+    const visB = computeLOS(lat, 10, 10, 10);
+    expect(visA.has('10,10')).toBe(visB.has('5,5'));
   });
 });
 
@@ -70,6 +109,24 @@ describe('computeLOS — edge cases', () => {
       expect(y).toBeGreaterThanOrEqual(0);
       expect(y).toBeLessThan(20);
     }
+  });
+
+  it('origin at exact corner → no throw', () => {
+    const grid = makeGrid(20, 20, 1);
+    const lat = createLattice({ cells: grid });
+    expect(() => computeLOS(lat, 19, 19, 5)).not.toThrow();
+  });
+});
+
+describe('computeLOS — corner visibility', () => {
+  it('cell visible through diagonal gap', () => {
+    const grid = makeGrid(20, 20, 0);
+    carve(grid, 1, 1, 18, 18, 1);
+    grid[10][11] = 0;
+    grid[11][10] = 0;
+    const lat = createLattice({ cells: grid });
+    const vis = computeLOS(lat, 10, 10, 5);
+    expect(vis.has('10,10')).toBe(true);
   });
 });
 
@@ -119,5 +176,71 @@ describe('updateFogOfWar', () => {
     const fog = new Uint8Array(640);
     const vis = new Set(['25,40']);
     expect(() => updateFogOfWar(fog, vis)).not.toThrow();
+  });
+});
+
+describe('createFogState', () => {
+  it('empty bitmap + no visible → all zeros', () => {
+    const fog = createFogState(new Uint8Array(80), null);
+    expect(fog.every(v => v === 0)).toBe(true);
+  });
+
+  it('visited bitmap bits → fog state 1', () => {
+    const bitmap = new Uint8Array(80);
+    bitmap[0] = 0xFF;
+    const fog = createFogState(bitmap, null);
+    for (let i = 0; i < 8; i++) {
+      expect(fog[i]).toBe(1);
+    }
+    expect(fog[8]).toBe(0);
+  });
+
+  it('visible cells override visited to 2', () => {
+    const bitmap = new Uint8Array(80);
+    bitmap[0] = 0xFF;
+    const vis = new Set(['0,0', '1,0']);
+    const fog = createFogState(bitmap, vis);
+    expect(fog[0]).toBe(2);
+    expect(fog[1]).toBe(2);
+    expect(fog[2]).toBe(1);
+  });
+
+  it('640-element fog array returned', () => {
+    const fog = createFogState(null, null);
+    expect(fog.length).toBe(640);
+  });
+});
+
+describe('syncVisitedBitmap', () => {
+  it('fog > 0 sets visited bit', () => {
+    const fog = new Uint8Array(640);
+    fog[0] = 1;
+    fog[1] = 2;
+    fog[10] = 2;
+    const bitmap = new Uint8Array(80);
+    syncVisitedBitmap(fog, bitmap);
+    expect(bitmap[0] & 1).toBeTruthy();
+    expect(bitmap[0] & 2).toBeTruthy();
+    expect(bitmap[1] & 4).toBeTruthy();
+  });
+
+  it('fog all 0 → bitmap unchanged', () => {
+    const fog = new Uint8Array(640);
+    const bitmap = new Uint8Array(80);
+    bitmap[5] = 0xAB;
+    syncVisitedBitmap(fog, bitmap);
+    expect(bitmap[5]).toBe(0xAB);
+  });
+
+  it('round-trip: mark visited → createFogState → sync back', () => {
+    const fog1 = new Uint8Array(640);
+    fog1[100] = 2;
+    fog1[200] = 1;
+    const bitmap = new Uint8Array(80);
+    syncVisitedBitmap(fog1, bitmap);
+    const fog2 = createFogState(bitmap, null);
+    expect(fog2[100]).toBe(1);
+    expect(fog2[200]).toBe(1);
+    expect(fog2[50]).toBe(0);
   });
 });

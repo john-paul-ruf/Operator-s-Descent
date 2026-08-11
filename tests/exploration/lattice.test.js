@@ -1,43 +1,110 @@
 import { describe, it, expect } from 'vitest';
-import { createLattice } from '../../src/exploration/lattice.js';
+import { createLattice, CELL } from '../../src/exploration/lattice.js';
 import { makeGrid, carve } from '../helpers/grids.js';
 
 describe('createLattice — party spawn', () => {
-  it('grid with 3 at (x, y) → party at (x, y−1)', () => {
+  it('grid with entryPoint → party at entryPoint', () => {
     const grid = makeGrid(20, 32, 0);
     carve(grid, 1, 1, 18, 30, 1);
-    grid[10][5] = 3;
-    const lat = createLattice({ cells: grid });
-    expect(lat.getPartyPosition()).toEqual({ x: 5, y: 9 });
+    const lat = createLattice({ cells: grid, entryPoint: { x: 5, y: 5 } });
+    expect(lat.getPartyPosition()).toEqual({ x: 5, y: 5 });
   });
 
-  it('3 at row 0 → clamps to y 0', () => {
+  it('entryPoint on wall → fallback to first open cell', () => {
     const grid = makeGrid(20, 32, 0);
-    carve(grid, 1, 0, 18, 30, 1);
-    grid[0][10] = 3;
-    const lat = createLattice({ cells: grid });
-    expect(lat.getPartyPosition()).toEqual({ x: 10, y: 0 });
+    carve(grid, 1, 1, 18, 30, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 0, y: 0 } });
+    expect(lat.getPartyPosition()).toEqual({ x: 1, y: 1 });
   });
 
-  it('no 3 anywhere → (floor(w/2), 0)', () => {
+  it('no entryPoint and default (w/2,0) is wall → fallback to first open cell', () => {
     const grid = makeGrid(20, 32, 0);
     carve(grid, 1, 1, 18, 30, 1);
     const lat = createLattice({ cells: grid });
-    expect(lat.getPartyPosition()).toEqual({ x: 10, y: 0 });
+    expect(lat.getPartyPosition()).toEqual({ x: 1, y: 1 });
   });
 
-  it('floor.grid accepted as alias for floor.cells', () => {
+  it('grid alias accepted', () => {
     const grid = makeGrid(10, 10, 1);
     const lat = createLattice({ grid });
     expect(lat.getWidth()).toBe(10);
     expect(lat.getHeight()).toBe(10);
   });
+});
 
-  it('floor.startX / startY override defaults', () => {
+describe('createLattice — saved diff restoration', () => {
+  it('saved partyPosition on valid cell → restored', () => {
     const grid = makeGrid(20, 32, 0);
-    carve(grid, 1, 1, 18, 30, 1);
-    const lat = createLattice({ cells: grid, startX: 3, startY: 5 });
-    expect(lat.getPartyPosition()).toEqual({ x: 3, y: 5 });
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 10, y: 0 } }, {
+      partyPosition: { x: 5, y: 10 }
+    });
+    expect(lat.getPartyPosition()).toEqual({ x: 5, y: 10 });
+  });
+
+  it('saved partyPosition on wall → fallback to entryPoint', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 10, y: 0 } }, {
+      partyPosition: { x: 0, y: 0 }
+    });
+    expect(lat.getPartyPosition()).toEqual({ x: 10, y: 0 });
+  });
+
+  it('saved partyPosition out of bounds → fallback to entryPoint', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 10, y: 0 } }, {
+      partyPosition: { x: -1, y: 0 }
+    });
+    expect(lat.getPartyPosition()).toEqual({ x: 10, y: 0 });
+  });
+
+  it('no savedDiff → entryPoint', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 3, y: 0 } });
+    expect(lat.getPartyPosition()).toEqual({ x: 3, y: 0 });
+  });
+
+  it('opened containers filtered from getActiveContainers', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({
+      cells: grid,
+      containers: [{ id: 0, x: 3, y: 3 }, { id: 1, x: 5, y: 5 }]
+    }, { openedContainers: 1n });
+    const active = lat.getActiveContainers();
+    expect(active.length).toBe(1);
+    expect(active[0].id).toBe(1);
+    expect(lat.getContainers().length).toBe(2);
+  });
+
+  it('defeated enemies filtered from getActiveEnemySpawns', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({
+      cells: grid,
+      enemySpawns: [{ id: 0, x: 3, y: 3 }, { id: 1, x: 5, y: 5 }]
+    }, { defeatedEnemies: 1n });
+    const active = lat.getActiveEnemySpawns();
+    expect(active.length).toBe(1);
+    expect(active[0].id).toBe(1);
+    expect(lat.getEnemySpawns().length).toBe(2);
+  });
+
+  it('isContainerOpened and isEnemyDefeated work with bitfield', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const lat = createLattice({
+      cells: grid,
+      containers: [{ id: 0, x: 3, y: 3 }, { id: 1, x: 5, y: 5 }],
+      enemySpawns: [{ id: 0, x: 4, y: 4 }, { id: 1, x: 6, y: 6 }]
+    }, { openedContainers: 1n, defeatedEnemies: 2n });
+    expect(lat.isContainerOpened(0)).toBe(true);
+    expect(lat.isContainerOpened(1)).toBe(false);
+    expect(lat.isEnemyDefeated(0)).toBe(false);
+    expect(lat.isEnemyDefeated(1)).toBe(true);
   });
 });
 
@@ -116,10 +183,48 @@ describe('createLattice — position & accessors', () => {
     expect(lat.getEnemySpawns()).toEqual([]);
   });
 
+  it('getActiveContainers/getActiveEnemySpawns default []', () => {
+    const grid = makeGrid(10, 10, 1);
+    const lat = createLattice({ cells: grid });
+    expect(lat.getActiveContainers()).toEqual([]);
+    expect(lat.getActiveEnemySpawns()).toEqual([]);
+  });
+
   it('getDescentPoint default null', () => {
     const grid = makeGrid(10, 10, 1);
     const lat = createLattice({ cells: grid });
     expect(lat.getDescentPoint()).toBeNull();
+  });
+
+  it('getEntryPoint returns provided entry', () => {
+    const grid = makeGrid(10, 10, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 3, y: 2 } });
+    expect(lat.getEntryPoint()).toEqual({ x: 3, y: 2 });
+  });
+
+  it('isOccupied: true for party position', () => {
+    const grid = makeGrid(10, 10, 1);
+    const lat = createLattice({ cells: grid, entryPoint: { x: 5, y: 5 } });
+    expect(lat.isOccupied(5, 5)).toBe(true);
+    expect(lat.isOccupied(3, 3)).toBe(false);
+  });
+
+  it('isOccupied: true for active enemy, false for defeated', () => {
+    const grid = makeGrid(10, 10, 1);
+    const lat = createLattice({
+      cells: grid,
+      enemySpawns: [{ id: 0, x: 3, y: 3 }, { id: 1, x: 4, y: 4 }]
+    }, { defeatedEnemies: 2n });
+    expect(lat.isOccupied(3, 3)).toBe(true);
+    expect(lat.isOccupied(4, 4)).toBe(false);
+  });
+
+  it('isOpaque matches isWall', () => {
+    const grid = makeGrid(10, 10, 0);
+    grid[5][5] = 1;
+    const lat = createLattice({ cells: grid });
+    expect(lat.isOpaque(0, 0)).toBe(true);
+    expect(lat.isOpaque(5, 5)).toBe(false);
   });
 
   it('getWidth/getHeight from grid shape', () => {
