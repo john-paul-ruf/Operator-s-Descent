@@ -126,3 +126,5 @@ export function createInputHandler(options = {}) {
     }
   };
 }
+
+export const CONSOLE_ACTIONS = Object.freeze(['mode_1', 'mode_2', 'mode_3', 'mode_4', 'mode_5', 'mode_6', 'mode_7', 'tab_next', 'confirm', 'cancel']);
