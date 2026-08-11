@@ -162,7 +162,7 @@ function createMeter(textValue, current, max, className) {
   const bar = document.createElement('div');
   bar.className = 'bar-track';
   const fill = document.createElement('div');
-  fill.className = 'bar-fill';
+  fill.className = className === 'hp-bar' ? 'bar-fill bar-fill-hp' : 'bar-fill';
   const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
   fill.style.width = `${pct}%`;
   if (className === 'hp-bar' && pct < 25) fill.classList.add('danger');
