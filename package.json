@@ -6,7 +6,9 @@
   "author": "John Ruf / Glitch Forgeworks LLC",
   "license": "UNLICENSED",
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "serve": "node scripts/server.js",
     "start": "node scripts/start.js",
@@ -18,9 +20,11 @@
     "font:check": "python3 ./tools/font/build_font.py --check && python3 ./scripts/verify-font.py",
     "lint:sigils": "node ./scripts/lint-sigils.js",
     "check:assets": "node ./scripts/verify-assets.js",
-    "validate": "npm run lint:sigils && npm run check:assets && npm test"
+    "validate": "npm run lint:sigils && npm run check:assets && npm test",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "vitest": "^2.1.0"
   }
 }

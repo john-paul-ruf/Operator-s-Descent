@@ -82,7 +82,13 @@ export function createConsole(state) {
     tab.setAttribute('aria-controls', 'console-content');
     tab.title = `Key ${index + 1}`;
     tab.dataset.testid = `console-tab-${mode.id}`;
-    tab.addEventListener('click', () => setMode(mode.id, { source: 'touch' }));
+    tab.addEventListener('click', () => {
+      const wasActive = currentMode === mode.id;
+      const wasExpanded = expanded;
+      if (!setMode(mode.id, { source: 'touch' })) return;
+      if (wasActive && wasExpanded) collapse();
+      else expand();
+    });
     return { tab, mode };
   });
 
@@ -146,6 +152,7 @@ export function createConsole(state) {
     expanded = true;
     container.classList.remove('collapsed');
     container.classList.add('expanded');
+    contentArea.focus?.({ preventScroll: true });
     bus.dispatch('ui:console-expand');
     bus.dispatch(CONSOLE_INTENTS.expand, { mode: currentMode });
     bus.dispatch('ui:camera-request', { reason: 'console-expand', mode: currentMode });
@@ -162,6 +169,15 @@ export function createConsole(state) {
 
   function handleInput(action, details = {}) {
     const normalized = normalizeConsoleAction(action);
+    const focusedTab = details.event?.target?.dataset?.testid?.match?.(/^console-tab-(.+)$/)?.[1];
+    if ((normalized === 'confirm' || normalized === ' ') && focusedTab) {
+      const wasActive = currentMode === focusedTab;
+      const wasExpanded = expanded;
+      if (!setMode(focusedTab, { source: details.source || 'keyboard' })) return false;
+      if (wasActive && wasExpanded) collapse();
+      else expand();
+      return true;
+    }
     const modeKey = normalized.match(/^mode_(\d)$/);
     if (modeKey) return setMode(MODE_REGISTRY[Number(modeKey[1]) - 1]?.id, { source: details.source || 'keyboard' });
     if (normalized === 'tab_next') {

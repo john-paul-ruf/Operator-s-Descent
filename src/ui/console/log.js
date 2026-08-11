@@ -15,6 +15,7 @@ const EVENT_TYPES = {
   move: '#888'
 };
 const stateByRun = new WeakMap();
+const copyByRun = new WeakMap();
 
 function clear(container) {
   if (typeof container.replaceChildren === 'function') container.replaceChildren();
@@ -105,6 +106,7 @@ async function copyLink(container, context) {
 export function render(container, context = {}) {
   clear(container);
   const state = stateFor(context.runState);
+  copyByRun.set(context.runState || globalThis, () => copyLink(container, context));
   const logs = collectLogs(context);
   const logArea = createScrollArea({ label: 'Recent event log', focusable: true });
   logArea.className = 'log-area';
@@ -152,6 +154,5 @@ export function render(container, context = {}) {
 
 export function handleInput(event, context = {}) {
   if (event.action !== 'confirm') return null;
-  context.logCopy?.();
-  return true;
+  return copyByRun.get(context.runState || globalThis)?.() ?? null;
 }
