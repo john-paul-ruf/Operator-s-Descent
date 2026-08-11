@@ -202,7 +202,7 @@ function setupBus() {
   });
 
   listen('state:combat-end', ({ runState, result } = {}) => {
-    if (result !== 'victory' || !runState) return;
+    if (!['victory', 'retreat'].includes(result) || !runState) return;
     currentRunState = runState;
     if (!hasCurrentFloorForRun(runState)) setCurrentFloor(runState, restoreFloorForRun(runState));
     if (!currentFloor) return;

@@ -165,10 +165,13 @@ export function createConsole(state) {
     const modeKey = normalized.match(/^mode_(\d)$/);
     if (modeKey) return setMode(MODE_REGISTRY[Number(modeKey[1]) - 1]?.id, { source: details.source || 'keyboard' });
     if (normalized === 'tab_next') {
-      const start = MODE_REGISTRY.findIndex((mode) => mode.id === currentMode);
+      const mode = modeById(currentMode);
+      const handled = mode.module.handleInput?.({ action: normalized }, createModeContext());
+      if (handled != null) return true;
+      const start = MODE_REGISTRY.findIndex((entry) => entry.id === currentMode);
       for (let offset = 1; offset <= MODE_REGISTRY.length; offset++) {
-        const mode = MODE_REGISTRY[(start + offset) % MODE_REGISTRY.length];
-        if (mode.available(state)) return setMode(mode.id, { source: details.source || 'keyboard' });
+        const entry = MODE_REGISTRY[(start + offset) % MODE_REGISTRY.length];
+        if (entry.available(state)) return setMode(entry.id, { source: details.source || 'keyboard' });
       }
     }
     if (normalized === 'cancel') { collapse(); return true; }
