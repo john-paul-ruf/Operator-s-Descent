@@ -1,77 +1,220 @@
-import { listRuns, loadRun } from '../../state/library.js';
-import { createButton, createPanel, createSigilToken } from '../components.js';
+import { deleteRunState, listRuns, loadRun } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
+import { createButton, createPanel, createScrollArea, createSigilToken } from '../components.js';
 
-export function mount(container, params) {
-  const runs = listRuns();
+const PLAYER_BANK_START = 0xE000;
+const PLAYER_BANK_END = 0xE030;
+const FAILURE_LABELS = {
+  truncated: 'TRUNCATED',
+  version_mismatch: 'VERSION MISMATCH',
+  checksum_failed: 'CHECKSUM FAILED',
+  malformed: 'MALFORMED',
+  not_found: 'MISSING RUN STATE'
+};
 
-  const header = document.createElement('h2');
-  header.className = 'display';
-  header.textContent = 'RUN LIBRARY';
-  container.appendChild(header);
+function safeAccent(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#7ec8e3';
+}
 
-  if (runs.length === 0) {
-    const empty = createPanel();
-    const msg = document.createElement('p');
-    msg.textContent = 'No saved runs.';
-    empty.appendChild(msg);
-    container.appendChild(empty);
-  } else {
-    const scroll = document.createElement('div');
-    scroll.className = 'scroll-area';
+function lastPlayed(entry) {
+  const value = Number(entry?.lastPlayed ?? entry?.creationTimestamp ?? 0);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
 
-    for (const run of runs) {
-      const row = document.createElement('div');
-      row.className = 'run-row';
+function formatDate(value) {
+  return value > 0 ? new Date(value).toISOString().replace('T', ' ').slice(0, 16) : 'UNKNOWN';
+}
 
-      const swatch = document.createElement('div');
-      swatch.className = 'accent-swatch';
-      swatch.style.background = '#7ec8e3';
-      row.appendChild(swatch);
+function isPlayerSigil(codepoint) {
+  return Number.isInteger(codepoint) && codepoint >= PLAYER_BANK_START && codepoint < PLAYER_BANK_END;
+}
 
-      const partySigils = Array.isArray(run.partySigils) ? run.partySigils : [];
-      for (const codepoint of partySigils) {
-        if (!Number.isInteger(codepoint) || codepoint < 0 || codepoint > 0x10FFFF) continue;
-        row.appendChild(createSigilToken(codepoint, 34));
-      }
+function failureLabel(error) {
+  return FAILURE_LABELS[error] || 'LOAD FAILED';
+}
 
-      const info = document.createElement('span');
-      info.className = 'run-info';
-      info.textContent = `SEED ${run.worldSeed} · D${run.depth}`;
-      row.appendChild(info);
+function readRows() {
+  return listRuns()
+    .map((entry) => ({ entry, result: loadRun(entry.key) }))
+    .sort((left, right) => lastPlayed(right.entry) - lastPlayed(left.entry));
+}
 
-      const partyCount = document.createElement('span');
-      partyCount.className = 'run-party-count';
-      partyCount.textContent = `${run.partyCount || 0} members`;
-      row.appendChild(partyCount);
+export function mount(container) {
+  let selectedKey = null;
+  let noticeText = '';
+  let renderCleanups = [];
 
-      const ts = document.createElement('span');
-      ts.className = 'run-timestamp';
-      ts.textContent = new Date(run.timestamp || 0).toLocaleDateString();
-      row.appendChild(ts);
-
-      row.addEventListener('click', () => {
-        const result = loadRun(run.key);
-        if (result.success) {
-          bus.dispatch('ui:navigate', { screen: 'exploration', params: { runState: result.runState, resume: true } });
-        }
-      });
-
-      scroll.appendChild(row);
-    }
-    container.appendChild(scroll);
+  function cleanupRender() {
+    while (renderCleanups.length) renderCleanups.pop()?.();
   }
 
-  const actions = document.createElement('div');
-  actions.className = 'library-actions';
-  actions.appendChild(createButton('NEW RUN', {
-    primary: true,
-    onClick: () => bus.dispatch('ui:navigate', { screen: 'creation' })
-  }));
-  actions.appendChild(createButton('TITLE', {
-    onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
-  }));
-  container.appendChild(actions);
+  function track(element) {
+    renderCleanups.push(() => element.cleanup?.());
+    return element;
+  }
 
-  return { unmount() {} };
+  function navigate(screen, params = {}) {
+    bus.dispatch('ui:navigate', { screen, params });
+  }
+
+  function resume(row) {
+    if (!row.result.success) return;
+    navigate('exploration', { runState: row.result.runState, resume: true, key: row.entry.key });
+  }
+
+  function removeRun(entry) {
+    const result = deleteRunState(entry.key);
+    noticeText = result.success
+      ? `DELETED LOCAL RUN ${entry.worldSeed}`
+      : `DELETE FAILED — ${result.error || 'storage_failed'}`;
+    if (selectedKey === entry.key) selectedKey = null;
+    render();
+  }
+
+  function appendSigils(row, sigils) {
+    const strip = document.createElement('div');
+    strip.className = 'run-sigils';
+    strip.dataset.testid = 'run-sigils';
+    for (const codepoint of sigils) {
+      if (!isPlayerSigil(codepoint)) continue;
+      strip.appendChild(createSigilToken(codepoint, 34, { role: 'player' }));
+    }
+    if (strip.children.length === 0) {
+      const empty = document.createElement('span');
+      empty.textContent = 'NO SIGILS';
+      strip.appendChild(empty);
+    }
+    row.appendChild(strip);
+  }
+
+  function createRunRow(row) {
+    const { entry, result } = row;
+    const broken = !result.success;
+    const element = document.createElement('article');
+    element.className = `run-row${broken ? ' broken' : ''}${selectedKey === entry.key ? ' selected' : ''}`;
+    element.tabIndex = 0;
+    element.dataset.testid = `run-row-${entry.key}`;
+    element.setAttribute('aria-selected', String(selectedKey === entry.key));
+
+    const choose = () => {
+      selectedKey = entry.key;
+      noticeText = broken ? `QUARANTINED — ${failureLabel(result.error)}` : `SELECTED SEED ${entry.worldSeed}`;
+      render();
+    };
+    element.addEventListener('click', choose);
+    element.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault?.();
+        choose();
+      }
+    });
+
+    const swatch = document.createElement('span');
+    swatch.className = 'accent-swatch';
+    swatch.style.backgroundColor = safeAccent(entry.accentSwatch);
+    swatch.setAttribute('aria-label', `Accent ${safeAccent(entry.accentSwatch)}`);
+    element.appendChild(swatch);
+
+    appendSigils(element, entry.partySigils);
+
+    const info = document.createElement('div');
+    info.className = 'run-info';
+    const seed = document.createElement('strong');
+    seed.textContent = `SEED ${entry.worldSeed}`;
+    const depth = document.createElement('span');
+    depth.textContent = `DEPTH ${entry.depth}`;
+    const classes = document.createElement('span');
+    classes.textContent = (entry.partyClasses || []).length
+      ? `CLASSES ${(entry.partyClasses || []).join(' / ').toUpperCase()}`
+      : 'CLASSES UNKNOWN';
+    const played = document.createElement('span');
+    played.textContent = `LAST ${formatDate(lastPlayed(entry))}`;
+    info.append(seed, depth, classes, played);
+    element.appendChild(info);
+
+    if (broken) {
+      const error = document.createElement('p');
+      error.className = 'load-error';
+      error.textContent = `QUARANTINED — ${failureLabel(result.error)}`;
+      element.appendChild(error);
+    }
+
+    const controls = document.createElement('div');
+    controls.className = 'run-controls';
+    const resumeButton = track(createButton('RESUME', {
+      primary: true,
+      disabled: broken,
+      description: broken ? `Cannot resume: ${failureLabel(result.error)}` : `Resume seed ${entry.worldSeed}`,
+      onClick: (event) => {
+        event.stopPropagation?.();
+        resume(row);
+      }
+    }));
+    resumeButton.dataset.testid = `run-resume-${entry.key}`;
+    const deleteButton = track(createButton('DELETE LOCAL STATE', {
+      danger: true,
+      onClick: (event) => {
+        event.stopPropagation?.();
+        removeRun(entry);
+      }
+    }));
+    deleteButton.dataset.testid = `run-delete-${entry.key}`;
+    controls.append(resumeButton, deleteButton);
+    element.appendChild(controls);
+    return element;
+  }
+
+  function render() {
+    cleanupRender();
+    container.replaceChildren();
+
+    const header = document.createElement('h2');
+    header.className = 'display';
+    header.textContent = 'RUN LIBRARY';
+
+    const notice = document.createElement('p');
+    notice.className = 'console-note';
+    notice.setAttribute('aria-live', 'polite');
+    notice.dataset.testid = 'library-notice';
+    notice.textContent = noticeText;
+
+    container.append(header, notice);
+
+    const rows = readRows();
+    if (rows.length === 0) {
+      const empty = createPanel({ title: 'NO LIVING RUNS' });
+      empty.dataset.testid = 'library-empty';
+      const message = document.createElement('p');
+      message.textContent = 'No saved living runs. Wiped runs remain seed tombstones only and do not appear here.';
+      empty.appendChild(message);
+      container.appendChild(empty);
+    } else {
+      const scroll = createScrollArea({ label: 'Saved runs', focusable: true });
+      scroll.dataset.testid = 'library-list';
+      for (const row of rows) scroll.appendChild(createRunRow(row));
+      container.appendChild(scroll);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'library-actions';
+    const newRun = track(createButton('NEW RUN', {
+      primary: true,
+      onClick: () => navigate('creation')
+    }));
+    newRun.dataset.testid = 'library-new-run';
+    const title = track(createButton('TITLE', {
+      onClick: () => navigate('title')
+    }));
+    title.dataset.testid = 'library-title';
+    actions.append(newRun, title);
+    container.appendChild(actions);
+  }
+
+  render();
+
+  return {
+    unmount() {
+      cleanupRender();
+    }
+  };
 }
