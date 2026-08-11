@@ -207,7 +207,13 @@ function normalizeRngState(value) {
 function normalizeEcho(value, sourceVersion) {
   if (!isPlainObject(value) || !finiteInteger(value.deathFloor, 1, MAX_DEPTH) || !finiteInteger(value.appearanceFloor, value.deathFloor + 2, value.deathFloor + 4)) return null;
   const character = normalizeCharacter(value.character, { sourceVersion });
-  return character ? { character, deathFloor: value.deathFloor, appearanceFloor: value.appearanceFloor } : null;
+  if (!character) return null;
+  const echo = { character, deathFloor: value.deathFloor, appearanceFloor: value.appearanceFloor };
+  if (value.consumed === true) {
+    echo.consumed = true;
+    echo.resolved = value.resolved === 'retreated' ? 'retreated' : 'killed';
+  }
+  return echo;
 }
 
 function normalizeStructuredEntries(value, maxEntries, maxBytes) {
@@ -265,7 +271,12 @@ function serializedState(state) {
     credits: state.credits,
     scrapCounter: state.scrapCounter,
     themesSeen: [...state.themesSeen],
-    echoQueue: state.echoQueue.map(echo => ({ character: serializeCharacter(echo.character), deathFloor: echo.deathFloor, appearanceFloor: echo.appearanceFloor })),
+    echoQueue: state.echoQueue.map(echo => ({
+      character: serializeCharacter(echo.character),
+      deathFloor: echo.deathFloor,
+      appearanceFloor: echo.appearanceFloor,
+      ...(echo.consumed ? { consumed: true, resolved: echo.resolved || 'killed' } : {})
+    })),
     rngState: state.rngState ? cloneBounded(state.rngState, MAX_EXTENSION_BYTES) : null,
     flags: { version: 2, calibrationFloorsReached: [...state.flags.calibrationFloorsReached] }
   };
@@ -403,6 +414,32 @@ function buildRunState(data) {
       if (bounded === undefined) return { set: false, reason: 'invalid-snapshot' };
       this.activeCombat = bounded;
       return { set: true };
+    },
+    addThemeSeen(themeId) {
+      if (typeof themeId !== 'string' || themeId.length < 1 || themeId.length > 64) return { added: false, reason: 'invalid_theme' };
+      if (this.themesSeen.has(themeId)) return { added: false, reason: 'already_seen' };
+      this.themesSeen.add(themeId);
+      return { added: true };
+    },
+    getDueEchoes(floorNumber) {
+      if (!finiteInteger(floorNumber, 1, MAX_DEPTH)) return [];
+      return this.echoQueue.filter(echo => echo.appearanceFloor === floorNumber && !echo.consumed);
+    },
+    consumeEcho(echoIndex) {
+      if (!finiteInteger(echoIndex, 0, this.echoQueue.length - 1)) return { consumed: false, reason: 'invalid_index' };
+      const echo = this.echoQueue[echoIndex];
+      if (echo.consumed) return { consumed: false, reason: 'already_consumed' };
+      echo.consumed = true;
+      echo.resolved = 'killed';
+      return { consumed: true, echo };
+    },
+    resolveEchoRetreat(echoIndex) {
+      if (!finiteInteger(echoIndex, 0, this.echoQueue.length - 1)) return { resolved: false, reason: 'invalid_index' };
+      const echo = this.echoQueue[echoIndex];
+      if (echo.consumed) return { resolved: false, reason: 'already_consumed' };
+      echo.consumed = true;
+      echo.resolved = 'retreated';
+      return { resolved: true, echo };
     }
   };
   return state;

@@ -3,12 +3,13 @@ import { createPRNG } from '../core/prng.js';
 import { ARCHETYPES, GRID_W, GRID_H } from './archetypes.js';
 import { applyModifiers } from './modifiers.js';
 import { validateFloor } from './validator.js';
-import { enemyCountScale } from '../rules/scaling.js';
+import { enemyCountScale, thresholdFloor } from '../rules/scaling.js';
 
 const MAX_CANDIDATES = 100;
 const REPAIR_THRESHOLD = 50;
 const CONTAINER_DENSITY_BASE = 3;
 const GENERATION_VERSION = 2;
+const HIGHER_TIER_ENEMIES = ['stalker', 'choir', 'null', 'construct'];
 
 function weightedSelect(entries, prng) {
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -45,9 +46,11 @@ function findFloorCells(grid) {
   return cells;
 }
 
-function placeFeatures(grid, prng, floorNumber, themeData) {
+function placeFeatures(grid, prng, floorNumber, themeData, options = {}) {
   const floorCells = findFloorCells(grid);
   if (floorCells.length === 0) return null;
+
+  const isThreshold = thresholdFloor(floorNumber);
 
   const descentPoint = floorCells.reduce((farthest, cell) => {
     const dist = cell.y * cell.y + cell.x * cell.x;
@@ -55,7 +58,8 @@ function placeFeatures(grid, prng, floorNumber, themeData) {
   }, { _dist: -1 });
   delete descentPoint._dist;
 
-  const numContainers = Math.max(1, Math.floor(CONTAINER_DENSITY_BASE * (themeData?.lootBias?.containerDensity || 1.0)));
+  const density = themeData?.lootBias?.containerDensity || 1.0;
+  const numContainers = Math.max(1, Math.floor(CONTAINER_DENSITY_BASE * density));
   const containers = [];
   const used = new Set();
   used.add(`${descentPoint.x},${descentPoint.y}`);
@@ -67,7 +71,9 @@ function placeFeatures(grid, prng, floorNumber, themeData) {
       const key = `${cell.x},${cell.y}`;
       if (!used.has(key) && grid[cell.y][cell.x] === 1) {
         grid[cell.y][cell.x] = 2;
-        containers.push({ id: i, x: cell.x, y: cell.y });
+        const container = { id: i, x: cell.x, y: cell.y };
+        if (isThreshold && i === 0) container.kind = 'vault';
+        containers.push(container);
         used.add(key);
         break;
       }
@@ -82,17 +88,57 @@ function placeFeatures(grid, prng, floorNumber, themeData) {
     ? Object.entries(themeData.enemyMixWeights)
     : [['drone', 1]];
 
+  const echoSpawns = options.echoSpawns || [];
+
   for (let i = 0; i < numEnemies; i++) {
     let attempts = 20;
     while (attempts-- > 0) {
       const cell = floorCells[prng.nextInt(floorCells.length)];
       const key = `${cell.x},${cell.y}`;
       if (!used.has(key) && grid[cell.y][cell.x] === 1) {
-        const archetypeId = weightedSelect(enemyWeights, prng);
-        enemySpawns.push({ id: i, x: cell.x, y: cell.y, archetypeId });
+        let archetypeId = weightedSelect(enemyWeights, prng);
+        if (isThreshold && i === 0) {
+          archetypeId = HIGHER_TIER_ENEMIES[prng.nextInt(HIGHER_TIER_ENEMIES.length)];
+        }
+        enemySpawns.push({
+          id: i,
+          x: cell.x,
+          y: cell.y,
+          archetypeId,
+          ...(isThreshold && i === 0 ? { elite: true } : {})
+        });
         used.add(key);
         break;
       }
+    }
+  }
+
+  if (isThreshold) {
+    let placed = false;
+    for (let attempts = 30; attempts > 0 && !placed; attempts--) {
+      const cell = floorCells[prng.nextInt(floorCells.length)];
+      const key = `${cell.x},${cell.y}`;
+      if (!used.has(key) && grid[cell.y][cell.x] === 1) {
+        enemySpawns.push({ id: enemySpawns.length, x: cell.x, y: cell.y, archetypeId: 'apex', elite: true });
+        used.add(key);
+        placed = true;
+      }
+    }
+  }
+
+  for (const echo of echoSpawns) {
+    if (echo.x >= 0 && echo.x < GRID_W && echo.y >= 0 && echo.y < GRID_H &&
+        grid[echo.y][echo.x] === 1 && !used.has(`${echo.x},${echo.y}`)) {
+      enemySpawns.push({
+        id: enemySpawns.length,
+        x: echo.x,
+        y: echo.y,
+        archetypeId: 'echo',
+        echo: true,
+        character: echo.character,
+        equipment: echo.equipment
+      });
+      used.add(`${echo.x},${echo.y}`);
     }
   }
 
@@ -108,7 +154,8 @@ function placeFeatures(grid, prng, floorNumber, themeData) {
     enemySpawns,
     themeId: themeData?.id || 'cold_storage',
     archetypeId: null,
-    modifiers: []
+    modifiers: [],
+    threshold: isThreshold
   };
 }
 
@@ -116,7 +163,15 @@ function buildCandidate(worldSeed, floorNumber, k, themesData, options) {
   const candidatePrng = createPRNG(hash(worldSeed, GENERATION_VERSION, floorNumber, k));
 
   const themesSeen = options.themesSeen || [];
-  const themeId = selectTheme(worldSeed, floorNumber, themesData, candidatePrng, themesSeen);
+  const isThreshold = thresholdFloor(floorNumber);
+  const unseenThemes = themesData.themes.filter(t => !themesSeen.includes(t.id));
+
+  let themeId;
+  if (isThreshold && unseenThemes.length > 0) {
+    themeId = weightedSelect(unseenThemes.map(t => [t.id, 1]), candidatePrng);
+  } else {
+    themeId = selectTheme(worldSeed, floorNumber, themesData, candidatePrng, themesSeen);
+  }
   const themeData = getThemeData(themeId, themesData);
 
   const archetypeEntries = themeData?.archetypeWeights
@@ -134,12 +189,13 @@ function buildCandidate(worldSeed, floorNumber, k, themesData, options) {
   const modifierIds = modResult.modifierIds;
 
   const featurePrng = createPRNG(hash(worldSeed, GENERATION_VERSION, floorNumber, k, 'features'));
-  const floor = placeFeatures(modifiedGrid, featurePrng, floorNumber, themeData);
+  const floor = placeFeatures(modifiedGrid, featurePrng, floorNumber, themeData, { echoSpawns: options.echoSpawns });
   if (!floor) return null;
 
   floor.archetypeId = archetypeId;
   floor.modifiers = modifierIds;
   floor.floorSubSeed = k;
+  floor.threshold = isThreshold;
   return floor;
 }
 

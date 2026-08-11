@@ -73,9 +73,11 @@ function salvageValue(category, baseType, equipmentData, consumablesData) {
 export function generateLoot(worldSeed, depth, floorId, containerId, themeLootBias, equipmentData, affixesData, consumablesData, options = {}) {
   const seed = hash(worldSeed, depth, floorId, containerId);
   const prng = createPRNG(seed);
-  const isVault = options.containerType === 'vault' || themeLootBias?.containerType === 'vault';
+  const isVault = options.containerType === 'vault' || options.kind === 'vault' || themeLootBias?.containerType === 'vault';
   const density = Math.max(0, Number(themeLootBias?.containerDensity ?? 1));
-  const count = Math.max(1, Math.floor((1 + prng.nextInt(3)) * density));
+  const count = isVault
+    ? Math.max(3, Math.floor((3 + prng.nextInt(3)) * Math.max(1, density)))
+    : Math.max(1, Math.floor((1 + prng.nextInt(3)) * density));
   const items = [];
   for (let index = 0; index < count; index++) {
     const category = rollCategory(prng, themeLootBias);

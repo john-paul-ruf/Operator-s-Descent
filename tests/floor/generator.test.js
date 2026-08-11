@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateFloor, GENERATION_VERSION } from '../../src/floor/generator.js';
 import { validateFloor } from '../../src/floor/validator.js';
-import { enemyCountScale } from '../../src/rules/scaling.js';
+import { enemyCountScale, thresholdFloor } from '../../src/rules/scaling.js';
 import { ARCHETYPES, GRID_W, GRID_H } from '../../src/floor/archetypes.js';
 import { loadData } from '../helpers/data.js';
 
@@ -62,7 +62,8 @@ describe('generateFloor — structural invariants', () => {
           expect(enemyKeys).toContain(e.archetypeId);
         }
         const baseEnemyCount = 2 + Math.floor(floor / 3);
-        expect(f.enemySpawns.length).toBeLessThanOrEqual(enemyCountScale(baseEnemyCount, floor));
+        const maxEnemies = enemyCountScale(baseEnemyCount, floor) + (thresholdFloor(floor) ? 1 : 0);
+        expect(f.enemySpawns.length).toBeLessThanOrEqual(maxEnemies);
 
         expect(THEME_IDS).toContain(f.themeId);
         expect(ARCH_KEYS).toContain(f.archetypeId);
@@ -198,5 +199,62 @@ describe('generateFloor — cloned grid independence', () => {
 describe('generateFloor — generation version', () => {
   it('GENERATION_VERSION is 2', () => {
     expect(GENERATION_VERSION).toBe(2);
+  });
+});
+
+describe('generateFloor — threshold floor guarantees', () => {
+  const THRESHOLD_FLOORS = [10, 20, 30];
+
+  for (const floor of THRESHOLD_FLOORS) {
+    it(`floor ${floor}: has threshold flag`, () => {
+      const f = gen(42, floor);
+      expect(f.threshold).toBe(true);
+    });
+
+    it(`floor ${floor}: has at least one vault container`, () => {
+      const f = gen(42, floor);
+      const vaults = f.containers.filter(c => c.kind === 'vault');
+      expect(vaults.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it(`floor ${floor}: has at least one elite/apex enemy`, () => {
+      const f = gen(42, floor);
+      const elites = f.enemySpawns.filter(e => e.elite || e.archetypeId === 'apex');
+      expect(elites.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it(`floor ${floor}: still passes validation`, () => {
+      const f = gen(42, floor);
+      const result = validateFloor(f);
+      expect(result.valid).toBe(true);
+      expect(result.failures).toEqual([]);
+    });
+  }
+
+  it('non-threshold floor 5: no threshold flag', () => {
+    const f = gen(42, 5);
+    expect(f.threshold).toBe(false);
+  });
+
+  it('non-threshold floor 5: no vault containers', () => {
+    const f = gen(42, 5);
+    const vaults = f.containers.filter(c => c.kind === 'vault');
+    expect(vaults.length).toBe(0);
+  });
+
+  it('threshold floor with all themes seen: falls back to normal weighting', () => {
+    const allThemes = themesData.themes.map(t => t.id);
+    const f = generateFloor(42, 10, { themesSeen: allThemes }, themesData);
+    expect(f.threshold).toBe(true);
+    expect(THEME_IDS).toContain(f.themeId);
+    expect(validateFloor(f).valid).toBe(true);
+  });
+
+  it('threshold floor with some themes unseen: selects unseen theme', () => {
+    const seenThemes = themesData.themes.slice(0, 6).map(t => t.id);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const f = generateFloor(42 + attempt, 10, { themesSeen: seenThemes }, themesData);
+      expect(seenThemes).not.toContain(f.themeId);
+    }
   });
 });
