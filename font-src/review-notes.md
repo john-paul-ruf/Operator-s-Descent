@@ -15,3 +15,12 @@
 - **34px proof**: `/tmp/session30-proof-34.png` reviewed locally with Breacher/Ghost/Compiler/Anchor in monochrome rows. Breacher reads heavy/closed, Ghost sparse/broken, Compiler branching/trace-like, Anchor grounded/symmetric before labels.
 - **220px proof**: `/tmp/session30-proof-220.png` reviewed locally for Compiler/Anchor. Cross-family collision resolved by moving Anchor stabilizer rails to the visual lower half; the first pass looked too top-bar/T-like at 34px.
 - **Rejected collisions**: removed top-heavy Anchor bars that suggested Latin `T`; avoided Compiler arrowheads and tree silhouettes by using open circuit returns and mixed branch angles.
+
+## SESSION-31 — Oracle and Operator
+
+- **Oracle motif**: open radial arrays, incomplete halos, offset sight lines, and spacious apertures. The family remains observational without literal eyes, stars, targets, crosshairs, status icons, letters, or digits.
+- **Operator motif**: hybrid grammar with a consistent organizing spine: each mark combines a ring fragment, trace return, branch, grounded rail, and open aperture while avoiding a miscellaneous catch-all feel.
+- **Full player-bank 34px audit**: `/tmp/session31-player-bank-34.png` reviewed locally without color/family labels. Six rows classify as Breacher heavy/closed, Ghost sparse/broken, Compiler branching, Anchor grounded, Oracle open/radial, Operator hybrid/spined.
+- **220px proof**: `/tmp/session31-proof-220.png` reviewed locally for Oracle/Operator large-scale contour quality before the final Operator collision changes; the WOFF2 verifier then rechecked nonempty unique outlines after those changes.
+- **Resolved collisions**: Operator 2 initially read too close to a Latin `A`, and Operator 4 too close to a close/X control; both were redrawn with offset spines and lateral returns instead of triangular or crossed cores.
+- **Contact-sheet risks**: Oracle and Ghost are both intentionally sparse. Oracle keeps stronger radial grouping and multiple halo fragments; Ghost keeps displaced broken arcs and needle traces. Recheck this pair in SESSION-34 at 34px contact-sheet scale.

@@ -2058,58 +2058,60 @@
       "recipe": {
         "rings": [
           {
-            "radius": 252,
-            "width": 30,
+            "radius": 286,
+            "width": 26,
             "gaps": [
               [
-                320,
-                350
+                20,
+                86
+              ],
+              [
+                140,
+                205
+              ],
+              [
+                260,
+                320
               ]
             ]
           },
           {
-            "radius": 127,
-            "width": 28,
+            "radius": 150,
+            "width": 24,
             "gaps": [
               [
-                135,
-                185
+                70,
+                250
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 28,
+            "angle": 22,
             "length": 430,
             "width": 26,
-            "offset": -42
+            "offset": 0
           },
           {
-            "angle": 88,
-            "length": 430,
-            "width": 26,
-            "offset": -42
+            "angle": 82,
+            "length": 360,
+            "width": 24,
+            "offset": 48
           },
           {
-            "angle": 148,
-            "length": 430,
-            "width": 26,
-            "offset": -42
+            "angle": 142,
+            "length": 360,
+            "width": 24,
+            "offset": -48
           }
         ],
         "bars": [],
         "nodes": [
           {
-            "angle": 28,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
-          },
-          {
-            "angle": 148,
-            "radius": 260,
-            "size": 24,
+            "angle": 315,
+            "radius": 230,
+            "size": 16,
             "kind": "diamond"
           }
         ]
@@ -2124,71 +2126,53 @@
         "rings": [
           {
             "radius": 270,
-            "width": 36,
+            "width": 28,
             "gaps": [
               [
-                320,
-                350
-              ]
-            ]
-          },
-          {
-            "radius": 145,
-            "width": 34,
-            "gaps": [
+                45,
+                130
+              ],
               [
-                152,
-                202
+                205,
+                290
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 51,
+            "angle": 10,
+            "length": 390,
+            "width": 26,
+            "offset": -80
+          },
+          {
+            "angle": 70,
             "length": 390,
             "width": 26,
             "offset": 0
           },
           {
-            "angle": 111,
+            "angle": 130,
             "length": 390,
             "width": 26,
-            "offset": 0
-          },
-          {
-            "angle": 171,
-            "length": 390,
-            "width": 26,
-            "offset": 0
+            "offset": 80
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": -35.0,
-            "w": 48,
-            "h": 210
+            "x": 150,
+            "y": -120,
+            "w": 28,
+            "h": 150
           }
         ],
         "nodes": [
           {
-            "angle": 62,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 182,
-            "radius": 260,
-            "size": 30,
+            "angle": 250,
+            "radius": 220,
+            "size": 16,
             "kind": "square"
-          },
-          {
-            "angle": 302,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
           }
         ]
       }
@@ -2201,71 +2185,67 @@
       "recipe": {
         "rings": [
           {
-            "radius": 288,
-            "width": 30,
+            "radius": 255,
+            "width": 26,
             "gaps": [
               [
-                320,
-                350
+                0,
+                52
+              ],
+              [
+                110,
+                178
+              ],
+              [
+                238,
+                306
               ]
             ]
           },
           {
-            "radius": 163,
-            "width": 28,
+            "radius": 105,
+            "width": 22,
             "gaps": [
               [
-                169,
-                219
+                10,
+                300
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 74,
-            "length": 430,
+            "angle": 35,
+            "length": 410,
             "width": 26,
-            "offset": 42
+            "offset": 60
           },
           {
-            "angle": 134,
-            "length": 430,
-            "width": 26,
-            "offset": 42
+            "angle": 95,
+            "length": 370,
+            "width": 24,
+            "offset": -20
           },
           {
-            "angle": 14,
-            "length": 430,
-            "width": 26,
-            "offset": 42
+            "angle": 155,
+            "length": 330,
+            "width": 24,
+            "offset": -70
           }
         ],
         "bars": [],
         "nodes": [
           {
-            "angle": 96,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
-          },
-          {
-            "angle": 216,
-            "radius": 260,
-            "size": 24,
+            "angle": 40,
+            "radius": 215,
+            "size": 16,
             "kind": "diamond"
           },
           {
-            "angle": 336,
-            "radius": 165,
-            "size": 24,
+            "angle": 205,
+            "radius": 175,
+            "size": 15,
             "kind": "square"
-          },
-          {
-            "angle": 96,
-            "radius": 260,
-            "size": 24,
-            "kind": "diamond"
           }
         ]
       }
@@ -2278,66 +2258,58 @@
       "recipe": {
         "rings": [
           {
-            "radius": 252,
-            "width": 36,
+            "radius": 292,
+            "width": 24,
             "gaps": [
               [
-                320,
-                350
-              ]
-            ]
-          },
-          {
-            "radius": 127,
-            "width": 34,
-            "gaps": [
+                75,
+                155
+              ],
               [
-                186,
-                236
+                190,
+                255
+              ],
+              [
+                310,
+                360
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 97,
-            "length": 390,
+            "angle": 0,
+            "length": 450,
             "width": 26,
-            "offset": -42
+            "offset": 50
           },
           {
-            "angle": 157,
-            "length": 390,
+            "angle": 60,
+            "length": 450,
             "width": 26,
-            "offset": -42
+            "offset": -30
           },
           {
-            "angle": 37,
-            "length": 390,
-            "width": 26,
-            "offset": -42
+            "angle": 120,
+            "length": 310,
+            "width": 24,
+            "offset": 90
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": 105.0,
-            "w": 48,
-            "h": 210
+            "x": -160,
+            "y": 100,
+            "w": 26,
+            "h": 150
           }
         ],
         "nodes": [
           {
-            "angle": 130,
-            "radius": 165,
-            "size": 30,
+            "angle": 300,
+            "radius": 220,
+            "size": 16,
             "kind": "diamond"
-          },
-          {
-            "angle": 250,
-            "radius": 260,
-            "size": 30,
-            "kind": "square"
           }
         ]
       }
@@ -2350,65 +2322,67 @@
       "recipe": {
         "rings": [
           {
-            "radius": 270,
-            "width": 30,
+            "radius": 265,
+            "width": 26,
             "gaps": [
               [
-                320,
-                350
+                30,
+                115
+              ],
+              [
+                155,
+                240
+              ],
+              [
+                285,
+                340
               ]
             ]
           },
           {
-            "radius": 145,
-            "width": 28,
+            "radius": 170,
+            "width": 22,
             "gaps": [
               [
-                203,
-                253
+                100,
+                280
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 120,
+            "angle": 18,
+            "length": 360,
+            "width": 24,
+            "offset": -90
+          },
+          {
+            "angle": 78,
             "length": 430,
             "width": 26,
             "offset": 0
           },
           {
-            "angle": 0,
-            "length": 430,
-            "width": 26,
-            "offset": 0
-          },
-          {
-            "angle": 60,
-            "length": 430,
-            "width": 26,
-            "offset": 0
+            "angle": 138,
+            "length": 360,
+            "width": 24,
+            "offset": 90
           }
         ],
         "bars": [],
         "nodes": [
           {
-            "angle": 164,
-            "radius": 165,
-            "size": 24,
+            "angle": 5,
+            "radius": 225,
+            "size": 15,
             "kind": "square"
           },
           {
-            "angle": 284,
-            "radius": 260,
-            "size": 24,
+            "angle": 185,
+            "radius": 160,
+            "size": 15,
             "kind": "diamond"
-          },
-          {
-            "angle": 44,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
           }
         ]
       }
@@ -2421,78 +2395,58 @@
       "recipe": {
         "rings": [
           {
-            "radius": 288,
-            "width": 36,
+            "radius": 282,
+            "width": 24,
             "gaps": [
               [
-                320,
-                350
-              ]
-            ]
-          },
-          {
-            "radius": 163,
-            "width": 34,
-            "gaps": [
+                5,
+                80
+              ],
               [
-                220,
-                270
+                125,
+                200
+              ],
+              [
+                250,
+                330
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 143,
-            "length": 390,
+            "angle": 48,
+            "length": 470,
             "width": 26,
-            "offset": 42
+            "offset": 0
           },
           {
-            "angle": 23,
-            "length": 390,
-            "width": 26,
-            "offset": 42
+            "angle": 108,
+            "length": 350,
+            "width": 24,
+            "offset": 68
           },
           {
-            "angle": 83,
-            "length": 390,
-            "width": 26,
-            "offset": 42
+            "angle": 168,
+            "length": 350,
+            "width": 24,
+            "offset": -68
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": -35.0,
-            "w": 48,
-            "h": 210
+            "x": 0,
+            "y": -160,
+            "w": 160,
+            "h": 24
           }
         ],
         "nodes": [
           {
-            "angle": 198,
-            "radius": 165,
-            "size": 30,
+            "angle": 225,
+            "radius": 215,
+            "size": 16,
             "kind": "diamond"
-          },
-          {
-            "angle": 318,
-            "radius": 260,
-            "size": 30,
-            "kind": "square"
-          },
-          {
-            "angle": 78,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 198,
-            "radius": 260,
-            "size": 30,
-            "kind": "square"
           }
         ]
       }
@@ -2505,58 +2459,62 @@
       "recipe": {
         "rings": [
           {
-            "radius": 252,
-            "width": 30,
+            "radius": 250,
+            "width": 28,
             "gaps": [
               [
-                320,
-                350
+                60,
+                145
+              ],
+              [
+                225,
+                310
               ]
             ]
           },
           {
-            "radius": 127,
-            "width": 28,
+            "radius": 130,
+            "width": 22,
             "gaps": [
               [
-                237,
-                287
+                200,
+                360
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 166,
-            "length": 430,
+            "angle": 25,
+            "length": 440,
             "width": 26,
-            "offset": -42
+            "offset": -52
           },
           {
-            "angle": 46,
-            "length": 430,
+            "angle": 85,
+            "length": 440,
             "width": 26,
-            "offset": -42
+            "offset": 52
           },
           {
-            "angle": 106,
-            "length": 430,
-            "width": 26,
-            "offset": -42
+            "angle": 145,
+            "length": 300,
+            "width": 24,
+            "offset": 0
           }
         ],
         "bars": [],
         "nodes": [
           {
-            "angle": 232,
-            "radius": 165,
-            "size": 24,
+            "angle": 330,
+            "radius": 220,
+            "size": 16,
             "kind": "square"
           },
           {
-            "angle": 352,
-            "radius": 260,
-            "size": 24,
+            "angle": 120,
+            "radius": 170,
+            "size": 15,
             "kind": "diamond"
           }
         ]
@@ -2570,71 +2528,63 @@
       "recipe": {
         "rings": [
           {
-            "radius": 270,
-            "width": 36,
+            "radius": 288,
+            "width": 24,
             "gaps": [
               [
-                320,
-                350
-              ]
-            ]
-          },
-          {
-            "radius": 145,
-            "width": 34,
-            "gaps": [
+                35,
+                100
+              ],
               [
-                254,
-                304
+                155,
+                225
+              ],
+              [
+                275,
+                340
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 9,
-            "length": 390,
+            "angle": 12,
+            "length": 420,
             "width": 26,
-            "offset": 0
+            "offset": 72
           },
           {
-            "angle": 69,
-            "length": 390,
+            "angle": 72,
+            "length": 420,
             "width": 26,
-            "offset": 0
+            "offset": -72
           },
           {
-            "angle": 129,
-            "length": 390,
+            "angle": 132,
+            "length": 420,
             "width": 26,
             "offset": 0
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": 105.0,
-            "w": 48,
-            "h": 210
+            "x": -120,
+            "y": -135,
+            "w": 26,
+            "h": 130
+          },
+          {
+            "x": 120,
+            "y": 135,
+            "w": 26,
+            "h": 130
           }
         ],
         "nodes": [
           {
-            "angle": 86,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 206,
-            "radius": 260,
-            "size": 30,
-            "kind": "square"
-          },
-          {
-            "angle": 326,
-            "radius": 165,
-            "size": 30,
+            "angle": 265,
+            "radius": 210,
+            "size": 15,
             "kind": "diamond"
           }
         ]
@@ -2648,15 +2598,15 @@
       "recipe": {
         "rings": [
           {
-            "radius": 222,
-            "width": 38,
+            "radius": 265,
+            "width": 34,
             "gaps": [
               [
                 40,
-                72
+                78
               ],
               [
-                220,
+                215,
                 252
               ]
             ]
@@ -2664,36 +2614,37 @@
         ],
         "strokes": [
           {
-            "angle": 35,
-            "length": 500,
-            "width": 38,
-            "offset": -42
+            "angle": 90,
+            "length": 520,
+            "width": 36,
+            "offset": 0
           },
           {
-            "angle": 125,
-            "length": 500,
-            "width": 38,
-            "offset": -42
-          },
-          {
-            "angle": 80,
-            "length": 330,
+            "angle": 25,
+            "length": 360,
             "width": 32,
-            "offset": -42
-          }
-        ],
-        "bars": [],
-        "nodes": [
-          {
-            "angle": 35,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
+            "offset": -64
           },
           {
             "angle": 155,
-            "radius": 260,
-            "size": 24,
+            "length": 300,
+            "width": 30,
+            "offset": 72
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -220,
+            "w": 330,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 20,
+            "radius": 210,
+            "size": 20,
             "kind": "diamond"
           }
         ]
@@ -2707,66 +2658,60 @@
       "recipe": {
         "rings": [
           {
-            "radius": 240,
-            "width": 44,
+            "radius": 250,
+            "width": 36,
             "gaps": [
               [
-                57,
-                89
+                120,
+                170
               ],
               [
-                237,
-                269
+                300,
+                350
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 58,
-            "length": 460,
-            "width": 38,
-            "offset": 0
+            "angle": 90,
+            "length": 520,
+            "width": 36,
+            "offset": -55
           },
           {
-            "angle": 148,
-            "length": 460,
-            "width": 38,
-            "offset": 0
-          },
-          {
-            "angle": 103,
-            "length": 290,
+            "angle": 90,
+            "length": 410,
             "width": 32,
-            "offset": 0
+            "offset": 82
+          },
+          {
+            "angle": 0,
+            "length": 360,
+            "width": 32,
+            "offset": 10
+          },
+          {
+            "angle": 35,
+            "length": 260,
+            "width": 30,
+            "offset": -105
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": -35.0,
-            "w": 48,
-            "h": 210
+            "x": 0,
+            "y": -235,
+            "w": 380,
+            "h": 40
           }
         ],
         "nodes": [
           {
-            "angle": 69,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 189,
-            "radius": 260,
-            "size": 30,
+            "angle": 180,
+            "radius": 210,
+            "size": 20,
             "kind": "square"
-          },
-          {
-            "angle": 309,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
           }
         ]
       }
@@ -2779,64 +2724,63 @@
       "recipe": {
         "rings": [
           {
-            "radius": 258,
-            "width": 38,
+            "radius": 278,
+            "width": 32,
             "gaps": [
               [
-                74,
-                106
+                18,
+                60
               ],
               [
-                254,
-                286
+                175,
+                215
+              ]
+            ]
+          },
+          {
+            "radius": 130,
+            "width": 26,
+            "gaps": [
+              [
+                60,
+                210
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 81,
-            "length": 500,
-            "width": 38,
-            "offset": 42
+            "angle": 90,
+            "length": 530,
+            "width": 36,
+            "offset": -45
           },
           {
-            "angle": 171,
-            "length": 500,
-            "width": 38,
-            "offset": 42
-          },
-          {
-            "angle": 126,
-            "length": 330,
+            "angle": 90,
+            "length": 420,
             "width": 32,
-            "offset": 42
+            "offset": 80
+          },
+          {
+            "angle": 35,
+            "length": 320,
+            "width": 30,
+            "offset": 0
           }
         ],
-        "bars": [],
+        "bars": [
+          {
+            "x": 0,
+            "y": -250,
+            "w": 420,
+            "h": 38
+          }
+        ],
         "nodes": [
           {
-            "angle": 103,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
-          },
-          {
-            "angle": 223,
-            "radius": 260,
-            "size": 24,
-            "kind": "diamond"
-          },
-          {
-            "angle": 343,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
-          },
-          {
-            "angle": 103,
-            "radius": 260,
-            "size": 24,
+            "angle": 310,
+            "radius": 190,
+            "size": 19,
             "kind": "diamond"
           }
         ]
@@ -2850,59 +2794,59 @@
       "recipe": {
         "rings": [
           {
-            "radius": 222,
-            "width": 44,
+            "radius": 258,
+            "width": 34,
             "gaps": [
               [
-                91,
-                123
+                70,
+                110
               ],
               [
-                271,
-                303
+                250,
+                292
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 104,
-            "length": 460,
-            "width": 38,
-            "offset": -42
+            "angle": 90,
+            "length": 520,
+            "width": 34,
+            "offset": 0
           },
           {
-            "angle": 14,
-            "length": 460,
-            "width": 38,
-            "offset": -42
-          },
-          {
-            "angle": 149,
-            "length": 290,
+            "angle": 35,
+            "length": 360,
             "width": 32,
-            "offset": -42
+            "offset": -60
+          },
+          {
+            "angle": 0,
+            "length": 330,
+            "width": 30,
+            "offset": 95
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": 105.0,
-            "w": 48,
-            "h": 210
+            "x": 0,
+            "y": -225,
+            "w": 340,
+            "h": 38
+          },
+          {
+            "x": 120,
+            "y": 40,
+            "w": 34,
+            "h": 150
           }
         ],
         "nodes": [
           {
-            "angle": 137,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 257,
-            "radius": 260,
-            "size": 30,
+            "angle": 90,
+            "radius": 205,
+            "size": 19,
             "kind": "square"
           }
         ]
@@ -2916,15 +2860,15 @@
       "recipe": {
         "rings": [
           {
-            "radius": 240,
-            "width": 38,
+            "radius": 270,
+            "width": 32,
             "gaps": [
               [
-                108,
+                95,
                 140
               ],
               [
-                288,
+                275,
                 320
               ]
             ]
@@ -2932,43 +2876,44 @@
         ],
         "strokes": [
           {
-            "angle": 127,
-            "length": 500,
-            "width": 38,
+            "angle": 90,
+            "length": 540,
+            "width": 36,
             "offset": 0
           },
           {
-            "angle": 37,
-            "length": 500,
-            "width": 38,
-            "offset": 0
-          },
-          {
-            "angle": 172,
+            "angle": 20,
             "length": 330,
-            "width": 32,
-            "offset": 0
+            "width": 30,
+            "offset": -80
+          },
+          {
+            "angle": 160,
+            "length": 330,
+            "width": 30,
+            "offset": 80
           }
         ],
-        "bars": [],
+        "bars": [
+          {
+            "x": 0,
+            "y": -240,
+            "w": 420,
+            "h": 40
+          },
+          {
+            "x": 0,
+            "y": 95,
+            "w": 210,
+            "h": 30
+          }
+        ],
         "nodes": [
           {
-            "angle": 171,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
-          },
-          {
-            "angle": 291,
-            "radius": 260,
-            "size": 24,
+            "angle": 270,
+            "radius": 175,
+            "size": 20,
             "kind": "diamond"
-          },
-          {
-            "angle": 51,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
           }
         ]
       }
@@ -2981,71 +2926,63 @@
       "recipe": {
         "rings": [
           {
-            "radius": 258,
-            "width": 44,
+            "radius": 245,
+            "width": 36,
             "gaps": [
               [
-                125,
-                157
+                35,
+                82
               ],
               [
-                305,
-                337
+                200,
+                250
+              ]
+            ]
+          },
+          {
+            "radius": 145,
+            "width": 26,
+            "gaps": [
+              [
+                115,
+                260
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 150,
-            "length": 460,
-            "width": 38,
-            "offset": 42
+            "angle": 0,
+            "length": 480,
+            "width": 34,
+            "offset": -55
           },
           {
-            "angle": 60,
-            "length": 460,
-            "width": 38,
-            "offset": 42
-          },
-          {
-            "angle": 15,
-            "length": 290,
+            "angle": 72,
+            "length": 370,
             "width": 32,
-            "offset": 42
+            "offset": 55
+          },
+          {
+            "angle": 132,
+            "length": 290,
+            "width": 30,
+            "offset": 0
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": -35.0,
-            "w": 48,
-            "h": 210
+            "x": 0,
+            "y": -235,
+            "w": 360,
+            "h": 38
           }
         ],
         "nodes": [
           {
-            "angle": 205,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 325,
-            "radius": 260,
-            "size": 30,
-            "kind": "square"
-          },
-          {
-            "angle": 85,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 205,
-            "radius": 260,
-            "size": 30,
+            "angle": 25,
+            "radius": 200,
+            "size": 19,
             "kind": "square"
           }
         ]
@@ -3059,52 +2996,63 @@
       "recipe": {
         "rings": [
           {
-            "radius": 222,
-            "width": 38,
+            "radius": 286,
+            "width": 30,
             "gaps": [
               [
-                142,
-                174
+                55,
+                98
               ],
               [
-                322,
-                354
+                150,
+                198
+              ],
+              [
+                260,
+                306
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 173,
+            "angle": 90,
             "length": 500,
-            "width": 38,
-            "offset": -42
+            "width": 34,
+            "offset": 0
           },
           {
-            "angle": 83,
-            "length": 500,
-            "width": 38,
-            "offset": -42
-          },
-          {
-            "angle": 38,
-            "length": 330,
+            "angle": 30,
+            "length": 390,
             "width": 32,
-            "offset": -42
+            "offset": 65
+          },
+          {
+            "angle": 150,
+            "length": 390,
+            "width": 32,
+            "offset": -65
           }
         ],
-        "bars": [],
+        "bars": [
+          {
+            "x": 0,
+            "y": -245,
+            "w": 430,
+            "h": 38
+          }
+        ],
         "nodes": [
           {
-            "angle": 239,
-            "radius": 165,
-            "size": 24,
-            "kind": "square"
+            "angle": 0,
+            "radius": 205,
+            "size": 18,
+            "kind": "diamond"
           },
           {
-            "angle": 359,
-            "radius": 260,
-            "size": 24,
+            "angle": 180,
+            "radius": 205,
+            "size": 18,
             "kind": "diamond"
           }
         ]
@@ -3118,66 +3066,60 @@
       "recipe": {
         "rings": [
           {
-            "radius": 240,
-            "width": 44,
+            "radius": 262,
+            "width": 34,
             "gaps": [
               [
-                159,
-                191
+                25,
+                70
               ],
               [
-                220,
-                252
+                225,
+                270
               ]
             ]
           }
         ],
         "strokes": [
           {
-            "angle": 16,
-            "length": 460,
-            "width": 38,
+            "angle": 0,
+            "length": 500,
+            "width": 34,
             "offset": 0
           },
           {
-            "angle": 106,
-            "length": 460,
-            "width": 38,
+            "angle": 90,
+            "length": 500,
+            "width": 34,
             "offset": 0
           },
           {
-            "angle": 61,
-            "length": 290,
-            "width": 32,
-            "offset": 0
+            "angle": 48,
+            "length": 310,
+            "width": 30,
+            "offset": 85
           }
         ],
         "bars": [
           {
-            "x": -190,
-            "y": 105.0,
-            "w": 48,
-            "h": 210
+            "x": 0,
+            "y": -238,
+            "w": 390,
+            "h": 38
+          },
+          {
+            "x": -140,
+            "y": 70,
+            "w": 34,
+            "h": 170
           }
         ],
         "nodes": [
           {
-            "angle": 93,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
-          },
-          {
-            "angle": 213,
-            "radius": 260,
-            "size": 30,
+            "angle": 315,
+            "radius": 200,
+            "size": 18,
             "kind": "square"
-          },
-          {
-            "angle": 333,
-            "radius": 165,
-            "size": 30,
-            "kind": "diamond"
           }
         ]
       }
