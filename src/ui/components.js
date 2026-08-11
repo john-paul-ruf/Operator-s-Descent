@@ -188,7 +188,7 @@ export function createAffixTag(affix, isMajor) {
 
 export function createConditionTag(conditionId, duration) {
   const tag = document.createElement('span');
-  tag.className = 'condition-tag';
+  tag.className = `condition-tag cond-${conditionId}`;
   tag.textContent = duration != null ? `${conditionId} (${duration})` : conditionId;
   return tag;
 }

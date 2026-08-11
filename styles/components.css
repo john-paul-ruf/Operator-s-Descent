@@ -793,6 +793,16 @@ button.protocol-card[aria-selected="true"],
   color: var(--text-secondary);
 }
 
+.cond-burning     { border-color: var(--warning); color: var(--warning); }
+.cond-jammed      { border-color: var(--danger); color: var(--danger); }
+.cond-marked      { border-color: #e8d23a; color: #e8d23a; }
+.cond-shielded    { border-color: var(--heal); color: var(--heal); }
+.cond-overloaded  { border-color: #e8d23a; color: #e8d23a; }
+.cond-blinded     { border-color: var(--text-secondary); color: var(--text-secondary); }
+.cond-immobilized { border-color: var(--danger); color: var(--danger); }
+.cond-corroded    { border-color: var(--warning); color: var(--warning); }
+.cond-panicked    { border-color: var(--accent); color: var(--accent); }
+
 .playfield-canvas {
   display: block;
   width: 100%;
