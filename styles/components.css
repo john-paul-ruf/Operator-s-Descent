@@ -715,6 +715,12 @@ input[type="range"]::-moz-range-thumb {
   opacity: 0.5;
 }
 
+.container-icon {
+  font-size: 24px;
+  color: #e8d23a;
+  text-shadow: 0 0 8px #e8d23a;
+}
+
 /* Mode indicator label */
 .mode-indicator {
   font-size: 10px;

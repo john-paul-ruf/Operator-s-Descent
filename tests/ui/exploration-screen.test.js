@@ -164,7 +164,7 @@ describe('exploration screen controller', () => {
     container.dispatch('keydown', keyEvent('ArrowRight'));
 
     expect(byTestId(container, 'console-tab-loot').getAttribute('aria-selected')).toBe('true');
-    expect(byTestId(container, 'loot-container').textContent).toContain('CONTAINER 0');
+    expect(textOf(byTestId(container, 'loot-container'))).toContain('CONTAINER 0');
     byTestId(container, 'loot-open').click();
     expect(opens).toHaveLength(1);
     expect(opens[0].container).toMatchObject({ id: 0, x: 12, y: 10 });
