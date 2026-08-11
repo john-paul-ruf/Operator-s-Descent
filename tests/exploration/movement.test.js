@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { moveParty, tickDangerClock, resetDangerClock, signalMovementDamage } from '../../src/exploration/movement.js';
 import { createLattice } from '../../src/exploration/lattice.js';
 import { createRunState } from '../../src/state/run-state.js';

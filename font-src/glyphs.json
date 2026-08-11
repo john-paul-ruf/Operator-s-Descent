@@ -1,0 +1,5144 @@
+{
+  "version": 1,
+  "unitsPerEm": 1000,
+  "advanceWidth": 1000,
+  "license": "Original parametric geometric recipes owned by Glitch Forgeworks LLC for Operator's Descent. No third-party outlines.",
+  "glyphs": [
+    {
+      "id": "breacher_1",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57344,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 227,
+            "width": 58,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 0,
+            "length": 420,
+            "width": 72,
+            "offset": -42
+          },
+          {
+            "angle": 90,
+            "length": 420,
+            "width": 72,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 0,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 120,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_2",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57345,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 245,
+            "width": 64,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 23,
+            "length": 380,
+            "width": 72,
+            "offset": 0
+          },
+          {
+            "angle": 113,
+            "length": 380,
+            "width": 72,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          },
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 34,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 154,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 274,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_3",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57346,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 263,
+            "width": 58,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 46,
+            "length": 420,
+            "width": 72,
+            "offset": 42
+          },
+          {
+            "angle": 136,
+            "length": 420,
+            "width": 72,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 68,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 188,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 308,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 68,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_4",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57347,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 227,
+            "width": 64,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 69,
+            "length": 380,
+            "width": 72,
+            "offset": -42
+          },
+          {
+            "angle": 159,
+            "length": 380,
+            "width": 72,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          },
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 102,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 222,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_5",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57348,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 245,
+            "width": 58,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 92,
+            "length": 420,
+            "width": 72,
+            "offset": 0
+          },
+          {
+            "angle": 2,
+            "length": 420,
+            "width": 72,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 136,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 256,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 16,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_6",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57349,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 263,
+            "width": 64,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 115,
+            "length": 380,
+            "width": 72,
+            "offset": 42
+          },
+          {
+            "angle": 25,
+            "length": 380,
+            "width": 72,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          },
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 170,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 290,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 50,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 170,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_7",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57350,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 227,
+            "width": 58,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 138,
+            "length": 420,
+            "width": 72,
+            "offset": -42
+          },
+          {
+            "angle": 48,
+            "length": 420,
+            "width": 72,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 204,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 324,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "breacher_8",
+      "bank": "player",
+      "owner": "breacher",
+      "codepoint": 57351,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 245,
+            "width": 64,
+            "gaps": []
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 161,
+            "length": 380,
+            "width": 72,
+            "offset": 0
+          },
+          {
+            "angle": 71,
+            "length": 380,
+            "width": 72,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -210,
+            "w": 280,
+            "h": 56
+          },
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 238,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 358,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 118,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_1",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57352,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 242,
+            "width": 34,
+            "gaps": [
+              [
+                20,
+                95
+              ],
+              [
+                180,
+                230
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 52,
+            "length": 500,
+            "width": 34,
+            "offset": -42
+          },
+          {
+            "angle": 142,
+            "length": 340,
+            "width": 28,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 7,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 127,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_2",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57353,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 260,
+            "width": 40,
+            "gaps": [
+              [
+                37,
+                112
+              ],
+              [
+                197,
+                247
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 75,
+            "length": 460,
+            "width": 34,
+            "offset": 0
+          },
+          {
+            "angle": 165,
+            "length": 300,
+            "width": 28,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 41,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 161,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 281,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_3",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57354,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 278,
+            "width": 34,
+            "gaps": [
+              [
+                54,
+                129
+              ],
+              [
+                214,
+                264
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 98,
+            "length": 500,
+            "width": 34,
+            "offset": 42
+          },
+          {
+            "angle": 8,
+            "length": 340,
+            "width": 28,
+            "offset": 42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 75,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 195,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 315,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 75,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_4",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57355,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 242,
+            "width": 40,
+            "gaps": [
+              [
+                71,
+                146
+              ],
+              [
+                231,
+                281
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 121,
+            "length": 460,
+            "width": 34,
+            "offset": -42
+          },
+          {
+            "angle": 31,
+            "length": 300,
+            "width": 28,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 109,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 229,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_5",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57356,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 260,
+            "width": 34,
+            "gaps": [
+              [
+                88,
+                163
+              ],
+              [
+                248,
+                298
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 144,
+            "length": 500,
+            "width": 34,
+            "offset": 0
+          },
+          {
+            "angle": 54,
+            "length": 340,
+            "width": 28,
+            "offset": 0
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 143,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 263,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 23,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_6",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57357,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 278,
+            "width": 40,
+            "gaps": [
+              [
+                105,
+                180
+              ],
+              [
+                265,
+                315
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 167,
+            "length": 460,
+            "width": 34,
+            "offset": 42
+          },
+          {
+            "angle": 77,
+            "length": 300,
+            "width": 28,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 177,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 297,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 57,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 177,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_7",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57358,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 242,
+            "width": 34,
+            "gaps": [
+              [
+                122,
+                197
+              ],
+              [
+                282,
+                332
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 10,
+            "length": 500,
+            "width": 34,
+            "offset": -42
+          },
+          {
+            "angle": 100,
+            "length": 340,
+            "width": 28,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 211,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 331,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ghost_8",
+      "bank": "player",
+      "owner": "ghost",
+      "codepoint": 57359,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 260,
+            "width": 40,
+            "gaps": [
+              [
+                139,
+                214
+              ],
+              [
+                299,
+                349
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 33,
+            "length": 460,
+            "width": 34,
+            "offset": 0
+          },
+          {
+            "angle": 123,
+            "length": 300,
+            "width": 28,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 245,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 5,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 125,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_1",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57360,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 212,
+            "width": 34,
+            "gaps": [
+              [
+                75,
+                115
+              ],
+              [
+                255,
+                295
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 104,
+            "length": 520,
+            "width": 34,
+            "offset": -42
+          },
+          {
+            "angle": 44,
+            "length": 360,
+            "width": 30,
+            "offset": -42
+          },
+          {
+            "angle": 164,
+            "length": 360,
+            "width": 30,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 14,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 134,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_2",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57361,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 230,
+            "width": 40,
+            "gaps": [
+              [
+                92,
+                132
+              ],
+              [
+                272,
+                312
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 127,
+            "length": 480,
+            "width": 34,
+            "offset": 0
+          },
+          {
+            "angle": 67,
+            "length": 320,
+            "width": 30,
+            "offset": 0
+          },
+          {
+            "angle": 7,
+            "length": 320,
+            "width": 30,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 48,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 168,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 288,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_3",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57362,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 248,
+            "width": 34,
+            "gaps": [
+              [
+                109,
+                149
+              ],
+              [
+                289,
+                329
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 150,
+            "length": 520,
+            "width": 34,
+            "offset": 42
+          },
+          {
+            "angle": 90,
+            "length": 360,
+            "width": 30,
+            "offset": 42
+          },
+          {
+            "angle": 30,
+            "length": 360,
+            "width": 30,
+            "offset": 42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 82,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 202,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 322,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 82,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_4",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57363,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 212,
+            "width": 40,
+            "gaps": [
+              [
+                126,
+                166
+              ],
+              [
+                306,
+                346
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 173,
+            "length": 480,
+            "width": 34,
+            "offset": -42
+          },
+          {
+            "angle": 113,
+            "length": 320,
+            "width": 30,
+            "offset": -42
+          },
+          {
+            "angle": 53,
+            "length": 320,
+            "width": 30,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 116,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 236,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_5",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57364,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 230,
+            "width": 34,
+            "gaps": [
+              [
+                143,
+                183
+              ],
+              [
+                255,
+                295
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 16,
+            "length": 520,
+            "width": 34,
+            "offset": 0
+          },
+          {
+            "angle": 136,
+            "length": 360,
+            "width": 30,
+            "offset": 0
+          },
+          {
+            "angle": 76,
+            "length": 360,
+            "width": 30,
+            "offset": 0
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 150,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 270,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 30,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_6",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57365,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 248,
+            "width": 40,
+            "gaps": [
+              [
+                160,
+                200
+              ],
+              [
+                255,
+                295
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 39,
+            "length": 480,
+            "width": 34,
+            "offset": 42
+          },
+          {
+            "angle": 159,
+            "length": 320,
+            "width": 30,
+            "offset": 42
+          },
+          {
+            "angle": 99,
+            "length": 320,
+            "width": 30,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 184,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 304,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 64,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 184,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_7",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57366,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 212,
+            "width": 34,
+            "gaps": [
+              [
+                177,
+                217
+              ],
+              [
+                255,
+                295
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 62,
+            "length": 520,
+            "width": 34,
+            "offset": -42
+          },
+          {
+            "angle": 2,
+            "length": 360,
+            "width": 30,
+            "offset": -42
+          },
+          {
+            "angle": 122,
+            "length": 360,
+            "width": 30,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 218,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 338,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compiler_8",
+      "bank": "player",
+      "owner": "compiler",
+      "codepoint": 57367,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 230,
+            "width": 40,
+            "gaps": [
+              [
+                194,
+                234
+              ],
+              [
+                255,
+                295
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 85,
+            "length": 480,
+            "width": 34,
+            "offset": 0
+          },
+          {
+            "angle": 25,
+            "length": 320,
+            "width": 30,
+            "offset": 0
+          },
+          {
+            "angle": 145,
+            "length": 320,
+            "width": 30,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 252,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 12,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 132,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_1",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57368,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 197,
+            "width": 42,
+            "gaps": [
+              [
+                150,
+                210
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 111,
+            "length": 500,
+            "width": 48,
+            "offset": -42
+          },
+          {
+            "angle": 21,
+            "length": 470,
+            "width": 52,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 21,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 141,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_2",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57369,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 215,
+            "width": 48,
+            "gaps": [
+              [
+                167,
+                227
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 134,
+            "length": 460,
+            "width": 48,
+            "offset": 0
+          },
+          {
+            "angle": 44,
+            "length": 430,
+            "width": 52,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          },
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 55,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 175,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 295,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_3",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57370,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 233,
+            "width": 42,
+            "gaps": [
+              [
+                184,
+                244
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 157,
+            "length": 500,
+            "width": 48,
+            "offset": 42
+          },
+          {
+            "angle": 67,
+            "length": 470,
+            "width": 52,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 89,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 209,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 329,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 89,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_4",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57371,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 197,
+            "width": 48,
+            "gaps": [
+              [
+                201,
+                261
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 0,
+            "length": 460,
+            "width": 48,
+            "offset": -42
+          },
+          {
+            "angle": 90,
+            "length": 430,
+            "width": 52,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          },
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 123,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 243,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_5",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57372,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 215,
+            "width": 42,
+            "gaps": [
+              [
+                218,
+                278
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 23,
+            "length": 500,
+            "width": 48,
+            "offset": 0
+          },
+          {
+            "angle": 113,
+            "length": 470,
+            "width": 52,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 157,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 277,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 37,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_6",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57373,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 233,
+            "width": 48,
+            "gaps": [
+              [
+                235,
+                295
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 46,
+            "length": 460,
+            "width": 48,
+            "offset": 42
+          },
+          {
+            "angle": 136,
+            "length": 430,
+            "width": 52,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          },
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 191,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 311,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 71,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 191,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_7",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57374,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 197,
+            "width": 42,
+            "gaps": [
+              [
+                252,
+                312
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 69,
+            "length": 500,
+            "width": 48,
+            "offset": -42
+          },
+          {
+            "angle": 159,
+            "length": 470,
+            "width": 52,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 225,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 345,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor_8",
+      "bank": "player",
+      "owner": "anchor",
+      "codepoint": 57375,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 215,
+            "width": 48,
+            "gaps": [
+              [
+                269,
+                329
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 92,
+            "length": 460,
+            "width": 48,
+            "offset": 0
+          },
+          {
+            "angle": 2,
+            "length": 430,
+            "width": 52,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": 0,
+            "y": -255,
+            "w": 520,
+            "h": 52
+          },
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 79,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 199,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 319,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_1",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57376,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 252,
+            "width": 30,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 127,
+            "width": 28,
+            "gaps": [
+              [
+                135,
+                185
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 28,
+            "length": 430,
+            "width": 26,
+            "offset": -42
+          },
+          {
+            "angle": 88,
+            "length": 430,
+            "width": 26,
+            "offset": -42
+          },
+          {
+            "angle": 148,
+            "length": 430,
+            "width": 26,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 28,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 148,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_2",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57377,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 270,
+            "width": 36,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 145,
+            "width": 34,
+            "gaps": [
+              [
+                152,
+                202
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 51,
+            "length": 390,
+            "width": 26,
+            "offset": 0
+          },
+          {
+            "angle": 111,
+            "length": 390,
+            "width": 26,
+            "offset": 0
+          },
+          {
+            "angle": 171,
+            "length": 390,
+            "width": 26,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 62,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 182,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 302,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_3",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57378,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 288,
+            "width": 30,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 163,
+            "width": 28,
+            "gaps": [
+              [
+                169,
+                219
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 74,
+            "length": 430,
+            "width": 26,
+            "offset": 42
+          },
+          {
+            "angle": 134,
+            "length": 430,
+            "width": 26,
+            "offset": 42
+          },
+          {
+            "angle": 14,
+            "length": 430,
+            "width": 26,
+            "offset": 42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 96,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 216,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 336,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 96,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_4",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57379,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 252,
+            "width": 36,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 127,
+            "width": 34,
+            "gaps": [
+              [
+                186,
+                236
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 97,
+            "length": 390,
+            "width": 26,
+            "offset": -42
+          },
+          {
+            "angle": 157,
+            "length": 390,
+            "width": 26,
+            "offset": -42
+          },
+          {
+            "angle": 37,
+            "length": 390,
+            "width": 26,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 130,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 250,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_5",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57380,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 270,
+            "width": 30,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 145,
+            "width": 28,
+            "gaps": [
+              [
+                203,
+                253
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 120,
+            "length": 430,
+            "width": 26,
+            "offset": 0
+          },
+          {
+            "angle": 0,
+            "length": 430,
+            "width": 26,
+            "offset": 0
+          },
+          {
+            "angle": 60,
+            "length": 430,
+            "width": 26,
+            "offset": 0
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 164,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 284,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 44,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_6",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57381,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 288,
+            "width": 36,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 163,
+            "width": 34,
+            "gaps": [
+              [
+                220,
+                270
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 143,
+            "length": 390,
+            "width": 26,
+            "offset": 42
+          },
+          {
+            "angle": 23,
+            "length": 390,
+            "width": 26,
+            "offset": 42
+          },
+          {
+            "angle": 83,
+            "length": 390,
+            "width": 26,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 198,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 318,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 78,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 198,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_7",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57382,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 252,
+            "width": 30,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 127,
+            "width": 28,
+            "gaps": [
+              [
+                237,
+                287
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 166,
+            "length": 430,
+            "width": 26,
+            "offset": -42
+          },
+          {
+            "angle": 46,
+            "length": 430,
+            "width": 26,
+            "offset": -42
+          },
+          {
+            "angle": 106,
+            "length": 430,
+            "width": 26,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 232,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 352,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle_8",
+      "bank": "player",
+      "owner": "oracle",
+      "codepoint": 57383,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 270,
+            "width": 36,
+            "gaps": [
+              [
+                320,
+                350
+              ]
+            ]
+          },
+          {
+            "radius": 145,
+            "width": 34,
+            "gaps": [
+              [
+                254,
+                304
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 9,
+            "length": 390,
+            "width": 26,
+            "offset": 0
+          },
+          {
+            "angle": 69,
+            "length": 390,
+            "width": 26,
+            "offset": 0
+          },
+          {
+            "angle": 129,
+            "length": 390,
+            "width": 26,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 86,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 206,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 326,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_1",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57384,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 222,
+            "width": 38,
+            "gaps": [
+              [
+                40,
+                72
+              ],
+              [
+                220,
+                252
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 35,
+            "length": 500,
+            "width": 38,
+            "offset": -42
+          },
+          {
+            "angle": 125,
+            "length": 500,
+            "width": 38,
+            "offset": -42
+          },
+          {
+            "angle": 80,
+            "length": 330,
+            "width": 32,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 35,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 155,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_2",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57385,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 240,
+            "width": 44,
+            "gaps": [
+              [
+                57,
+                89
+              ],
+              [
+                237,
+                269
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 58,
+            "length": 460,
+            "width": 38,
+            "offset": 0
+          },
+          {
+            "angle": 148,
+            "length": 460,
+            "width": 38,
+            "offset": 0
+          },
+          {
+            "angle": 103,
+            "length": 290,
+            "width": 32,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 69,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 189,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 309,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_3",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57386,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 258,
+            "width": 38,
+            "gaps": [
+              [
+                74,
+                106
+              ],
+              [
+                254,
+                286
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 81,
+            "length": 500,
+            "width": 38,
+            "offset": 42
+          },
+          {
+            "angle": 171,
+            "length": 500,
+            "width": 38,
+            "offset": 42
+          },
+          {
+            "angle": 126,
+            "length": 330,
+            "width": 32,
+            "offset": 42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 103,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 223,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 343,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 103,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_4",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57387,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 222,
+            "width": 44,
+            "gaps": [
+              [
+                91,
+                123
+              ],
+              [
+                271,
+                303
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 104,
+            "length": 460,
+            "width": 38,
+            "offset": -42
+          },
+          {
+            "angle": 14,
+            "length": 460,
+            "width": 38,
+            "offset": -42
+          },
+          {
+            "angle": 149,
+            "length": 290,
+            "width": 32,
+            "offset": -42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 137,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 257,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_5",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57388,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 240,
+            "width": 38,
+            "gaps": [
+              [
+                108,
+                140
+              ],
+              [
+                288,
+                320
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 127,
+            "length": 500,
+            "width": 38,
+            "offset": 0
+          },
+          {
+            "angle": 37,
+            "length": 500,
+            "width": 38,
+            "offset": 0
+          },
+          {
+            "angle": 172,
+            "length": 330,
+            "width": 32,
+            "offset": 0
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 171,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 291,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          },
+          {
+            "angle": 51,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_6",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57389,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 258,
+            "width": 44,
+            "gaps": [
+              [
+                125,
+                157
+              ],
+              [
+                305,
+                337
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 150,
+            "length": 460,
+            "width": 38,
+            "offset": 42
+          },
+          {
+            "angle": 60,
+            "length": 460,
+            "width": 38,
+            "offset": 42
+          },
+          {
+            "angle": 15,
+            "length": 290,
+            "width": 32,
+            "offset": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": -35.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 205,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 325,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 85,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 205,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_7",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57390,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 222,
+            "width": 38,
+            "gaps": [
+              [
+                142,
+                174
+              ],
+              [
+                322,
+                354
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 173,
+            "length": 500,
+            "width": 38,
+            "offset": -42
+          },
+          {
+            "angle": 83,
+            "length": 500,
+            "width": 38,
+            "offset": -42
+          },
+          {
+            "angle": 38,
+            "length": 330,
+            "width": 32,
+            "offset": -42
+          }
+        ],
+        "bars": [],
+        "nodes": [
+          {
+            "angle": 239,
+            "radius": 165,
+            "size": 24,
+            "kind": "square"
+          },
+          {
+            "angle": 359,
+            "radius": 260,
+            "size": 24,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "operator_8",
+      "bank": "player",
+      "owner": "operator",
+      "codepoint": 57391,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 240,
+            "width": 44,
+            "gaps": [
+              [
+                159,
+                191
+              ],
+              [
+                220,
+                252
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 16,
+            "length": 460,
+            "width": 38,
+            "offset": 0
+          },
+          {
+            "angle": 106,
+            "length": 460,
+            "width": 38,
+            "offset": 0
+          },
+          {
+            "angle": 61,
+            "length": 290,
+            "width": 32,
+            "offset": 0
+          }
+        ],
+        "bars": [
+          {
+            "x": -190,
+            "y": 105.0,
+            "w": 48,
+            "h": 210
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 93,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 213,
+            "radius": 260,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 333,
+            "radius": 165,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "drone_1",
+      "bank": "bestiary",
+      "owner": "drone",
+      "codepoint": 57392,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 36,
+            "gaps": [
+              [
+                35,
+                118
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 0,
+            "offset": -44,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 37,
+            "offset": 0,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 74,
+            "offset": 44,
+            "length": 450,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -210,
+            "y": -90,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 0,
+            "radius": 145,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 95,
+            "radius": 207,
+            "size": 25,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "drone_2",
+      "bank": "bestiary",
+      "owner": "drone",
+      "codepoint": 57393,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 36,
+            "gaps": [
+              [
+                35,
+                118
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 47,
+            "offset": -44,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 84,
+            "offset": 0,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 121,
+            "offset": 44,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 158,
+            "offset": -44,
+            "length": 310,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -140,
+            "y": -90,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 67,
+            "radius": 145,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 162,
+            "radius": 207,
+            "size": 25,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "drone_3",
+      "bank": "bestiary",
+      "owner": "drone",
+      "codepoint": 57394,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 36,
+            "gaps": [
+              [
+                35,
+                118
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 94,
+            "offset": -44,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 131,
+            "offset": 0,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 168,
+            "offset": 44,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 25,
+            "offset": -44,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 62,
+            "offset": 0,
+            "length": 380,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -70,
+            "y": -90,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 134,
+            "radius": 145,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 229,
+            "radius": 207,
+            "size": 25,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "warden_1",
+      "bank": "bestiary",
+      "owner": "warden",
+      "codepoint": 57395,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 44,
+            "gaps": [
+              [
+                54,
+                137
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 29,
+            "offset": -62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 66,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 103,
+            "offset": 62,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 140,
+            "offset": -62,
+            "length": 380,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": 105,
+            "y": 165,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 41,
+            "radius": 145,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 136,
+            "radius": 207,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 231,
+            "radius": 269,
+            "size": 20,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "warden_2",
+      "bank": "bestiary",
+      "owner": "warden",
+      "codepoint": 57396,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 44,
+            "gaps": [
+              [
+                54,
+                137
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 76,
+            "offset": -62,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 113,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 150,
+            "offset": 62,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 7,
+            "offset": -62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 44,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": 40,
+            "y": 165,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 108,
+            "radius": 145,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 203,
+            "radius": 207,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 298,
+            "radius": 269,
+            "size": 20,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "warden_3",
+      "bank": "bestiary",
+      "owner": "warden",
+      "codepoint": 57397,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 44,
+            "gaps": [
+              [
+                54,
+                137
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 123,
+            "offset": -62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 160,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 17,
+            "offset": 62,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 54,
+            "offset": -62,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 91,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 128,
+            "offset": 62,
+            "length": 310,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -25,
+            "y": 165,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 175,
+            "radius": 145,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 270,
+            "radius": 207,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 5,
+            "radius": 269,
+            "size": 20,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stalker_1",
+      "bank": "bestiary",
+      "owner": "stalker",
+      "codepoint": 57398,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 52,
+            "gaps": [
+              [
+                73,
+                156
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 58,
+            "offset": -44,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 95,
+            "offset": 0,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 132,
+            "offset": 44,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 169,
+            "offset": -44,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 26,
+            "offset": 0,
+            "length": 310,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -210,
+            "y": 20,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 82,
+            "radius": 145,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 177,
+            "radius": 207,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 272,
+            "radius": 269,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 7,
+            "radius": 145,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stalker_2",
+      "bank": "bestiary",
+      "owner": "stalker",
+      "codepoint": 57399,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 52,
+            "gaps": [
+              [
+                73,
+                156
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 105,
+            "offset": -44,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 142,
+            "offset": 0,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 179,
+            "offset": 44,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 36,
+            "offset": -44,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 73,
+            "offset": 0,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 110,
+            "offset": 44,
+            "length": 380,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -140,
+            "y": 20,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 149,
+            "radius": 145,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 244,
+            "radius": 207,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 339,
+            "radius": 269,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 74,
+            "radius": 145,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stalker_3",
+      "bank": "bestiary",
+      "owner": "stalker",
+      "codepoint": 57400,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 52,
+            "gaps": [
+              [
+                73,
+                156
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 152,
+            "offset": -44,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 9,
+            "offset": 0,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 46,
+            "offset": 44,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 83,
+            "offset": -44,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 120,
+            "offset": 0,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 157,
+            "offset": 44,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 14,
+            "offset": -44,
+            "length": 450,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -70,
+            "y": 20,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 216,
+            "radius": 145,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 311,
+            "radius": 207,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 46,
+            "radius": 269,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 141,
+            "radius": 145,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "choir_1",
+      "bank": "bestiary",
+      "owner": "choir",
+      "codepoint": 57401,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 36,
+            "gaps": [
+              [
+                92,
+                175
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 87,
+            "offset": -62,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 124,
+            "offset": 0,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 161,
+            "offset": 62,
+            "length": 450,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 105,
+            "y": 220,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 123,
+            "radius": 145,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 218,
+            "radius": 207,
+            "size": 25,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "choir_2",
+      "bank": "bestiary",
+      "owner": "choir",
+      "codepoint": 57402,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 36,
+            "gaps": [
+              [
+                92,
+                175
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 134,
+            "offset": -62,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 171,
+            "offset": 0,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 28,
+            "offset": 62,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 65,
+            "offset": -62,
+            "length": 310,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 40,
+            "y": 220,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 190,
+            "radius": 145,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 285,
+            "radius": 207,
+            "size": 25,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "choir_3",
+      "bank": "bestiary",
+      "owner": "choir",
+      "codepoint": 57403,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 36,
+            "gaps": [
+              [
+                92,
+                175
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 1,
+            "offset": -62,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 38,
+            "offset": 0,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 75,
+            "offset": 62,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 112,
+            "offset": -62,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 149,
+            "offset": 0,
+            "length": 380,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -25,
+            "y": 220,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 257,
+            "radius": 145,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 352,
+            "radius": 207,
+            "size": 25,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "null_1",
+      "bank": "bestiary",
+      "owner": "null",
+      "codepoint": 57404,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 44,
+            "gaps": [
+              [
+                111,
+                194
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 116,
+            "offset": -44,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 153,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 10,
+            "offset": 44,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 47,
+            "offset": -44,
+            "length": 380,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -210,
+            "y": -90,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 164,
+            "radius": 145,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 259,
+            "radius": 207,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 354,
+            "radius": 269,
+            "size": 20,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "null_2",
+      "bank": "bestiary",
+      "owner": "null",
+      "codepoint": 57405,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 44,
+            "gaps": [
+              [
+                111,
+                194
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 163,
+            "offset": -44,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 20,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 57,
+            "offset": 44,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 94,
+            "offset": -44,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 131,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -140,
+            "y": -90,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 231,
+            "radius": 145,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 326,
+            "radius": 207,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 61,
+            "radius": 269,
+            "size": 20,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "null_3",
+      "bank": "bestiary",
+      "owner": "null",
+      "codepoint": 57406,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 44,
+            "gaps": [
+              [
+                111,
+                194
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 30,
+            "offset": -44,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 67,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 104,
+            "offset": 44,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 141,
+            "offset": -44,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 178,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 35,
+            "offset": 44,
+            "length": 310,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -70,
+            "y": -90,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 298,
+            "radius": 145,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 33,
+            "radius": 207,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 128,
+            "radius": 269,
+            "size": 20,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "construct_1",
+      "bank": "bestiary",
+      "owner": "construct",
+      "codepoint": 57407,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 52,
+            "gaps": [
+              [
+                130,
+                213
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 145,
+            "offset": -62,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 2,
+            "offset": 0,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 39,
+            "offset": 62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 76,
+            "offset": -62,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 113,
+            "offset": 0,
+            "length": 310,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 105,
+            "y": 110,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 205,
+            "radius": 145,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 300,
+            "radius": 207,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 35,
+            "radius": 269,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 130,
+            "radius": 145,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "construct_2",
+      "bank": "bestiary",
+      "owner": "construct",
+      "codepoint": 57408,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 52,
+            "gaps": [
+              [
+                130,
+                213
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 12,
+            "offset": -62,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 49,
+            "offset": 0,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 86,
+            "offset": 62,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 123,
+            "offset": -62,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 160,
+            "offset": 0,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 17,
+            "offset": 62,
+            "length": 380,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": 40,
+            "y": 110,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 272,
+            "radius": 145,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 7,
+            "radius": 207,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 102,
+            "radius": 269,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 197,
+            "radius": 145,
+            "size": 30,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "construct_3",
+      "bank": "bestiary",
+      "owner": "construct",
+      "codepoint": 57409,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 52,
+            "gaps": [
+              [
+                130,
+                213
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 59,
+            "offset": -62,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 96,
+            "offset": 0,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 133,
+            "offset": 62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 170,
+            "offset": -62,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 27,
+            "offset": 0,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 64,
+            "offset": 62,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 101,
+            "offset": -62,
+            "length": 450,
+            "width": 42
+          }
+        ],
+        "bars": [
+          {
+            "x": -25,
+            "y": 110,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 339,
+            "radius": 145,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 74,
+            "radius": 207,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 169,
+            "radius": 269,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 264,
+            "radius": 145,
+            "size": 30,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "phantom_1",
+      "bank": "bestiary",
+      "owner": "phantom",
+      "codepoint": 57410,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 36,
+            "gaps": [
+              [
+                149,
+                232
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 174,
+            "offset": -44,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 31,
+            "offset": 0,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 68,
+            "offset": 44,
+            "length": 450,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -210,
+            "y": 20,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 246,
+            "radius": 145,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 341,
+            "radius": 207,
+            "size": 25,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "phantom_2",
+      "bank": "bestiary",
+      "owner": "phantom",
+      "codepoint": 57411,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 36,
+            "gaps": [
+              [
+                149,
+                232
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 41,
+            "offset": -44,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 78,
+            "offset": 0,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 115,
+            "offset": 44,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 152,
+            "offset": -44,
+            "length": 310,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -140,
+            "y": 20,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 313,
+            "radius": 145,
+            "size": 20,
+            "kind": "square"
+          },
+          {
+            "angle": 48,
+            "radius": 207,
+            "size": 25,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "phantom_3",
+      "bank": "bestiary",
+      "owner": "phantom",
+      "codepoint": 57412,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 250,
+            "width": 36,
+            "gaps": [
+              [
+                149,
+                232
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 88,
+            "offset": -44,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 125,
+            "offset": 0,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 162,
+            "offset": 44,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 19,
+            "offset": -44,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 56,
+            "offset": 0,
+            "length": 380,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -70,
+            "y": 20,
+            "w": 44,
+            "h": 310
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 20,
+            "radius": 145,
+            "size": 20,
+            "kind": "diamond"
+          },
+          {
+            "angle": 115,
+            "radius": 207,
+            "size": 25,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "apex_1",
+      "bank": "bestiary",
+      "owner": "apex",
+      "codepoint": 57413,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 44,
+            "gaps": [
+              [
+                168,
+                251
+              ],
+              [
+                210,
+                248
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 23,
+            "offset": -62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 60,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 97,
+            "offset": 62,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 134,
+            "offset": -62,
+            "length": 380,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": 105,
+            "y": 165,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 287,
+            "radius": 145,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 22,
+            "radius": 207,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 117,
+            "radius": 269,
+            "size": 20,
+            "kind": "square"
+          }
+        ]
+      }
+    },
+    {
+      "id": "apex_2",
+      "bank": "bestiary",
+      "owner": "apex",
+      "codepoint": 57414,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 44,
+            "gaps": [
+              [
+                168,
+                251
+              ],
+              [
+                241,
+                279
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 70,
+            "offset": -62,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 107,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 144,
+            "offset": 62,
+            "length": 310,
+            "width": 30
+          },
+          {
+            "angle": 1,
+            "offset": -62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 38,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": 40,
+            "y": 165,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 354,
+            "radius": 145,
+            "size": 25,
+            "kind": "diamond"
+          },
+          {
+            "angle": 89,
+            "radius": 207,
+            "size": 30,
+            "kind": "square"
+          },
+          {
+            "angle": 184,
+            "radius": 269,
+            "size": 20,
+            "kind": "diamond"
+          }
+        ]
+      }
+    },
+    {
+      "id": "apex_3",
+      "bank": "bestiary",
+      "owner": "apex",
+      "codepoint": 57415,
+      "recipe": {
+        "rings": [
+          {
+            "radius": 226,
+            "width": 44,
+            "gaps": [
+              [
+                168,
+                251
+              ],
+              [
+                272,
+                310
+              ]
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "angle": 117,
+            "offset": -62,
+            "length": 380,
+            "width": 42
+          },
+          {
+            "angle": 154,
+            "offset": 0,
+            "length": 450,
+            "width": 30
+          },
+          {
+            "angle": 11,
+            "offset": 62,
+            "length": 310,
+            "width": 42
+          },
+          {
+            "angle": 48,
+            "offset": -62,
+            "length": 380,
+            "width": 30
+          },
+          {
+            "angle": 85,
+            "offset": 0,
+            "length": 450,
+            "width": 42
+          },
+          {
+            "angle": 122,
+            "offset": 62,
+            "length": 310,
+            "width": 30
+          }
+        ],
+        "bars": [
+          {
+            "x": -25,
+            "y": 165,
+            "w": 260,
+            "h": 38
+          }
+        ],
+        "nodes": [
+          {
+            "angle": 61,
+            "radius": 145,
+            "size": 25,
+            "kind": "square"
+          },
+          {
+            "angle": 156,
+            "radius": 207,
+            "size": 30,
+            "kind": "diamond"
+          },
+          {
+            "angle": 251,
+            "radius": 269,
+            "size": 20,
+            "kind": "square"
+          }
+        ]
+      }
+    }
+  ]
+}
