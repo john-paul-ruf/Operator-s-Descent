@@ -5,15 +5,10 @@ import { applyModifiers } from './modifiers.js';
 import { validateFloor } from './validator.js';
 import { enemyCountScale } from '../rules/scaling.js';
 
-const MAX_ATTEMPTS = 10;
+const MAX_CANDIDATES = 100;
+const REPAIR_THRESHOLD = 50;
 const CONTAINER_DENSITY_BASE = 3;
-
-function wrapGenStream(rngCursor) {
-  return {
-    next: () => rngCursor.next('gen'),
-    nextInt: (max) => rngCursor.nextInt('gen', max)
-  };
-}
+const GENERATION_VERSION = 2;
 
 function weightedSelect(entries, prng) {
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -26,10 +21,14 @@ function weightedSelect(entries, prng) {
   return entries[0]?.[0] || null;
 }
 
-function selectTheme(worldSeed, floorNumber, themesData, prng) {
-  const subPrng = createPRNG(hash(worldSeed, floorNumber, 'theme'));
-  const themeEntries = themesData.themes.map(t => [t.id, 1]);
-  return weightedSelect(themeEntries, subPrng);
+function selectTheme(worldSeed, floorNumber, themesData, prng, themesSeen) {
+  const themeEntries = themesData.themes
+    .filter(t => !themesSeen || !themesSeen.includes(t.id))
+    .map(t => [t.id, 1]);
+  if (themeEntries.length === 0) {
+    return themesData.themes[0]?.id || 'cold_storage';
+  }
+  return weightedSelect(themeEntries, prng);
 }
 
 function getThemeData(themeId, themesData) {
@@ -99,8 +98,11 @@ function placeFeatures(grid, prng, floorNumber, themeData) {
 
   grid[descentPoint.y][descentPoint.x] = 3;
 
+  const entryPoint = { x: Math.floor(GRID_W / 2), y: 0 };
+
   return {
     cells: grid,
+    entryPoint,
     descentPoint,
     containers,
     enemySpawns,
@@ -110,63 +112,132 @@ function placeFeatures(grid, prng, floorNumber, themeData) {
   };
 }
 
-export function generateFloor(worldSeed, floorNumber, rngCursor, themesData) {
-  const genPrng = wrapGenStream(rngCursor);
-  let lastFloor = null;
+function buildCandidate(worldSeed, floorNumber, k, themesData, options) {
+  const candidatePrng = createPRNG(hash(worldSeed, GENERATION_VERSION, floorNumber, k));
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const themeId = selectTheme(worldSeed, floorNumber, themesData, genPrng);
-    const themeData = getThemeData(themeId, themesData);
+  const themesSeen = options.themesSeen || [];
+  const themeId = selectTheme(worldSeed, floorNumber, themesData, candidatePrng, themesSeen);
+  const themeData = getThemeData(themeId, themesData);
 
-    const archetypeEntries = themeData?.archetypeWeights
-      ? Object.entries(themeData.archetypeWeights)
-      : Object.keys(ARCHETYPES).map(id => [id, 1]);
+  const archetypeEntries = themeData?.archetypeWeights
+    ? Object.entries(themeData.archetypeWeights)
+    : Object.keys(ARCHETYPES).map(id => [id, 1]);
 
-    const archetypeId = weightedSelect(archetypeEntries, genPrng);
+  const archetypeId = weightedSelect(archetypeEntries, candidatePrng);
 
-    const generator = ARCHETYPES[archetypeId] || ARCHETYPES.chambers;
-    const grid = generator(genPrng);
+  const generator = ARCHETYPES[archetypeId] || ARCHETYPES.chambers;
+  const grid = generator(candidatePrng);
 
-    const modifierWeights = themeData?.modifierWeights || { none: 1 };
-    const modResult = applyModifiers(grid, genPrng, modifierWeights);
-    const modifiedGrid = modResult.grid;
-    const modifierIds = modResult.modifierIds;
+  const modifierWeights = themeData?.modifierWeights || { none: 1 };
+  const modResult = applyModifiers(grid, candidatePrng, modifierWeights);
+  const modifiedGrid = modResult.grid;
+  const modifierIds = modResult.modifierIds;
 
-    const featurePrng = createPRNG(hash(worldSeed, floorNumber, attempt));
-    const floor = placeFeatures(modifiedGrid, featurePrng, floorNumber, themeData);
-    if (!floor) continue;
+  const featurePrng = createPRNG(hash(worldSeed, GENERATION_VERSION, floorNumber, k, 'features'));
+  const floor = placeFeatures(modifiedGrid, featurePrng, floorNumber, themeData);
+  if (!floor) return null;
 
-    floor.archetypeId = archetypeId;
-    floor.modifiers = modifierIds;
-    lastFloor = floor;
+  floor.archetypeId = archetypeId;
+  floor.modifiers = modifierIds;
+  floor.floorSubSeed = k;
+  return floor;
+}
 
-    const result = validateFloor(floor);
-    if (result.valid) return floor;
-  }
+function buildRepairCandidate(worldSeed, floorNumber, k, themesData) {
+  const candidatePrng = createPRNG(hash(worldSeed, GENERATION_VERSION, floorNumber, k, 'repair'));
 
-  if (lastFloor) {
-    return lastFloor;
-  }
+  const themeData = themesData.themes[0] || {};
+  const grid = ARCHETYPES.chambers(candidatePrng);
 
-  const fallbackGrid = ARCHETYPES.chambers(createPRNG(hash(worldSeed, floorNumber, 999)));
-  const fallbackFloor = placeFeatures(fallbackGrid, createPRNG(hash(worldSeed, floorNumber, 998)), floorNumber, themesData.themes[0] || {});
-  if (fallbackFloor) {
-    fallbackFloor.archetypeId = 'chambers';
-    return fallbackFloor;
-  }
+  const featurePrng = createPRNG(hash(worldSeed, GENERATION_VERSION, floorNumber, k, 'repair-features'));
+  const floor = placeFeatures(grid, featurePrng, floorNumber, themeData);
+  if (!floor) return null;
 
-  const grid = new Array(GRID_H);
-  for (let y = 0; y < GRID_H; y++) {
-    grid[y] = new Array(GRID_W).fill(1);
-  }
-  grid[GRID_H - 1][Math.floor(GRID_W / 2)] = 3;
+  floor.archetypeId = 'chambers';
+  floor.modifiers = [];
+  floor.floorSubSeed = k;
+  return floor;
+}
+
+function cloneFloor(floor) {
   return {
-    cells: grid,
-    descentPoint: { x: Math.floor(GRID_W / 2), y: GRID_H - 1 },
-    containers: [],
-    enemySpawns: [],
-    themeId: 'cold_storage',
-    archetypeId: 'chambers',
-    modifiers: []
+    ...floor,
+    cells: floor.cells.map(row => [...row]),
+    containers: floor.containers.map(c => ({ ...c })),
+    enemySpawns: floor.enemySpawns.map(e => ({ ...e })),
+    descentPoint: { ...floor.descentPoint },
+    entryPoint: { ...floor.entryPoint },
+    modifiers: [...floor.modifiers]
   };
 }
+
+export function generateFloor(worldSeed, floorNumber, options, themesData) {
+  if (themesData === undefined && options !== undefined) {
+    themesData = options;
+    options = {};
+  }
+  options = options || {};
+  const generationVersion = options.generationVersion || GENERATION_VERSION;
+
+  let floor = null;
+  let diagnostics = { attempts: 0, repaired: false, failures: [] };
+
+  for (let k = 0; k < MAX_CANDIDATES; k++) {
+    diagnostics.attempts = k + 1;
+    const candidate = buildCandidate(worldSeed, floorNumber, k, themesData, options);
+    if (!candidate) continue;
+
+    const result = validateFloor(candidate);
+    if (result.valid) {
+      floor = candidate;
+      break;
+    }
+    diagnostics.failures = result.failures;
+  }
+
+  if (!floor) {
+    for (let k = 0; k < REPAIR_THRESHOLD; k++) {
+      diagnostics.attempts = MAX_CANDIDATES + k + 1;
+      diagnostics.repaired = true;
+      const candidate = buildRepairCandidate(worldSeed, floorNumber, k, themesData);
+      if (!candidate) continue;
+
+      const result = validateFloor(candidate);
+      if (result.valid) {
+        floor = candidate;
+        break;
+      }
+      diagnostics.failures = result.failures;
+    }
+  }
+
+  if (!floor) {
+    floor = buildRepairCandidate(worldSeed, floorNumber, 0, themesData);
+  }
+
+  if (!floor) {
+    const grid = new Array(GRID_H);
+    for (let y = 0; y < GRID_H; y++) {
+      grid[y] = new Array(GRID_W).fill(1);
+    }
+    grid[0][Math.floor(GRID_W / 2)] = 3;
+    grid[GRID_H - 1][Math.floor(GRID_W / 2)] = 1;
+    for (let y = 1; y < GRID_H - 1; y++) grid[y][Math.floor(GRID_W / 2)] = 1;
+    floor = {
+      cells: grid,
+      entryPoint: { x: Math.floor(GRID_W / 2), y: 0 },
+      descentPoint: { x: Math.floor(GRID_W / 2), y: GRID_H - 1 },
+      containers: [{ id: 0, x: Math.floor(GRID_W / 2) + 1, y: Math.floor(GRID_H / 2) }],
+      enemySpawns: [],
+      themeId: themesData.themes[0]?.id || 'cold_storage',
+      archetypeId: 'chambers',
+      modifiers: [],
+      floorSubSeed: 0
+    };
+    grid[floor.containers[0].y][floor.containers[0].x] = 2;
+  }
+
+  return cloneFloor(floor);
+}
+
+export { GENERATION_VERSION };

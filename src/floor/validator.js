@@ -6,22 +6,17 @@ function floodFill(grid, startX, startY) {
   const h = grid.length;
   const w = grid[0].length;
   const visited = Array.from({ length: h }, () => new Array(w).fill(false));
-  const queue = [[startX, startY]];
+  const stack = [[startX, startY]];
   visited[startY][startX] = true;
   let count = 0;
 
-  while (queue.length > 0) {
-    const [x, y] = queue.shift();
+  while (stack.length > 0) {
+    const [x, y] = stack.pop();
     count++;
-    const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
-    for (const [dx, dy] of dirs) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx] && isOpenCell(grid[ny][nx])) {
-        visited[ny][nx] = true;
-        queue.push([nx, ny]);
-      }
-    }
+    if (grid[y - 1]?.[x] >= 1 && !visited[y - 1]?.[x]) { visited[y - 1][x] = true; stack.push([x, y - 1]); }
+    if (grid[y + 1]?.[x] >= 1 && !visited[y + 1]?.[x]) { visited[y + 1][x] = true; stack.push([x, y + 1]); }
+    if (grid[y]?.[x - 1] >= 1 && !visited[y]?.[x - 1]) { visited[y][x - 1] = true; stack.push([x - 1, y]); }
+    if (grid[y]?.[x + 1] >= 1 && !visited[y]?.[x + 1]) { visited[y][x + 1] = true; stack.push([x + 1, y]); }
   }
   return { visited, count };
 }
@@ -72,20 +67,15 @@ function maxOpenArea(grid) {
     for (let x = 0; x < w; x++) {
       if (isOpenCell(grid[y][x]) && !visited[y][x]) {
         let size = 0;
-        const queue = [[x, y]];
+        const stack = [[x, y]];
         visited[y][x] = true;
-        while (queue.length > 0) {
-          const [cx, cy] = queue.shift();
+        while (stack.length > 0) {
+          const [cx, cy] = stack.pop();
           size++;
-          const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
-          for (const [dx, dy] of dirs) {
-            const nx = cx + dx;
-            const ny = cy + dy;
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx] && isOpenCell(grid[ny][nx])) {
-              visited[ny][nx] = true;
-              queue.push([nx, ny]);
-            }
-          }
+          if (grid[cy - 1]?.[cx] >= 1 && !visited[cy - 1]?.[cx]) { visited[cy - 1][cx] = true; stack.push([cx, cy - 1]); }
+          if (grid[cy + 1]?.[cx] >= 1 && !visited[cy + 1]?.[cx]) { visited[cy + 1][cx] = true; stack.push([cx, cy + 1]); }
+          if (grid[cy]?.[cx - 1] >= 1 && !visited[cy]?.[cx - 1]) { visited[cy][cx - 1] = true; stack.push([cx - 1, cy]); }
+          if (grid[cy]?.[cx + 1] >= 1 && !visited[cy]?.[cx + 1]) { visited[cy][cx + 1] = true; stack.push([cx + 1, cy]); }
         }
         maxSize = Math.max(maxSize, size);
       }
@@ -96,25 +86,31 @@ function maxOpenArea(grid) {
 
 export function validateFloor(floor) {
   const failures = [];
+  const metrics = {};
   const grid = floor.cells;
 
   const start = findFirstOpen(grid);
   if (!start) {
-    return { valid: false, failures: ['no-floor-cells'] };
+    return { valid: false, failures: ['no-floor-cells'], metrics: { openCells: 0, connectedCells: 0, loops: 0, maxRegion: 0 } };
   }
 
   const { visited, count } = floodFill(grid, start.x, start.y);
   const totalOpen = countOpenCells(grid);
+  metrics.openCells = totalOpen;
+  metrics.connectedCells = count;
+
   if (count < totalOpen) {
     failures.push('connectivity');
   }
 
   const loops = countLoops(grid);
+  metrics.loops = loops;
   if (loops < 3 && totalOpen > 50) {
     failures.push('loop-density');
   }
 
   const openArea = maxOpenArea(grid);
+  metrics.maxRegion = openArea;
   if (openArea > 200) {
     failures.push('open-cell-bounds');
   }
@@ -139,6 +135,9 @@ export function validateFloor(floor) {
           failures.push('container-accessibility');
           break;
         }
+      } else {
+        failures.push('container-accessibility');
+        break;
       }
     }
   }
@@ -147,5 +146,5 @@ export function validateFloor(floor) {
     failures.push('interior-cover');
   }
 
-  return { valid: failures.length === 0, failures };
+  return { valid: failures.length === 0, failures, metrics };
 }

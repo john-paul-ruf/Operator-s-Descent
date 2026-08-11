@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { generateFloor } from '../../src/floor/generator.js';
 import { validateFloor } from '../../src/floor/validator.js';
 import { createLattice } from '../../src/exploration/lattice.js';
-import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { ARCHETYPES } from '../../src/floor/archetypes.js';
 import { reachable } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
@@ -17,10 +16,9 @@ const FLOORS = [1, 3, 7, 10, 15];
 const records = [];
 for (const seed of SEEDS) {
   for (const floor of FLOORS) {
-    const cursor = createRNGCursorForRun(seed);
-    const f = generateFloor(seed, floor, cursor, themesData);
+    const f = generateFloor(seed, floor, {}, themesData);
     const validation = validateFloor(f);
-    records.push({ seed, floorNumber: floor, floor: f, valid: validation.valid, failures: validation.failures });
+    records.push({ seed, floorNumber: floor, floor: f, valid: validation.valid, failures: validation.failures, metrics: validation.metrics });
   }
 }
 
@@ -66,13 +64,23 @@ describe('floor pipeline — structural invariants (every floor)', () => {
 
       expect(THEME_IDS).toContain(f.themeId);
       expect(ARCH_KEYS).toContain(f.archetypeId);
+      expect(f).toHaveProperty('entryPoint');
+      expect(f).toHaveProperty('floorSubSeed');
     });
   }
 });
 
-describe('floor pipeline — reachability (valid floors only)', () => {
-  const validRecords = records.filter(r => r.valid);
-  for (const rec of validRecords) {
+describe('floor pipeline — all 150 floors pass validation', () => {
+  for (const rec of records) {
+    it(`seed ${rec.seed} floor ${rec.floorNumber}: valid (no failures)`, () => {
+      expect(rec.valid).toBe(true);
+      expect(rec.failures).toEqual([]);
+    });
+  }
+});
+
+describe('floor pipeline — reachability (all floors)', () => {
+  for (const rec of records) {
     it(`seed ${rec.seed} floor ${rec.floorNumber}: descent + containers reachable from first open cell`, () => {
       const f = rec.floor;
       const lattice = createLattice(f);
@@ -94,56 +102,36 @@ describe('floor pipeline — determinism at scale', () => {
 
   for (const seed of checkSeeds) {
     for (const floor of checkFloors) {
-      it(`seed ${seed} floor ${floor}: fresh cursor reproduces deep-equal floor`, () => {
-        const c1 = createRNGCursorForRun(seed);
-        const f1 = generateFloor(seed, floor, c1, themesData);
-        const c2 = createRNGCursorForRun(seed);
-        const f2 = generateFloor(seed, floor, c2, themesData);
+      it(`seed ${seed} floor ${floor}: fresh call reproduces deep-equal floor`, () => {
+        const f1 = generateFloor(seed, floor, {}, themesData);
+        const f2 = generateFloor(seed, floor, {}, themesData);
         expect(f1).toEqual(f2);
       });
     }
   }
 
-  it('sequential generation on one cursor is reproducible (two sequential runs → pairwise deep-equal)', () => {
+  it('sequential generation is reproducible (two sequential runs → pairwise deep-equal)', () => {
     const seed = 42;
     const run1 = [];
-    const c1 = createRNGCursorForRun(seed);
-    for (const floor of [1, 2, 3, 4, 5]) {
-      run1.push(generateFloor(seed, floor, c1, themesData));
-    }
     const run2 = [];
-    const c2 = createRNGCursorForRun(seed);
     for (const floor of [1, 2, 3, 4, 5]) {
-      run2.push(generateFloor(seed, floor, c2, themesData));
+      run1.push(generateFloor(seed, floor, {}, themesData));
+    }
+    for (const floor of [1, 2, 3, 4, 5]) {
+      run2.push(generateFloor(seed, floor, {}, themesData));
     }
     for (let i = 0; i < 5; i++) {
       expect(run1[i]).toEqual(run2[i]);
     }
   });
 
-  it('theme stability: themeId for (seed, floor) identical across runs', () => {
+  it('theme stability: themeId for (seed, floor) identical across calls', () => {
     const seed = 7;
     for (const floor of [1, 3, 7, 10, 15]) {
-      const c1 = createRNGCursorForRun(seed);
-      const f1 = generateFloor(seed, floor, c1, themesData);
-      const c2 = createRNGCursorForRun(seed);
-      for (let i = 0; i < 17; i++) c2.next('gen');
-      const f2 = generateFloor(seed, floor, c2, themesData);
+      const f1 = generateFloor(seed, floor, {}, themesData);
+      const f2 = generateFloor(seed, floor, {}, themesData);
       expect(f2.themeId).toBe(f1.themeId);
     }
-  });
-});
-
-// 84 of 150 floors valid — retry-exhaustion escapes are a design signal
-describe('floor pipeline — validation rate', () => {
-  it('≥ 80 of 150 floors valid', () => {
-    let validCount = 0;
-    const failures = [];
-    for (const rec of records) {
-      if (rec.valid) validCount++;
-      else failures.push({ seed: rec.seed, floor: rec.floorNumber, failures: rec.failures });
-    }
-    expect(validCount).toBeGreaterThanOrEqual(80);
   });
 });
 

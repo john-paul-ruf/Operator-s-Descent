@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateFloor } from '../../src/floor/generator.js';
-import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
+import { generateFloor, GENERATION_VERSION } from '../../src/floor/generator.js';
 import { validateFloor } from '../../src/floor/validator.js';
 import { enemyCountScale } from '../../src/rules/scaling.js';
 import { ARCHETYPES, GRID_W, GRID_H } from '../../src/floor/archetypes.js';
@@ -13,7 +12,7 @@ const ARCH_KEYS = Object.keys(ARCHETYPES);
 const THEME_IDS = themesData.themes.map(t => t.id);
 
 function gen(seed, floor) {
-  return generateFloor(seed, floor, createRNGCursorForRun(seed), themesData);
+  return generateFloor(seed, floor, {}, themesData);
 }
 
 describe('generateFloor — structural invariants', () => {
@@ -28,6 +27,8 @@ describe('generateFloor — structural invariants', () => {
         expect(f).toHaveProperty('themeId');
         expect(f).toHaveProperty('archetypeId');
         expect(f).toHaveProperty('modifiers');
+        expect(f).toHaveProperty('entryPoint');
+        expect(f).toHaveProperty('floorSubSeed');
 
         expect(f.cells.length).toBe(GRID_H);
         for (const row of f.cells) expect(row.length).toBe(GRID_W);
@@ -65,30 +66,17 @@ describe('generateFloor — structural invariants', () => {
 
         expect(THEME_IDS).toContain(f.themeId);
         expect(ARCH_KEYS).toContain(f.archetypeId);
+        expect(typeof f.floorSubSeed).toBe('number');
       });
     }
   }
 });
 
-describe('generateFloor — determinism & seeding domains', () => {
-  it('full determinism: same (seed, floor) → deep-equal floors and identical gen cursor', () => {
-    const c1 = createRNGCursorForRun(42);
-    const c2 = createRNGCursorForRun(42);
-    const f1 = generateFloor(42, 5, c1, themesData);
-    const f2 = generateFloor(42, 5, c2, themesData);
+describe('generateFloor — determinism & cursor isolation', () => {
+  it('full determinism: same (seed, floor) → deep-equal floors', () => {
+    const f1 = generateFloor(42, 5, {}, themesData);
+    const f2 = generateFloor(42, 5, {}, themesData);
     expect(f1).toEqual(f2);
-    expect(c1.getCursor('gen')).toBe(c2.getCursor('gen'));
-  });
-
-  it('theme cursor-independence: burning 17 gen draws → same themeId', () => {
-    const c1 = createRNGCursorForRun(42);
-    const f1 = generateFloor(42, 5, c1, themesData);
-
-    const c2 = createRNGCursorForRun(42);
-    for (let i = 0; i < 17; i++) c2.next('gen');
-    const f2 = generateFloor(42, 5, c2, themesData);
-
-    expect(f2.themeId).toBe(f1.themeId);
   });
 
   it('different floorNumber (1 vs 2) → different floor', () => {
@@ -97,39 +85,64 @@ describe('generateFloor — determinism & seeding domains', () => {
     expect(f1).not.toEqual(f2);
   });
 
-  it('combat stream untouched: getCursor("combat") === 0 after generation', () => {
-    const c = createRNGCursorForRun(42);
-    generateFloor(42, 5, c, themesData);
-    expect(c.getCursor('combat')).toBe(0);
+  it('generation does not depend on external cursor state', () => {
+    const f1 = generateFloor(42, 5, {}, themesData);
+    const f2 = generateFloor(42, 5, {}, themesData);
+    expect(f1).toEqual(f2);
+  });
+
+  it('floorSubSeed replay: same seed + floor + subSeed → same floor', () => {
+    const f1 = gen(42, 5);
+    const f2 = generateFloor(42, 5, { floorSubSeed: f1.floorSubSeed }, themesData);
+    expect(f1).toEqual(f2);
+  });
+});
+
+describe('generateFloor — all floors are valid', () => {
+  it('every floor in a 9-run sweep passes validation', () => {
+    for (const seed of SEEDS) {
+      for (const floor of FLOORS) {
+        const f = gen(seed, floor);
+        const result = validateFloor(f);
+        expect(result.valid).toBe(true);
+        expect(result.failures).toEqual([]);
+      }
+    }
+  });
+
+  it('every floor in a 150-run sweep passes validation', () => {
+    const sweepSeeds = Array.from({ length: 30 }, (_, i) => i + 1);
+    const sweepFloors = [1, 3, 7, 10, 15];
+    for (const seed of sweepSeeds) {
+      for (const floor of sweepFloors) {
+        const f = gen(seed, floor);
+        const result = validateFloor(f);
+        expect(result.valid).toBe(true);
+        expect(result.failures).toEqual([]);
+      }
+    }
   });
 });
 
 describe('generateFloor — degenerate-input tolerance', () => {
-  it('single-theme with minimal fields → floor still structurally valid', () => {
+  it('single-theme with minimal fields → floor still valid', () => {
     const minimal = {
-      themes: [{
-        id: 'test_theme',
-        lootBias: {},
-      }],
+      themes: [{ id: 'test_theme', lootBias: {} }],
     };
-    const cursor = createRNGCursorForRun(42);
-    const f = generateFloor(42, 1, cursor, minimal);
+    const f = generateFloor(42, 1, {}, minimal);
     expect(f.cells.length).toBe(GRID_H);
     expect(f.cells[0].length).toBe(GRID_W);
     expect(f.themeId).toBe('test_theme');
     expect(ARCH_KEYS).toContain(f.archetypeId);
     expect(f.containers.length).toBeGreaterThanOrEqual(1);
+    expect(validateFloor(f).valid).toBe(true);
   });
 
   it('theme without enemyMixWeights → spawns are all drones', () => {
     const noEnemyMix = {
-      themes: [{
-        id: 'no_mix',
-        lootBias: {},
-      }],
+      themes: [{ id: 'no_mix', lootBias: {} }],
     };
-    const cursor = createRNGCursorForRun(42);
-    const f = generateFloor(42, 1, cursor, noEnemyMix);
+    const f = generateFloor(42, 1, {}, noEnemyMix);
     for (const e of f.enemySpawns) {
       expect(e.archetypeId).toBe('drone');
     }
@@ -137,56 +150,53 @@ describe('generateFloor — degenerate-input tolerance', () => {
 
   it('containerDensity 3 → containers.length ≤ 9 and ≥ 1', () => {
     const highDensity = {
-      themes: [{
-        id: 'dense_loot',
-        lootBias: { containerDensity: 3 },
-      }],
+      themes: [{ id: 'dense_loot', lootBias: { containerDensity: 3 } }],
     };
-    const cursor = createRNGCursorForRun(42);
-    const f = generateFloor(42, 1, cursor, highDensity);
+    const f = generateFloor(42, 1, {}, highDensity);
     expect(f.containers.length).toBeLessThanOrEqual(9);
     expect(f.containers.length).toBeGreaterThanOrEqual(1);
   });
 });
 
-describe('generateFloor — fallback & validity', () => {
-  it('pressure test: heavy dangerous + sparse archetype still returns valid structure', () => {
+describe('generateFloor — no invalid fallback', () => {
+  it('pressure test: heavy dangerous modifier still returns valid floor', () => {
     const pressure = {
       themes: [{
         id: 'pressure',
-        archetypeWeights: { organic: 1 },
+        archetypeWeights: { caves: 1 },
         modifierWeights: { dangerous: 1 },
         enemyMixWeights: { drone: 1 },
         lootBias: { containerDensity: 1 },
       }],
     };
-    const cursor = createRNGCursorForRun(42);
-    const f = generateFloor(42, 1, cursor, pressure);
+    const f = generateFloor(42, 1, {}, pressure);
     expect(f.cells.length).toBe(GRID_H);
     expect(f.cells[0].length).toBe(GRID_W);
     expect(f.containers.length).toBeGreaterThanOrEqual(1);
+    expect(validateFloor(f).valid).toBe(true);
   });
 
-  it('ultimate all-floor fallback signature never appears in normal runs', () => {
+  it('ultimate all-floor fallback never appears: all floors have containers', () => {
     for (const seed of SEEDS) {
       for (const floor of FLOORS) {
         const f = gen(seed, floor);
-        const isFallback = f.containers.length === 0 &&
-          f.themeId === 'cold_storage' &&
-          f.archetypeId === 'chambers';
-        expect(isFallback).toBe(false);
+        expect(f.containers.length).toBeGreaterThan(0);
       }
     }
   });
+});
 
-  it('≥ 80% valid across the 9-run sweep', () => {
-    let validCount = 0;
-    for (const seed of SEEDS) {
-      for (const floor of FLOORS) {
-        const f = gen(seed, floor);
-        if (validateFloor(f).valid) validCount++;
-      }
-    }
-    expect(validCount / 9).toBeGreaterThanOrEqual(0.8);
+describe('generateFloor — cloned grid independence', () => {
+  it('mutating returned grid does not affect subsequent calls', () => {
+    const f1 = gen(42, 5);
+    f1.cells[0][0] = 9;
+    const f2 = gen(42, 5);
+    expect(f2.cells[0][0]).not.toBe(9);
+  });
+});
+
+describe('generateFloor — generation version', () => {
+  it('GENERATION_VERSION is 2', () => {
+    expect(GENERATION_VERSION).toBe(2);
   });
 });

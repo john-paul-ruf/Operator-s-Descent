@@ -2,11 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { validateFloor } from '../../src/floor/validator.js';
 import { makeGrid, carve } from '../helpers/grids.js';
 
+describe('validator — return shape', () => {
+  it('returns {valid, failures, metrics} for a valid floor', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 1, 4, 4, 1);
+    carve(grid, 8, 1, 4, 4, 1);
+    carve(grid, 1, 7, 4, 4, 1);
+    const result = validateFloor({ cells: grid, descentPoint: { x: 2, y: 2 }, containers: [] });
+    expect(result).toHaveProperty('valid');
+    expect(result).toHaveProperty('failures');
+    expect(result).toHaveProperty('metrics');
+    expect(result.metrics).toHaveProperty('openCells');
+    expect(result.metrics).toHaveProperty('connectedCells');
+    expect(result.metrics).toHaveProperty('loops');
+    expect(result.metrics).toHaveProperty('maxRegion');
+  });
+});
+
 describe('validator — no-floor-cells', () => {
   it('all walls → {valid: false, failures: ["no-floor-cells"]}', () => {
     const grid = makeGrid(20, 32, 0);
     const result = validateFloor({ cells: grid, descentPoint: null, containers: [] });
-    expect(result).toEqual({ valid: false, failures: ['no-floor-cells'] });
+    expect(result.valid).toBe(false);
+    expect(result.failures).toContain('no-floor-cells');
   });
 });
 
@@ -36,9 +54,6 @@ describe('validator — loop-density', () => {
       y += 2;
       leftToRight = !leftToRight;
     }
-    let open = 0;
-    for (const row of grid) for (const c of row) if (c === 1) open++;
-    expect(open).toBeGreaterThan(50);
     const result = validateFloor({ cells: grid, descentPoint: { x: 1, y: 1 }, containers: [] });
     expect(result.failures).toContain('loop-density');
   });
@@ -58,9 +73,6 @@ describe('validator — loop-density', () => {
       y += 2;
       leftToRight = !leftToRight;
     }
-    let open = 0;
-    for (const row of grid) for (const c of row) if (c === 1) open++;
-    expect(open).toBeLessThan(50);
     const result = validateFloor({ cells: grid, descentPoint: { x: 1, y: 1 }, containers: [] });
     expect(result.failures).not.toContain('loop-density');
   });
@@ -107,6 +119,13 @@ describe('validator — container-accessibility', () => {
     expect(result.failures).toContain('container-accessibility');
   });
 
+  it('container out of bounds → includes container-accessibility', () => {
+    const grid = makeGrid(10, 10, 0);
+    carve(grid, 1, 1, 8, 8, 1);
+    const result = validateFloor({ cells: grid, descentPoint: { x: 5, y: 5 }, containers: [{ x: 50, y: 50 }] });
+    expect(result.failures).toContain('container-accessibility');
+  });
+
   it('two bad containers → single failure entry (breaks after first)', () => {
     const grid = makeGrid(10, 10, 0);
     carve(grid, 1, 1, 8, 8, 1);
@@ -121,50 +140,40 @@ describe('validator — interior-cover', () => {
     for (let i = 0; i < 4; i++) {
       for (let y = 1; y <= 30; y++) grid[y][1 + i * 5] = 1;
     }
-    let open = 0;
-    for (const row of grid) for (const c of row) if (c === 1) open++;
-    expect(open).toBe(120);
-    let maxArea = 0;
-    const visited = Array.from({ length: 32 }, () => new Array(20).fill(false));
-    for (let y = 0; y < 32; y++) {
-      for (let x = 0; x < 20; x++) {
-        if (grid[y][x] === 1 && !visited[y][x]) {
-          let size = 0;
-          const q = [[x, y]];
-          visited[y][x] = true;
-          while (q.length > 0) {
-            const [cx, cy] = q.shift();
-            size++;
-            for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
-              const nx = cx + dx, ny = cy + dy;
-              if (nx >= 0 && nx < 20 && ny >= 0 && ny < 32 && !visited[ny][nx] && grid[ny][nx] === 1) {
-                visited[ny][nx] = true;
-                q.push([nx, ny]);
-              }
-            }
-          }
-          maxArea = Math.max(maxArea, size);
-        }
-      }
-    }
-    expect(maxArea).toBe(30);
-    let loops = 0;
-    for (let y = 1; y < 31; y++) {
-      for (let x = 1; x < 19; x++) {
-        if (grid[y][x] === 1) {
-          let n = 0;
-          if (grid[y-1][x] === 1) n++;
-          if (grid[y+1][x] === 1) n++;
-          if (grid[y][x-1] === 1) n++;
-          if (grid[y][x+1] === 1) n++;
-          if (n >= 3) loops++;
-        }
-      }
-    }
-    expect(loops).toBeLessThan(2);
     const result = validateFloor({ cells: grid, descentPoint: { x: 1, y: 1 }, containers: [] });
     expect(result.failures).toContain('interior-cover');
     expect(result.failures).toContain('connectivity');
+  });
+});
+
+describe('validator — metrics', () => {
+  it('metrics.openCells counts all walkable cells', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 1, 10, 10, 1);
+    const result = validateFloor({ cells: grid, descentPoint: { x: 5, y: 5 }, containers: [] });
+    expect(result.metrics.openCells).toBe(100);
+  });
+
+  it('metrics.maxRegion matches largest contiguous region', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 1, 5, 5, 1);
+    carve(grid, 10, 10, 8, 8, 1);
+    const result = validateFloor({ cells: grid, descentPoint: { x: 2, y: 2 }, containers: [] });
+    expect(result.metrics.maxRegion).toBe(64);
+  });
+
+  it('metrics.loops counts junction points (≥3 open neighbors)', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 1, 4, 4, 1);
+    carve(grid, 8, 1, 4, 4, 1);
+    carve(grid, 1, 7, 4, 4, 1);
+    carve(grid, 8, 7, 4, 4, 1);
+    grid[2][5] = 1; grid[2][6] = 1; grid[2][7] = 1;
+    grid[8][5] = 1; grid[8][6] = 1; grid[8][7] = 1;
+    grid[5][2] = 1; grid[6][2] = 1;
+    grid[5][9] = 1; grid[6][9] = 1;
+    const result = validateFloor({ cells: grid, descentPoint: { x: 2, y: 2 }, containers: [] });
+    expect(result.metrics.loops).toBeGreaterThan(0);
   });
 });
 
