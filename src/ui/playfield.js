@@ -11,6 +11,7 @@ const GRID_COLOR = 'rgba(126,200,227,0.1)';
 const DANGER_COLOR = '#e83a3a';
 const COVER_COLOR = '#e8c63a';
 const PATH_COLOR = '#ffffff';
+const ECHO_COLOR = '#b026d4';
 
 function bounded(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -176,15 +177,18 @@ export function createPlayfield(canvas) {
         const px = dx * COMBAT_CELL_SIZE;
         const py = dy * COMBAT_CELL_SIZE;
         const role = actorRole(actor);
-        if (actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
-        if (actor.id === options.selectedTargetId) drawFrame(ctx, px + 4, py + 4, DANGER_COLOR, 'TARGET');
+        const isDead = actor.hp <= 0;
+        const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
+        const tokenColor = isDead ? 'rgba(128,128,128,0.35)' : roleColor;
+        if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
+        if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px + 4, py + 4, DANGER_COLOR, 'TARGET');
         drawCreatureSigil(ctx, {
           codepoint: actorSigil(actor),
           size: 72,
           role,
           x: px + COMBAT_CELL_SIZE / 2,
           y: py + COMBAT_CELL_SIZE / 2,
-          color: role === 'player' ? accentColor : DANGER_COLOR
+          color: tokenColor
         });
       }
     }
