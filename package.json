@@ -19,6 +19,7 @@
     "font:build": "python3 ./tools/font/build_font.py",
     "font:check": "python3 ./tools/font/build_font.py --check && python3 ./scripts/verify-font.py",
     "lint:sigils": "node ./scripts/lint-sigils.js",
+    "design:scan": "node ./scripts/scan-design-compliance.js",
     "check:assets": "node ./scripts/verify-assets.js",
     "stress:generation": "node ./scripts/stress-generation.js --seeds 250 --depths 1,10,50,100",
     "stress:saves": "node ./scripts/stress-saves.js",
