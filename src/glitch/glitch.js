@@ -1,10 +1,32 @@
 let safePool = null;
 
+const PLAYER_BANK_START = 0xE000;
+const BESTIARY_BANK_END = 0xE048;
+
+export const GLITCH_TIMINGS = Object.freeze({
+  charSubstitution: { minCadence: 700, maxCadence: 1799, minDuration: 120, maxDuration: 349 },
+  glitchBars: { minCadence: 350, maxCadence: 999, minDuration: 80, maxDuration: 249, firePercent: 40 },
+  noiseLines: { minCadence: 1200, maxCadence: 3499, minDuration: 80, maxDuration: 299, firePercent: 30 },
+  vhsEvents: { minCadence: 4000, maxCadence: 9999, minDuration: 80, maxDuration: 249 },
+  elementJitter: { minCadence: 500, maxCadence: 1399, minDuration: 70, maxDuration: 199, firePercent: 30 },
+  borderFlicker: { minCadence: 400, maxCadence: 1099, minDuration: 40, maxDuration: 159, firePercent: 35 },
+  frameFlash: { minCadence: 1800, maxCadence: 4499, minDuration: 30, maxDuration: 89, firePercent: 12 }
+});
+
+const EFFECTS = Object.keys(GLITCH_TIMINGS);
+
 export function initGlitchSafePool(sigilsData) {
   const pool = sigilsData?.safeSubstitutionPool;
-  if (pool) {
-    safePool = [...pool.latin, ...pool.digits, ...pool.boxDrawing];
-  }
+  if (pool) safePool = [...pool.latin, ...pool.digits, ...pool.boxDrawing];
+}
+
+export function resolveMotionPolicy(settings = {}, media = globalThis.window?.matchMedia) {
+  const manual = settings.reducedMotion;
+  if (manual === 'reduce' || manual === true) return { reduced: true, source: 'manual' };
+  if (manual === 'full') return { reduced: false, source: 'manual' };
+  let system = false;
+  try { system = Boolean(media?.('(prefers-reduced-motion: reduce)')?.matches); } catch { system = false; }
+  return { reduced: system, source: 'system' };
 }
 
 function loadSafePool() {
@@ -13,195 +35,192 @@ function loadSafePool() {
   return safePool;
 }
 
-const TIMINGS = {
-  charSubstitution: { minCadence: 700, maxCadence: 1799, minDuration: 120, maxDuration: 349 },
-  glitchBars: { minCadence: 350, maxCadence: 999, minDuration: 80, maxDuration: 249, firePercent: 40 },
-  noiseLines: { minCadence: 1200, maxCadence: 3499, minDuration: 80, maxDuration: 299, firePercent: 30 },
-  vhsEvents: { minCadence: 4000, maxCadence: 9999, minDuration: 80, maxDuration: 249 },
-  elementJitter: { minCadence: 500, maxCadence: 1399, minDuration: 70, maxDuration: 199, firePercent: 30 },
-  borderFlicker: { minCadence: 400, maxCadence: 1099, minDuration: 40, maxDuration: 159, firePercent: 35 },
-  frameFlash: { minCadence: 1800, maxCadence: 4499, minDuration: 30, maxDuration: 89, firePercent: 12 }
-};
-
-function randomBetween(min, max) {
-  return min + Math.random() * (max - min);
+function randomInt(min, max) {
+  return Math.floor(min + Math.random() * (max - min + 1));
 }
 
-export function createGlitchSystem() {
-  const elements = [];
-  let enabled = true;
-  const timers = [];
-  let reducedMotion = false;
-  try {
-    reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
-  } catch { reducedMotion = false; }
+function hasReservedSigil(text) {
+  return [...text].some((char) => {
+    const codepoint = char.codePointAt(0);
+    return codepoint >= PLAYER_BANK_START && codepoint < BESTIARY_BANK_END;
+  });
+}
 
-  function getEffectContainer() {
-    return document.getElementById('crt-overlays');
+function isProtected(element, decisionPending) {
+  if (!decisionPending) return false;
+  if (element?.dataset?.glitchProtected === 'true' || element?.dataset?.decisionPending === 'true') return true;
+  if (typeof element?.matches === 'function' && element.matches('button,input,textarea,select,[role="button"],[aria-disabled],[data-decision-pending="true"]')) return true;
+  return ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName);
+}
+
+function addTimer(timers, id, clear, owner = null) {
+  const timer = { id, clear };
+  timers.add(timer);
+  owner?.timers?.add(timer);
+}
+
+function clearTimers(timers) {
+  for (const timer of timers) timer.clear(timer.id);
+  timers.clear();
+}
+
+export function createGlitchSystem(options = {}) {
+  const elements = new Map();
+  const timers = new Set();
+  let enabled = options.enabled !== false;
+  let decisionPending = false;
+  let reducedMotion = resolveMotionPolicy(options.settings || {}).reduced;
+
+  function overlay() {
+    return options.overlay || document.getElementById?.('crt-overlays');
   }
 
-  function applyCharSubstitution(element, duration) {
+  function active() {
+    return enabled && !reducedMotion;
+  }
+
+  function restoreText(element, original) {
+    if (!element?.isConnected && element?.isConnected !== undefined) return;
+    element.textContent = original;
+    element.dataset.ghostText = original;
+    element.classList?.remove('text-swapping');
+    element.style.transform = element.dataset.glitchOriginalTransform || '';
+  }
+
+  function applyCharSubstitution(element, timing) {
+    if (isProtected(element, decisionPending)) return;
+    const original = element.textContent || '';
+    if (!original || hasReservedSigil(original)) return;
     const pool = loadSafePool();
-    const text = element.textContent;
-    if (!text || text.length === 0) return;
-    const numSwaps = 1 + Math.floor(Math.random() * 2);
-    const swaps = [];
-    const original = [];
+    const count = randomInt(1, Math.min(2, original.length));
+    const chars = [...original];
+    for (let i = 0; i < count; i++) chars[randomInt(0, chars.length - 1)] = String.fromCodePoint(pool[randomInt(0, pool.length - 1)]);
+    element.dataset.glitchOriginalTransform = element.style?.transform || '';
+    element.dataset.ghostText = chars.join('');
+    element.textContent = chars.join('');
+    element.classList?.add('text-swapping');
+    if (element.style) element.style.transform = `${element.dataset.glitchOriginalTransform} translate(${randomInt(-3, 3)}px, ${randomInt(-1, 1)}px)`;
+    const id = setTimeout(() => restoreText(element, original), randomInt(timing.minDuration, timing.maxDuration));
+    addTimer(timers, id, clearTimeout);
+  }
 
-    for (let i = 0; i < numSwaps; i++) {
-      const idx = Math.floor(Math.random() * text.length);
-      const replacement = pool[Math.floor(Math.random() * pool.length)];
-      original.push({ idx, char: text[idx] });
-      swaps.push({ idx, char: String.fromCharCode(replacement) });
+  function appendTimedNode(className, duration, styleText, text = '') {
+    const container = overlay();
+    if (!container) return;
+    const node = document.createElement('div');
+    node.className = className;
+    node.textContent = text;
+    node.style.cssText = styleText;
+    container.appendChild(node);
+    const id = setTimeout(() => node.remove?.(), duration);
+    addTimer(timers, id, clearTimeout);
+  }
+
+  function applyGlobalEffect(type, duration) {
+    if (decisionPending && (type === 'frameFlash' || type === 'glitchBars')) return;
+    if (type === 'glitchBars') appendTimedNode('glitch-bar', duration, `position:absolute;left:0;width:100%;height:${randomInt(1, 4)}px;top:${randomInt(0, 100)}%;background:rgba(126,200,227,${(0.1 + Math.random() * 0.4).toFixed(2)});transform:translateX(${randomInt(-8, 8)}px);pointer-events:none;z-index:5;mix-blend-mode:screen;`);
+    if (type === 'noiseLines') {
+      const pool = loadSafePool();
+      const text = Array.from({ length: randomInt(8, 28) }, () => String.fromCodePoint(pool[randomInt(0, pool.length - 1)])).join('');
+      appendTimedNode('noise-line', duration, `position:absolute;left:${randomInt(0, 50)}%;top:${randomInt(0, 100)}%;font-family:monospace;font-size:8px;color:rgba(126,200,227,0.4);letter-spacing:1px;pointer-events:none;z-index:5;white-space:nowrap;`, text);
     }
+    if (type === 'borderFlicker') appendTimedNode('border-flicker', duration, `position:absolute;inset:0;opacity:${(0.5 + Math.random() * 0.4).toFixed(2)};box-shadow:inset 0 0 8px rgba(126,200,227,0.8);pointer-events:none;z-index:6;`);
+    if (type === 'frameFlash') appendTimedNode('frame-flash', duration, 'position:absolute;inset:0;background:rgba(255,0,255,0.05);pointer-events:none;z-index:7;');
+  }
 
-    let mutated = text;
-    for (const s of swaps) {
-      mutated = mutated.substring(0, s.idx) + s.char + mutated.substring(s.idx + 1);
+  function applyElementEffect(type, element, timing) {
+    if (isProtected(element, decisionPending)) return;
+    if (type === 'charSubstitution') return applyCharSubstitution(element, timing);
+    if (type === 'vhsEvents' && element.style) {
+      const originalFilter = element.style.filter || '';
+      const originalTransform = element.style.transform || '';
+      element.style.filter = `drop-shadow(${randomInt(-4, 4)}px 0 rgba(255,0,0,0.47)) drop-shadow(${randomInt(-4, 4)}px 0 rgba(0,0,255,0.47))`;
+      element.style.transform = `${originalTransform} translate(${randomInt(-2, 2)}px, 0)`;
+      element.classList?.add('vhs-event');
+      const id = setTimeout(() => {
+        element.style.filter = originalFilter;
+        element.style.transform = originalTransform;
+        element.classList?.remove('vhs-event');
+      }, randomInt(timing.minDuration, timing.maxDuration));
+      addTimer(timers, id, clearTimeout);
     }
-    element.textContent = mutated;
-    element.classList.add('text-swapping');
-
-    setTimeout(() => {
-      let restored = element.textContent;
-      for (const o of original) {
-        restored = restored.substring(0, o.idx) + o.char + restored.substring(o.idx + 1);
-      }
-      element.textContent = restored;
-      element.classList.remove('text-swapping');
-    }, duration);
-  }
-
-  function applyGlitchBars(duration) {
-    const container = getEffectContainer();
-    if (!container) return;
-    const bar = document.createElement('div');
-    bar.className = 'glitch-bar';
-    bar.style.cssText = `position:absolute;left:0;width:100%;height:${1 + Math.floor(Math.random() * 4)}px;top:${Math.random() * 100}%;background:rgba(126,200,227,${0.1 + Math.random() * 0.4});transform:translateX(${(Math.random() - 0.5) * 16}px);pointer-events:none;z-index:5;`;
-    container.appendChild(bar);
-    setTimeout(() => bar.remove(), duration);
-  }
-
-  function applyNoiseLines(duration) {
-    const container = getEffectContainer();
-    if (!container) return;
-    const pool = loadSafePool();
-    const line = document.createElement('div');
-    line.className = 'noise-line';
-    const numChars = 8 + Math.floor(Math.random() * 21);
-    let text = '';
-    for (let i = 0; i < numChars; i++) {
-      text += String.fromCharCode(pool[Math.floor(Math.random() * pool.length)]);
+    if (type === 'elementJitter' && element.style) {
+      const original = element.style.transform || '';
+      element.style.transform = `${original} translate(${randomInt(-3, 3)}px, ${randomInt(-2, 2)}px)`;
+      const id = setTimeout(() => { element.style.transform = original; }, randomInt(timing.minDuration, timing.maxDuration));
+      addTimer(timers, id, clearTimeout);
     }
-    line.textContent = text;
-    line.style.cssText = `position:absolute;left:${Math.random() * 50}%;top:${Math.random() * 100}%;font-family:monospace;font-size:8px;color:rgba(126,200,227,0.4);letter-spacing:1px;pointer-events:none;z-index:5;white-space:nowrap;`;
-    container.appendChild(line);
-    setTimeout(() => line.remove(), duration);
   }
 
-  function applyVhsEvents(element, duration) {
-    if (!element || !element.style) return;
-    const original = {
-      filter: element.style.filter || '',
-      transform: element.style.transform || ''
-    };
-    const chromaOffset = 2 + Math.floor(Math.random() * 3);
-    const tearOffset = (Math.random() - 0.5) * 10;
-    element.style.filter = `hue-rotate(${Math.random() * 360}deg) saturate(${1 + Math.random()})`;
-    element.style.transform = `${original.transform} translateX(${tearOffset}px)`;
-    element.classList.add('vhs-event');
-    setTimeout(() => {
-      element.style.filter = original.filter;
-      element.style.transform = original.transform;
-      element.classList.remove('vhs-event');
-    }, duration);
+  function tick(record, type) {
+    if (!active()) return;
+    const { element, intensity, cadences } = record;
+    if (!element?.isConnected && element?.isConnected !== undefined) return;
+    const timing = GLITCH_TIMINGS[type];
+    if (timing.firePercent && Math.random() * 100 >= timing.firePercent) return;
+    if (type === 'charSubstitution' && Math.random() > intensity) return;
+    const duration = randomInt(timing.minDuration, timing.maxDuration);
+    if (['glitchBars', 'noiseLines', 'borderFlicker', 'frameFlash'].includes(type)) applyGlobalEffect(type, duration);
+    else applyElementEffect(type, element, timing);
+    record.lastCadence = cadences[type];
   }
 
-  function applyElementJitter(element, duration) {
-    if (!element || !element.style) return;
-    const dx = (Math.random() - 0.5) * 6;
-    const dy = (Math.random() - 0.5) * 4;
-    const original = element.style.transform || '';
-    element.style.transform = `${original} translate(${dx}px, ${dy}px)`;
-    setTimeout(() => {
-      element.style.transform = original;
-    }, duration);
-  }
-
-  function applyBorderFlicker(duration) {
-    const container = getEffectContainer();
-    if (!container) return;
-    const flicker = document.createElement('div');
-    flicker.style.cssText = `position:absolute;inset:0;box-shadow:inset 0 0 8px rgba(126,200,227,${0.5 + Math.random() * 0.4});pointer-events:none;z-index:6;`;
-    container.appendChild(flicker);
-    setTimeout(() => flicker.remove(), duration);
-  }
-
-  function applyFrameFlash(duration) {
-    const container = getEffectContainer();
-    if (!container) return;
-    const flash = document.createElement('div');
-    flash.style.cssText = `position:absolute;inset:0;background:rgba(255,0,255,0.05);pointer-events:none;z-index:7;`;
-    container.appendChild(flash);
-    setTimeout(() => flash.remove(), duration);
-  }
-
-  function scheduleNext(element, effectType, intensity) {
-    if (!enabled || reducedMotion) return;
-    const timing = TIMINGS[effectType];
-    const cadence = randomBetween(timing.minCadence, timing.maxCadence);
-    const effectiveIntensity = effectType === 'charSubstitution' ? intensity : 1;
-
-    const id = setTimeout(() => {
-      if (!enabled || reducedMotion) return;
-      if (!element || !element.isConnected) return;
-
-      if (timing.firePercent && Math.random() * 100 > timing.firePercent) {
-        scheduleNext(element, effectType, intensity);
-        return;
-      }
-
-      if (effectType === 'charSubstitution' && Math.random() > effectiveIntensity) {
-        scheduleNext(element, effectType, intensity);
-        return;
-      }
-
-      const duration = randomBetween(timing.minDuration, timing.maxDuration);
-
-      switch (effectType) {
-        case 'charSubstitution': applyCharSubstitution(element, duration); break;
-        case 'glitchBars': applyGlitchBars(duration); break;
-        case 'noiseLines': applyNoiseLines(duration); break;
-        case 'vhsEvents': applyVhsEvents(element, duration); break;
-        case 'elementJitter': applyElementJitter(element, duration); break;
-        case 'borderFlicker': applyBorderFlicker(duration); break;
-        case 'frameFlash': applyFrameFlash(duration); break;
-      }
-
-      scheduleNext(element, effectType, intensity);
-    }, cadence);
-
-    timers.push(id);
+  function schedule(record) {
+    for (const type of EFFECTS) {
+      const timing = GLITCH_TIMINGS[type];
+      const cadence = randomInt(timing.minCadence, timing.maxCadence);
+      record.cadences[type] = cadence;
+      const id = setInterval(() => tick(record, type), cadence);
+      addTimer(timers, id, clearInterval, record);
+    }
   }
 
   return {
     registerElement(element, intensity = 0.1) {
-      elements.push({ element, intensity });
-      for (const effectType of Object.keys(TIMINGS)) {
-        scheduleNext(element, effectType, intensity);
-      }
+      const record = { element, intensity: Math.max(0, Math.min(1, intensity)), cadences: {}, timers: new Set() };
+      elements.set(element, record);
+      if (active()) schedule(record);
+      return () => this.unregisterElement(element);
     },
-    start() { enabled = true; },
-    stop() { enabled = false; for (const id of timers) clearTimeout(id); timers.length = 0; },
-    setEnabled(value) {
-      enabled = value && !reducedMotion;
-      if (!enabled) {
-        for (const { element } of elements) {
-          if (element && element.classList) {
-            element.classList.remove('text-swapping', 'vhs-event');
-          }
+    unregisterElement(element) {
+      const record = elements.get(element);
+      if (record) {
+        for (const timer of record.timers) {
+          timer.clear(timer.id);
+          timers.delete(timer);
         }
+        record.timers.clear();
       }
+      elements.delete(element);
+      if (element?.dataset) delete element.dataset.ghostText;
+      element?.classList?.remove('text-swapping', 'vhs-event');
+    },
+    start() {
+      enabled = true;
+      if (!active()) return;
+      clearTimers(timers);
+      for (const record of elements.values()) schedule(record);
+    },
+    stop() {
+      enabled = false;
+      clearTimers(timers);
+    },
+    setEnabled(value) {
+      enabled = Boolean(value);
+      if (!enabled) this.stop();
+      else this.start();
+    },
+    setDecisionPending(value) { decisionPending = Boolean(value); },
+    setMotionSettings(settings) {
+      reducedMotion = resolveMotionPolicy(settings).reduced;
+      if (reducedMotion) clearTimers(timers);
+      else if (enabled) this.start();
+    },
+    getRegisteredCadences(element) { return { ...(elements.get(element)?.cadences || {}) }; },
+    isEnabled() { return active(); },
+    destroy() {
+      clearTimers(timers);
+      elements.clear();
     }
   };
 }

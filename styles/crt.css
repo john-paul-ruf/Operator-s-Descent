@@ -16,7 +16,7 @@
   100% { transform: translateY(2px); }
 }
 
-/* Aperture grille: 3px RGB triad stripes, screen blend at 15% opacity */
+/* Aperture grille: 3px RGB triad stripes, screen blend at 50% opacity */
 .crt-grille {
   position: absolute;
   inset: 0;
@@ -27,7 +27,7 @@
     rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
     rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
   mix-blend-mode: screen;
-  opacity: 0.15;
+  opacity: 0.50;
 }
 
 /* Vignette: radial gradient, 4s ease-in-out pulse, opacity 0.65↔0.92 */
