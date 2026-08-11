@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import io
 import json
 import math
 import sys
@@ -108,7 +109,7 @@ def draw_recipe(recipe):
         node(pen, n['angle'], n['radius'], n['size'], n.get('kind', 'square'))
     return pen.glyph()
 
-def build(check=False):
+def create_font():
     sigils = load_json(SIGILS)
     player, bestiary = bank_codepoints(sigils)
     recipes_data = load_json(RECIPES)
@@ -165,11 +166,30 @@ def build(check=False):
     font.flavor = 'woff2'
     font['head'].created = 0
     font['head'].modified = 0
-    if check:
-        return font
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    font.save(OUT, reorderTables=True)
-    print(f'wrote {OUT} ({OUT.stat().st_size} bytes)')
+    return font
+
+def save_font(path=OUT):
+    font = create_font()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=True)
+    print(f'wrote {path} ({path.stat().st_size} bytes)')
+
+def font_bytes():
+    buffer = io.BytesIO()
+    create_font().save(buffer, reorderTables=True)
+    return buffer.getvalue()
+
+def check_deterministic():
+    first = font_bytes()
+    second = font_bytes()
+    if first != second:
+        raise SystemExit('font build is not deterministic')
+    print(f'deterministic WOFF2 build verified ({len(first)} bytes)')
 
 if __name__ == '__main__':
-    build(check='--check' in sys.argv)
+    if '--check-deterministic' in sys.argv:
+        check_deterministic()
+    elif '--check' in sys.argv:
+        create_font()
+    else:
+        save_font()
