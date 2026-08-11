@@ -1,45 +1,33 @@
-const BASE_TEMPO = 60;
-const MIN_DIST = 1;
 const MAX_DIST = 10;
 
+function clampDistance(value) {
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_DIST, value)) : MAX_DIST;
+}
+
 export function createPulse(ctx, dest) {
-  let started = false;
   let gain = null;
   let filter = null;
   let schedulerId = null;
   let nextBeatTime = 0;
   let nearestDist = MAX_DIST;
+  let combat = false;
+  let volume = 0.75;
 
-  function tempo() {
-    const t = Math.min(nearestDist / MAX_DIST, 1);
-    return BASE_TEMPO * (1 + (1 - t) * 2);
-  }
-
-  function beatInterval() {
-    return 60 / tempo();
-  }
-
-  function dissonance() {
-    const t = Math.min(nearestDist / MAX_DIST, 1);
-    return (1 - t);
-  }
+  function pressure() { return 1 - nearestDist / MAX_DIST; }
+  function tempo() { return 60 + pressure() * (combat ? 150 : 90); }
+  function beatInterval() { return 60 / tempo(); }
 
   function playBeat(time) {
-    const dis = dissonance();
-    const intervals = dis > 0.5 ? [0, 1, 6] : dis > 0.2 ? [0, 3] : [0];
-    const baseFreq = 110;
-
-    for (const semis of intervals) {
-      const freq = baseFreq * Math.pow(2, semis / 12);
+    const p = pressure();
+    const intervals = p > 0.6 ? [0, 1, 6] : p > 0.25 ? [0, 3] : [0];
+    for (const semitone of intervals) {
       const osc = ctx.createOscillator();
-      osc.type = dis > 0.5 ? 'sawtooth' : 'triangle';
-      osc.frequency.value = freq;
-
+      osc.type = p > 0.5 || combat ? 'sawtooth' : 'triangle';
+      osc.frequency.value = 110 * Math.pow(2, semitone / 12);
       const env = ctx.createGain();
       env.gain.setValueAtTime(0, time);
-      env.gain.linearRampToValueAtTime(0.08, time + 0.01);
+      env.gain.linearRampToValueAtTime((combat ? 0.11 : 0.08) * volume, time + 0.01);
       env.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-
       osc.connect(env);
       env.connect(filter);
       osc.start(time);
@@ -48,8 +36,7 @@ export function createPulse(ctx, dest) {
   }
 
   function scheduler() {
-    const lookahead = 0.2;
-    while (nextBeatTime < ctx.currentTime + lookahead) {
+    while (nextBeatTime < ctx.currentTime + 0.2) {
       playBeat(nextBeatTime);
       nextBeatTime += beatInterval();
     }
@@ -57,31 +44,26 @@ export function createPulse(ctx, dest) {
 
   return {
     start() {
-      if (started) return;
+      if (schedulerId) return;
       gain = ctx.createGain();
-      gain.gain.value = 0.12;
+      gain.gain.value = 0.12 * volume;
       gain.connect(dest);
-
       filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.value = 600;
       filter.Q.value = 2;
       filter.connect(gain);
-
       nextBeatTime = ctx.currentTime + 0.1;
       schedulerId = setInterval(scheduler, 50);
-      started = true;
     },
-    stop() {
-      if (schedulerId) { clearInterval(schedulerId); schedulerId = null; }
-      started = false;
-    },
-    setVolume(v) {
-      if (gain) gain.gain.value = v * 0.12;
-    },
+    stop() { if (schedulerId) clearInterval(schedulerId); schedulerId = null; filter?.disconnect?.(); gain?.disconnect?.(); },
+    destroy() { this.stop(); },
+    setVolume(v) { volume = v; if (gain) gain.gain.value = v * 0.12; },
     updateState(state) {
-      const d = state?.nearestHostileDistance;
-      if (d !== undefined) nearestDist = Math.max(MIN_DIST, Math.min(MAX_DIST, d));
-    }
+      nearestDist = clampDistance(state?.proximity?.hostile ?? state?.nearestHostileDistance);
+      combat = Boolean(state?.combatActive || state?.combatState);
+      if (filter?.frequency) filter.frequency.linearRampToValueAtTime?.(400 + pressure() * (combat ? 1600 : 900), ctx.currentTime + 0.1);
+    },
+    getState() { return { nearestDist, combat, tempo: tempo() }; }
   };
 }

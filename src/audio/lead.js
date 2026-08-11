@@ -14,56 +14,46 @@ const MODES = {
   'bioluminescent-teal': [0, 2, 4, 6, 7, 9, 11],
   'ancient-bone': [0, 2, 3, 5, 7, 8, 10]
 };
-
 const BEATS_PER_BAR = 4;
 const BASE_TEMPO = 72;
 const ROOT_FREQ = 220;
-const PERTURB_RANGE = 7;
+const LEDGER_LIMIT = 32;
+
+export function generateLeadBar({ worldSeed = 0, depth = 1, floorId = '', barIndex = 0, audioMode = 'cold-ambient', perturb = 0 }) {
+  const mode = MODES[audioMode] || MODES['cold-ambient'];
+  return Array.from({ length: BEATS_PER_BAR }, (_, beat) => {
+    const h = hash(worldSeed, depth, floorId, barIndex, beat, perturb);
+    return { degree: mode[h % mode.length], octave: (h >>> 8) % 2, duration: 1, velocity: 0.05 + ((h >>> 16) % 4) * 0.01 };
+  });
+}
+
+function keyFor(notes) {
+  return notes.map((note) => `${note.degree}:${note.octave}:${note.velocity.toFixed(2)}`).join(',');
+}
 
 export function createLead(ctx, dest) {
-  let started = false;
   let gain = null;
   let schedulerId = null;
-  let nextBeatTime = 0;
-  let worldSeed = 0;
-  let depth = 1;
-  let floorId = '';
+  let nextBarTime = 0;
   let barIndex = 0;
-  const ledger = new Set();
+  let volume = 0.75;
+  let tempo = BASE_TEMPO;
+  let state = { worldSeed: 0, depth: 1, floorId: '', audioMode: 'cold-ambient', combat: false };
+  const ledger = [];
 
-  function barDuration() {
-    return (60 / BASE_TEMPO) * BEATS_PER_BAR;
-  }
+  function barDuration() { return (60 / tempo) * BEATS_PER_BAR; }
 
-  function generateBar(barIdx) {
-    const mode = MODES['cold-ambient'];
-    const notes = [];
-    for (let beat = 0; beat < BEATS_PER_BAR; beat++) {
-      const h = hash(worldSeed, depth, floorId, barIdx, beat);
-      const degreeIdx = h % mode.length;
-      const octave = (h >>> 8) % 2;
-      notes.push({ degree: mode[degreeIdx], octave, duration: 1 });
+  function uniqueBar(index) {
+    let perturb = 0;
+    let notes = generateLeadBar({ ...state, barIndex: index, perturb });
+    let key = keyFor(notes);
+    while (ledger.includes(key)) {
+      perturb++;
+      notes = generateLeadBar({ ...state, barIndex: index, perturb });
+      key = keyFor(notes);
     }
-    return notes;
-  }
-
-  function barHash(barIdx) {
-    const notes = generateBar(barIdx);
-    const key = notes.map(n => `${n.degree}:${n.octave}`).join(',');
-    if (!ledger.has(key)) {
-      ledger.add(key);
-      return notes;
-    }
-    let attempts = 0;
-    while (attempts < PERTURB_RANGE) {
-      const perturbed = generateBar(barIdx + attempts + 1);
-      const pKey = perturbed.map(n => `${n.degree}:${n.octave}`).join(',');
-      if (!ledger.has(pKey)) {
-        ledger.add(pKey);
-        return perturbed;
-      }
-      attempts++;
-    }
+    ledger.push(key);
+    while (ledger.length > LEDGER_LIMIT) ledger.shift();
     return notes;
   }
 
@@ -71,19 +61,14 @@ export function createLead(ctx, dest) {
     const beatDur = barDuration() / BEATS_PER_BAR;
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i];
-      const freq = ROOT_FREQ * Math.pow(2, (note.degree + note.octave * 12) / 12);
       const noteStart = time + i * beatDur;
-
       const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-
+      osc.type = state.combat ? 'square' : 'triangle';
+      osc.frequency.value = ROOT_FREQ * Math.pow(2, (note.degree + note.octave * 12) / 12);
       const env = ctx.createGain();
       env.gain.setValueAtTime(0, noteStart);
-      env.gain.linearRampToValueAtTime(0.07, noteStart + 0.02);
-      env.gain.linearRampToValueAtTime(0.05, noteStart + beatDur * 0.6);
-      env.gain.exponentialRampToValueAtTime(0.001, noteStart + beatDur * 0.9);
-
+      env.gain.linearRampToValueAtTime(note.velocity * volume * (state.combat ? 1.25 : 1), noteStart + 0.02);
+      env.gain.exponentialRampToValueAtTime(0.001, noteStart + beatDur * (state.combat ? 0.55 : 0.9));
       osc.connect(env);
       env.connect(gain);
       osc.start(noteStart);
@@ -92,45 +77,28 @@ export function createLead(ctx, dest) {
   }
 
   function scheduler() {
-    const lookahead = 0.3;
-    while (nextBeatTime < ctx.currentTime + lookahead) {
-      const notes = barHash(barIndex);
-      playBar(nextBeatTime, notes);
-      nextBeatTime += barDuration();
-      barIndex++;
+    while (nextBarTime < ctx.currentTime + 0.3) {
+      playBar(nextBarTime, uniqueBar(barIndex++));
+      nextBarTime += barDuration();
     }
   }
 
   return {
-    start() {
-      if (started) return;
-      gain = ctx.createGain();
-      gain.gain.value = 0.1;
-      gain.connect(dest);
-
-      nextBeatTime = ctx.currentTime + 0.1;
-      ledger.clear();
-      barIndex = 0;
-      schedulerId = setInterval(scheduler, 100);
-      started = true;
+    start() { if (schedulerId) return; gain = ctx.createGain(); gain.gain.value = 0.1 * volume; gain.connect(dest); nextBarTime = ctx.currentTime + 0.1; barIndex = 0; ledger.length = 0; schedulerId = setInterval(scheduler, 100); },
+    stop() { if (schedulerId) clearInterval(schedulerId); schedulerId = null; gain?.disconnect?.(); },
+    destroy() { this.stop(); },
+    setVolume(v) { volume = v; if (gain) gain.gain.value = v * 0.1; },
+    updateState(nextState) {
+      const nextFloor = nextState?.floorId;
+      const nextMode = nextState?.theme?.audioMode || nextState?.audioMode;
+      if (nextState?.worldSeed !== undefined) state.worldSeed = nextState.worldSeed;
+      if (nextState?.depth !== undefined) state.depth = nextState.depth;
+      if (nextMode) state.audioMode = nextMode;
+      state.combat = Boolean(nextState?.combatActive || nextState?.combatState);
+      tempo = BASE_TEMPO * (state.combat ? 1.25 : 1);
+      if (nextFloor !== undefined && nextFloor !== state.floorId) { state.floorId = nextFloor; barIndex = 0; ledger.length = 0; }
     },
-    stop() {
-      if (schedulerId) { clearInterval(schedulerId); schedulerId = null; }
-      started = false;
-    },
-    setVolume(v) {
-      if (gain) gain.gain.value = v * 0.1;
-    },
-    updateState(state) {
-      if (state?.worldSeed !== undefined) worldSeed = state.worldSeed;
-      if (state?.depth !== undefined) depth = state.depth;
-      if (state?.floorId !== undefined) {
-        if (state.floorId !== floorId) {
-          floorId = state.floorId;
-          ledger.clear();
-          barIndex = 0;
-        }
-      }
-    }
+    getLedger() { return [...ledger]; },
+    getState() { return { ...state, tempo, barIndex }; }
   };
 }

@@ -1,64 +1,57 @@
+function noiseSample(index) {
+  const x = Math.sin(index * 12.9898 + 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+}
+
 export function createNoiseBed(ctx, dest) {
-  let started = false;
   let gain = null;
-  let noiseSource = null;
-  let wowOsc = null;
-  let wowGain = null;
-  let flutterOsc = null;
-  let flutterGain = null;
+  let nodes = [];
+  let volume = 0.75;
+
+  function remember(node) {
+    nodes.push(node);
+    return node;
+  }
 
   return {
     start() {
-      if (started) return;
-      gain = ctx.createGain();
-      gain.gain.value = 0.03;
+      if (nodes.length) return;
+      gain = remember(ctx.createGain());
+      gain.gain.value = 0.03 * volume;
       gain.connect(dest);
-
-      const bufferSize = ctx.sampleRate * 2;
+      const bufferSize = Math.floor(ctx.sampleRate * 2);
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
-      noiseSource = ctx.createBufferSource();
-      noiseSource.buffer = buffer;
-      noiseSource.loop = true;
-
-      const noiseFilter = ctx.createBiquadFilter();
-      noiseFilter.type = 'bandpass';
-      noiseFilter.frequency.value = 2000;
-      noiseFilter.Q.value = 0.3;
-
-      noiseSource.connect(noiseFilter);
-      noiseFilter.connect(gain);
-      noiseSource.start();
-
-      wowOsc = ctx.createOscillator();
-      wowOsc.frequency.value = 0.5;
-      wowGain = ctx.createGain();
+      for (let i = 0; i < bufferSize; i++) data[i] = noiseSample(i);
+      const source = remember(ctx.createBufferSource());
+      source.buffer = buffer;
+      source.loop = true;
+      const filter = remember(ctx.createBiquadFilter());
+      filter.type = 'bandpass';
+      filter.frequency.value = 2000;
+      filter.Q.value = 0.3;
+      source.connect(filter);
+      filter.connect(gain);
+      source.start();
+      const wow = remember(ctx.createOscillator());
+      const wowGain = remember(ctx.createGain());
+      wow.frequency.value = 0.5;
       wowGain.gain.value = 0.02;
-      wowOsc.connect(wowGain);
+      wow.connect(wowGain);
       wowGain.connect(gain.gain);
-      wowOsc.start();
-
-      flutterOsc = ctx.createOscillator();
-      flutterOsc.frequency.value = 5;
-      flutterGain = ctx.createGain();
+      wow.start();
+      const flutter = remember(ctx.createOscillator());
+      const flutterGain = remember(ctx.createGain());
+      flutter.frequency.value = 5;
       flutterGain.gain.value = 0.005;
-      flutterOsc.connect(flutterGain);
+      flutter.connect(flutterGain);
       flutterGain.connect(gain.gain);
-      flutterOsc.start();
-
-      started = true;
+      flutter.start();
     },
-    stop() {
-      try { noiseSource?.stop(); } catch {}
-      try { wowOsc?.stop(); } catch {}
-      try { flutterOsc?.stop(); } catch {}
-      started = false;
-    },
-    setVolume(v) {
-      if (gain) gain.gain.value = v * 0.03;
-    },
-    updateState() {}
+    stop() { for (const node of nodes) { try { node.stop?.(); } catch {} node.disconnect?.(); } nodes = []; gain = null; },
+    destroy() { this.stop(); },
+    setVolume(v) { volume = v; if (gain) gain.gain.value = v * 0.03; },
+    updateState() {},
+    getNodeCount() { return nodes.length; }
   };
 }
