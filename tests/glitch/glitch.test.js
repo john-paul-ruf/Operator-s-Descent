@@ -110,6 +110,35 @@ describe('ambient glitch', () => {
     expect(element.textContent).toBe('READY');
   });
 
+  test('clears browser timers without illegal invocation', () => {
+    vi.useRealTimers();
+    const interval = setInterval(() => {}, 1000);
+    clearInterval(interval);
+    const nativeClearInterval = globalThis.clearInterval;
+    const nativeClearTimeout = globalThis.clearTimeout;
+    globalThis.clearInterval = function clearIntervalStrict(id) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return nativeClearInterval.call(this, id);
+    };
+    globalThis.clearTimeout = function clearTimeoutStrict(id) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return nativeClearTimeout.call(this, id);
+    };
+
+    try {
+      const element = new FakeElement();
+      const glitch = createGlitchSystem();
+      const unregister = glitch.registerElement(element, 1);
+      expect(() => unregister()).not.toThrow();
+      glitch.registerElement(element, 1);
+      expect(() => glitch.destroy()).not.toThrow();
+    } finally {
+      globalThis.clearInterval = nativeClearInterval;
+      globalThis.clearTimeout = nativeClearTimeout;
+      vi.useFakeTimers();
+    }
+  });
+
   test('resolves motion policy and transition fallbacks without authored motion', async () => {
     expect(resolveMotionPolicy({ reducedMotion: 'reduce' }).reduced).toBe(true);
     expect(resolveMotionPolicy({ reducedMotion: 'full' }, () => ({ matches: true })).reduced).toBe(false);

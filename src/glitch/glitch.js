@@ -54,13 +54,13 @@ function isProtected(element, decisionPending) {
 }
 
 function addTimer(timers, id, clear, owner = null) {
-  const timer = { id, clear };
+  const timer = { id, clear: () => clear.call(globalThis, id) };
   timers.add(timer);
   owner?.timers?.add(timer);
 }
 
 function clearTimers(timers) {
-  for (const timer of timers) timer.clear(timer.id);
+  for (const timer of timers) timer.clear();
   timers.clear();
 }
 
@@ -186,7 +186,7 @@ export function createGlitchSystem(options = {}) {
       const record = elements.get(element);
       if (record) {
         for (const timer of record.timers) {
-          timer.clear(timer.id);
+          timer.clear();
           timers.delete(timer);
         }
         record.timers.clear();
