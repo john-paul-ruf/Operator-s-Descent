@@ -27,15 +27,19 @@ function activateOnce() {
   if (activationPromise) return activationPromise;
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   pendingAudioContext = AudioContextCtor ? new AudioContextCtor() : null;
-  activationPromise = import('./runtime.js').then(({ activateRuntime, shutdownRuntime }) =>
-    activateRuntime({
-      audioContext: pendingAudioContext,
-      initialHash: window.location.hash
-    }).catch((error) => {
+  const audioContext = pendingAudioContext;
+  activationPromise = import('./runtime.js').then(async ({ activateRuntime, shutdownRuntime }) => {
+    try {
+      await activateRuntime({
+        audioContext,
+        initialHash: window.location.hash
+      });
+      pendingAudioContext = null;
+    } catch (error) {
       shutdownRuntime();
       throw error;
-    })
-  );
+    }
+  });
   return activationPromise;
 }
 
