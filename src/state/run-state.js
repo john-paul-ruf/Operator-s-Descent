@@ -467,7 +467,8 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
   const inventory = input.inventory.map(normalizeItem);
   if (inventory.some(item => item === null)) return null;
   if (!Number.isFinite(input.corruption ?? 0) || input.corruption < 0 || input.corruption > 1_000_000 || !finiteInteger(input.credits ?? 0, 0, 1_000_000_000) || !finiteInteger(input.scrapCounter ?? 0, 0, 1_000_000_000)) return null;
-  if (!Array.isArray(input.themesSeen ?? []) || input.themesSeen.length > 12 || !(input.themesSeen ?? []).every(theme => typeof theme === 'string' && theme.length <= 64)) return null;
+  const themesSeenRaw = input.themesSeen instanceof Set ? [...input.themesSeen] : (Array.isArray(input.themesSeen) ? input.themesSeen : []);
+  if (themesSeenRaw.length > 12 || !themesSeenRaw.every(theme => typeof theme === 'string' && theme.length <= 64)) return null;
   if (!Array.isArray(input.echoQueue ?? []) || input.echoQueue.length > MAX_ECHOES) return null;
   const echoQueue = (input.echoQueue ?? []).map(echo => normalizeEcho(echo, sourceVersion));
   if (echoQueue.some(echo => echo === null)) return null;
@@ -542,7 +543,7 @@ export function createRunState(worldSeed, party, options = {}) {
     corruption: options.corruption ?? 0,
     credits: options.credits ?? 0,
     scrapCounter: options.scrapCounter ?? 0,
-    themesSeen: options.themesSeen ?? [],
+    themesSeen: new Set(options.themesSeen ?? []),
     echoQueue: options.echoQueue ?? [],
     rngState: options.rngState ?? null,
     flags: options.flags ?? { version: 2, calibrationFloorsReached: [] },

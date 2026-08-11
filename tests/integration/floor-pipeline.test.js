@@ -5,6 +5,8 @@ import { createLattice } from '../../src/exploration/lattice.js';
 import { ARCHETYPES } from '../../src/floor/archetypes.js';
 import { reachable } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
+import { createRunState } from '../../src/state/run-state.js';
+import { beginFloorTransition, completeFloorTransition } from '../../src/rules/progression.js';
 
 const themesData = loadData('themes');
 const THEME_IDS = themesData.themes.map(t => t.id);
@@ -158,5 +160,84 @@ describe('floor pipeline — distribution sanity', () => {
     const mean1 = floor1Counts.reduce((a, b) => a + b, 0) / floor1Counts.length;
     const mean15 = floor15Counts.reduce((a, b) => a + b, 0) / floor15Counts.length;
     expect(mean15).toBeGreaterThan(mean1);
+  });
+});
+
+function makeTCharacter(id) {
+  return {
+    id, classId: 'breacher', sigilId: 'pua-e000',
+    attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+    currentHP: 30, currentCHARGE: 4,
+    calibrationCount: 0, calibrationChoices: [], signatureTier: 1,
+    equipment: { weapon: null, armor: null, offhand: null },
+    protocolDeck: [], conditions: []
+  };
+}
+
+describe('floor pipeline — multi-floor transition', () => {
+  it('5 sequential transitions produce valid floors with correct depth and theme tracking', () => {
+    const classData = loadData('classes');
+    const state = createRunState(42, [makeTCharacter('a')], { depth: 1, creationTimestamp: 1 });
+
+    for (let i = 2; i <= 6; i++) {
+      const begin = beginFloorTransition(state, { classes: classData });
+      expect(begin.error).toBeUndefined();
+      const result = completeFloorTransition(state, begin.transitionToken, {},
+        { data: { classes: classData }, themesData });
+      expect(result.error).toBeUndefined();
+      expect(result.runState.depth).toBe(i);
+      expect(result.floor.cells).toBeDefined();
+      expect(result.floor.descentPoint).toBeDefined();
+      expect(result.floor.entryPoint).toBeDefined();
+
+      const v = validateFloor(result.floor);
+      expect(v.valid).toBe(true);
+
+      expect(result.runState.themesSeen.has(result.floor.themeId)).toBe(true);
+
+      state.depth = result.runState.depth;
+      state.fogOfWar = result.runState.fogOfWar;
+      state.openedContainers = result.runState.openedContainers;
+      state.defeatedEnemies = result.runState.defeatedEnemies;
+      state.dangerClockProgress = result.runState.dangerClockProgress;
+      state.partyPosition = result.runState.partyPosition;
+      state.themesSeen = result.runState.themesSeen;
+      state.party = result.runState.party;
+      state.flags = result.runState.flags;
+      state.affixFloorLedger = result.runState.affixFloorLedger;
+    }
+  });
+
+  it('transition to floor 3 triggers calibration and applies selection', () => {
+    const classData = loadData('classes');
+    const state = createRunState(42, [makeTCharacter('a'), makeTCharacter('b')], { depth: 2, creationTimestamp: 1 });
+    const begin = beginFloorTransition(state, { classes: classData });
+    expect(begin.calibrationRequired).toBe(true);
+    expect(begin.offers.length).toBe(2);
+
+    const selections = {};
+    for (const offer of begin.offers) {
+      selections[offer.characterId] = offer.options[0].id;
+    }
+    const result = completeFloorTransition(state, begin.transitionToken, selections,
+      { data: { classes: classData }, themesData });
+    expect(result.error).toBeUndefined();
+    expect(result.runState.depth).toBe(3);
+    expect(result.runState.party[0].calibrationCount).toBe(1);
+    expect(result.runState.party[1].calibrationCount).toBe(1);
+  });
+
+  it('repeated transition from same state is deterministic', () => {
+    const classData = loadData('classes');
+    const state = createRunState(42, [makeTCharacter('a')], { depth: 1, creationTimestamp: 1 });
+    const begin1 = beginFloorTransition(state, { classes: classData });
+    const r1 = completeFloorTransition(state, begin1.transitionToken, {},
+      { data: { classes: classData }, themesData });
+
+    const begin2 = beginFloorTransition(state, { classes: classData });
+    const r2 = completeFloorTransition(state, begin2.transitionToken, {},
+      { data: { classes: classData }, themesData });
+    expect(r1.floor).toEqual(r2.floor);
+    expect(r1.runState.partyPosition).toEqual(r2.runState.partyPosition);
   });
 });
