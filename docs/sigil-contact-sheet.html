@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DESCENT SIGIL Contact Sheet</title>
+  <link rel="stylesheet" href="./sigil-contact-sheet.css">
+</head>
+<body>
+  <h1>DESCENT SIGIL Contact Sheet</h1>
+  <p>Acceptance proof for 72 mapped Private Use Area glyphs. Sizes are exactly 34px and 220px.</p>
+  <main id="sheet"></main>
+  <script type="module">
+    const sigils = await fetch('../data/sigils.json').then((response) => response.json());
+    const groups = [
+      ...Object.entries(sigils.playerBank.families).map(([name, value]) => [`player / ${name}`, value.codepoints]),
+      ...Object.entries(sigils.bestiaryBank.archetypes).map(([name, value]) => [`bestiary / ${name}`, value.codepoints]),
+    ];
+    const sheet = document.querySelector('#sheet');
+    const renderSection = (title, className) => {
+      const section = document.createElement('section');
+      section.className = className;
+      const heading = document.createElement('h2');
+      heading.textContent = title;
+      section.append(heading);
+      for (const [label, codepoints] of groups) {
+        const group = document.createElement('div');
+        group.className = 'group';
+        const name = document.createElement('h3');
+        name.className = 'label';
+        name.textContent = label;
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        for (const codepoint of codepoints) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          const glyph = document.createElement('div');
+          glyph.className = 'sigil';
+          glyph.textContent = String.fromCodePoint(codepoint);
+          const code = document.createElement('small');
+          code.textContent = `U+${codepoint.toString(16).toUpperCase().padStart(4, '0')}`;
+          cell.append(glyph, code);
+          grid.append(cell);
+        }
+        group.append(name, grid);
+        section.append(group);
+      }
+      sheet.append(section);
+    };
+    renderSection('34px monochrome', 'sigil-34 mono');
+    renderSection('34px production glow', 'sigil-34 glow');
+    renderSection('220px monochrome', 'sigil-220 mono');
+    renderSection('220px production glow', 'sigil-220 glow');
+  </script>
+</body>
+</html>

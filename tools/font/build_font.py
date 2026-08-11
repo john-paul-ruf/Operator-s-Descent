@@ -67,7 +67,7 @@ def stroke(pen, angle_deg, offset, length, width):
         (round(cx - hx + wx), round(cy - hy + wy)),
     ])
 
-def arc_segment(pen, radius, width, start_deg, sweep_deg, steps=12):
+def arc_segment(pen, radius, width, start_deg, sweep_deg, steps=8):
     outer = []
     inner = []
     for i in range(steps + 1):
@@ -92,15 +92,15 @@ def draw_recipe(recipe):
     for ring in recipe.get('rings', []):
         gaps = ring.get('gaps', [])
         if not gaps:
-            arc_segment(pen, ring['radius'], ring['width'], 0, 360, 24)
+            arc_segment(pen, ring['radius'], ring['width'], 0, 360, 10)
         else:
             cursor = 0
             for start, end in sorted(gaps):
                 if start > cursor:
-                    arc_segment(pen, ring['radius'], ring['width'], cursor, start - cursor, max(4, int((start - cursor) / 18)))
+                    arc_segment(pen, ring['radius'], ring['width'], cursor, start - cursor, max(3, int((start - cursor) / 36)))
                 cursor = end
             if cursor < 360:
-                arc_segment(pen, ring['radius'], ring['width'], cursor, 360 - cursor, max(4, int((360 - cursor) / 18)))
+                arc_segment(pen, ring['radius'], ring['width'], cursor, 360 - cursor, max(3, int((360 - cursor) / 36)))
     for s in recipe.get('strokes', []):
         stroke(pen, s['angle'], s.get('offset', 0), s['length'], s['width'])
     for b in recipe.get('bars', []):
@@ -156,6 +156,7 @@ def create_font():
         'fullName': 'DESCENT SIGIL Regular',
         'psName': 'DESCENTSIGIL-Regular',
         'version': 'Version 1.000; original Glitch Forgeworks LLC outline recipes',
+        'copyright': 'Copyright 2026 Glitch Forgeworks LLC. All rights reserved.',
         'manufacturer': 'Glitch Forgeworks LLC',
         'designer': 'Glitch Forgeworks LLC',
         'description': 'Original 72-glyph Operator\'s Descent sigil typeface.',
@@ -163,6 +164,9 @@ def create_font():
     })
     fb.setupPost()
     font = fb.font
+    font['post'].isFixedPitch = 1
+    font['hhea'].lineGap = 0
+    font['OS/2'].sTypoLineGap = 0
     font.flavor = 'woff2'
     font['head'].created = 0
     font['head'].modified = 0

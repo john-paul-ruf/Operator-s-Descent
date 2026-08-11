@@ -42,3 +42,10 @@
 - **Apex trio**: aggressive compound asymmetry, heavy crossing traces, and imbalanced nodes. The marks are more forceful than other enemies without drawing weapons, creatures, arrows, or warning signs.
 - **All-72 audit**: `/tmp/session33-all-72-34.png` reviewed locally in monochrome with identical glow. Bestiary forms remain more asymmetric, unclosed, displaced, or over-dense than the player bank.
 - **Held for SESSION-34**: Apex and Construct are intentionally dense and should be checked for counter fill-in on the generated 34px contact sheet. Oracle/Ghost sparsity remains the main player-family comparison risk.
+
+## SESSION-34 — Acceptance Contact Sheet
+
+- **Metrics**: 1000 UPM, fixed 1000 advance, hhea ascent 850/descent -150/line gap 0, fixed-pitch post flag set. All 72 encoded glyphs share the same advance and remain within safe outline bounds.
+- **Artifact**: final SESSION-34 WOFF2 is 7,916 bytes, inside the 4–8 KB acceptance target. The compiler now uses lower-resolution deterministic arc construction to reduce bytes while preserving 34px silhouettes.
+- **Contact sheet**: `./docs/sigil-contact-sheet.html` and `./docs/sigil-contact-sheet.css` provide labeled 34px and 220px monochrome plus production-glow views. Browser inspection over `http://127.0.0.1:4173/docs/sigil-contact-sheet.html` completed; screenshot proof was saved at `/tmp/session34-contact-sheet.png`.
+- **Acceptance disposition**: all 72 glyphs are nonempty, mapped from `./data/sigils.json`, visibly grouped by family/archetype, and distinguish player from bestiary construction without relying on red. No conscious limitation remains for SESSION-34.

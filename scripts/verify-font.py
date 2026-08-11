@@ -60,7 +60,11 @@ def main():
     if 'DESCENT SIGIL' not in names or 'Glitch Forgeworks LLC' not in names:
         raise SystemExit('required font metadata missing')
     if not (MIN_SIZE <= size <= MAX_SIZE):
-        print(f'WARNING: WOFF2 size {size} bytes outside target {MIN_SIZE}-{MAX_SIZE}; allowed for baseline refinement sessions')
+        raise SystemExit(f'WOFF2 size {size} bytes outside required {MIN_SIZE}-{MAX_SIZE}')
+    if font['post'].isFixedPitch != 1:
+        raise SystemExit('font is not marked fixed-pitch')
+    if font['hhea'].ascent != 850 or font['hhea'].descent != -150 or font['hhea'].lineGap != 0:
+        raise SystemExit('unexpected horizontal metrics')
     print(f'DESCENT SIGIL verified: 72 glyphs, advance 1000, WOFF2 {size} bytes')
 
 if __name__ == '__main__':

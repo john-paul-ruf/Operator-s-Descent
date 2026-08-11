@@ -1,0 +1,37 @@
+:root {
+  color-scheme: dark;
+  --bg: #05080c;
+  --grid: #0f4d43;
+  --ink: #b6ffe7;
+  --glow: #00ffb4;
+  --muted: #76a99a;
+}
+
+@font-face {
+  font-family: 'DESCENT SIGIL';
+  src: url('../assets/descent-sigil.woff2') format('woff2');
+  font-display: block;
+}
+
+body {
+  margin: 0;
+  padding: 32px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+h1, h2, h3 { margin: 0 0 12px; }
+section { margin: 0 0 36px; }
+.group { margin: 18px 0 28px; }
+.label { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.grid { display: grid; gap: 8px; grid-template-columns: repeat(8, max-content); }
+.cell { border: 1px solid var(--grid); display: grid; place-items: center; background: #020507; }
+.cell small { color: var(--muted); font-size: 10px; align-self: end; padding: 0 0 4px; }
+.sigil { font-family: 'DESCENT SIGIL'; color: var(--ink); line-height: 1; }
+.sigil-34 .cell { width: 64px; height: 64px; }
+.sigil-34 .sigil { font-size: 34px; }
+.sigil-220 .cell { width: 260px; height: 260px; }
+.sigil-220 .sigil { font-size: 220px; }
+.glow .sigil { text-shadow: 0 0 12px var(--glow), 0 0 24px var(--glow); }
+.mono .sigil { text-shadow: none; }
