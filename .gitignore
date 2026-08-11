@@ -1,3 +1,5 @@
 /.idea/
 /.zencoder/
 /program/
+/.devserver.log
+/.devserver.pid
