@@ -274,7 +274,7 @@ export function mount(container, params = {}) {
         label: `Choose ${cls.name}`,
         onClick: () => dispatch({ type: 'set_class', classId: cls.id })
       });
-      card.className = `class-card console-row${selected.classId === cls.id ? ' selected' : ''}`;
+      card.classList.add('class-card', 'console-row');
       card.setAttribute('role', 'radio');
       card.setAttribute('aria-checked', String(selected.classId === cls.id));
       card.dataset.testid = `class-${cls.id}`;
@@ -304,7 +304,7 @@ export function mount(container, params = {}) {
         description: unavailable ? 'sigil already used by another character' : 'free class-family sigil',
         onClick: () => dispatch({ type: 'set_sigil', sigil: codepoint })
       });
-      tokenButton.className = `sigil-choice console-row${selected.sigil === codepoint ? ' selected' : ''}`;
+      tokenButton.classList.add('sigil-choice', 'console-row');
       tokenButton.setAttribute('role', 'radio');
       tokenButton.setAttribute('aria-checked', String(selected.sigil === codepoint));
       tokenButton.setAttribute('aria-label', `Sigil ${codepoint.toString(16)}`);

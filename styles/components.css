@@ -466,6 +466,9 @@ input[type="range"]::-moz-range-thumb {
 
 /* Class Card */
 .class-card {
+  border: 1px solid var(--border-dim);
+  background: var(--bg-panel);
+  padding: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -978,6 +981,11 @@ button.protocol-card[aria-selected="true"],
 }
 
 .sigil-choice {
+  border: 1px solid var(--border-dim);
+  background: var(--bg-panel);
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
   min-height: 280px;
   gap: 8px;
 }
