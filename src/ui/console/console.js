@@ -22,7 +22,7 @@ export const MODE_REGISTRY = [
   { id: 'party', label: 'PARTY', key: 'mode_3', module: partyMode, available: (state) => Boolean(state.runState?.party?.length), reason: 'No party.' },
   { id: 'gear', label: 'GEAR', key: 'mode_4', module: gearMode, available: (state) => Boolean(state.runState), reason: 'No run data.' },
   { id: 'tech', label: 'TECH', key: 'mode_5', module: techMode, available: (state) => Boolean(state.runState?.party?.length), reason: 'No protocol deck.' },
-  { id: 'loot', label: 'LOOT', key: 'mode_6', module: lootMode, available: (state) => Boolean(state.lootState || state.lastMoveResult?.interruptType === 'container'), reason: 'No unopened nearby container.' },
+  { id: 'loot', label: 'LOOT', key: 'mode_6', module: lootMode, available: (state) => Boolean(state.lootState || state.canLoot?.()), reason: 'No unopened nearby container.' },
   { id: 'log', label: 'LOG', key: 'mode_7', module: logMode, available: () => true, reason: '' }
 ];
 
@@ -81,6 +81,7 @@ export function createConsole(state) {
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', 'console-content');
     tab.title = `Key ${index + 1}`;
+    tab.dataset.testid = `console-tab-${mode.id}`;
     tab.addEventListener('click', () => setMode(mode.id, { source: 'touch' }));
     return { tab, mode };
   });

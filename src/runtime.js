@@ -161,6 +161,10 @@ function setupBus() {
     }
   });
 
+  listen('audio:update-state', (payload) => {
+    audioEngine?.updateState(payload || {});
+  });
+
   listen('state:settings-change', ({ key, value }) => {
     if (key.startsWith('volume:') && audioEngine) {
       audioEngine.setLayerVolume(key.split(':')[1], value);
@@ -188,12 +192,12 @@ function setupBus() {
     audioEngine?.updateState({ depth: runState.depth });
   });
 
-  listen('state:combat-start', ({ runState, floor, lattice } = {}) => {
+  listen('state:combat-start', ({ runState, floor, lattice, encounter, reason, contact, moveResult } = {}) => {
     if (!runState) return;
     currentRunState = runState;
     setCurrentFloor(runState, isValidFloor(floor) ? floor : restoreFloorForRun(runState));
     if (!currentFloor) return;
-    void mountScreen('combat', { runState, floor: currentFloor, lattice });
+    void mountScreen('combat', { runState, floor: currentFloor, lattice, encounter, reason, contact, moveResult });
     audioEngine?.updateState({ combat: true });
   });
 

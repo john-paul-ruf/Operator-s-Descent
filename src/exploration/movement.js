@@ -61,9 +61,9 @@ export function moveParty(lattice, fogState, direction, rngCursor, runState, opt
     syncVisitedBitmap(fogState, runState.fogOfWar);
   }
 
-  const discoveries = findDiscoveries(lattice, visibleCells, runState);
+  const discoveries = findDiscoveries(lattice, visibleCells, runState, options);
   const interrupt = pickInterrupt(discoveries, options);
-  const proximity = computeProximity(lattice, visibleCells, runState);
+  const proximity = computeExplorationProximity(lattice, visibleCells, runState);
 
   let huntResult = null;
   let pendingHunt = false;
@@ -131,7 +131,7 @@ export function resetDangerClock(runState) {
   runState.dangerClockProgress = 0;
 }
 
-function findDiscoveries(lattice, visibleCells, runState) {
+function findDiscoveries(lattice, visibleCells, runState, options = {}) {
   const discoveries = [];
   const defeated = runState?.defeatedEnemies || 0n;
   const opened = runState?.openedContainers || 0n;
@@ -171,7 +171,7 @@ function findDiscoveries(lattice, visibleCells, runState) {
   }
 
   if (moveParty._damageFlag) {
-    discoveries.push({ type: 'damage', entity: null, newlyDiscovered: true });
+    if (options.autoStopToggles?.damage !== false) discoveries.push({ type: 'damage', entity: null, newlyDiscovered: true });
     moveParty._damageFlag = false;
   }
 
@@ -209,7 +209,7 @@ function pickInterrupt(discoveries, options) {
   return null;
 }
 
-function computeProximity(lattice, visibleCells, runState) {
+export function computeExplorationProximity(lattice, visibleCells, runState) {
   const defeated = runState?.defeatedEnemies || 0n;
   const opened = runState?.openedContainers || 0n;
   const pos = lattice.getPartyPosition();
