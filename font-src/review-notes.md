@@ -24,3 +24,12 @@
 - **220px proof**: `/tmp/session31-proof-220.png` reviewed locally for Oracle/Operator large-scale contour quality before the final Operator collision changes; the WOFF2 verifier then rechecked nonempty unique outlines after those changes.
 - **Resolved collisions**: Operator 2 initially read too close to a Latin `A`, and Operator 4 too close to a close/X control; both were redrawn with offset spines and lateral returns instead of triangular or crossed cores.
 - **Contact-sheet risks**: Oracle and Ghost are both intentionally sparse. Oracle keeps stronger radial grouping and multiple halo fragments; Ghost keeps displaced broken arcs and needle traces. Recheck this pair in SESSION-34 at 34px contact-sheet scale.
+
+## SESSION-32 — Drone, Warden, Stalker, Choir
+
+- **Drone trio**: repeated incomplete swarm cells, displaced short traces, and small scattered nodes. Each mark is asymmetric and unfinished rather than a player-family seal.
+- **Warden trio**: dense broken barriers, offset vertical/horizontal slabs, and heavy interrupted enclosures. The grammar is over-built and obstructive without using shield icons.
+- **Stalker trio**: off-axis pursuit lines, hooked interruptions, and unbalanced trailing bars. The silhouettes avoid claws/arrows by keeping hooks as circuit breaks rather than pointed pictographs.
+- **Choir trio**: clustered resonance nodes, overlaid halos, and layered short traces. The density comes from node clusters rather than musical-note or face imagery.
+- **Player/bestiary comparison**: `/tmp/session32-player-bestiary-34.png` reviewed locally in monochrome with identical glow. The first twelve bestiary marks classify as more asymmetric, broken, or over-dense than the six player families.
+- **Corrected ambiguity**: Warden marks were kept dense but visibly broken so they do not collapse into Anchor's stable bilateral footing at 34px.
