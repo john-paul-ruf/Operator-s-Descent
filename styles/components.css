@@ -1123,3 +1123,59 @@ button.protocol-card[aria-selected="true"],
 .btn-crt.finalize-btn {
   flex: 2;
 }
+
+/* Scorecard */
+.scorecard-roster-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.scorecard-roster-entry.dead span {
+  color: var(--danger);
+}
+
+.creature-sigil.dead {
+  opacity: 0.4;
+  filter: grayscale(0.5);
+}
+
+.creature-sigil.dead::after {
+  content: '\2715';
+  position: absolute;
+  font-size: 24px;
+  color: var(--danger);
+  text-shadow: 0 0 4px var(--danger);
+}
+
+/* Import failure */
+.import-result .panel.error {
+  border-color: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+}
+
+/* Tutorial illustrations */
+.illus-dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 24px);
+  grid-template-rows: repeat(3, 24px);
+  gap: 2px;
+}
+
+.illus-dpad > div {
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--border-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.illus-dpad > .dpad-center {
+  background: transparent;
+  border: 1px dashed var(--border-dim);
+  font-size: 6px;
+  color: var(--text-dim);
+}

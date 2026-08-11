@@ -87,8 +87,14 @@ export function mount(container, params = {}) {
   for (const character of party) {
     const entry = document.createElement('div');
     entry.className = 'scorecard-roster-entry';
+    const isDead = (character?.currentHP ?? character?.hp ?? 1) <= 0;
+    if (isDead) entry.classList.add('dead');
     const sigil = createSigilToken(safePlayerSigil(character), 72, { role: 'player' });
-    sigil.style.opacity = '0.4';
+    if (isDead) {
+      sigil.classList.add('dead');
+      sigil.style.position = 'relative';
+    }
+    sigil.style.opacity = isDead ? '0.4' : '1';
     const label = document.createElement('span');
     label.textContent = `${character?.id || 'UNKNOWN'} · ${(character?.classId || 'unknown').toUpperCase()}`;
     entry.append(sigil, label);

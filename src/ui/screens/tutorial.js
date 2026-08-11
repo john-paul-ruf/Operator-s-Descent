@@ -13,7 +13,8 @@ const PAGES = [
   {
     title: 'MOVE Mode',
     body: 'MOVE owns exploration input. Use the directional controls or movement keys for eight-way steps. Hostiles always stop movement; container, descent, and damage stops are shown as console decisions.',
-    tokens: ['NW', 'N', 'NE', 'W', 'WAIT', 'E', 'SW', 'S', 'SE']
+    tokens: ['NW', 'N', 'NE', 'W', 'WAIT', 'E', 'SW', 'S', 'SE'],
+    illustration: 'dpad'
   },
   {
     title: 'COMBAT Mode',
@@ -138,11 +139,23 @@ export function mount(container) {
     index.dataset.testid = 'tutorial-page-index';
     index.textContent = `${currentPage + 1}/${PAGES.length}`;
     illustration.appendChild(index);
-    for (const token of page.tokens) {
-      const chip = document.createElement('span');
-      chip.className = 'tutorial-chip';
-      chip.textContent = token;
-      illustration.appendChild(chip);
+    if (page.illustration === 'dpad' && page.tokens.length === 9) {
+      const grid = document.createElement('div');
+      grid.className = 'illus-dpad';
+      for (let i = 0; i < page.tokens.length; i++) {
+        const cell = document.createElement('div');
+        cell.textContent = page.tokens[i];
+        if (i === 4) cell.className = 'dpad-center';
+        grid.appendChild(cell);
+      }
+      illustration.appendChild(grid);
+    } else {
+      for (const token of page.tokens) {
+        const chip = document.createElement('span');
+        chip.className = 'tutorial-chip';
+        chip.textContent = token;
+        illustration.appendChild(chip);
+      }
     }
 
     const body = document.createElement('p');

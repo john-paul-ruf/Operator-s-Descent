@@ -97,7 +97,7 @@ export function mount(container, params = {}) {
     resultArea.replaceChildren();
 
     const panel = createPanel({ title });
-    panel.classList.add('glow-danger');
+    panel.classList.add('error');
     panel.dataset.testid = `import-failure-${code}`;
     const message = document.createElement('p');
     message.textContent = body;
