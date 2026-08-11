@@ -474,6 +474,12 @@ export function mount(container, params = {}) {
     const footer = document.createElement('section');
     footer.className = 'creation-actions';
     footer.dataset.testid = 'creation-actions';
+    const backButton = createButton('◀ BACK', {
+      onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
+    });
+    backButton.dataset.testid = 'back';
+    backButton.classList.add('footer-back-btn');
+    footer.appendChild(backButton);
     const errors = summary.validation.errors;
     const errorBox = document.createElement('div');
     errorBox.className = errors.length ? 'creation-error' : 'creation-note';
@@ -489,6 +495,7 @@ export function mount(container, params = {}) {
       onClick: finalize
     });
     finalizeButton.dataset.testid = 'finalize';
+    finalizeButton.classList.add('finalize-btn');
     footer.appendChild(finalizeButton);
     if (notice && activeTab !== 'blueprints') footer.appendChild(text('p', notice.startsWith('LOADED') ? 'creation-note' : 'creation-error', notice));
     const selected = selectedSummary(summary);

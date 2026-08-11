@@ -921,7 +921,13 @@ button.protocol-card[aria-selected="true"],
   color: var(--text-primary);
 }
 
-.creation-header,
+.creation-header {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
 .creation-char-bar,
 .creation-tabs,
 .creation-actions,
@@ -1051,7 +1057,6 @@ button.protocol-card[aria-selected="true"],
 }
 
 .creation-char-bar > *,
-.creation-tabs > *,
 .creation-actions > *,
 .blueprint-controls > *,
 .sigil-choice,
@@ -1060,4 +1065,12 @@ button.protocol-card[aria-selected="true"],
 .protocol-card,
 .config-row {
   min-height: 96px;
+}
+
+.btn-crt.footer-back-btn {
+  flex: 1;
+}
+
+.btn-crt.finalize-btn {
+  flex: 2;
 }
