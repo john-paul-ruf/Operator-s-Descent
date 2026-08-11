@@ -4,6 +4,8 @@ const ATTRIBUTES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
 const CATEGORIES = ['weapon', 'armor', 'consumable'];
 const RARITIES = ['stock', 'tuned', 'custom', 'prototype', 'corrupt'];
 const SIDES = ['party', 'enemy', 'echo'];
+const ENEMY_ID_TYPES = ['drone', 'stalker', 'choir', 'null', 'construct', 'apex', 'echo'];
+const ENCOUNTER_TYPES = ['standard', 'hunt'];
 const MAX_ID = 96;
 const MAX_CONDITIONS = 9;
 const MAX_AFFIXES = 8;
@@ -39,6 +41,78 @@ function writeString(writer, value, maximum = MAX_ID) {
 
 function readString(reader, maximum = MAX_ID) {
   return new TextDecoder('utf-8', { fatal: true }).decode(reader.readBytes(requireInteger(reader.readVarUint(), 0, maximum, 'invalid_length')));
+}
+
+function writeEntityId(writer, value) {
+  if (typeof value !== 'string') fail('invalid_string');
+  const operator = value.match(/^operator_([1-4])$/);
+  if (operator) {
+    writer.writeUint(1, 2);
+    writer.writeUint(Number(operator[1]) - 1, 2);
+    return;
+  }
+  const enemy = value.match(/^enemy_(\d{1,3})_([a-z_]+)_(\d+)$/);
+  const enemyType = enemy ? ENEMY_ID_TYPES.indexOf(enemy[2]) : -1;
+  const depth = enemy ? Number(enemy[1]) : -1;
+  const cursor = enemy ? Number(enemy[3]) : -1;
+  if (enemyType >= 0 && Number.isInteger(depth) && depth >= 1 && depth <= 255 && Number.isSafeInteger(cursor) && cursor >= 0) {
+    writer.writeUint(2, 2);
+    writer.writeUint(depth, 8);
+    writer.writeUint(enemyType, 3);
+    writer.writeVarUint(cursor);
+    return;
+  }
+  writer.writeUint(0, 2);
+  writeString(writer, value);
+}
+
+function readEntityId(reader) {
+  switch (reader.readUint(2)) {
+    case 0: return readString(reader);
+    case 1: return `operator_${reader.readUint(2) + 1}`;
+    case 2: {
+      const depth = reader.readUint(8);
+      const enemyType = ENEMY_ID_TYPES[reader.readUint(3)];
+      const cursor = reader.readVarUint();
+      if (!enemyType) fail('invalid_string');
+      return `enemy_${depth}_${enemyType}_${cursor}`;
+    }
+    default: fail('invalid_string');
+  }
+}
+
+function writeEncounterId(writer, value) {
+  if (typeof value !== 'string') fail('invalid_string');
+  const encounter = value.match(/^encounter_(\d{1,2})_(\d{1,2})_(\d+)$/);
+  const x = encounter ? Number(encounter[1]) : -1;
+  const y = encounter ? Number(encounter[2]) : -1;
+  const cursor = encounter ? Number(encounter[3]) : -1;
+  if (Number.isInteger(x) && x >= 0 && x <= 31 && Number.isInteger(y) && y >= 0 && y <= 31 && Number.isSafeInteger(cursor) && cursor >= 0) {
+    writer.writeBool(true);
+    writer.writeUint(x, 5);
+    writer.writeUint(y, 5);
+    writer.writeVarUint(cursor);
+    return;
+  }
+  writer.writeBool(false);
+  writeString(writer, value);
+}
+
+function readEncounterId(reader) {
+  if (!reader.readBool()) return readString(reader);
+  return `encounter_${reader.readUint(5)}_${reader.readUint(5)}_${reader.readVarUint()}`;
+}
+
+function writeEncounterType(writer, value) {
+  const index = ENCOUNTER_TYPES.indexOf(value);
+  writer.writeBool(index >= 0);
+  if (index >= 0) writer.writeUint(index, 1);
+  else writeString(writer, value, 64);
+}
+
+function readEncounterType(reader) {
+  if (!reader.readBool()) return readString(reader, 64);
+  return ENCOUNTER_TYPES[reader.readUint(1)];
 }
 
 function writeNumber(writer, value) {
@@ -211,7 +285,7 @@ export function writeCharacter(writer, character, symbols) {
   const calibrationChoices = character?.calibrationChoices ?? [];
   const protocolDeck = character?.protocolDeck ?? [];
   if (!isObject(character) || !isObject(character.attributes) || !Array.isArray(calibrationChoices) || calibrationChoices.length > MAX_CALIBRATIONS || !Array.isArray(protocolDeck) || protocolDeck.length > MAX_DECK) fail('invalid_character');
-  writeString(writer, character.id);
+  writeEntityId(writer, character.id);
   writeField(writer, symbols, 'class', character.classId, (value) => writeString(writer, value, 64));
   writeField(writer, symbols, 'sigil_id', character.sigilId, (value) => writeString(writer, value, 64));
   for (const attribute of ATTRIBUTES) writeField(writer, symbols, 'attribute', requireInteger(character.attributes[attribute], 1, 255, 'invalid_character'), (value) => writer.writeVarUint(value));
@@ -244,7 +318,7 @@ export function writeCharacter(writer, character, symbols) {
 }
 
 export function readCharacter(reader, symbols) {
-  const id = readString(reader);
+  const id = readEntityId(reader);
   const classId = readField(reader, symbols, 'class', () => readString(reader, 64));
   const sigilId = readField(reader, symbols, 'sigil_id', () => readString(reader, 64));
   const attributes = Object.fromEntries(ATTRIBUTES.map((attribute) => [attribute, requireInteger(readField(reader, symbols, 'attribute', () => reader.readVarUint()), 1, 255, 'invalid_character')]));
@@ -285,7 +359,7 @@ export function readEcho(reader, symbols) {
 
 function writeActor(writer, actor) {
   if (!isObject(actor) || !SIDES.includes(actor.side)) fail('invalid_actor');
-  writeString(writer, actor.id);
+  writeEntityId(writer, actor.id);
   writer.writeUint(SIDES.indexOf(actor.side), 2);
   writer.writeUint(requireInteger(actor.x, 0, 31, 'invalid_actor'), 5);
   writer.writeUint(requireInteger(actor.y, 0, 31, 'invalid_actor'), 5);
@@ -301,7 +375,7 @@ function writeActor(writer, actor) {
 }
 
 function readActor(reader) {
-  const id = readString(reader);
+  const id = readEntityId(reader);
   const side = SIDES[reader.readUint(2)];
   if (!side) fail('invalid_actor');
   return {
@@ -325,7 +399,7 @@ export function writeCombatSnapshot(writer, combat, symbols) {
   if (!isObject(combat) || !isObject(combat.arena) || !Array.isArray(combat.actors) || combat.actors.length < 1 || combat.actors.length > MAX_ACTORS || !Array.isArray(combat.initiativeOrder) || !Array.isArray(combat.pendingEffects)) fail('invalid_combat');
   writer.writeUint(requireInteger(combat.arena.originX, 0, 31, 'invalid_combat'), 5);
   writer.writeUint(requireInteger(combat.arena.originY, 0, 31, 'invalid_combat'), 5);
-  writeString(writer, combat.arena.contactId, MAX_ID);
+  writeEncounterId(writer, combat.arena.contactId);
   writer.writeUint(combat.actors.length, 5);
   const actorIds = new Set();
   for (const actor of combat.actors) {
@@ -334,33 +408,33 @@ export function writeCombatSnapshot(writer, combat, symbols) {
     writeActor(writer, actor);
   }
   if (combat.initiativeOrder.length !== combat.actors.length || new Set(combat.initiativeOrder).size !== combat.initiativeOrder.length || combat.initiativeOrder.some((id) => !actorIds.has(id))) fail('invalid_combat');
-  for (const id of combat.initiativeOrder) writeString(writer, id);
+  for (const id of combat.initiativeOrder) writeEntityId(writer, id);
   writer.writeUint(requireInteger(combat.currentIndex, 0, combat.initiativeOrder.length - 1, 'invalid_combat'), 5);
   writer.writeVarUint(requireInteger(combat.round, 1, 255, 'invalid_combat'));
   if (combat.pendingEffects.length > MAX_PENDING_EFFECTS) fail('invalid_combat');
   writer.writeUint(combat.pendingEffects.length, 6);
   for (const effect of combat.pendingEffects) writeValue(writer, effect);
   if (!isObject(combat.encounter) || typeof combat.encounter.id !== 'string' || typeof combat.encounter.type !== 'string') fail('invalid_combat');
-  writeString(writer, combat.encounter.id, MAX_ID);
-  writeString(writer, combat.encounter.type, 64);
+  writeEncounterId(writer, combat.encounter.id);
+  writeEncounterType(writer, combat.encounter.type);
   writer.writeVarUint(requireInteger(combat.eventOrder, 0, Number.MAX_SAFE_INTEGER, 'invalid_combat'));
 }
 
 export function readCombatSnapshot(reader, symbols) {
-  const arena = { originX: reader.readUint(5), originY: reader.readUint(5), contactId: readString(reader) };
+  const arena = { originX: reader.readUint(5), originY: reader.readUint(5), contactId: readEncounterId(reader) };
   const actorLength = reader.readUint(5);
   if (actorLength < 1 || actorLength > MAX_ACTORS) fail('invalid_combat');
   const actors = Array.from({ length: actorLength }, () => readActor(reader));
   const actorIds = new Set(actors.map((actor) => actor.id));
   if (actorIds.size !== actors.length) fail('duplicate_actor');
-  const initiativeOrder = Array.from({ length: actorLength }, () => readString(reader));
+  const initiativeOrder = Array.from({ length: actorLength }, () => readEntityId(reader));
   if (new Set(initiativeOrder).size !== actorLength || initiativeOrder.some((id) => !actorIds.has(id))) fail('invalid_combat');
   const currentIndex = requireInteger(reader.readUint(5), 0, actorLength - 1, 'invalid_combat');
   const round = requireInteger(reader.readVarUint(), 1, 255, 'invalid_combat');
   const pendingLength = reader.readUint(6);
   if (pendingLength > MAX_PENDING_EFFECTS) fail('invalid_combat');
   const pendingEffects = Array.from({ length: pendingLength }, () => readValue(reader));
-  const encounter = { id: readString(reader), type: readString(reader, 64) };
+  const encounter = { id: readEncounterId(reader), type: readEncounterType(reader) };
   const eventOrder = reader.readVarUint();
   return { arena, actors, initiativeOrder, currentIndex, round, pendingEffects, encounter, eventOrder };
 }
