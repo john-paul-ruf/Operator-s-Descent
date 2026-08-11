@@ -1,108 +1,209 @@
-import { createButton } from '../components.js';
+import { setFlag } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
+import { createButton } from '../components.js';
+
+const TUTORIAL_FLAG = 'tutorialDeclined';
 
 const PAGES = [
   {
     title: 'Console Overview',
-    body: 'The console is your interface to the system. It has seven modes, selected by tabs or keys 1-7. The console can be expanded for detail or collapsed to maximize the playfield. The status strip at the top always shows your depth, danger clock, and party status.'
+    body: 'Every meaningful action routes through the single bottom console. Tabs 1-7 select modes; the panel expands for detail and collapses to keep the playfield visible.',
+    tokens: ['MOVE', 'COMBAT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']
   },
   {
     title: 'MOVE Mode',
-    body: 'MOVE mode (1) displays an 8-directional D-pad. Use arrow keys, WASD, numpad, or QEZC for movement. Diagonal movement follows the corner rule — you can slip through gaps. Movement reveals fog-of-war and may trigger auto-stops for hostiles, containers, or descent points.'
+    body: 'MOVE owns exploration input. Use the directional controls or movement keys for eight-way steps. Hostiles always stop movement; container, descent, and damage stops are shown as console decisions.',
+    tokens: ['NW', 'N', 'NE', 'W', 'WAIT', 'E', 'SW', 'S', 'SE']
   },
   {
     title: 'COMBAT Mode',
-    body: 'COMBAT mode (2) shows available actions: Attack, Cast, Item, Retreat. Combat uses a d20 system — your attack roll + modifiers vs target Defense. Natural 20 is a critical (double damage). Natural 1 is a fumble. Each character has 2 AP per round. Turns follow initiative order.'
+    body: 'COMBAT presents one actor turn at a time: choose an action, choose a target or path, then confirm. Turns follow initiative, AP, movement, reactions, and d20 outcomes.',
+    tokens: ['ACTION', 'TARGET', 'CONFIRM', 'ROLL', 'END']
   },
   {
-    title: 'PARTY / GEAR / TECH',
-    body: 'PARTY mode (3) shows each character with attributes, HP, CHARGE, and conditions. GEAR mode (4) displays equipped items and inventory (100-item cap). TECH mode (5) shows your protocol deck — cast protocols by spending CHARGE. Overclock for enhanced effects at higher risk.'
+    title: 'PARTY Mode',
+    body: 'PARTY is the read-only roster: HP, CHARGE, attributes, defenses, conditions, calibration, corruption, equipment, protocol deck, and current combat resources.',
+    tokens: ['HP', 'CHARGE', 'ATTR', 'COND', 'DECK']
   },
   {
-    title: 'LOOT / LOG',
-    body: 'LOOT mode (6) appears when a container is in line of sight. Take items individually or all at once. LOG mode (7) is a scrolling record of events — combat results, discoveries, and more. Use the copy-link button to share your log.'
+    title: 'GEAR Mode',
+    body: 'GEAR handles equipment, inventory, junk tags, scrap, class gates, slot gates, and CORRUPT consent. In combat, the active actor gets one free swap per turn.',
+    tokens: ['WEAPON', 'ARMOR', 'OFFHAND', 'JUNK', 'SCRAP']
   },
   {
-    title: 'Status Strip & Settings',
-    body: 'The status strip shows depth (D1+), danger clock (fills as you linger — when it fills, hostiles hunt you), and party sigils with mini HP bars. In combat, it shows round, active combatant, and full HP/CHARGE bars. SETTINGS adjusts audio, glitch effects, and scanlines. Your world seed is displayed in the creation screen and can be shared via #w= links.'
+    title: 'TECH Mode',
+    body: 'TECH shows each prepared protocol, CHARGE cost, target shape, and overclock risk. Select a protocol, choose a legal target, then confirm before CHARGE or RNG is consumed.',
+    tokens: ['CAST', 'OVERCLK', 'TIER', 'DC', 'RISK']
+  },
+  {
+    title: 'LOOT Mode',
+    body: 'LOOT opens nearby containers. Items remain in the container until taken, inventory cap failures do not delete them, and CORRUPT items remain explicit decisions.',
+    tokens: ['OPEN', 'TAKE', 'COMPARE', 'CAP 100', 'CORRUPT']
+  },
+  {
+    title: 'LOG Mode',
+    body: 'LOG keeps the ordered recent event tail: discoveries, damage, d20 rolls, combat outcomes, and link actions. Living runs can copy a full #r= state link.',
+    tokens: ['EVENTS', 'ROLLS', '#r=', 'COPY']
+  },
+  {
+    title: 'Status Strip',
+    body: 'The top strip is the compact truth readout. Exploration shows depth, seed, party HP, corruption, and danger clock. Combat shows round, initiative, active HP, CHARGE, AP, and move.',
+    tokens: ['DEPTH', 'SEED', 'HP', 'CLOCK', 'AP']
+  },
+  {
+    title: 'Settings',
+    body: 'Settings are reachable from the title and in play. Master mute, five audio layers, glitch, motion policy, and scanline/grain are the complete v1 list.',
+    tokens: ['MUTE', 'DRONE', 'PULSE', 'GLITCH', 'MOTION']
+  },
+  {
+    title: 'Seed & Share Links',
+    body: 'The world seed identifies the dungeon. Copy #w= to share the world, or #r= while the party lives to share the entire current run state. Failed links name the reason.',
+    tokens: ['SEED', '#w=', '#r=', 'IMPORT', 'FAILURE']
   }
 ];
 
-export function mount(container, params) {
+function navigateTitle(params = {}) {
+  bus.dispatch('ui:navigate', { screen: 'title', params });
+}
+
+function suppressTutorial() {
+  return setFlag(TUTORIAL_FLAG, true);
+}
+
+export function mount(container) {
   let currentPage = 0;
+  let pageCleanups = [];
+  const cleanups = [];
 
-  const wrapper = document.createElement('div');
+  const wrapper = document.createElement('section');
   wrapper.className = 'tutorial-wrapper';
+  wrapper.setAttribute('aria-label', 'Operator manual');
 
-  const pageContainer = document.createElement('div');
+  const header = document.createElement('h2');
+  header.className = 'display';
+  header.textContent = 'OPERATOR MANUAL';
+
+  const status = document.createElement('p');
+  status.className = 'console-note';
+  status.setAttribute('aria-live', 'polite');
+  status.dataset.testid = 'tutorial-status';
+
+  const pageContainer = document.createElement('article');
   pageContainer.className = 'tutorial-page';
+  pageContainer.dataset.testid = 'tutorial-page';
 
   const dotsContainer = document.createElement('div');
   dotsContainer.className = 'tutorial-dots';
+  dotsContainer.setAttribute('aria-label', 'Tutorial progress');
 
-  function renderPage() {
-    pageContainer.innerHTML = '';
+  function track(element) {
+    pageCleanups.push(() => element.cleanup?.());
+    return element;
+  }
 
-    const page = PAGES[currentPage];
-
-    const title = document.createElement('h3');
-    title.className = 'tutorial-page-title';
-    title.textContent = page.title;
-    pageContainer.appendChild(title);
-
-    const illustration = document.createElement('div');
-    illustration.className = 'tutorial-illustration';
-    illustration.textContent = `${currentPage + 1}/${PAGES.length}`;
-    pageContainer.appendChild(illustration);
-
-    const body = document.createElement('p');
-    body.className = 'tutorial-body';
-    body.textContent = page.body;
-    pageContainer.appendChild(body);
-
-    renderDots();
-
-    const navRow = document.createElement('div');
-    navRow.className = 'tutorial-nav';
-
-    if (currentPage > 0) {
-      navRow.appendChild(createButton('PREV', {
-        onClick: () => { currentPage--; renderPage(); }
-      }));
-    }
-
-    if (currentPage < PAGES.length - 1) {
-      navRow.appendChild(createButton('NEXT', {
-        primary: true,
-        onClick: () => { currentPage++; renderPage(); }
-      }));
-    } else {
-      navRow.appendChild(createButton('DONE', {
-        primary: true,
-        onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
-      }));
-    }
-
-    navRow.appendChild(createButton('SKIP', {
-      onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
-    }));
-
-    pageContainer.appendChild(navRow);
+  function finish(completed) {
+    const result = suppressTutorial();
+    status.textContent = result.success
+      ? (completed ? 'MANUAL COMPLETE — OFFER SUPPRESSED' : 'MANUAL SKIPPED — OFFER SUPPRESSED')
+      : `MANUAL CLOSED — ${result.error || 'storage unavailable'}`;
+    navigateTitle({ tutorialCompleted: completed });
   }
 
   function renderDots() {
-    dotsContainer.innerHTML = '';
-    for (let i = 0; i < PAGES.length; i++) {
-      const dot = document.createElement('div');
-      dot.className = `tutorial-dot${i === currentPage ? ' active' : ''}`;
+    dotsContainer.replaceChildren();
+    for (let index = 0; index < PAGES.length; index += 1) {
+      const dot = document.createElement('span');
+      dot.className = `tutorial-dot${index === currentPage ? ' active' : ''}`;
+      dot.textContent = String(index + 1);
+      dot.setAttribute('aria-current', index === currentPage ? 'step' : 'false');
       dotsContainer.appendChild(dot);
     }
   }
 
-  renderPage();
-  wrapper.appendChild(pageContainer);
-  wrapper.appendChild(dotsContainer);
-  container.appendChild(wrapper);
+  function renderPage() {
+    while (pageCleanups.length) pageCleanups.pop()?.();
+    pageContainer.replaceChildren();
+    const page = PAGES[currentPage];
 
-  return { unmount() {} };
+    const title = document.createElement('h3');
+    title.className = 'tutorial-page-title';
+    title.dataset.testid = 'tutorial-page-title';
+    title.textContent = page.title;
+
+    const illustration = document.createElement('div');
+    illustration.className = 'tutorial-illustration';
+    illustration.setAttribute('aria-label', `${page.title} diagram`);
+    const index = document.createElement('span');
+    index.className = 'tutorial-page-index';
+    index.dataset.testid = 'tutorial-page-index';
+    index.textContent = `${currentPage + 1}/${PAGES.length}`;
+    illustration.appendChild(index);
+    for (const token of page.tokens) {
+      const chip = document.createElement('span');
+      chip.className = 'tutorial-chip';
+      chip.textContent = token;
+      illustration.appendChild(chip);
+    }
+
+    const body = document.createElement('p');
+    body.className = 'tutorial-body';
+    body.textContent = page.body;
+
+    const navRow = document.createElement('nav');
+    navRow.className = 'tutorial-nav';
+    navRow.setAttribute('aria-label', 'Tutorial navigation');
+
+    if (currentPage > 0) {
+      const prev = track(createButton('PREV', {
+        onClick: () => {
+          currentPage -= 1;
+          renderPage();
+        }
+      }));
+      prev.dataset.testid = 'tutorial-prev';
+      navRow.appendChild(prev);
+    }
+
+    if (currentPage < PAGES.length - 1) {
+      const next = track(createButton('NEXT', {
+        primary: true,
+        onClick: () => {
+          currentPage += 1;
+          renderPage();
+        }
+      }));
+      next.dataset.testid = 'tutorial-next';
+      navRow.appendChild(next);
+    } else {
+      const done = track(createButton('DONE', {
+        primary: true,
+        onClick: () => finish(true)
+      }));
+      done.dataset.testid = 'tutorial-done';
+      navRow.appendChild(done);
+    }
+
+    const skip = track(createButton('SKIP / BACK TO TITLE', {
+      onClick: () => finish(false)
+    }));
+    skip.dataset.testid = 'tutorial-skip';
+    navRow.appendChild(skip);
+
+    pageContainer.append(title, illustration, body, navRow);
+    renderDots();
+  }
+
+  renderPage();
+  wrapper.append(header, status, pageContainer, dotsContainer);
+  container.replaceChildren(wrapper);
+
+  cleanups.push(() => {
+    while (pageCleanups.length) pageCleanups.pop()?.();
+  });
+
+  return {
+    unmount() {
+      while (cleanups.length) cleanups.pop()?.();
+    }
+  };
 }

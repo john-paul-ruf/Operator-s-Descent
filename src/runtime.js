@@ -132,6 +132,15 @@ function setupGrain() {
   grainController.start();
 }
 
+function startAudioEngine(settings = loadSettings()) {
+  if (audioEngine) return audioEngine;
+  audioEngine = createAudioEngine(gestureAudioContext);
+  gestureAudioContext = null;
+  audioEngine.start();
+  audioEngine.applySettings(settings);
+  return audioEngine;
+}
+
 function setupBus() {
   const listen = (event, handler) => busUnsubscribers.push(bus.on(event, handler));
 
@@ -149,16 +158,7 @@ function setupBus() {
   });
 
   listen('ui:audio-start', () => {
-    if (!audioEngine) {
-      audioEngine = createAudioEngine(gestureAudioContext);
-      gestureAudioContext = null;
-      audioEngine.start();
-      const settings = loadSettings();
-      audioEngine.setMute(settings.masterMute);
-      for (const [layer, vol] of Object.entries(settings.layerVolumes)) {
-        audioEngine.setLayerVolume(layer, vol);
-      }
-    }
+    startAudioEngine(loadSettings());
   });
 
   listen('audio:update-state', (payload) => {
@@ -259,6 +259,7 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
   initGlitchSafePool(gameData.sigils);
 
   const settings = loadSettings();
+  startAudioEngine(settings);
   visualSettings = {
     glitchEnabled: Boolean(settings.glitchEnabled),
     reducedMotion: settings.reducedMotion
