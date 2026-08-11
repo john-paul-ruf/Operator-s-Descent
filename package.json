@@ -17,7 +17,8 @@
     "font:build": "python3 ./tools/font/build_font.py",
     "font:check": "python3 ./tools/font/build_font.py --check && python3 ./scripts/verify-font.py",
     "lint:sigils": "node ./scripts/lint-sigils.js",
-    "validate": "npm run lint:sigils && npm test"
+    "check:assets": "node ./scripts/verify-assets.js",
+    "validate": "npm run lint:sigils && npm run check:assets && npm test"
   },
   "devDependencies": {
     "vitest": "^2.1.0"

@@ -40,6 +40,7 @@ let busUnsubscribers = [];
 let runtimeActive = false;
 let serviceWorkerStarted = false;
 let lastAutosaveResult = null;
+let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, scope: null, error: null };
 
 let gameData = null;
 
@@ -551,10 +552,26 @@ function setupBus() {
 }
 
 function registerServiceWorkerOnce() {
-  if (serviceWorkerStarted || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
+  if (serviceWorkerStarted) return null;
+  serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, scope: null, error: null };
+  if (!serviceWorkerStatus.supported) return null;
   serviceWorkerStarted = true;
-  return navigator.serviceWorker.register('./service-worker.js').catch((err) => {
-    console.warn('Service worker registration failed:', err);
+  return navigator.serviceWorker.register('./service-worker.js').then(async (registration) => {
+    serviceWorkerStatus = { ...serviceWorkerStatus, registered: true, scope: registration?.scope || null };
+    if (!registration?.update) return registration;
+    try {
+      await registration.update();
+      serviceWorkerStatus = { ...serviceWorkerStatus, updated: true };
+    } catch (error) {
+      serviceWorkerStatus = { ...serviceWorkerStatus, error: error?.message || String(error) };
+      console.warn('Service worker update failed:', error);
+      bus.dispatch('runtime:error', { error: 'service_worker_update_failed', message: serviceWorkerStatus.error });
+    }
+    return registration;
+  }).catch((error) => {
+    serviceWorkerStatus = { ...serviceWorkerStatus, error: error?.message || String(error) };
+    console.warn('Service worker registration failed:', error);
+    bus.dispatch('runtime:error', { error: 'service_worker_registration_failed', message: serviceWorkerStatus.error });
     return null;
   });
 }
@@ -635,6 +652,7 @@ export function getRuntimeSnapshot() {
     grainCanvasAttached: Boolean(grainCanvas?.parentNode),
     busListenerCount: busUnsubscribers.length,
     serviceWorkerStarted,
+    serviceWorkerStatus,
     floorKey: currentFloorKey,
     currentRun: currentRunState ? {
       worldSeed: currentRunState.worldSeed,
