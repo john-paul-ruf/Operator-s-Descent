@@ -89,6 +89,8 @@ body {
 .glow-strong { text-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent); }
 .glow-danger { text-shadow: 0 0 8px var(--danger); }
 .accent-text { color: var(--accent); }
+.glow-border { box-shadow: 0 0 8px var(--accent); }
+.glow-border-strong { box-shadow: 0 0 16px var(--accent), 0 0 24px var(--accent); }
 
 /* Ornament — ◈ decorative element (CSS-drawn, never a sigil bank glyph) */
 .ornament::before {

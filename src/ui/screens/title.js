@@ -52,6 +52,7 @@ export function mount(container) {
   notice.dataset.testid = 'title-notice';
 
   const branches = createPanel({ title: 'FRONT DOOR' });
+  branches.classList.add('glow-border-strong');
   branches.dataset.testid = 'title-branches';
 
   if (getFlag(TUTORIAL_FLAG) !== true) {
