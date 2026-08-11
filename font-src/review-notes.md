@@ -33,3 +33,12 @@
 - **Choir trio**: clustered resonance nodes, overlaid halos, and layered short traces. The density comes from node clusters rather than musical-note or face imagery.
 - **Player/bestiary comparison**: `/tmp/session32-player-bestiary-34.png` reviewed locally in monochrome with identical glow. The first twelve bestiary marks classify as more asymmetric, broken, or over-dense than the six player families.
 - **Corrected ambiguity**: Warden marks were kept dense but visibly broken so they do not collapse into Anchor's stable bilateral footing at 34px.
+
+## SESSION-33 — Null, Construct, Phantom, Apex
+
+- **Null trio**: cancelled rings, missing cores, hostile void gaps, and short cancellation bars. The trio uses absence and interruption rather than extra decoration.
+- **Construct trio**: over-dense fabrication grids, misaligned frames, and slab returns. The forms are machine-like without becoming logos, boxes, or UI icons.
+- **Phantom trio**: displaced double halos, unresolved contours, and offset echo traces. The doubles are structurally shifted instead of color/shadow effects.
+- **Apex trio**: aggressive compound asymmetry, heavy crossing traces, and imbalanced nodes. The marks are more forceful than other enemies without drawing weapons, creatures, arrows, or warning signs.
+- **All-72 audit**: `/tmp/session33-all-72-34.png` reviewed locally in monochrome with identical glow. Bestiary forms remain more asymmetric, unclosed, displaced, or over-dense than the player bank.
+- **Held for SESSION-34**: Apex and Construct are intentionally dense and should be checked for counter fill-in on the generated 34px contact sheet. Oracle/Ghost sparsity remains the main player-family comparison risk.
