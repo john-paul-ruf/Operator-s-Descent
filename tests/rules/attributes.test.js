@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { attributeCost, attributeStepCost, deriveStats, modifier, overclockTarget, protocolSaveDC } from '../../src/rules/attributes.js';
+import { attributeCost, attributeCreationCost, attributeStepCost, deriveStats, isAttributeRank, modifier, normalizeAttributeRank, overclockTarget, protocolSaveDC } from '../../src/rules/attributes.js';
 import { makeCharacter, makeClassData } from '../helpers/fixtures.js';
 
 describe('modifier', () => {
@@ -70,6 +70,17 @@ describe('authoritative formula helpers', () => {
     expect(attributeStepCost(3, 6)).toBe(3);
     expect(attributeStepCost(3, 8)).toBe(7);
     expect(attributeStepCost(3, 10)).toBe(13);
+    expect(attributeCreationCost(1)).toBe(0);
+    expect(attributeCreationCost(3)).toBe(0);
+    expect(attributeCreationCost(10)).toBe(13);
+  });
+
+  it('exposes exact creation rank boundaries without UI assumptions', () => {
+    expect(isAttributeRank(1)).toBe(true);
+    expect(isAttributeRank(10)).toBe(true);
+    expect(isAttributeRank(11)).toBe(false);
+    expect(normalizeAttributeRank(99)).toBe(10);
+    expect(normalizeAttributeRank('bad')).toBe(3);
   });
 
   it('derives protocol DC and overclock targets from the defined formulas', () => {

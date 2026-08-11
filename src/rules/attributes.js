@@ -1,4 +1,18 @@
-function rank(value) { return Number.isInteger(value) ? Math.max(1, Math.min(10, value)) : 3; }
+export const ATTRIBUTE_KEYS = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
+export const ATTRIBUTE_MIN_RANK = 1;
+export const ATTRIBUTE_BASELINE_RANK = 3;
+export const ATTRIBUTE_MAX_RANK = 10;
+
+export function isAttributeRank(value) {
+  return Number.isInteger(value) && value >= ATTRIBUTE_MIN_RANK && value <= ATTRIBUTE_MAX_RANK;
+}
+
+export function normalizeAttributeRank(value, fallback = ATTRIBUTE_BASELINE_RANK) {
+  const rank = Number.isInteger(value) ? value : fallback;
+  return Math.max(ATTRIBUTE_MIN_RANK, Math.min(ATTRIBUTE_MAX_RANK, rank));
+}
+
+function rank(value) { return normalizeAttributeRank(value); }
 
 export function modifier(value) {
   return rank(value) - 5;
@@ -17,12 +31,21 @@ export function attributeCost(currentRank, targetRank) {
   return attributeStepCost(currentRank, targetRank);
 }
 
+export function attributeCreationCost(targetRank) {
+  return attributeStepCost(ATTRIBUTE_BASELINE_RANK, targetRank);
+}
+
+export function normalizeAttributes(attributes = {}, fallbackRank = ATTRIBUTE_BASELINE_RANK) {
+  return Object.fromEntries(ATTRIBUTE_KEYS.map((key) => [key, normalizeAttributeRank(attributes[key], fallbackRank)]));
+}
+
 export function deriveStats(character, classData, equipment = {}) {
   const attributes = character?.attributes || {};
   const armor = equipment.armor || character?.armor || {};
   const offhand = equipment.offhand || character?.offhand || {};
   const classId = classData?.id || character?.classId;
-  const ignoresMediumPenalty = armor.id === 'medium' && (classId === 'breacher' || classId === 'anchor');
+  const armorId = armor.baseType ?? armor.id;
+  const ignoresMediumPenalty = armorId === 'medium' && (classId === 'breacher' || classId === 'anchor');
   const finPenalty = armor.ignoreFinPenalty || ignoresMediumPenalty ? 0 : (armor.finPenalty || 0);
   const effectiveFin = rank(attributes.fin) + finPenalty;
   const calibrations = Math.max(0, Math.floor(character?.calibrationCount || 0));

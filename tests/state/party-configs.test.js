@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { deleteConfig, getLastUsed, listConfigs, loadConfig, saveConfig, setLastUsed, validateConfig } from '../../src/state/party-configs.js';
+import { blueprintFromDraft, deleteConfig, draftFromBlueprint, getLastUsed, listConfigs, loadConfig, saveConfig, setLastUsed, validateConfig } from '../../src/state/party-configs.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import { loadData } from '../helpers/data.js';
 
@@ -81,6 +81,22 @@ describe('party configurations', () => {
   it('migrates a legacy blueprint to version one and complete equipment fields', () => {
     localStorage.setItem('od_party_configs', JSON.stringify([{ name: 'legacy', characters: [blueprint().characters[0]] }]));
     expect(loadConfig('legacy')).toMatchObject({ version: 1, credits: 0, pointsSpent: 0, characters: [expect.objectContaining({ equipment: { weapon: null, armor: null, offhand: null } })] });
+  });
+
+  it('adapts creation drafts to versioned blueprints and back without run state fields', () => {
+    const draft = {
+      characters: [{
+        classId: 'operator',
+        sigil: 0xe028,
+        attributes: { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 6 },
+        equipment: { weapon: 'heavy_ranged', armor: 'medium', offhand: 'shield' },
+        protocols: [{ school: 'ward', tier: 1 }]
+      }]
+    };
+    const config = blueprintFromDraft(draft, gameData, 'operator shell');
+    expect(config).toMatchObject({ name: 'operator shell', version: 1, pointsSpent: 18, credits: 620 });
+    expect(config.depth).toBeUndefined();
+    expect(draftFromBlueprint(config)).toMatchObject({ activeSlot: 0, finalized: false, characters: [expect.objectContaining({ classId: 'operator', sigil: 0xe028 })] });
   });
 
   it('does not alter the list when deleting an unknown name', () => {
