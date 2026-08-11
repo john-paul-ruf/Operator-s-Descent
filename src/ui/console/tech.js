@@ -279,9 +279,9 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   const row = document.createElement('div');
   row.className = 'tech-protocol-row console-row';
   row.dataset.testid = `tech-protocol-${protocolKey(protocol)}`;
-  row.appendChild(createProtocolCard({ ...protocol, name: protocolName(data, protocol), chargeCost: normalCost }));
-  row.appendChild(text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`));
   const castReason = availabilityReason(context, character, caster, protocol, false);
+  row.appendChild(createProtocolCard({ ...protocol, name: protocolName(data, protocol), chargeCost: normalCost }, { insufficient: Boolean(castReason) }));
+  row.appendChild(text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`));
   const cast = createButton(castReason ? 'CAST BLOCKED' : 'CAST', { disabled: Boolean(castReason), description: castReason, onClick: () => beginProtocol(context, protocol, false) });
   cast.dataset.testid = `tech-cast-${protocolKey(protocol)}`;
   row.appendChild(cast);
@@ -369,6 +369,14 @@ export function render(container, context = {}) {
   renderCharacters(container, context, ui, activeActor);
   container.appendChild(createChargeBar(chargeOf(caster), chargeMaxOf(caster)));
   container.appendChild(text('tech-slots console-row', `Deck slots ${deckStatus.slotsUsed}/${deckStatus.capacity} · ${deckStatus.valid ? 'valid' : deckStatus.reason}`, 'tech-slots'));
+  const pipRow = document.createElement('div');
+  pipRow.className = 'tech-pip-row console-row';
+  for (let i = 0; i < deckStatus.capacity; i++) {
+    const pip = document.createElement('span');
+    pip.className = `deck-pip${i < deckStatus.slotsUsed ? ' filled' : ''}`;
+    pipRow.appendChild(pip);
+  }
+  container.appendChild(pipRow);
 
   const list = createScrollArea({ label: 'Prepared protocols', focusable: true });
   list.className = 'tech-deck';

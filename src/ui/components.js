@@ -212,7 +212,14 @@ export function createProtocolCard(protocol, opts = {}) {
   const card = document.createElement(opts.onClick ? 'button' : 'article');
   card.className = 'protocol-card action-btn console-row';
   if (opts.onClick) card.type = 'button';
+  if (opts.insufficient) card.classList.add('insufficient');
   applyControlState(card, opts);
+  if (protocol.school) {
+    const tag = document.createElement('span');
+    tag.className = `school-tag school-${protocol.school}`;
+    tag.textContent = protocol.school;
+    card.appendChild(tag);
+  }
   const name = document.createElement('div');
   name.className = 'card-name';
   name.textContent = protocol.name || protocol.id;

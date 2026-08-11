@@ -803,6 +803,39 @@ button.protocol-card[aria-selected="true"],
 .cond-corroded    { border-color: var(--warning); color: var(--warning); }
 .cond-panicked    { border-color: var(--accent); color: var(--accent); }
 
+.school-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border-dim);
+}
+
+.school-disrupt { border-color: var(--danger); color: var(--danger); }
+.school-ward     { border-color: var(--heal);   color: var(--heal); }
+.school-scry     { border-color: var(--accent); color: var(--accent); }
+.school-rewrite  { border-color: #e8d23a;       color: #e8d23a; }
+
+.protocol-card.insufficient {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.deck-pip {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-dim);
+  display: inline-block;
+  margin-right: 3px;
+}
+
+.deck-pip.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+}
+
 .playfield-canvas {
   display: block;
   width: 100%;
