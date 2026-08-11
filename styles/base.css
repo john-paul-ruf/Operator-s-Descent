@@ -259,3 +259,18 @@ textarea:disabled,
     transition-duration: 0.01ms !important;
   }
 }
+
+html {
+  width: 100%;
+  min-height: 100%;
+  background: #000;
+}
+
+@supports (height: 100dvh) {
+  body { min-height: 100dvh; }
+}
+
+#portrait-frame {
+  transform-origin: center center;
+  box-shadow: 0 0 0 1px #050208, 0 0 48px rgba(0,0,0,0.9);
+}

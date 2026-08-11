@@ -789,3 +789,60 @@ button.protocol-card[aria-selected="true"],
   border: 1px solid var(--border-dim);
   color: var(--text-secondary);
 }
+
+.playfield-canvas {
+  display: block;
+  width: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+  touch-action: none;
+  background: var(--bg-base);
+}
+
+.playfield-description {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.status-strip {
+  min-height: 96px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.status-depth,
+.status-depth-combat,
+.status-seed,
+.status-round,
+.status-initiative,
+.status-clock,
+.status-corruption,
+.status-ap,
+.status-move {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.status-seed,
+.status-clock,
+.status-corruption,
+.status-initiative {
+  color: var(--text-secondary);
+}
+
+.status-mini-hp,
+.status-mini-charge {
+  min-width: 72px;
+}
+
+.status-active-sigil {
+  color: var(--accent);
+  border-color: currentColor;
+}
