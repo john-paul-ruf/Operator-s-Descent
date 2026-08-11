@@ -78,6 +78,14 @@ function themeForFloor(floor) {
   return gameData?.themes?.themes?.find((entry) => entry.id === floor?.themeId) ?? null;
 }
 
+function themesSeenBeforeCurrentFloor(runState) {
+  const themesSeen = runState?.themesSeen instanceof Set ? [...runState.themesSeen] : [...(runState?.themesSeen || [])];
+  const currentThemeId = typeof runState?.extensions?.floorThemeId === 'string' ? runState.extensions.floorThemeId : null;
+  const themeCount = gameData?.themes?.themes?.length ?? 0;
+  if (!currentThemeId || !themesSeen.includes(currentThemeId) || (themeCount > 0 && themesSeen.length >= themeCount)) return themesSeen;
+  return themesSeen.filter((themeId) => themeId !== currentThemeId);
+}
+
 function autosaveMetadata(runState, floor, extra = {}) {
   const theme = themeForFloor(floor);
   return {
@@ -175,7 +183,7 @@ function restoreFloorForRun(runState) {
   }
 
   try {
-    const floor = generateFloor(worldSeed, depth, { floorSubSeed: runState.floorSubSeed ?? 0 }, gameData.themes);
+    const floor = generateFloor(worldSeed, depth, { floorSubSeed: runState.floorSubSeed ?? 0, themesSeen: themesSeenBeforeCurrentFloor(runState) }, gameData.themes);
     if (!isValidFloor(floor)) {
       console.error(`Generated floor at depth ${depth} is invalid`);
       return null;

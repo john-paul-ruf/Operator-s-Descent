@@ -196,6 +196,7 @@ export function completeFloorTransition(runState, transitionToken, selections, c
   if (!floor) return { error: 'generation_failed' };
 
   nextState.floorSubSeed = floor.floorSubSeed ?? 0;
+  nextState.extensions = { ...(nextState.extensions || {}), floorThemeId: floor.themeId };
 
   if (floor.themeId && !nextState.themesSeen.has(floor.themeId)) {
     nextState.themesSeen.add(floor.themeId);

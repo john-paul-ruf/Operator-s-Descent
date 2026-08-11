@@ -243,7 +243,7 @@ function materializeItem(characterId, slot, baseType, gameData) {
   if (baseType === null || (slot === 'armor' && baseType === 'none')) return null;
   const data = equipmentEntry(gameData, slot, baseType);
   if (!data) return null;
-  return { id: `${characterId}-${slot}-${baseType}`, category: slot === 'armor' ? 'armor' : 'weapon', baseType, rarity: 'stock', affixes: [], corrupt: false, stats: clone(data), salvageValue: data.salvageValue ?? 0, junkTagged: false };
+  return { id: `${characterId}-${slot}-${baseType}`, category: slot === 'armor' ? 'armor' : 'weapon', baseType, rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: data.salvageValue ?? 0, junkTagged: false };
 }
 
 export function finalizeCreationDraft(draft, gameData = {}, options = {}) {

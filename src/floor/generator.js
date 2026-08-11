@@ -144,7 +144,12 @@ function placeFeatures(grid, prng, floorNumber, themeData, options = {}) {
 
   grid[descentPoint.y][descentPoint.x] = 3;
 
-  const entryPoint = { x: Math.floor(GRID_W / 2), y: 0 };
+  const centerX = Math.floor(GRID_W / 2);
+  const entryPoint = floorCells
+    .filter(cell => grid[cell.y][cell.x] === 1 && !used.has(`${cell.x},${cell.y}`))
+    .sort((a, b) => a.y - b.y || Math.abs(a.x - centerX) - Math.abs(b.x - centerX) || a.x - b.x)[0]
+    || floorCells.find(cell => grid[cell.y][cell.x] === 1)
+    || { x: centerX, y: 0 };
 
   return {
     cells: grid,
@@ -237,18 +242,31 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
 
   let floor = null;
   let diagnostics = { attempts: 0, repaired: false, failures: [] };
+  const requestedSubSeed = Number.isInteger(options.floorSubSeed) && options.floorSubSeed >= 0 ? options.floorSubSeed : null;
 
-  for (let k = 0; k < MAX_CANDIDATES; k++) {
-    diagnostics.attempts = k + 1;
-    const candidate = buildCandidate(worldSeed, floorNumber, k, themesData, options);
-    if (!candidate) continue;
-
-    const result = validateFloor(candidate);
-    if (result.valid) {
-      floor = candidate;
-      break;
+  if (requestedSubSeed !== null) {
+    diagnostics.attempts = 1;
+    const candidate = buildCandidate(worldSeed, floorNumber, requestedSubSeed, themesData, options);
+    if (candidate) {
+      const result = validateFloor(candidate);
+      if (result.valid) floor = candidate;
+      else diagnostics.failures = result.failures;
     }
-    diagnostics.failures = result.failures;
+  }
+
+  if (!floor && requestedSubSeed === null) {
+    for (let k = 0; k < MAX_CANDIDATES; k++) {
+      diagnostics.attempts = k + 1;
+      const candidate = buildCandidate(worldSeed, floorNumber, k, themesData, options);
+      if (!candidate) continue;
+
+      const result = validateFloor(candidate);
+      if (result.valid) {
+        floor = candidate;
+        break;
+      }
+      diagnostics.failures = result.failures;
+    }
   }
 
   if (!floor) {

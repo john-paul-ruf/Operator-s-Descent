@@ -581,7 +581,8 @@ export function mount(container, params = {}) {
         rngState: rngCursor.getState(),
         floorSubSeed: floor.floorSubSeed ?? 0,
         partyPosition: floor.entryPoint,
-        themesSeen: floor.themeId ? [floor.themeId] : []
+        themesSeen: floor.themeId ? [floor.themeId] : [],
+        extensions: { floorThemeId: floor.themeId }
       });
       if (!runState) throw new Error('RUN STATE FAILED — invalid_run_state');
       const theme = data?.themes?.themes?.find((entry) => entry.id === floor.themeId);

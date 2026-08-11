@@ -1,7 +1,28 @@
 export const INVENTORY_CAP = 100;
 
 const units = item => Number.isInteger(item?.count) ? item.count : 1;
-const copy = item => ({ ...item, ...(item?.count === undefined ? {} : { count: item.count }), affixes: [...(item?.affixes ?? [])], stats: { ...(item?.stats ?? {}) } });
+const ITEM_FIELDS = new Set(['id', 'category', 'baseType', 'rarity', 'affixes', 'corrupt', 'corruptionValue', 'stats', 'salvageValue', 'junkTagged', 'count', 'extensions']);
+
+const copy = item => {
+  const extensions = { ...(item?.extensions ?? {}) };
+  for (const [key, value] of Object.entries(item ?? {})) {
+    if (!ITEM_FIELDS.has(key)) extensions[key] = value;
+  }
+  return {
+    id: item?.id,
+    category: item?.category,
+    baseType: item?.baseType,
+    ...(item?.rarity === undefined ? {} : { rarity: item.rarity }),
+    affixes: [...(item?.affixes ?? [])],
+    ...(item?.corrupt === undefined ? {} : { corrupt: Boolean(item.corrupt) }),
+    ...(item?.corruptionValue === undefined ? {} : { corruptionValue: item.corruptionValue }),
+    stats: { ...(item?.stats ?? {}) },
+    salvageValue: item?.salvageValue,
+    junkTagged: Boolean(item?.junkTagged),
+    ...(item?.count === undefined ? {} : { count: item.count }),
+    ...(Object.keys(extensions).length ? { extensions } : {})
+  };
+};
 
 export function getInventoryCount(inventory = []) {
   return inventory.reduce((total, item) => total + units(item), 0);
