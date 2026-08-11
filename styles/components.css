@@ -720,3 +720,72 @@ input[type="range"]::-moz-range-thumb {
   color: var(--accent);
   text-shadow: 0 0 4px var(--accent);
 }
+.console-row,
+.mode-tab,
+.action-btn,
+.item-card,
+.equipment-card,
+.protocol-card,
+.run-row,
+.deck-slot,
+.calibration-card,
+.toggle-row,
+.slider-row,
+.text-input-row {
+  min-height: 96px;
+}
+
+button.mode-tab[aria-selected="true"],
+button.action-btn[aria-selected="true"],
+button.item-card[aria-selected="true"],
+button.protocol-card[aria-selected="true"],
+.selected {
+  border-color: var(--accent);
+  background: rgba(126,200,227,0.1);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.toggle-row,
+.text-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.toggle-input:focus-visible + .toggle {
+  outline: 4px solid var(--accent);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 2px var(--bg-base), 0 0 16px var(--accent);
+}
+
+.toggle-input:disabled + .toggle {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.input-label {
+  min-width: 160px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.condition-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border-dim);
+  color: var(--text-secondary);
+}

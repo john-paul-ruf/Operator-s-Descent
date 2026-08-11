@@ -221,3 +221,41 @@ body {
 /* Corner radius utilities */
 .radius-btn { border-radius: 4px; }
 .radius-control { border-radius: 2px; }
+:focus-visible {
+  outline: 4px solid var(--accent);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 2px var(--bg-base), 0 0 16px var(--accent);
+}
+
+button:disabled,
+input:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+[aria-invalid="true"],
+.error {
+  border-color: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+}
+
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+[aria-live] {
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

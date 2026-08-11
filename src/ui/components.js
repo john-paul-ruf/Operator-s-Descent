@@ -13,53 +13,108 @@ const RARITY_COLORS = {
   CORRUPT: '#e83a3a'
 };
 
-export function createButton(label, opts = {}) {
-  const btn = document.createElement('button');
-  btn.className = opts.primary ? 'btn-primary' : 'btn-crt';
-  btn.textContent = label;
-  if (opts.onClick) btn.addEventListener('click', opts.onClick);
-  if (opts.disabled) btn.disabled = true;
-  if (opts.danger) btn.classList.add('danger');
-  return btn;
+let nextControlId = 0;
+
+function withCleanup(element, cleanup = () => {}) {
+  element.cleanup = cleanup;
+  return element;
 }
 
-export function createSlider(label, value, onChange) {
-  const row = document.createElement('div');
-  row.className = 'slider-row';
+function listen(element, eventName, listener, options) {
+  element.addEventListener(eventName, listener, options);
+  return () => element.removeEventListener(eventName, listener, options);
+}
+
+function applyControlState(element, opts) {
+  if (opts.label) element.setAttribute('aria-label', opts.label);
+  if (opts.description) element.setAttribute('aria-description', opts.description);
+  if (opts.describedBy) element.setAttribute('aria-describedby', opts.describedBy);
+  if (opts.disabled) element.disabled = true;
+  if (opts.busy) element.setAttribute('aria-busy', 'true');
+  if (opts.selected != null) element.setAttribute('aria-selected', String(Boolean(opts.selected)));
+  if (opts.error) {
+    element.setAttribute('aria-invalid', 'true');
+    element.classList.add('error');
+  }
+}
+
+export function createButton(label, opts = {}) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = opts.primary ? 'btn-primary' : 'btn-crt';
+  button.textContent = label;
+  if (opts.danger) button.classList.add('danger');
+  if (opts.selected) button.classList.add('selected');
+  applyControlState(button, opts);
+  return withCleanup(button, opts.onClick ? listen(button, 'click', opts.onClick) : undefined);
+}
+
+export function createSlider(label, value, onChange, opts = {}) {
+  const row = document.createElement('label');
+  row.className = 'slider-row console-row';
   const labelEl = document.createElement('span');
   labelEl.className = 'slider-label';
   labelEl.textContent = label;
   const input = document.createElement('input');
   input.type = 'range';
-  input.min = '0'; input.max = '100'; input.value = String(value);
-  const valEl = document.createElement('span');
-  valEl.className = 'slider-value';
-  valEl.textContent = `${value}%`;
-  input.addEventListener('input', () => {
-    valEl.textContent = `${input.value}%`;
+  input.min = String(opts.min ?? 0);
+  input.max = String(opts.max ?? 100);
+  input.step = String(opts.step ?? 1);
+  input.value = String(value);
+  input.id = opts.id || `slider-${++nextControlId}`;
+  applyControlState(input, opts);
+  const valueEl = document.createElement('span');
+  valueEl.className = 'slider-value';
+  valueEl.setAttribute('aria-live', 'polite');
+  valueEl.textContent = `${value}%`;
+  const cleanup = listen(input, 'input', () => {
+    valueEl.textContent = `${input.value}%`;
     onChange(Number(input.value));
   });
-  row.appendChild(labelEl);
-  row.appendChild(input);
-  row.appendChild(valEl);
-  return row;
+  row.append(labelEl, input, valueEl);
+  return withCleanup(row, cleanup);
 }
 
-export function createToggle(label, value, onChange) {
-  const toggle = document.createElement('div');
-  toggle.className = `toggle${value ? ' on' : ''}`;
-  const labelEl = document.createElement('span');
-  labelEl.textContent = label;
-  const knob = document.createElement('div');
+export function createToggle(label, value, onChange, opts = {}) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'toggle-row console-row';
+  const text = document.createElement('span');
+  text.textContent = label;
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.className = 'toggle-input';
+  input.checked = Boolean(value);
+  input.disabled = Boolean(opts.disabled);
+  input.setAttribute('role', 'switch');
+  input.setAttribute('aria-label', opts.label || label);
+  const visual = document.createElement('span');
+  visual.className = `toggle${value ? ' on' : ''}`;
+  visual.setAttribute('aria-hidden', 'true');
+  const knob = document.createElement('span');
   knob.className = 'toggle-knob';
-  toggle.appendChild(labelEl);
-  toggle.appendChild(knob);
-  toggle.addEventListener('click', () => {
-    value = !value;
-    toggle.classList.toggle('on', value);
-    onChange(value);
+  visual.appendChild(knob);
+  const cleanup = listen(input, 'change', () => {
+    visual.classList.toggle('on', input.checked);
+    onChange(input.checked);
   });
-  return toggle;
+  wrapper.append(text, input, visual);
+  return withCleanup(wrapper, cleanup);
+}
+
+export function createTextInput(label, value, onInput, opts = {}) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'text-input-row console-row';
+  const text = document.createElement('span');
+  text.className = 'input-label';
+  text.textContent = label;
+  const input = document.createElement(opts.multiline ? 'textarea' : 'input');
+  input.className = opts.className || 'link-input';
+  if (!opts.multiline) input.type = opts.type || 'text';
+  input.value = value || '';
+  applyControlState(input, opts);
+  const cleanup = listen(input, 'input', () => onInput(input.value));
+  wrapper.append(text, input);
+  return withCleanup(wrapper, cleanup);
 }
 
 export function validateSigilToken(codepoint, size, role = 'player') {
@@ -79,43 +134,40 @@ export function createSigilToken(codepoint, size, opts = {}) {
   const el = document.createElement('span');
   el.className = `creature-sigil sigil-${size} sigil-role-${role}`;
   el.dataset.sigilRole = role;
+  el.setAttribute('aria-hidden', opts.label ? 'false' : 'true');
+  if (opts.label) el.setAttribute('aria-label', opts.label);
   el.textContent = String.fromCodePoint(codepoint);
   return el;
 }
 
 export function createHPBar(current, max) {
-  const container = document.createElement('div');
-  container.className = 'hp-bar';
-  const text = document.createElement('span');
-  text.className = 'hp-text';
-  text.textContent = `${current}/${max}`;
-  const bar = document.createElement('div');
-  bar.className = 'bar-track';
-  const fill = document.createElement('div');
-  fill.className = 'bar-fill';
-  const pct = max > 0 ? (current / max) * 100 : 0;
-  fill.style.width = `${pct}%`;
-  if (pct < 25) fill.classList.add('danger');
-  bar.appendChild(fill);
-  container.appendChild(text);
-  container.appendChild(bar);
-  return container;
+  return createMeter(`${current}/${max}`, current, max, 'hp-bar');
 }
 
 export function createChargeBar(current, max) {
+  return createMeter(`${current}/${max}`, current, max, 'charge-bar');
+}
+
+function createMeter(textValue, current, max, className) {
   const container = document.createElement('div');
-  container.className = 'charge-bar';
+  container.className = className;
+  container.setAttribute('role', 'meter');
+  container.setAttribute('aria-valuemin', '0');
+  container.setAttribute('aria-valuemax', String(max));
+  container.setAttribute('aria-valuenow', String(current));
+  container.setAttribute('aria-valuetext', textValue);
   const text = document.createElement('span');
-  text.className = 'charge-text';
-  text.textContent = `${current}/${max}`;
+  text.className = className === 'hp-bar' ? 'hp-text' : 'charge-text';
+  text.textContent = textValue;
   const bar = document.createElement('div');
   bar.className = 'bar-track';
   const fill = document.createElement('div');
   fill.className = 'bar-fill';
-  fill.style.width = `${max > 0 ? (current / max) * 100 : 0}%`;
+  const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
+  fill.style.width = `${pct}%`;
+  if (className === 'hp-bar' && pct < 25) fill.classList.add('danger');
   bar.appendChild(fill);
-  container.appendChild(text);
-  container.appendChild(bar);
+  container.append(text, bar);
   return container;
 }
 
@@ -142,78 +194,74 @@ export function createConditionTag(conditionId, duration) {
 }
 
 export function createEquipmentCard(item, opts = {}) {
-  const card = document.createElement('div');
-  card.className = 'equipment-card';
+  const card = document.createElement(opts.onClick ? 'button' : 'article');
+  card.className = 'equipment-card item-card console-row';
+  if (opts.onClick) card.type = 'button';
   if (item.corrupt) card.classList.add('corrupt');
+  applyControlState(card, opts);
   const name = document.createElement('div');
   name.className = 'card-name';
   name.textContent = item.name || item.id;
   card.appendChild(name);
   if (item.rarity) card.appendChild(createRarityTag(item.rarity));
-  if (item.affixes) {
-    for (const affix of item.affixes) {
-      card.appendChild(createAffixTag(affix, affix.category === 'major'));
-    }
-  }
-  if (opts.onClick) card.addEventListener('click', opts.onClick);
-  return card;
+  if (item.affixes) for (const affix of item.affixes) card.appendChild(createAffixTag(affix, affix.category === 'major'));
+  return withCleanup(card, opts.onClick ? listen(card, 'click', opts.onClick) : undefined);
 }
 
 export function createProtocolCard(protocol, opts = {}) {
-  const card = document.createElement('div');
-  card.className = 'protocol-card';
+  const card = document.createElement(opts.onClick ? 'button' : 'article');
+  card.className = 'protocol-card action-btn console-row';
+  if (opts.onClick) card.type = 'button';
+  applyControlState(card, opts);
   const name = document.createElement('div');
   name.className = 'card-name';
   name.textContent = protocol.name || protocol.id;
   const cost = document.createElement('span');
   cost.className = 'action-cost';
   cost.textContent = `${protocol.chargeCost || 0} CHG`;
-  card.appendChild(name);
-  card.appendChild(cost);
-  if (opts.onClick) card.addEventListener('click', opts.onClick);
-  return card;
+  card.append(name, cost);
+  return withCleanup(card, opts.onClick ? listen(card, 'click', opts.onClick) : undefined);
 }
 
 export function createAttributeRow(attrName, rank, opts = {}) {
   const row = document.createElement('div');
-  row.className = 'attr-row';
+  row.className = 'attr-row console-row';
   const name = document.createElement('span');
   name.className = 'attr-name';
   name.textContent = attrName;
   const val = document.createElement('span');
   val.className = 'attr-val';
   val.textContent = String(rank);
-  row.appendChild(name);
-  row.appendChild(val);
+  row.append(name, val);
+  const cleanups = [];
   if (opts.steppers) {
-    const dec = document.createElement('button');
+    const dec = createButton('−', { label: `Decrease ${attrName}`, onClick: () => opts.onDecrease?.(), disabled: opts.decreaseDisabled });
     dec.className = 'stepper-btn';
-    dec.textContent = '-';
-    dec.addEventListener('click', () => opts.onDecrease?.());
-    const inc = document.createElement('button');
+    const inc = createButton('+', { label: `Increase ${attrName}`, onClick: () => opts.onIncrease?.(), disabled: opts.increaseDisabled });
     inc.className = 'stepper-btn';
-    inc.textContent = '+';
-    inc.addEventListener('click', () => opts.onIncrease?.());
-    row.appendChild(dec);
-    row.appendChild(inc);
+    cleanups.push(dec.cleanup, inc.cleanup);
+    row.append(dec, inc);
   }
-  return row;
+  return withCleanup(row, () => cleanups.forEach((cleanup) => cleanup?.()));
 }
 
 export function createPanel(opts = {}) {
-  const panel = document.createElement('div');
+  const panel = document.createElement('section');
   panel.className = opts.elevated ? 'panel-elevated' : 'panel';
   if (opts.title) {
     const title = document.createElement('div');
     title.className = 'panel-title';
     title.textContent = opts.title;
+    panel.setAttribute('aria-label', opts.title);
     panel.appendChild(title);
   }
   return panel;
 }
 
-export function createScrollArea() {
+export function createScrollArea(opts = {}) {
   const area = document.createElement('div');
   area.className = 'scroll-area';
+  if (opts.label) area.setAttribute('aria-label', opts.label);
+  area.tabIndex = opts.focusable ? 0 : -1;
   return area;
 }
