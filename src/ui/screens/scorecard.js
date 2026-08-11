@@ -1,4 +1,4 @@
-import { deleteRunState } from '../../state/library.js';
+import { deleteRunState, getRunKey } from '../../state/library.js';
 import { encodeSeed } from '../../state/save-encode.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createSigilToken } from '../components.js';
@@ -32,9 +32,7 @@ function shareUrl(fragment) {
 }
 
 function runKey(runState) {
-  return Number.isInteger(runState?.worldSeed) && Number.isInteger(runState?.creationTimestamp)
-    ? `${runState.worldSeed}_${runState.creationTimestamp}`
-    : null;
+  return getRunKey(runState);
 }
 
 function navigate(screen, params = {}) {

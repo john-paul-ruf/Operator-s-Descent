@@ -50,26 +50,29 @@ export function decodeRun(fragment) {
     if (bytes[0] === 1) return decodeV1(bytes);
     if (bytes.length < 3) return { success: false, error: 'truncated' };
     if (bytes[0] !== MAGIC[0] || bytes[1] !== MAGIC[1]) return { success: false, error: 'malformed' };
-    if (bytes[2] !== SAVE_VERSION) return { success: false, error: 'version_mismatch' };
+    if (bytes[2] !== SAVE_VERSION) {
+      const recoveredSeed = bytes.length >= 9 ? readUint32(bytes, 5) : null;
+      return { success: false, error: 'version_mismatch', ...(Number.isInteger(recoveredSeed) ? { recoveredSeed } : {}) };
+    }
     if (bytes.length < 18) return { success: false, error: 'truncated' };
     const tableVersion = new DataView(bytes.buffer, bytes.byteOffset + 3, 2).getUint16(0, true);
     const worldSeed = readUint32(bytes, 5);
     const bitLength = readUint32(bytes, 9);
     const layerCount = bytes[13];
-    if (layerCount > MAX_LAYERS || bitLength > MAX_PAYLOAD_BYTES * 8) return { success: false, error: 'malformed' };
+    if (layerCount > MAX_LAYERS || bitLength > MAX_PAYLOAD_BYTES * 8) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
     let offset = 14;
     const layers = [];
     for (let index = 0; index < layerCount; index++) {
-      if (offset + 11 > bytes.length - 4) return { success: false, error: 'truncated' };
+      if (offset + 11 > bytes.length - 4) return { success: false, error: 'truncated', recoveredSeed: worldSeed };
       const pass = bytes[offset++], originalLength = readUint32(bytes, offset); offset += 4;
       const metadataLength = new DataView(bytes.buffer, bytes.byteOffset + offset, 2).getUint16(0, true); offset += 2;
       const dataLength = readUint32(bytes, offset); offset += 4;
-      if (offset + metadataLength > bytes.length - 4 || originalLength > MAX_PAYLOAD_BYTES || dataLength > MAX_PAYLOAD_BYTES) return { success: false, error: 'malformed' };
+      if (offset + metadataLength > bytes.length - 4 || originalLength > MAX_PAYLOAD_BYTES || dataLength > MAX_PAYLOAD_BYTES) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
       layers.push({ pass, originalLength, dataLength, metadata: bytes.slice(offset, offset + metadataLength) });
       offset += metadataLength;
     }
     const encrypted = bytes.slice(offset, -4);
-    if (encrypted.length > MAX_PAYLOAD_BYTES || crc32(bytes.slice(0, -4)) !== readUint32(bytes, bytes.length - 4)) return { success: false, error: 'checksum_failed' };
+    if (encrypted.length > MAX_PAYLOAD_BYTES || crc32(bytes.slice(0, -4)) !== readUint32(bytes, bytes.length - 4)) return { success: false, error: 'checksum_failed', recoveredSeed: worldSeed };
     if ((layers.length && layers.at(-1).dataLength !== encrypted.length) || (!layers.length && Math.ceil(bitLength / 8) !== encrypted.length)) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
     const payload = decompressSync(decrypt(encrypted, SAVE_VERSION), layers, { maxOutput: MAX_PAYLOAD_BYTES, maxInput: MAX_PAYLOAD_BYTES });
     if (payload.length !== Math.ceil(bitLength / 8)) return { success: false, error: 'malformed', recoveredSeed: worldSeed };

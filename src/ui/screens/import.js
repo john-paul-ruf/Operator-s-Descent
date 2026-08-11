@@ -1,4 +1,4 @@
-import { saveRun } from '../../state/library.js';
+import { assignLocalRunKey, saveRun } from '../../state/library.js';
 import { decodeRun, decodeSeed } from '../../state/save-decode.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel } from '../components.js';
@@ -59,7 +59,7 @@ function isLivingRun(runState) {
 
 function withImportedIdentity(runState) {
   const originalCreationTimestamp = runState.creationTimestamp;
-  runState.creationTimestamp = Date.now();
+  assignLocalRunKey(runState);
   return { runState, originalCreationTimestamp };
 }
 

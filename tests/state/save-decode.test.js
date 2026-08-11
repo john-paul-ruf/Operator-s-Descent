@@ -78,7 +78,7 @@ describe('decodeRun — error paths', () => {
   it('valid version + layer count 0 + wrong checksum → checksum_failed', () => {
     const encoded = encodeRun(makeState());
     const corrupted = encoded.fragment.slice(0, -1) + (encoded.fragment.at(-1) === 'A' ? 'B' : 'A');
-    expect(decodeRun(corrupted)).toEqual({ success: false, error: 'checksum_failed' });
+    expect(decodeRun(corrupted)).toEqual({ success: false, error: 'checksum_failed', recoveredSeed: 42 });
   });
 
   it('rejects an invalid base64url alphabet as malformed', () => {

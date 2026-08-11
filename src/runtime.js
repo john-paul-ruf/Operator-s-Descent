@@ -1,7 +1,7 @@
 import { setGameDataCompatibility } from './main.js';
 import { loadGameData } from './data-loader.js';
 import { bus } from './state/bus.js';
-import { loadSettings, saveRun, deleteRunState } from './state/library.js';
+import { loadSettings, saveRun, deleteRunState, getRunKey } from './state/library.js';
 import { createAudioEngine } from './audio/engine.js';
 import { createGlitchSystem, initGlitchSafePool } from './glitch/glitch.js';
 import { createGrain } from './glitch/grain.js';
@@ -477,7 +477,8 @@ async function handleNavigation({ screen, params = {} } = {}) {
     return mountScreen('combat', { ...params, runState: params.runState, floor: currentFloor });
   }
   if (screen === 'title' && params.abandon === true && currentRunState?.creationTimestamp != null) {
-    deleteRunState(`${currentRunState.worldSeed}_${currentRunState.creationTimestamp}`);
+    const key = getRunKey(currentRunState);
+    if (key) deleteRunState(key);
     currentRunState = null;
     setCurrentFloor(null, null);
   }
@@ -528,8 +529,9 @@ function setupBus() {
   listen('state:party-wipe', ({ runState, summary, combatState } = {}) => {
     if (!runState) return;
     const seed = runState.worldSeed;
-    if (runState.creationTimestamp != null) {
-      deleteRunState(`${runState.worldSeed}_${runState.creationTimestamp}`);
+    const key = getRunKey(runState);
+    if (key) {
+      deleteRunState(key);
     }
     currentRunState = null;
     setCurrentFloor(null, null);

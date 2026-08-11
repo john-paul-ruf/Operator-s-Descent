@@ -252,7 +252,7 @@ describe('import screen', () => {
     expect(allText(container).join(' ')).toContain('SEED 555 · DEPTH 6 · 2 MEMBERS');
 
     await byTestId(container, 'import-resume').click();
-    expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, imported: true, runState: expect.objectContaining({ worldSeed: 555, creationTimestamp: 5000 }) } });
+    expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, imported: true, originalCreationTimestamp: 1000, runState: expect.objectContaining({ worldSeed: 555, creationTimestamp: 1000 }) } });
     expect(listRuns().some((entry) => entry.key === '555_5000')).toBe(true);
     off();
   });
@@ -265,18 +265,18 @@ describe('import screen', () => {
     mount(container);
 
     const cases = [
-      ['truncated', base64urlEncode(Uint8Array.of(0x4f, 0x44)), 'Truncated — the link was cut short.'],
-      ['version_mismatch', base64urlEncode(Uint8Array.of(0x4f, 0x44, 99)), 'Version mismatch — this link was made by a different version.'],
-      ['checksum_failed', frameWithHeader(123, { badChecksum: true }), 'Checksum failed — the link was corrupted in transit.'],
-      ['malformed', 'not-valid-*', 'Malformed — the link is not a valid save.']
+      ['truncated', base64urlEncode(Uint8Array.of(0x4f, 0x44)), 'Truncated — the link was cut short.', false],
+      ['version_mismatch', base64urlEncode(Uint8Array.of(0x4f, 0x44, 99)), 'Version mismatch — this link was made by a different version.', false],
+      ['checksum_failed', frameWithHeader(123, { badChecksum: true }), 'Checksum failed — the link was corrupted in transit.', true],
+      ['malformed', 'not-valid-*', 'Malformed — the link is not a valid save.', false]
     ];
 
-    for (const [code, fragment, message] of cases) {
+    for (const [code, fragment, message, recoversSeed] of cases) {
       byTestId(container, 'import-input').value = `#r=${fragment}`;
       await byTestId(container, 'import-submit').click();
       expect(byTestId(container, `import-failure-${code}`)).toBeTruthy();
       expect(allText(container)).toContain(message);
-      expect(byTestId(container, 'import-fresh-world')).toBeNull();
+      expect(Boolean(byTestId(container, 'import-fresh-world'))).toBe(recoversSeed);
     }
 
     byTestId(container, 'import-input').value = `#r=${frameWithHeader(321, { bitLength: 16, data: Uint8Array.of(1) })}`;

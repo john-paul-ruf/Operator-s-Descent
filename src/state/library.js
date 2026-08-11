@@ -6,6 +6,7 @@ const KEY_SETTINGS = 'od_settings';
 const KEY_FLAGS = 'od_flags';
 const RUN_PREFIX = 'od_run_';
 const LAYERS = ['drone', 'pulse', 'sparkle', 'lead', 'noiseBed'];
+const LOCAL_RUN_KEY = '__operatorDescentLocalRunKey';
 
 function getStorage() {
   try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
@@ -31,6 +32,31 @@ function isObject(value) { return value !== null && typeof value === 'object' &&
 function integer(value, min, max, fallback) { return Number.isInteger(value) && value >= min && value <= max ? value : fallback; }
 function safeString(value, fallback = '', max = 128) { return typeof value === 'string' && value.length <= max ? value : fallback; }
 function safeCodepoints(value) { return Array.isArray(value) ? value.filter((codepoint) => Number.isInteger(codepoint) && codepoint >= 0 && codepoint <= 0x10ffff).slice(0, 4) : []; }
+function isRunKey(value) { return typeof value === 'string' && /^\d{1,10}_\d{1,16}$/.test(value); }
+function keyTimestamp(key, fallback) {
+  const value = Number.parseInt(String(key).split('_')[1], 10);
+  return integer(value, 0, Number.MAX_SAFE_INTEGER, fallback);
+}
+function attachLocalRunKey(runState, key) {
+  if (!runState || !isRunKey(key)) return runState;
+  Object.defineProperty(runState, LOCAL_RUN_KEY, { value: key, configurable: true, writable: true, enumerable: false });
+  return runState;
+}
+
+export function assignLocalRunKey(runState, timestamp = Date.now()) {
+  if (!Number.isInteger(runState?.worldSeed)) return null;
+  const localTimestamp = integer(timestamp, 0, Number.MAX_SAFE_INTEGER, Date.now());
+  const key = `${runState.worldSeed >>> 0}_${localTimestamp}`;
+  attachLocalRunKey(runState, key);
+  return key;
+}
+
+export function getRunKey(runState) {
+  if (isRunKey(runState?.[LOCAL_RUN_KEY])) return runState[LOCAL_RUN_KEY];
+  if (!Number.isInteger(runState?.worldSeed)) return null;
+  const creationTimestamp = integer(runState.creationTimestamp, 0, Number.MAX_SAFE_INTEGER, null);
+  return creationTimestamp == null ? null : `${runState.worldSeed >>> 0}_${creationTimestamp}`;
+}
 
 function normalizeEntry(entry) {
   if (!isObject(entry)) return null;
@@ -113,7 +139,9 @@ export function saveRun(runState, metadata = {}) {
   const storage = getStorage();
   if (!storage) return { success: false, error: 'no_storage' };
   const creationTimestamp = integer(runState?.creationTimestamp, 0, Number.MAX_SAFE_INTEGER, Date.now());
-  const key = `${runState.worldSeed}_${creationTimestamp}`;
+  const key = getRunKey(runState) || `${runState.worldSeed >>> 0}_${creationTimestamp}`;
+  attachLocalRunKey(runState, key);
+  const localCreationTimestamp = keyTimestamp(key, creationTimestamp);
   const stateWrite = write(storage, RUN_PREFIX + key, encoded.fragment);
   if (!stateWrite.success) return stateWrite;
   const indexResult = readIndex(storage);
@@ -124,7 +152,7 @@ export function saveRun(runState, metadata = {}) {
     ...(isObject(metadata) ? metadata : {}),
     key,
     worldSeed: runState.worldSeed >>> 0,
-    creationTimestamp,
+    creationTimestamp: localCreationTimestamp,
     depth: integer(runState.depth, 1, 1_000_000, 1),
     partySigils: party.map((character) => character?.sigilCodepoint ?? character?.sigilId).filter((sigil) => Number.isInteger(sigil)),
     partyClasses: party.map((character) => character?.classId).filter((classId) => typeof classId === 'string'),
@@ -144,10 +172,13 @@ export function saveRun(runState, metadata = {}) {
 export function loadRun(key) {
   const storage = getStorage();
   if (!storage) return { success: false, error: 'no_storage' };
-  const raw = read(storage, RUN_PREFIX + safeString(key));
+  const safeKey = safeString(key);
+  const raw = read(storage, RUN_PREFIX + safeKey);
   if (!raw.success) return raw;
   if (!raw.value) return { success: false, error: 'not_found' };
-  return decodeRun(raw.value);
+  const decoded = decodeRun(raw.value);
+  if (decoded.success) attachLocalRunKey(decoded.runState, safeKey);
+  return decoded;
 }
 
 export function listRuns() {
