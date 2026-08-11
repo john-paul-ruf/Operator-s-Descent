@@ -637,8 +637,9 @@ input[type="range"]::-moz-range-thumb {
   margin: 16px 0 8px 0;
 }
 
-/* Sigil Placeholder (CSS-drawn since typeface not yet available) */
-.sigil-placeholder {
+/* Creature sigils */
+.sigil-placeholder,
+.creature-sigil {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -647,7 +648,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--accent);
   text-shadow: 0 0 8px var(--accent);
   font-weight: bold;
-  font-family: ui-monospace, monospace;
+  font-family: 'DESCENT SIGIL';
 }
 
 .sigil-placeholder.large {

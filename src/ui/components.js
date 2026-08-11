@@ -1,3 +1,10 @@
+const PLAYER_BANK_START = 0xE000;
+const PLAYER_BANK_END = 0xE030;
+const BESTIARY_BANK_START = 0xE030;
+const BESTIARY_BANK_END = 0xE048;
+const SIGIL_SIZES = new Set([34, 72, 108, 220]);
+const SIGIL_ROLES = new Set(['player', 'enemy', 'echo']);
+
 const RARITY_COLORS = {
   Stock: '#7ec8e3',
   Tuned: '#2ed4c1',
@@ -55,13 +62,23 @@ export function createToggle(label, value, onChange) {
   return toggle;
 }
 
-export function createSigilToken(codepoint, size) {
+export function validateSigilToken(codepoint, size, role = 'player') {
+  if (!SIGIL_SIZES.has(size)) return { valid: false, error: 'invalid-size' };
+  if (!SIGIL_ROLES.has(role)) return { valid: false, error: 'invalid-role' };
+  const isPlayerBank = codepoint >= PLAYER_BANK_START && codepoint < PLAYER_BANK_END;
+  const isBestiaryBank = codepoint >= BESTIARY_BANK_START && codepoint < BESTIARY_BANK_END;
+  if ((role === 'player' || role === 'echo') && !isPlayerBank) return { valid: false, error: 'invalid-player-bank' };
+  if (role === 'enemy' && !isBestiaryBank) return { valid: false, error: 'invalid-enemy-bank' };
+  return { valid: true };
+}
+
+export function createSigilToken(codepoint, size, opts = {}) {
+  const role = opts.role || 'player';
+  const validation = validateSigilToken(codepoint, size, role);
+  if (!validation.valid) throw new RangeError(`invalid sigil token: ${validation.error}`);
   const el = document.createElement('span');
-  el.className = 'sigil-placeholder';
-  if (size >= 108) el.classList.add('large');
-  if (size <= 34) el.classList.add('small');
-  el.style.fontSize = `${size}px`;
-  el.style.fontFamily = "'DESCENT SIGIL', monospace";
+  el.className = `creature-sigil sigil-${size} sigil-role-${role}`;
+  el.dataset.sigilRole = role;
   el.textContent = String.fromCodePoint(codepoint);
   return el;
 }

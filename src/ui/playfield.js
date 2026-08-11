@@ -1,7 +1,19 @@
+import { validateSigilToken } from './components.js';
 const CELL_SIZE = 24;
 const COMBAT_CELL_SIZE = 48;
 const COMBAT_GRID_W = 8;
 const COMBAT_GRID_H = 16;
+
+function drawCreatureSigil(ctx, { codepoint, size, role, x, y, color }) {
+  const validation = validateSigilToken(codepoint, size, role);
+  if (!validation.valid) return false;
+  ctx.font = `${size}px 'DESCENT SIGIL'`;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String.fromCodePoint(codepoint), x, y);
+  return true;
+}
 
 export function createPlayfield(canvas) {
   const ctx = canvas.getContext('2d');
@@ -62,15 +74,14 @@ export function createPlayfield(canvas) {
       }
 
       if (partyPos) {
-        ctx.font = `${CELL_SIZE - 2}px 'DESCENT SIGIL', monospace`;
-        ctx.fillStyle = accentColor;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(
-          String.fromCodePoint(0xE000),
-          partyPos.x * CELL_SIZE + CELL_SIZE / 2,
-          partyPos.y * CELL_SIZE + CELL_SIZE / 2
-        );
+        drawCreatureSigil(ctx, {
+          codepoint: 0xE000,
+          size: 108,
+          role: 'player',
+          x: partyPos.x * CELL_SIZE + CELL_SIZE / 2,
+          y: partyPos.y * CELL_SIZE + CELL_SIZE / 2,
+          color: accentColor
+        });
       }
     },
 
@@ -122,16 +133,16 @@ export function createPlayfield(canvas) {
           ctx.lineWidth = 1;
         }
 
-        ctx.font = `${COMBAT_CELL_SIZE - 8}px 'DESCENT SIGIL', monospace`;
-        ctx.fillStyle = c.side === 'enemy' ? '#e83a3a' : accentColor;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const codepoint = c.sigilCodepoint || (c.side === 'enemy' ? 0xE030 : 0xE000);
-        ctx.fillText(
-          String.fromCodePoint(codepoint),
-          px + COMBAT_CELL_SIZE / 2,
-          py + COMBAT_CELL_SIZE / 2
-        );
+        const role = c.side === 'enemy' ? 'enemy' : c.side === 'echo' ? 'echo' : 'player';
+        const codepoint = c.sigilCodepoint || (role === 'enemy' ? 0xE030 : 0xE000);
+        drawCreatureSigil(ctx, {
+          codepoint,
+          size: 72,
+          role,
+          x: px + COMBAT_CELL_SIZE / 2,
+          y: py + COMBAT_CELL_SIZE / 2,
+          color: role === 'player' ? accentColor : '#e83a3a'
+        });
       }
     }
   };

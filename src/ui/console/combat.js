@@ -21,7 +21,11 @@ export function render(container, context) {
   if (active) {
     const activePanel = document.createElement('div');
     activePanel.className = 'combat-active-panel';
-    activePanel.appendChild(createSigilToken(active.sigilCodepoint || 0xE000, 34));
+    activePanel.appendChild(createSigilToken(
+      active.sigilCodepoint || (active.side === 'enemy' ? 0xE030 : 0xE000),
+      34,
+      { role: active.side === 'enemy' ? 'enemy' : active.side === 'echo' ? 'echo' : 'player' }
+    ));
     if (active.hp !== undefined) activePanel.appendChild(createHPBar(active.hp, active.hpMax || active.hp));
     if (active.charge !== undefined) activePanel.appendChild(createChargeBar(active.charge, active.chargeMax || active.charge));
     if (active.ap !== undefined) {

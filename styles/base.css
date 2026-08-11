@@ -1,3 +1,9 @@
+@font-face {
+  font-family: 'DESCENT SIGIL';
+  src: url('../assets/descent-sigil.woff2') format('woff2');
+  font-display: block;
+}
+
 :root {
   --bg-base: #0a0612;
   --bg-panel: #13092a;
@@ -166,10 +172,21 @@ body {
   text-shadow: 0 0 4px var(--accent);
 }
 
-.sigil-34 { font-size: 34px; }
-.sigil-72 { font-size: 72px; }
-.sigil-108 { font-size: 108px; }
-.sigil-220 { font-size: 220px; }
+.creature-sigil {
+  font-family: 'DESCENT SIGIL';
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  text-shadow: 0 0 12px currentColor, 0 0 24px currentColor;
+}
+
+.sigil-role-player { color: var(--sigil-player); }
+.sigil-role-enemy { color: var(--sigil-enemy); }
+.sigil-role-echo { color: var(--sigil-echo); }
+.sigil-34 { font-size: 34px; width: 34px; height: 34px; }
+.sigil-72 { font-size: 72px; width: 72px; height: 72px; }
+.sigil-108 { font-size: 108px; width: 108px; height: 108px; }
+.sigil-220 { font-size: 220px; width: 220px; height: 220px; }
 
 /* Bar */
 .bar-track {

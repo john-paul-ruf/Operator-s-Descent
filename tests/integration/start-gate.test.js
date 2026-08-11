@@ -33,7 +33,8 @@ describe('cold START boundary', () => {
     const source = await readSource('../../index.html');
 
     expect(source).not.toMatch(/rel=["'](?:modulepreload|preload)["']/);
-    expect(source).toContain('@font-face');
+    expect(source).not.toContain('@font-face');
+    expect(source).not.toContain('assets/descent-sigil.woff2');
     expect(source).toContain('data-cold-shell');
   });
 });
