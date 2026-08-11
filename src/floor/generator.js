@@ -128,13 +128,16 @@ export function generateFloor(worldSeed, floorNumber, rngCursor, themesData) {
     const grid = generator(genPrng);
 
     const modifierWeights = themeData?.modifierWeights || { none: 1 };
-    const modifiedGrid = applyModifiers(grid, genPrng, modifierWeights);
+    const modResult = applyModifiers(grid, genPrng, modifierWeights);
+    const modifiedGrid = modResult.grid;
+    const modifierIds = modResult.modifierIds;
 
     const featurePrng = createPRNG(hash(worldSeed, floorNumber, attempt));
     const floor = placeFeatures(modifiedGrid, featurePrng, floorNumber, themeData);
     if (!floor) continue;
 
     floor.archetypeId = archetypeId;
+    floor.modifiers = modifierIds;
     lastFloor = floor;
 
     const result = validateFloor(floor);

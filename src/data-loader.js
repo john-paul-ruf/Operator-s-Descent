@@ -12,7 +12,7 @@ const DATA_FILES = [
 ];
 
 const ATTRIBUTES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
-const ARCHETYPES = ['chambers', 'caves', 'maze', 'open', 'organic', 'bastion', 'lattice', 'ruin'];
+const ARCHETYPES = ['chambers', 'caves', 'mazes', 'cathedrals', 'spines', 'fractured', 'rings', 'shards'];
 const MODIFIERS = ['none', 'dense', 'sparse', 'dangerous'];
 const CLASS_IDS = ['breacher', 'ghost', 'compiler', 'anchor', 'oracle', 'operator'];
 const THEME_IDS = ['cold_storage', 'foundry', 'data_stream', 'data_cache', 'archive', 'hive', 'void', 'lattice', 'stack', 'terminal', 'nursery', 'crypt'];

@@ -1,10 +1,12 @@
+const MODIFIER_IDS = new Set(['dense', 'sparse', 'dangerous']);
+
 export function applyModifiers(grid, prng, modifierWeights) {
   const weights = modifierWeights || { none: 1 };
   const entries = Object.entries(weights).filter(([k]) => k !== 'none');
   const totalWeight = entries.reduce((sum, [, w]) => sum + w, 0);
-  if (totalWeight === 0) return grid;
+  if (totalWeight === 0) return { grid, modifierIds: [] };
 
-  const numMods = 0 + (prng.next() < 0.3 ? 1 : 0) + (prng.next() < 0.2 ? 1 : 0);
+  const numMods = (prng.next() < 0.3 ? 1 : 0) + (prng.next() < 0.2 ? 1 : 0);
   const applied = new Set();
 
   for (let i = 0; i < numMods; i++) {
@@ -18,11 +20,11 @@ export function applyModifiers(grid, prng, modifierWeights) {
       }
     }
     if (modId && !applied.has(modId)) {
-      applied.add(modId);
       grid = applyModifier(grid, prng, modId);
+      if (MODIFIER_IDS.has(modId)) applied.add(modId);
     }
   }
-  return grid;
+  return { grid, modifierIds: [...applied] };
 }
 
 function applyModifier(grid, prng, modId) {
@@ -38,6 +40,15 @@ function applyModifier(grid, prng, modId) {
   }
 }
 
+function countOrthoOpen(grid, x, y) {
+  let n = 0;
+  if (grid[y - 1]?.[x] >= 1) n++;
+  if (grid[y + 1]?.[x] >= 1) n++;
+  if (grid[y]?.[x - 1] >= 1) n++;
+  if (grid[y]?.[x + 1] >= 1) n++;
+  return n;
+}
+
 function applyDense(grid, prng) {
   const h = grid.length;
   const w = grid[0].length;
@@ -45,7 +56,7 @@ function applyDense(grid, prng) {
   for (let i = 0; i < numWalls; i++) {
     const x = prng.nextInt(w - 2) + 1;
     const y = prng.nextInt(h - 2) + 1;
-    if (grid[y][x] === 1) grid[y][x] = 0;
+    if (grid[y][x] === 1 && countOrthoOpen(grid, x, y) >= 4) grid[y][x] = 0;
   }
   return grid;
 }
@@ -57,7 +68,7 @@ function applySparse(grid, prng) {
   for (let i = 0; i < numRemovals; i++) {
     const x = prng.nextInt(w - 2) + 1;
     const y = prng.nextInt(h - 2) + 1;
-    if (grid[y][x] === 0) grid[y][x] = 1;
+    if (grid[y][x] === 0 && countOrthoOpen(grid, x, y) >= 1) grid[y][x] = 1;
   }
   return grid;
 }
@@ -70,7 +81,7 @@ function applyDangerous(grid, prng) {
   for (let i = 0; i < numPits; i++) {
     const x = prng.nextInt(w - 2) + 1;
     const y = prng.nextInt(h - 2) + 1;
-    if (grid[y][x] === 1) grid[y][x] = 0;
+    if (grid[y][x] === 1 && countOrthoOpen(grid, x, y) >= 4) grid[y][x] = 0;
   }
   return grid;
 }
