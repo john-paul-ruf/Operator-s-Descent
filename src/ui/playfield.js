@@ -1,3 +1,4 @@
+import { CELL } from '../exploration/lattice.js';
 import { validateSigilToken } from './components.js';
 
 export const EXPLORATION_CELL_SIZE = 24;
@@ -9,6 +10,8 @@ const WALL_COLOR = '#1a0e36';
 const VISITED_OVERLAY = 'rgba(0,0,0,0.55)';
 const GRID_COLOR = 'rgba(126,200,227,0.1)';
 const DANGER_COLOR = '#e83a3a';
+const DESCENT_COLOR = '#3ae8a8';
+const CONTAINER_COLOR = '#e8d23a';
 const COVER_COLOR = '#e8c63a';
 const PATH_COLOR = '#ffffff';
 const ECHO_COLOR = '#b026d4';
@@ -113,9 +116,12 @@ export function createPlayfield(canvas) {
           const py = y * EXPLORATION_CELL_SIZE;
           const cellType = grid[y][x];
           drawCell(ctx, px, py, EXPLORATION_CELL_SIZE, cellType);
-          if (cellType === 3) {
-            ctx.fillStyle = COVER_COLOR;
-            ctx.fillText('DESCENT', px + EXPLORATION_CELL_SIZE / 2, py + EXPLORATION_CELL_SIZE / 2);
+          if (cellType === CELL.DESCENT) {
+            ctx.fillStyle = DESCENT_COLOR;
+            ctx.font = '8px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('◈', px + EXPLORATION_CELL_SIZE / 2, py + EXPLORATION_CELL_SIZE / 2);
           }
           if (fog === 1) {
             ctx.fillStyle = VISITED_OVERLAY;
@@ -126,8 +132,11 @@ export function createPlayfield(canvas) {
 
       for (const c of lattice.getContainers?.() || []) {
         if (fogState[c.y * w + c.x] !== 2) continue;
-        ctx.fillStyle = accentColor;
-        ctx.fillRect(c.x * EXPLORATION_CELL_SIZE + 8, c.y * EXPLORATION_CELL_SIZE + 8, 8, 8);
+        ctx.fillStyle = CONTAINER_COLOR;
+        ctx.font = '8px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(c.kind === 'vault' ? '◈' : '▣', c.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2, c.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2);
       }
       for (const e of lattice.getEnemySpawns?.() || []) {
         if (fogState[e.y * w + e.x] !== 2) continue;

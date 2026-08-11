@@ -52,6 +52,8 @@ function appendActorSummary(strip, actor, active = false) {
   const hpBar = createHPBar(hp.current, hp.max);
   hpBar.classList.add('status-mini-hp');
   strip.appendChild(hpBar);
+  sigil.setAttribute('data-glitch', '');
+  sigil.dataset.glitchIntensity = '0.15';
   return { hp };
 }
 
