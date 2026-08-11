@@ -907,3 +907,149 @@ button.protocol-card[aria-selected="true"],
 .console-notice[hidden] {
   display: none;
 }
+
+/* Creation screen */
+.creation-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: 24px;
+  color: var(--text-primary);
+}
+
+.creation-header,
+.creation-char-bar,
+.creation-tabs,
+.creation-actions,
+.blueprint-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.creation-readout {
+  min-width: 128px;
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid var(--border-dim);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.readout-label,
+.card-detail,
+.config-summary,
+.creation-note,
+.disabled-reason {
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.readout-value,
+.config-name {
+  color: var(--accent);
+  text-shadow: 0 0 6px var(--accent);
+}
+
+.creation-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.class-card-row,
+.sigil-picker-row,
+.creation-choice-grid,
+.blueprint-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sigil-picker-row {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.sigil-choice {
+  min-height: 280px;
+  gap: 8px;
+}
+
+.sigil-choice .creature-sigil {
+  flex: 0 0 auto;
+}
+
+.creation-section,
+.config-row {
+  border: 1px solid var(--border-dim);
+  background: var(--bg-panel);
+  padding: 12px;
+}
+
+.config-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.config-row.invalid,
+.creation-warning,
+.creation-error {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.creation-error {
+  min-height: 48px;
+  padding: 8px 12px;
+  background: rgba(232,99,42,0.08);
+}
+
+.creation-warning,
+.creation-note {
+  padding: 8px 12px;
+}
+
+.config-name-input {
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  border: 1px solid var(--border-dim);
+  font-family: inherit;
+  text-transform: uppercase;
+}
+
+.creation-wrapper button:focus-visible,
+.creation-wrapper input:focus-visible {
+  outline: 4px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 16px var(--accent);
+}
+
+.creation-wrapper button:disabled,
+.creation-wrapper [aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.creation-char-bar > *,
+.creation-tabs > *,
+.creation-actions > *,
+.blueprint-controls > *,
+.sigil-choice,
+.class-card,
+.equipment-card,
+.protocol-card,
+.config-row {
+  min-height: 96px;
+}
