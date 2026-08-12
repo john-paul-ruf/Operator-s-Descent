@@ -27,7 +27,8 @@
     "budget:report": "node ./scripts/report-budget.js",
     "validate": "node ./scripts/validate-data.js && npm run lint:sigils && npm run font:check && npm run check:assets && npm test",
     "check:release": "npm run validate && npm run stress:generation && npm run stress:saves && npm run simulate && npm run budget:report && npm run test:e2e",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "parity:shots": "node ./scripts/screenshot-parity.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
