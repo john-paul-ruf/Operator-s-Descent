@@ -8,10 +8,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const MOCKS_DIR = join(ROOT, 'mocks');
-const SHOTS_DIR = join(ROOT, 'program', 'operator-s-descent', 'prompts', 'visual-parity-v2', 'shots');
+const SHOTS_DIR = join(ROOT, 'program', 'operator-s-descent', 'prompts', 'visual-parity-v3', 'shots');
 const SERVER_URL = 'http://127.0.0.1:8080/';
 
 const VIEWPORT = { width: 1080, height: 1920 };
+const MOCK_VIEWPORT = { width: 600, height: 900 };
 
 const SCREENS = {
   title:           { mockFile: 'title.html',          setup: null },
@@ -135,10 +136,12 @@ async function captureSideBySide(browser, screenKey) {
     return null;
   }
 
-  const mockPage = await browser.newPage({ viewport: VIEWPORT });
+  const mockPage = await browser.newPage({ viewport: MOCK_VIEWPORT });
   await mockPage.goto(`file://${mockPath}`, { waitUntil: 'domcontentloaded' });
   await mockPage.waitForTimeout(1500);
-  const mockBuf = await mockPage.screenshot({ type: 'png' });
+  const mockFrame = mockPage.locator('.portrait-frame').first();
+  await mockFrame.waitFor({ state: 'visible', timeout: 5000 });
+  const mockBuf = await mockFrame.screenshot({ type: 'png' });
   await mockPage.close();
 
   const prodPage = await browser.newPage({ viewport: VIEWPORT });
@@ -161,8 +164,12 @@ async function captureSideBySide(browser, screenKey) {
     return null;
   }
   await prodPage.waitForTimeout(1000);
-  const prodBuf = await prodPage.screenshot({ type: 'png' });
+  const prodFrame = prodPage.locator('#portrait-frame').first();
+  await prodFrame.waitFor({ state: 'visible', timeout: 5000 });
+  const prodBuf = await prodFrame.screenshot({ type: 'png' });
   await prodPage.close();
+
+  console.log(`  ${screenKey}: mock=${mockBuf.length}B prod=${prodBuf.length}B`);
 
   const combinedPage = await browser.newPage({ viewport: { width: 2160, height: 1920 } });
   await combinedPage.setContent(
