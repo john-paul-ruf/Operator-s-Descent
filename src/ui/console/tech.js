@@ -282,13 +282,18 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   const castReason = availabilityReason(context, character, caster, protocol, false);
   row.appendChild(createProtocolCard({ ...protocol, name: protocolName(data, protocol), chargeCost: normalCost }, { insufficient: Boolean(castReason) }));
   row.appendChild(text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`));
+  const btnWrap = document.createElement('div');
+  btnWrap.className = 'protocol-buttons';
   const cast = createButton(castReason ? 'CAST BLOCKED' : 'CAST', { disabled: Boolean(castReason), description: castReason, onClick: () => beginProtocol(context, protocol, false) });
+  cast.className = 'btn-crt tech-cast-btn';
   cast.dataset.testid = `tech-cast-${protocolKey(protocol)}`;
-  row.appendChild(cast);
+  btnWrap.appendChild(cast);
   const overReason = availabilityReason(context, character, caster, protocol, true);
   const over = createButton(overReason ? 'OVERCLOCK BLOCKED' : `OVERCLOCK ${overclock.cost} CHG`, { danger: true, disabled: Boolean(overReason), description: overReason, onClick: () => beginProtocol(context, protocol, true) });
+  over.className = 'btn-crt danger tech-overclock-btn';
   over.dataset.testid = `tech-overclock-${protocolKey(protocol)}`;
-  row.appendChild(over);
+  btnWrap.appendChild(over);
+  row.appendChild(btnWrap);
   list.appendChild(row);
 }
 

@@ -5,6 +5,7 @@ import { resolveLoadout } from '../../rules/equipment.js';
 
 const ATTR_LABELS = { mgt: 'MGT', fin: 'FIN', vit: 'VIT', res: 'RES', foc: 'FOC', sig: 'SIG' };
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', offhand: 'Off-hand' };
+const SLOT_SHORT = { weapon: 'WPN', armor: 'ARM', offhand: 'OFH' };
 const selectionByRun = new WeakMap();
 
 function clear(container) {
@@ -66,6 +67,32 @@ function row(label, value, testid = null) {
   return element;
 }
 
+function compactBar(label, current, max, colorVar) {
+  const wrap = document.createElement('div');
+  wrap.className = 'party-inline-bar console-row';
+  const info = document.createElement('span');
+  info.className = 'stat-label';
+  info.textContent = `${label} ${current}/${max}`;
+  const track = document.createElement('div');
+  track.className = 'party-inline-track';
+  const fill = document.createElement('div');
+  fill.className = 'party-inline-fill';
+  fill.style.width = `${max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0}%`;
+  fill.style.background = `var(${colorVar})`;
+  track.appendChild(fill);
+  wrap.append(info, track);
+  return wrap;
+}
+
+function equipmentLine(character) {
+  const pieces = [];
+  for (const slot of ['weapon', 'offhand', 'armor']) {
+    const item = character.equipment?.[slot];
+    if (item) pieces.push(`${SLOT_SHORT[slot] || slot}: ${itemLabel(item)}`);
+  }
+  return pieces.join(' · ') || 'No gear.';
+}
+
 function itemLabel(item) {
   return item?.name || item?.baseType || item?.id || '—';
 }
@@ -94,22 +121,35 @@ export function render(container, context = {}) {
 
   const state = getSelection(runState);
   state.index = Math.max(0, Math.min(state.index, living.length - 1));
-  const list = document.createElement('div');
-  list.className = 'member-list';
-  list.dataset.testid = 'party-roster';
+  const grid = document.createElement('div');
+  grid.className = 'member-grid';
+  grid.dataset.testid = 'party-roster';
   living.forEach((character, index) => {
     const combatActor = combatActorFor(context, character);
     const hp = hpOf(character, combatActor);
-    const button = createButton(`${character.name || character.classId || `C${index + 1}`} · ${hp.current}/${hp.max}`, {
-      selected: index === state.index,
-      onClick: () => { state.index = index; renderDetail(detail, living[state.index], context); }
-    });
-    button.className = 'member-pill console-row';
-    button.dataset.testid = `party-member-${character.id}`;
-    button.appendChild(createSigilToken(sigilOf(character), 34, { role: 'player', label: `Party member ${character.id}` }));
-    list.appendChild(button);
+    const charge = chargeOf(character, combatActor);
+    const selected = index === state.index;
+    const card = document.createElement('div');
+    card.className = `member-card console-row${selected ? ' selected' : ''}`;
+    card.dataset.testid = `party-member-${character.id}`;
+    card.addEventListener('click', () => { state.index = index; renderDetail(detail, living[state.index], context); });
+    card.appendChild(createSigilToken(sigilOf(character), 34, { role: 'player', label: `Party member ${character.id}` }));
+    const meta = document.createElement('div');
+    meta.className = 'member-card-meta';
+    const name = document.createElement('div');
+    name.className = 'member-card-name';
+    name.textContent = character.name || character.classId || `C${index + 1}`;
+    meta.appendChild(name);
+    card.appendChild(meta);
+    card.appendChild(compactBar('HP', hp.current, hp.max, '--danger'));
+    card.appendChild(compactBar('CHG', charge.current, charge.max, '--accent'));
+    const equip = document.createElement('div');
+    equip.className = 'member-card-equip';
+    equip.textContent = equipmentLine(character);
+    card.appendChild(equip);
+    grid.appendChild(card);
   });
-  container.appendChild(list);
+  container.appendChild(grid);
 
   const detail = createScrollArea({ label: 'Party member detail', focusable: true });
   detail.className = 'party-detail';
