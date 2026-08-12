@@ -6,24 +6,15 @@ import { createInputHandler } from '../input.js';
 const TUTORIAL_FLAG = 'tutorialDeclined';
 
 const BRANCHES = [
-  ['BEGIN NEW RUN', 'creation', 'title-begin-new-run'],
-  ['RUN LIBRARY', 'library', 'title-run-library'],
-  ['IMPORT LINK', 'import', 'title-import-link'],
-  ['TUTORIAL', 'tutorial', 'title-tutorial'],
-  ['SETTINGS', 'settings', 'title-settings']
+  ['◈ BEGIN NEW RUN', 'creation', 'title-begin-new-run'],
+  ['◈ RUN LIBRARY', 'library', 'title-run-library'],
+  ['◈ IMPORT LINK', 'import', 'title-import-link'],
+  ['◈ TUTORIAL', 'tutorial', 'title-tutorial'],
+  ['◈ SETTINGS', 'settings', 'title-settings']
 ];
 
 function navigate(screen, params = {}) {
   bus.dispatch('ui:navigate', { screen, params });
-}
-
-function branchButton(label, screen, testid) {
-  const button = createButton(label, {
-    primary: screen === 'creation',
-    onClick: () => navigate(screen)
-  });
-  button.dataset.testid = testid;
-  return button;
 }
 
 export function mount(container) {
@@ -34,26 +25,73 @@ export function mount(container) {
 
   const screen = document.createElement('section');
   screen.className = 'title-screen';
-  screen.setAttribute('aria-label', 'Activated title screen');
+  screen.setAttribute('aria-label', 'Title screen');
 
-  const title = document.createElement('h1');
-  title.className = 'display glow-strong';
-  title.textContent = "OPERATOR'S DESCENT";
-  title.setAttribute('data-glitch', '');
-  title.dataset.glitchIntensity = '0.10';
+  const header = document.createElement('div');
+  header.className = 'title-header';
+  const headerText = document.createElement('p');
+  headerText.className = 'caption';
+  headerText.textContent = 'GLITCH FORGEWORKS';
+  header.appendChild(headerText);
 
-  const subtitle = document.createElement('p');
-  subtitle.className = 'subtitle';
-  subtitle.textContent = 'SYSTEM ACTIVATED · SELECT DESCENT PATH';
+  const main = document.createElement('div');
+  main.className = 'title-main';
+
+  const ornamentTop = document.createElement('div');
+  ornamentTop.className = 'ornament';
+
+  const titleTop = document.createElement('h1');
+  titleTop.className = 'display glow-strong title-glitch';
+  titleTop.textContent = "OPERATOR'S";
+  titleTop.setAttribute('data-text', "OPERATOR'S");
+  titleTop.setAttribute('data-glitch', '');
+  titleTop.dataset.glitchIntensity = '0.10';
+
+  const titleBottom = document.createElement('h1');
+  titleBottom.className = 'display glow-strong title-glitch';
+  titleBottom.textContent = 'DESCENT';
+  titleBottom.setAttribute('data-text', 'DESCENT');
+  titleBottom.setAttribute('data-glitch', '');
+  titleBottom.dataset.glitchIntensity = '0.10';
+
+  const ornamentBottom = document.createElement('div');
+  ornamentBottom.className = 'ornament';
+
+  const tagline = document.createElement('p');
+  tagline.className = 'tagline';
+  tagline.textContent = 'DEPTH IS THE SCORE';
+
+  const startButton = document.createElement('button');
+  startButton.className = 'btn-crt btn-start glow-border-strong';
+  startButton.type = 'button';
+  startButton.textContent = 'START';
+  startButton.dataset.testid = 'title-start';
+
+  const branchList = document.createElement('div');
+  branchList.className = 'branch-list hidden-branches';
+  branchList.id = 'title-branches';
+  branchList.dataset.testid = 'title-branches';
+
+  startButton.addEventListener('click', () => {
+    branchList.classList.toggle('hidden-branches');
+  });
+
+  for (const [label, route, testid] of BRANCHES) {
+    const button = createButton(label, {
+      primary: route === 'creation',
+      onClick: () => navigate(route)
+    });
+    button.dataset.testid = testid;
+    cleanups.push(() => button.cleanup?.());
+    branchList.appendChild(button);
+  }
 
   const notice = document.createElement('p');
   notice.className = 'console-note';
   notice.setAttribute('aria-live', 'polite');
   notice.dataset.testid = 'title-notice';
 
-  const branches = createPanel({ title: 'FRONT DOOR' });
-  branches.classList.add('glow-border-strong');
-  branches.dataset.testid = 'title-branches';
+  main.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline, startButton, branchList);
 
   if (getFlag(TUTORIAL_FLAG) !== true) {
     const offer = createPanel({ title: 'FIRST-TIME BRIEFING', elevated: true });
@@ -84,17 +122,22 @@ export function mount(container) {
 
     cleanups.push(() => tutorial.cleanup?.(), () => decline.cleanup?.());
     offer.append(body, tutorial, decline);
-    screen.appendChild(offer);
+    screen.append(header, main, offer, notice);
+  } else {
+    screen.append(header, main, notice);
   }
 
-  for (const [label, route, testid] of BRANCHES) {
-    const button = branchButton(label, route, testid);
-    cleanups.push(() => button.cleanup?.());
-    branches.appendChild(button);
-  }
+  const footer = document.createElement('div');
+  footer.className = 'title-footer';
+  const footerVersion = document.createElement('p');
+  footerVersion.className = 'micro';
+  footerVersion.textContent = 'v1.0 · BUILD · OFFLINE READY';
+  const footerPrompt = document.createElement('p');
+  footerPrompt.className = 'micro';
+  footerPrompt.textContent = 'PRESS START TO POWER ON';
+  footer.append(footerVersion, footerPrompt);
+  screen.appendChild(footer);
 
-  screen.prepend(title, subtitle, notice);
-  screen.appendChild(branches);
   container.replaceChildren(screen);
 
   return {

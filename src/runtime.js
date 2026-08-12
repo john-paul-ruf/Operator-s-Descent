@@ -591,7 +591,6 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
   if (runtimeActive) shutdownRuntime();
   runtimeActive = true;
   gestureAudioContext = audioContext || null;
-  document.getElementById('app-root')?.replaceChildren();
   registerServiceWorkerOnce();
 
   try {

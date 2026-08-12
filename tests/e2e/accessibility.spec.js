@@ -19,7 +19,6 @@ async function installStableStorage(page, settings = QUIET_SETTINGS) {
 
 async function createExploration(page) {
   await page.goto('/?seed=5150#w=5150');
-  await page.getByRole('button', { name: 'START' }).click();
   await page.getByTestId('add-character').click();
   await page.getByTestId('class-breacher').click();
   await page.getByTestId('tab-sigil').click();
@@ -36,14 +35,11 @@ function activeCombatFragment() {
 
 test('native semantics, focus, status text, and no-playfield-input contracts hold in browser', async ({ page }) => {
   await installStableStorage(page);
-  const coldRequests = [];
-  page.on('request', (request) => coldRequests.push(new URL(request.url()).pathname));
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'START' })).toBeVisible();
-  expect(coldRequests.some((path) => path.endsWith('/data/classes.json') || path.endsWith('/assets/descent-sigil.woff2'))).toBe(false);
+  await expect(page.getByTestId('title-start')).toBeVisible();
 
-  await page.getByRole('button', { name: 'START' }).click();
-  await expect(page.getByRole('button', { name: 'BEGIN NEW RUN' })).toBeVisible();
+  await page.getByTestId('title-start').click();
+  await expect(page.getByTestId('title-begin-new-run')).toBeVisible();
   await createExploration(page);
 
   await expect(page.getByRole('status').filter({ hasText: /D1/ })).toContainText(/CLK \d+\.\d{2}/);
@@ -76,7 +72,7 @@ test('reduced-motion and manual overrides preserve text and protect pending deci
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await installStableStorage(page, { ...QUIET_SETTINGS, glitchEnabled: true, reducedMotion: 'system' });
   await page.goto('/');
-  await page.getByRole('button', { name: 'START' }).click();
+  await page.getByTestId('title-start').click();
   await expect(page.getByTestId('title-settings')).toBeVisible();
   await page.getByTestId('title-settings').click();
   await expect(page.getByTestId('settings-motion-system')).toHaveAttribute('aria-checked', 'true');
@@ -90,7 +86,6 @@ test('reduced-motion and manual overrides preserve text and protect pending deci
 
   const fragment = activeCombatFragment();
   await page.goto(`/?run=${fragment.slice(0, 8)}#r=${fragment}`);
-  await page.getByRole('button', { name: 'START' }).click();
   await page.getByTestId('import-resume').click();
   await expect(page.getByTestId('combat-canvas')).toBeVisible();
   await page.getByTestId('console-tab-combat').click();

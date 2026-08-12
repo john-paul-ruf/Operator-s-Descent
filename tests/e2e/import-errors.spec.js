@@ -40,7 +40,7 @@ async function installStorage(page) {
 test('import diagnostics show named failures, title return, and seed recovery when readable', async ({ page }) => {
   await installStorage(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'START' }).click();
+  await page.getByTestId('title-start').click();
   await page.getByTestId('title-import-link').click();
 
   for (const [code, fragment, message] of importCases()) {

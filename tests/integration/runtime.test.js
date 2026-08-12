@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import '../helpers/skip-boot.js';
 import { bus } from '../../src/state/bus.js';
 import { saveSettings } from '../../src/state/library.js';
 import { resetGameDataForTests } from '../../src/data-loader.js';

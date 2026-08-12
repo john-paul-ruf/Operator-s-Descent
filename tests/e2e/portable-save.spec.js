@@ -64,7 +64,6 @@ async function installStorage(page) {
 async function importFragment(page, fragment) {
   await installStorage(page);
   await page.goto(`/?run=${fragment.slice(0, 8)}#r=${fragment}`);
-  await page.getByRole('button', { name: 'START' }).click();
   await expect(page.getByTestId('import-run-summary')).toContainText('ACTIVE COMBAT SNAPSHOT');
   await page.getByTestId('import-resume').click();
   await expect(page.getByTestId('combat-canvas')).toBeVisible();
@@ -134,7 +133,6 @@ test('world-share links open creation with no carried run state', async ({ page 
   await installStorage(page);
   const seed = 60013;
   await page.goto(`/#w=${encodeSeed(seed)}`);
-  await page.getByRole('button', { name: 'START' }).click();
   await expect(page.getByTestId('add-character')).toBeVisible();
   await expect(page.getByTestId('seed')).toContainText(String(seed));
   await expect(page.getByTestId('exploration-canvas')).toHaveCount(0);

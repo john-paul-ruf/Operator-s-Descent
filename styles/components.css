@@ -1179,3 +1179,5 @@ button.protocol-card[aria-selected="true"],
   font-size: 6px;
   color: var(--text-dim);
 }
+
+.hidden-branches { display: none; }

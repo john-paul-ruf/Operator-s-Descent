@@ -21,7 +21,6 @@ async function installStableStorage(page) {
 
 async function createRunByTouch(page, seed = 2) {
   await page.goto(`/?seed=${seed}#w=${seed}`);
-  await page.getByRole('button', { name: 'START' }).tap();
   await expect(page.getByTestId('add-character')).toBeVisible();
   await page.getByTestId('add-character').tap();
   await page.getByTestId('class-breacher').tap();
@@ -74,7 +73,6 @@ test('touch combat selects a target first and requires explicit confirm', async 
   await installStableStorage(page);
   const fragment = activeCombatFragment();
   await page.goto(`/?run=${fragment.slice(0, 8)}#r=${fragment}`);
-  await page.getByRole('button', { name: 'START' }).tap();
   await expect(page.getByTestId('import-run-summary')).toContainText('ACTIVE COMBAT SNAPSHOT');
   await page.getByTestId('import-resume').tap();
   await expect(page.getByTestId('combat-canvas')).toBeVisible();

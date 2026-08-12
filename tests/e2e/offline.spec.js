@@ -57,15 +57,13 @@ test('first offline load fails, then cached activated load resumes and plays off
   try {
     await installStorage(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'START' }).click();
+    await page.getByTestId('title-start').click();
     await expect(page.getByTestId('title-import-link')).toBeVisible();
     await waitForCache(page);
 
     const fragment = activeDepthTwoFragment();
     await context.setOffline(true);
     await page.goto(`/?offline=1#r=${fragment}`);
-    await expect(page.getByRole('button', { name: 'START' })).toBeVisible();
-    await page.getByRole('button', { name: 'START' }).click();
     await expect(page.getByTestId('import-run-summary')).toContainText('DEPTH 2');
     await page.getByTestId('import-resume').click();
     await expect(page.getByTestId('combat-canvas')).toBeVisible();

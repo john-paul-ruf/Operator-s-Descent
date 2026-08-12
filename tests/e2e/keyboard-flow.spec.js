@@ -26,9 +26,6 @@ async function installStableStorage(page, { rejectClipboard = false } = {}) {
 
 async function openCreationFromSeed(page, seed = 777) {
   await page.goto(`/?seed=${seed}#w=${seed}`);
-  await expect(page.getByRole('button', { name: 'START' })).toBeVisible();
-  await page.getByRole('button', { name: 'START' }).focus();
-  await page.keyboard.press('Enter');
   await expect(page.getByTestId('add-character')).toBeVisible();
 }
 
@@ -92,7 +89,7 @@ test('keyboard route and console journey covers modes, movement, copy fallback, 
 test('keyboard can enter settings and return without a trap', async ({ page }) => {
   await installStableStorage(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'START' }).click();
+  await page.getByTestId('title-start').click();
   await expect(page.getByTestId('title-settings')).toBeVisible();
 
   await page.getByTestId('title-settings').focus();

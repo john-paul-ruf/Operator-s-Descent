@@ -3,17 +3,15 @@ import { readFile } from 'node:fs/promises';
 
 const readSource = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-describe('cold START boundary', () => {
-  it('keeps the cold entry dependency-free and loads only the hot runtime dynamically', async () => {
+describe('boot architecture', () => {
+  it('eagerly loads CRT overlays and runtime via dynamic import at boot', async () => {
     const source = await readSource('../../src/main.js');
 
     expect(source).not.toMatch(/^\s*import\s/m);
     expect(source.match(/import\(/g)).toHaveLength(2);
     expect(source).toContain("import('./runtime.js')");
     expect(source).toContain("import('./glitch/crt-overlays.js')");
-    expect(source).not.toMatch(/data\//);
-    expect(source).not.toMatch(/service-worker/);
-    expect(source).not.toMatch(/createRNG|Math\.random|createGlitch\b|createGrain/);
+    expect(source).toContain('activateRuntime');
   });
 
   it('keeps service-worker, deferred data loading, and visual services inside the hot runtime', async () => {
@@ -36,6 +34,5 @@ describe('cold START boundary', () => {
     expect(source).not.toMatch(/rel=["'](?:modulepreload|preload)["']/);
     expect(source).not.toContain('@font-face');
     expect(source).not.toContain('assets/descent-sigil.woff2');
-    expect(source).toContain('data-cold-shell');
   });
 });

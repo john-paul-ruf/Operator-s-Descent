@@ -128,17 +128,8 @@ function collect(root, predicate, matches = []) {
   return matches;
 }
 
-function buttonByText(root, text) {
-  return collect(root, (element) => element.tagName === 'BUTTON' && element.textContent === text)[0] || null;
-}
-
 function allText(root) {
   return [root.textContent, ...(root.children || []).flatMap((child) => allText(child))].filter(Boolean);
-}
-
-async function mountCold(root, activate) {
-  const { mountColdTitle } = await import('../../src/main.js');
-  return mountColdTitle(root, activate);
 }
 
 let storage;
@@ -154,70 +145,54 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('front door cold START', () => {
-  it('renders only the cold title and calls the activation boundary once', async () => {
-    const root = document.getElementById('app-root');
-    let activations = 0;
-    await mountCold(root, async () => { activations += 1; });
-
-    expect(allText(root)).toContain("OPERATOR'S DESCENT");
-    expect(buttonByText(root, 'START')).toBeTruthy();
-    expect(allText(root)).not.toContain('BEGIN NEW RUN');
-
-    const start = buttonByText(root, 'START');
-    await start.click();
-    await start.click();
-
-    expect(activations).toBe(1);
-    expect(start.disabled).toBe(true);
-  });
-
-  it('shows a named recoverable boot error when activation fails', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const root = document.getElementById('app-root');
-    let activations = 0;
-    await mountCold(root, async () => {
-      activations += 1;
-      if (activations === 1) throw new Error('boom');
-    });
-
-    const start = buttonByText(root, 'START');
-    await start.click();
-
-    expect(start.disabled).toBe(false);
-    expect(allText(root)).toContain('BOOT FAILED — RETRY START');
-
-    await start.click();
-    expect(activations).toBe(2);
-    expect(start.disabled).toBe(true);
-  });
-});
-
-describe('activated title', () => {
-  it('reveals branches after activation and suppresses the first-time tutorial offer', async () => {
+describe('title screen', () => {
+  it('renders the title with a hidden branch list that START toggles', async () => {
     const seen = [];
-    const audioStarts = [];
     const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
-    const offAudio = bus.on('ui:audio-start', () => audioStarts.push(true));
     const { mount } = await import('../../src/ui/screens/title.js');
     const container = new FakeElement('div');
     const controller = mount(container);
 
-    expect(allText(container)).toEqual(expect.arrayContaining(['BEGIN NEW RUN', 'RUN LIBRARY', 'IMPORT LINK', 'TUTORIAL', 'SETTINGS']));
-    expect(byTestId(container, 'tutorial-offer')).toBeTruthy();
-    expect(audioStarts).toEqual([]);
+    expect(allText(container)).toContain("OPERATOR'S");
+    expect(allText(container)).toContain('DESCENT');
+    expect(allText(container)).toContain('DEPTH IS THE SCORE');
+    expect(allText(container)).not.toContain('BEGIN NEW RUN');
 
+    const start = byTestId(container, 'title-start');
+    expect(start).toBeTruthy();
+    await start.click();
+
+    const branches = byTestId(container, 'title-branches');
+    expect(branches.classList.contains('hidden-branches')).toBe(false);
+    expect(allText(container)).toContain('◈ BEGIN NEW RUN');
+
+    await start.click();
+    expect(branches.classList.contains('hidden-branches')).toBe(true);
+
+    await start.click();
     await byTestId(container, 'title-run-library').click();
     expect(seen.at(-1)).toEqual({ screen: 'library', params: {} });
+
+    controller.unmount();
+    offNavigate();
+  });
+
+  it('shows the first-time tutorial offer and allows declining it', async () => {
+    const seen = [];
+    const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/title.js');
+    const container = new FakeElement('div');
+    const controller = mount(container);
+
+    expect(byTestId(container, 'tutorial-offer')).toBeTruthy();
+    expect(byTestId(container, 'title-offer-tutorial')).toBeTruthy();
 
     await byTestId(container, 'title-decline-tutorial').click();
     expect(getFlag('tutorialDeclined')).toBe(true);
     expect(byTestId(container, 'tutorial-offer')).toBeNull();
-    expect(byTestId(container, 'title-tutorial')).toBeTruthy();
 
     controller.unmount();
     offNavigate();
-    offAudio();
   });
 
   it('does not auto-offer the tutorial once the flag exists', async () => {
