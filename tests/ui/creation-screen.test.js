@@ -206,5 +206,10 @@ describe('creation screen workflow', () => {
     expect(card).not.toBeNull();
     expect(card.classList.contains('class-card')).toBe(true);
     expect(card.classList.contains('btn-crt')).toBe(true);
+    const cardName = card.children.find((c) => c.classList?.contains('card-name'));
+    expect(cardName).toBeTruthy();
+    expect(cardName.textContent).toBe('BREACHER');
+    const cardDetail = card.children.find((c) => c.classList?.contains('card-detail'));
+    expect(cardDetail).toBeTruthy();
   });
 });

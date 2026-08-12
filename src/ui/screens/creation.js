@@ -269,7 +269,7 @@ export function mount(container, params = {}) {
     group.setAttribute('role', 'radiogroup');
     group.setAttribute('aria-label', 'Class selection');
     for (const cls of classList(data)) {
-      const card = createButton(`${cls.name}`, {
+      const card = createButton('', {
         selected: selected.classId === cls.id,
         label: `Choose ${cls.name}`,
         onClick: () => dispatch({ type: 'set_class', classId: cls.id })
@@ -278,7 +278,10 @@ export function mount(container, params = {}) {
       card.setAttribute('role', 'radio');
       card.setAttribute('aria-checked', String(selected.classId === cls.id));
       card.dataset.testid = `class-${cls.id}`;
-      card.appendChild(text('span', 'card-detail', cls.signature?.tiers?.[0] || ''));
+      const nameSpan = text('span', 'card-name accent-text', cls.name.toUpperCase());
+      const subtitle = text('span', 'card-subtitle', `${ATTR_LABELS[cls.primaryAttribute] || ''} · Hit Die ${cls.hitDieBase || ''}`);
+      const desc = text('span', 'card-detail', cls.signature?.tiers?.[0] || '');
+      card.append(nameSpan, subtitle, desc);
       group.appendChild(card);
     }
     panel.appendChild(group);

@@ -43,7 +43,7 @@ Three concurrent problems:
 | 3 | Drop Rule 10 — collapse two-state title into single-state | M82, M86, M68, FORGE-CONFIG | done | 2026-08-12 | Rule 10 amended in FORGE-CONFIG; main.js calls activateRuntime at boot; title.js rewritten as single-state with START toggle; 6 test files updated; hash routing preserved. |
 | 4 | Diagnostic — class-card white-button regression | M69, M79, M77, M56 | done | 2026-08-12 | Root cause: stale SW cache. Runtime DOM inspection confirms class-card buttons render correctly (computedBg: rgb(19,9,42) = #13092a). SW cache version bumped to 2026-08-12-parity-v2. Regression test added. |
 | 5 | Title screen full port | M68, M79 | done | 2026-08-12 | Full visual port: chromatic ghost, ornaments, tagline, START pulse, footer, title layout CSS. Design scan 85→81. |
-| 6 | Creation screen full port (post-diagnostic) | M69, M79 | pending | — | 6 dark class cards, sigil grid, stat readout, back + finalize footer |
+| 6 | Creation screen full port (post-diagnostic) | M69, M79 | done | 2026-08-12 | Class cards restructured: name + subtitle + description spans; flex-column layout. CSS for .card-name, .card-subtitle added. All tests pass. |
 | 7 | Exploration screen full port | M70, M58, M59, M79, M77 | pending | — | Playfield tokens, cell markers, status strip, alert-banner decision |
 | 8 | Combat screen full port | M71, M58, M62, M79 | pending | — | Playfield tokens (echo/dead/deploy decision), combat console actions |
 | 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | pending | — | Independent from S10 (different tabs) |
@@ -322,3 +322,34 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 
 **Deferred:**
 - Whether `PRESS START TO POWER ON` should hide after START is clicked — user decision; mock doesn't address this.
+
+### SESSION-06 (2026-08-12)
+
+**Built:** Creation screen class-card restructuring to match mock. Each class card now has three elements: bold accent name (`card-name`), dim subtitle with `ATTR · Hit Die N` (`card-subtitle`), and description text (`card-detail`). Class card CSS updated to flex-column left-aligned layout.
+
+**Gap list (identified via parity screenshot comparison):**
+- **Fixed:** Class card content structure — was a single text label; now name + subtitle + description spans matching mock's two-div layout
+- **Fixed:** Class card layout — added flex-column + text-align left so content stacks vertically
+- **Already correct (verified):** Stat cards (readout) — labels in `--text-secondary`, values in accent glow; 3-column grid; touch targets 96px
+- **Already correct:** Tab bar — 48px tabs, active state with accent border-bottom + glow; matches mock
+- **Already correct:** Sigil choices — dark bg, `btn-crt sigil-choice console-row` classes; sigil glyph via `createSigilToken`
+- **Already correct:** Footer — flex layout with back + finalize buttons
+- **Deferred:** Blueprint saved-configs horizontal scroll preview at footer — mock shows a scrollable list; production has a `blueprint-controls` section. Visual polish deferred to future iteration as the functional behavior is correct
+
+**Files modified:**
+- `./src/ui/screens/creation.js` — class card `createButton` now takes empty label; appends `card-name accent-text`, `card-subtitle`, `card-detail` spans with class name, primary attribute + hit die, and signature description
+- `./styles/components.css` — `.class-card` now `display: flex; flex-direction: column; text-align: left;`; added `.card-name` (bold 14px), `.card-subtitle` (10px dim), `.class-card .card-detail` (block, no uppercase)
+- `./tests/ui/creation-screen.test.js` — regression test now asserts `card-name` span with text `BREACHER` and `card-detail` span present
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/creation.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/creation-prod.png`
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/creation-mock.png`
+
+**Verification:**
+- `node --check` passes for `./src/ui/screens/creation.js`
+- `npx vitest run` → 1768/1768 passing
+- `npm run parity:shots -- --screen creation` → produces all 3 PNGs
+
+**Warnings for downstream sessions:**
+- The class-card name/subtitle/description split may need to propagate to equipment cards and protocol cards in SESSION-09/10 if the mocks show similar two-line structures there.
