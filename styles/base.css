@@ -56,7 +56,13 @@ body {
   z-index: 10;
   width: 100%;
   height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--bg-panel);
 }
+#app-root::-webkit-scrollbar { width: 4px; }
+#app-root::-webkit-scrollbar-thumb { background: var(--accent); }
+#app-root::-webkit-scrollbar-track { background: var(--bg-panel); }
 
 .screen-container {
   display: flex;
@@ -178,7 +184,6 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: center;
-  min-height: 48px;
   border-radius: 4px;
 }
 

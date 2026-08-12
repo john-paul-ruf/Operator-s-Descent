@@ -28,7 +28,7 @@ export function mount(container) {
   screen.setAttribute('aria-label', 'Title screen');
 
   const header = document.createElement('div');
-  header.className = 'title-header caption accent-text glow';
+  header.className = 'title-header caption glow';
   header.style.color = 'var(--text-secondary)';
   header.textContent = 'GLITCH FORGEWORKS';
   header.dataset.testid = 'title-header';
@@ -77,9 +77,9 @@ export function mount(container) {
 
   for (const [label, route, testid] of BRANCHES) {
     const button = createButton(label, {
-      primary: route === 'creation',
       onClick: () => navigate(route)
     });
+    button.classList.add('btn-crt');
     button.dataset.testid = testid;
     cleanups.push(() => button.cleanup?.());
     branchList.appendChild(button);
