@@ -29,6 +29,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/glitch/glitch.js',
   './src/glitch/grain.js',
   './src/glitch/transitions.js',
+  './src/glitch/crt-overlays.js',
   './src/main.js',
   './src/rules/attributes.js',
   './src/rules/classes.js',

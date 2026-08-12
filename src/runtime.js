@@ -1,4 +1,4 @@
-import { setGameDataCompatibility } from './main.js';
+import { setGameDataCompatibility, getCrtOverlaysController } from './main.js';
 import { loadGameData } from './data-loader.js';
 import { bus } from './state/bus.js';
 import { loadSettings, saveRun, deleteRunState, getRunKey } from './state/library.js';
@@ -404,6 +404,7 @@ function updateRuntimeSettings(key, value) {
   } else if (key === 'scanlineGrain') {
     runtimeSettings = { ...runtimeSettings, scanlineGrainEnabled: Boolean(value) };
     grainController?.setEnabled(value);
+    getCrtOverlaysController()?.setEnabled(value);
   }
 }
 
@@ -617,7 +618,10 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
   applyVisualSettings();
 
   setupGrain();
-  if (!runtimeSettings.scanlineGrainEnabled) grainController?.setEnabled(false);
+  if (!runtimeSettings.scanlineGrainEnabled) {
+    grainController?.setEnabled(false);
+    getCrtOverlaysController()?.setEnabled(false);
+  }
 
   setupBus();
 

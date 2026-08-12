@@ -1,5 +1,12 @@
 /* CRT / VHS Effect Layers */
 
+#crt-overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
 /* Scanlines: 1px line every 2px, white at 10% opacity, drifts 2px over 4s */
 .crt-scanlines {
   position: absolute;

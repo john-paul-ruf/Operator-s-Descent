@@ -64,7 +64,14 @@ async function stopServer() {
 
 async function setupProdPage(page, screenKey) {
   const setup = SCREENS[screenKey].setup;
-  if (!setup || setup === 'skip') return;
+  if (setup === 'skip') {
+    await page.goto(SERVER_URL);
+    return;
+  }
+  if (!setup) {
+    await page.goto(SERVER_URL);
+    return;
+  }
   if (setup === 'clickStart' || setup === 'startRunToExploration' || setup === 'startRunToCombat') {
     await page.goto(`${SERVER_URL}?seed=777#w=777`);
     await page.getByRole('button', { name: 'START' }).click();
@@ -138,7 +145,7 @@ async function captureSideBySide(browser, screenKey) {
       layerVolumes: { drone: 0, pulse: 0, sparkle: 0, lead: 0, noiseBed: 0 },
       glitchEnabled: false,
       reducedMotion: 'reduce',
-      scanlineGrainEnabled: false
+      scanlineGrainEnabled: true
     }));
     localStorage.setItem('od_flags', JSON.stringify({ tutorialDeclined: true }));
   });

@@ -8,11 +8,12 @@ describe('cold START boundary', () => {
     const source = await readSource('../../src/main.js');
 
     expect(source).not.toMatch(/^\s*import\s/m);
-    expect(source.match(/import\(/g)).toHaveLength(1);
+    expect(source.match(/import\(/g)).toHaveLength(2);
     expect(source).toContain("import('./runtime.js')");
+    expect(source).toContain("import('./glitch/crt-overlays.js')");
     expect(source).not.toMatch(/data\//);
     expect(source).not.toMatch(/service-worker/);
-    expect(source).not.toMatch(/createRNG|Math\.random|createGlitch|createGrain/);
+    expect(source).not.toMatch(/createRNG|Math\.random|createGlitch\b|createGrain/);
   });
 
   it('keeps service-worker, deferred data loading, and visual services inside the hot runtime', async () => {

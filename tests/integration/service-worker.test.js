@@ -86,7 +86,7 @@ function loadWorker() {
 describe('service worker manifest', () => {
   it('lists only production assets needed for offline play', () => {
     const manifest = extractManifest();
-    expect(manifest).toHaveLength(91);
+    expect(manifest).toHaveLength(92);
     expect(manifest).toContain('./index.html');
     expect(manifest).toContain('./service-worker.js');
     expect(manifest).toContain('./src/runtime.js');

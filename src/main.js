@@ -16,6 +16,11 @@ export function setGameDataCompatibility(registry) {
 
 let activationPromise = null;
 let pendingAudioContext = null;
+let crtOverlaysController = null;
+
+export function getCrtOverlaysController() {
+  return crtOverlaysController;
+}
 
 function closePendingAudioContext() {
   const context = pendingAudioContext;
@@ -87,6 +92,14 @@ export function mountColdTitle(root, activate = activateOnce) {
   screen.append(title, subtitle, startButton);
   root.appendChild(screen);
   return screen;
+}
+
+const overlaysContainer = document.getElementById('crt-overlays');
+if (overlaysContainer) {
+  import('./glitch/crt-overlays.js').then(({ createCRTOverlays }) => {
+    crtOverlaysController = createCRTOverlays({ container: overlaysContainer, enabled: true });
+    crtOverlaysController.mount();
+  }).catch(error => console.error('CRT overlay load failed:', error));
 }
 
 const root = document.getElementById('app-root');
