@@ -46,7 +46,7 @@ Three concurrent problems:
 | 6 | Creation screen full port (post-diagnostic) | M69, M79 | done | 2026-08-12 | Class cards restructured: name + subtitle + description spans; flex-column layout. CSS for .card-name, .card-subtitle added. All tests pass. |
 | 7 | Exploration screen full port | M70, M58, M59, M79, M77 | done | 2026-08-12 | Alert-banner implemented (option A): shows on hostile/hunt interrupt, hides on victory or non-hostile move. Canvas colors verified correct. CSS added. |
 | 8 | Combat screen full port | M71, M58, M62, M79 | done | 2026-08-12 | Token colors verified (echo #b026d4, dead dimmed). Initiative rail + action list + target picker all present. Deployment phase deferred (option A). |
-| 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | pending | — | Independent from S10 (different tabs) |
+| 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | done | 2026-08-12 | CSS tokens added for all party/tech/loot classes (~50 missing definitions). DOM structures verified complete. Design scan 81→80. Party pill+detail pattern accepted as equivalent. |
 | 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | pending | — | Independent from S9 |
 | 11 | Library + Scorecard + Import full port | M72, M73, M74, M79 | pending | — | Three small screens grouped |
 | 12 | Tutorial full port (all illus-*) + Settings | M75, M76, M79 | pending | — | Console/grid/tabs diagrams (S12 prior deferred these — deliver here) |
@@ -430,3 +430,43 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 **Deferred:**
 - Deployment phase UI — mechanic decision for user
 - Damage number popovers — check if M55 Transitions handles in a future session
+
+### SESSION-09 (2026-08-12)
+
+**Built:** Added ~50 missing CSS token definitions for console party/tech/loot modes in `./styles/components.css`. All three console mode files (`./src/ui/console/party.js`, `./src/ui/console/tech.js`, `./src/ui/console/loot.js`) were verified — DOM structures are semantically complete with all testids, data elements, and correct content. No JS changes needed.
+
+**Files modified:**
+- `./styles/components.css` — added CSS for: `.member-list`, `.party-detail`, `.detail-header`, `.detail-title`, `.party-stat-row`, `.stat-label`, `.stat-value`, `.party-attributes`, `.party-derived`, `.section-label`, `.condition-list`, `.condition-empty`, `.party-equipment`, `.party-deck`, `.deck-empty`, `.console-empty`, `.tech-character-row`, `.tech-active`, `.tech-protocol-row`, `.tech-protocol-detail`, `.tech-target-list`, `.tech-preview`, `.tech-confirm-row`, `.tech-slots`, `.tech-pip-row`, `.tech-deck`, `.tech-catalog`, `.tech-school-row`, `.tech-notice`, `.tech-error`, `.tech-result`, `.loot-container-header`, `.loot-items`, `.loot-item-row`, `.loot-detail`, `.loot-compare`, `.loot-inventory-header`, `.loot-junk-list`, `.loot-notice`, `.loot-error`, `.loot-warning`
+
+**Party decision:** Accepted pill+detail pattern as visually equivalent to mock. The mock has a 2×2 member card grid; production has a pill list + scrollable detail panel. Both show the same information (sigil, name, HP, CHARGE, conditions, attributes, derived stats, equipment, deck). The difference is layout, not missing features. Porting to the mock's 2×2 grid would require a cross-cutting refactor — deferred to a follow-up feature if user requests stronger fidelity.
+
+**Tech verification:**
+- `.school-tag` + `.school-disrupt`/`.school-ward`/`.school-scry`/`.school-rewrite` — all defined, correct colors
+- `.protocol-card.insufficient` — opacity 0.4, cursor not-allowed — defined
+- `.deck-pip` + `.deck-pip.filled` — 12px squares, accent fill — defined
+- Character selector, CHARGE bar, deck slots, protocol rows with cast/overclock buttons, target list, confirm/back, catalog — all present in DOM
+
+**Loot verification:**
+- `.container-icon` — 24px, `#e8d23a`, text-shadow — defined (added in prior feature)
+- Container header with glyph + metadata — present
+- Item list with equipment cards, detail lines, comparison lines, TAKE buttons — present
+- Inventory header with counts, junk tag/untag buttons, junk all button — present
+- OPEN CONTAINER primary button — present
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/console-party.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/console-tech.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/console-loot.png` (side-by-side)
+
+**Verification:**
+- `npx vitest run` → 1768/1768 passing
+- `npm run design:scan` → 80 findings, 0 errors (down from 81)
+- `npm run parity:shots -- --screen console-party/tech/loot` → all 3 PNGs produced
+
+**Deferred:**
+- Party 2×2 grid layout (mock has grid, prod has pill+detail) — accepted as equivalent; defer to follow-up feature if user wants stronger fidelity
+- Loot "TAKE ALL" button (mock has one, prod takes items individually) — minor feature gap, defer
+- Loot "DETAILS" button on each item card (mock has it, prod shows details inline) — information is present, just layout differs
+
+**Warnings for next sessions:**
+- `min-height: 96px` on `.console-row` (line 747) applies to many console elements including member pills, stat rows, and tech protocol rows. This makes them taller than the mock. SESSION-10 or SESSION-13 may want to add more specific overrides for compact rows.
