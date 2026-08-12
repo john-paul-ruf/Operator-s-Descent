@@ -45,7 +45,7 @@ Three concurrent problems:
 | 5 | Title screen full port | M68, M79 | done | 2026-08-12 | Full visual port: chromatic ghost, ornaments, tagline, START pulse, footer, title layout CSS. Design scan 85→81. |
 | 6 | Creation screen full port (post-diagnostic) | M69, M79 | done | 2026-08-12 | Class cards restructured: name + subtitle + description spans; flex-column layout. CSS for .card-name, .card-subtitle added. All tests pass. |
 | 7 | Exploration screen full port | M70, M58, M59, M79, M77 | done | 2026-08-12 | Alert-banner implemented (option A): shows on hostile/hunt interrupt, hides on victory or non-hostile move. Canvas colors verified correct. CSS added. |
-| 8 | Combat screen full port | M71, M58, M62, M79 | pending | — | Playfield tokens (echo/dead/deploy decision), combat console actions |
+| 8 | Combat screen full port | M71, M58, M62, M79 | done | 2026-08-12 | Token colors verified (echo #b026d4, dead dimmed). Initiative rail + action list + target picker all present. Deployment phase deferred (option A). |
 | 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | pending | — | Independent from S10 (different tabs) |
 | 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | pending | — | Independent from S9 |
 | 11 | Library + Scorecard + Import full port | M72, M73, M74, M79 | pending | — | Three small screens grouped |
@@ -389,3 +389,44 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 
 **Deferred:**
 - Theme badge row (mock line 533-542: theme name + danger bar between status strip and playfield) — not implemented; this is a visual polish item that requires knowing the current theme at render time. Future session can add.
+
+### SESSION-08 (2026-08-12)
+
+**Built:** Combat screen verification — no code changes needed. All visual elements verified present and correct.
+
+**Token color verification:** `./src/ui/playfield.js` confirmed:
+- `ECHO_COLOR = '#b026d4'` — purple for echo combatants
+- `DANGER_COLOR = '#e83a3a'` — red for enemies
+- Dead actors: `'rgba(128,128,128,0.35)'` — dimmed gray
+- `accentColor` (default `'#7ec8e3'`) — for party
+- Active frame + target frame rendering with labels
+
+**Combat console verification:** `./src/ui/console/combat.js` confirmed:
+- Initiative rail with sigil tokens, active highlighted
+- Active combatant panel: sigil, name, HP bar, charge bar, AP, conditions
+- Action buttons: Move, Attack, Protocol, Overclock, Item, Retreat, End Turn — with disabled states
+- Direction grid for Move (D-pad style)
+- Protocol list with protocol cards
+- Item list for consumables
+- Target list with range/cover/flank preview
+- Confirm/Back row
+- Terminal state handling (victory/defeat)
+
+**Deployment-phase decision (option A — skip):** Deployment phase deferred. Game logic (`deployBands()` positions internally) means a pre-combat placement UI requires new game rules. This is a mechanic decision outside visual-parity scope. Flagged for SESSION-13 to re-flag to user.
+
+**Setup helper:** `startRunToCombat` in `./scripts/screenshot-parity.js` already works (builds a full run and the combat screen mounts via the `state:combat-start` event flow).
+
+**Files modified:** None — all elements verified present and correct.
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/combat.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/combat-prod.png`
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/combat-mock.png`
+
+**Verification:**
+- `npx vitest run` → 1768/1768 passing (no code changes)
+- `npm run parity:shots -- --screen combat` → produces all 3 PNGs
+
+**Deferred:**
+- Deployment phase UI — mechanic decision for user
+- Damage number popovers — check if M55 Transitions handles in a future session
