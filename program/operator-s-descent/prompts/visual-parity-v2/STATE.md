@@ -44,7 +44,7 @@ Three concurrent problems:
 | 4 | Diagnostic — class-card white-button regression | M69, M79, M77, M56 | done | 2026-08-12 | Root cause: stale SW cache. Runtime DOM inspection confirms class-card buttons render correctly (computedBg: rgb(19,9,42) = #13092a). SW cache version bumped to 2026-08-12-parity-v2. Regression test added. |
 | 5 | Title screen full port | M68, M79 | done | 2026-08-12 | Full visual port: chromatic ghost, ornaments, tagline, START pulse, footer, title layout CSS. Design scan 85→81. |
 | 6 | Creation screen full port (post-diagnostic) | M69, M79 | done | 2026-08-12 | Class cards restructured: name + subtitle + description spans; flex-column layout. CSS for .card-name, .card-subtitle added. All tests pass. |
-| 7 | Exploration screen full port | M70, M58, M59, M79, M77 | pending | — | Playfield tokens, cell markers, status strip, alert-banner decision |
+| 7 | Exploration screen full port | M70, M58, M59, M79, M77 | done | 2026-08-12 | Alert-banner implemented (option A): shows on hostile/hunt interrupt, hides on victory or non-hostile move. Canvas colors verified correct. CSS added. |
 | 8 | Combat screen full port | M71, M58, M62, M79 | pending | — | Playfield tokens (echo/dead/deploy decision), combat console actions |
 | 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | pending | — | Independent from S10 (different tabs) |
 | 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | pending | — | Independent from S9 |
@@ -353,3 +353,39 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 
 **Warnings for downstream sessions:**
 - The class-card name/subtitle/description split may need to propagate to equipment cards and protocol cards in SESSION-09/10 if the mocks show similar two-line structures there.
+
+### SESSION-07 (2026-08-12)
+
+**Built:** Exploration screen alert-banner implementation + canvas color verification.
+
+**Alert-banner decision (option A — implemented):** Added a `data-testid="alert-banner"` div between status strip and playfield. Shows when `handleMoveResult` gets `interruptType === 'hostile'` or `'hunt'`; hides on `state:combat-end` victory or any non-hostile move result. No new gameplay logic — reads existing move-result interrupt types and combat-end events.
+
+**Canvas color verification:** All marker colors confirmed present and correct in `./src/ui/playfield.js`:
+- `DESCENT_COLOR = '#3ae8a8'` — accent green for descent stairs
+- `CONTAINER_COLOR = '#e8d23a'` — yellow for containers
+- `COVER_COLOR = '#e8c63a'` — yellow for cover markers
+- `DANGER_COLOR = '#e83a3a'` — red for enemies
+- `accentColor = '#7ec8e3'` — accent for party marker
+- `FLOOR_COLOR = '#0a0612'`, `WALL_COLOR = '#1a0e36'`, `VISITED_OVERLAY = 'rgba(0,0,0,0.55)'`, `GRID_COLOR = 'rgba(126,200,227,0.1)'`
+- No drifts found; no patches needed.
+
+**Status strip verification:** `./src/ui/status-strip.js` renders depth, seed, party sigils (34px), HP bars, corruption, danger clock. All present and correct. No changes needed.
+
+**Setup helper:** `startRunToExploration` in `./scripts/screenshot-parity.js` already works (navigates via `#w=777`, adds breacher + sigil, finalizes, waits for exploration canvas). No changes needed.
+
+**Files modified:**
+- `./src/ui/screens/exploration.js` — added alert-banner div between statusBar and canvas; wired show/hide in `handleMoveResult` (shows on hostile/hunt, hides otherwise) and `state:combat-end` victory
+- `./styles/components.css` — added `.alert-banner` (red bg, danger border, pulse animation) + `.alert-banner[hidden]` + `@keyframes alert-pulse`
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/exploration.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/exploration-prod.png`
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/exploration-mock.png`
+
+**Verification:**
+- `node --check` passes for `./src/ui/screens/exploration.js`
+- `npx vitest run` → 1768/1768 passing
+- `npm run parity:shots -- --screen exploration` → produces all 3 PNGs
+
+**Deferred:**
+- Theme badge row (mock line 533-542: theme name + danger bar between status strip and playfield) — not implemented; this is a visual polish item that requires knowing the current theme at render time. Future session can add.

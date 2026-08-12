@@ -49,6 +49,13 @@ export function mount(container, params = {}) {
   const statusBar = createStatusBar(runState);
   container.appendChild(statusBar);
 
+  const alertBanner = document.createElement('div');
+  alertBanner.className = 'alert-banner';
+  alertBanner.hidden = true;
+  alertBanner.textContent = '◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE';
+  alertBanner.dataset.testid = 'alert-banner';
+  container.appendChild(alertBanner);
+
   const canvas = document.createElement('canvas');
   canvas.width = 480;
   canvas.height = 768;
@@ -101,6 +108,7 @@ export function mount(container, params = {}) {
   const unsubscribers = [
     bus.on('state:combat-end', ({ result } = {}) => {
       if (result === 'victory') {
+        alertBanner.hidden = true;
         refreshVisibility();
         refreshLootState();
         renderPlayfield();
@@ -167,13 +175,18 @@ export function mount(container, params = {}) {
     runState.rngState = rngCursor.getState();
     bus.dispatch('state:danger-clock-tick', { progress: runState.dangerClockProgress });
     pushAudioProximity();
-    if (result.interruptType === 'hostile' || result.interruptType === 'hunt') requestCombat(result);
-    else if (result.interruptType === 'container' && viewState.lootState) {
-      notice = 'CONTAINER IN REACH — LOOT MODE READY.';
-      consoleController.setMode('loot', { source: 'container' });
-    } else if (result.interruptType === 'descent') notice = 'DESCENT DISCOVERED — step onto it and confirm.';
-    else if (result.interruptType === 'damage') notice = 'DAMAGE INTERRUPT — movement stopped.';
-    else notice = '';
+    if (result.interruptType === 'hostile' || result.interruptType === 'hunt') {
+      alertBanner.hidden = false;
+      requestCombat(result);
+    } else {
+      alertBanner.hidden = true;
+      if (result.interruptType === 'container' && viewState.lootState) {
+        notice = 'CONTAINER IN REACH — LOOT MODE READY.';
+        consoleController.setMode('loot', { source: 'container' });
+      } else if (result.interruptType === 'descent') notice = 'DESCENT DISCOVERED — step onto it and confirm.';
+      else if (result.interruptType === 'damage') notice = 'DAMAGE INTERRUPT — movement stopped.';
+      else notice = '';
+    }
     consoleController.refresh();
     return result;
   }

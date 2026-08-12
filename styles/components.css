@@ -1251,3 +1251,21 @@ button.protocol-card[aria-selected="true"],
   max-width: 280px;
   margin-top: 24px;
 }
+
+.alert-banner {
+  padding: 8px 16px;
+  background: rgba(232, 58, 58, 0.15);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px var(--danger);
+  animation: alert-pulse 1.2s ease-in-out infinite;
+}
+.alert-banner[hidden] { display: none; }
+@keyframes alert-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(232, 58, 58, 0.4); }
+  50%      { box-shadow: 0 0 16px rgba(232, 58, 58, 0.8); }
+}
