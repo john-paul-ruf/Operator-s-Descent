@@ -251,9 +251,11 @@ export function mount(container, params = {}) {
   container.appendChild(statusBar);
 
   const canvas = document.createElement('canvas');
+  canvas.className = 'playfield-canvas';
   canvas.width = 384;
   canvas.height = 768;
   canvas.dataset.testid = 'combat-canvas';
+
   container.appendChild(canvas);
   const playfield = createPlayfield(canvas);
   playfield.setAccent(themeFor(floor, data) || '#7ec8e3');

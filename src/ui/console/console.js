@@ -18,7 +18,7 @@ const MODE_MODULES = { move: moveMode, combat: combatMode, party: partyMode, gea
 
 export const MODE_REGISTRY = [
   { id: 'move', label: 'MOVE', key: 'mode_1', module: moveMode, available: (state) => !state.combatState, reason: 'Only available while exploring.' },
-  { id: 'combat', label: 'COMBAT', key: 'mode_2', module: combatMode, available: (state) => Boolean(state.combatState), reason: 'No active combat.' },
+  { id: 'combat', label: 'CMBT', key: 'mode_2', module: combatMode, available: (state) => Boolean(state.combatState), reason: 'No active combat.' },
   { id: 'party', label: 'PARTY', key: 'mode_3', module: partyMode, available: (state) => Boolean(state.runState?.party?.length), reason: 'No party.' },
   { id: 'gear', label: 'GEAR', key: 'mode_4', module: gearMode, available: (state) => Boolean(state.runState), reason: 'No run data.' },
   { id: 'tech', label: 'TECH', key: 'mode_5', module: techMode, available: (state) => Boolean(state.runState?.party?.length), reason: 'No protocol deck.' },

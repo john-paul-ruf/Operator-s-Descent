@@ -57,6 +57,7 @@ export function mount(container, params = {}) {
   container.appendChild(alertBanner);
 
   const canvas = document.createElement('canvas');
+  canvas.className = 'playfield-canvas';
   canvas.width = 480;
   canvas.height = 768;
   canvas.dataset.testid = 'exploration-canvas';

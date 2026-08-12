@@ -69,7 +69,7 @@ function activeSummary(container, active) {
 
 function initiativeRail(container, combatState) {
   const rail = document.createElement('div');
-  rail.className = 'initiative-rail console-row';
+  rail.className = 'init-rail console-row';
   rail.dataset.testid = 'initiative-rail';
   const actors = new Map(getActors(combatState).map((actor) => [actor.id, actor]));
   for (const id of combatState.turnOrder || []) {
