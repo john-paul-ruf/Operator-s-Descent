@@ -47,7 +47,7 @@ Three concurrent problems:
 | 7 | Exploration screen full port | M70, M58, M59, M79, M77 | done | 2026-08-12 | Alert-banner implemented (option A): shows on hostile/hunt interrupt, hides on victory or non-hostile move. Canvas colors verified correct. CSS added. |
 | 8 | Combat screen full port | M71, M58, M62, M79 | done | 2026-08-12 | Token colors verified (echo #b026d4, dead dimmed). Initiative rail + action list + target picker all present. Deployment phase deferred (option A). |
 | 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | done | 2026-08-12 | CSS tokens added for all party/tech/loot classes (~50 missing definitions). DOM structures verified complete. Design scan 81→80. Party pill+detail pattern accepted as equivalent. |
-| 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | pending | — | Independent from S9 |
+| 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | done | 2026-08-12 | CSS tokens added for all gear/log/move/combat console classes (~45 missing definitions). D-pad already present in move.js. All DOM structures verified complete. |
 | 11 | Library + Scorecard + Import full port | M72, M73, M74, M79 | pending | — | Three small screens grouped |
 | 12 | Tutorial full port (all illus-*) + Settings | M75, M76, M79 | pending | — | Console/grid/tabs diagrams (S12 prior deferred these — deliver here) |
 | 13 | Full-matrix parity audit + regressions + final report | M99, all UI | pending | — | Run `npm run parity:shots -- --all`, triage every non-passing screen, wrap |
@@ -470,3 +470,38 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 
 **Warnings for next sessions:**
 - `min-height: 96px` on `.console-row` (line 747) applies to many console elements including member pills, stat rows, and tech protocol rows. This makes them taller than the mock. SESSION-10 or SESSION-13 may want to add more specific overrides for compact rows.
+
+### SESSION-10 (2026-08-12)
+
+**Built:** Added ~45 missing CSS token definitions for console gear/log/move/combat modes in `./styles/components.css`. All four console mode files were verified — DOM structures are semantically complete. No JS changes needed.
+
+**Files modified:**
+- `./styles/components.css` — added CSS for: `.gear-selectors`, `.gear-character`, `.gear-slot-row`, `.gear-slot`, `.equipped-section`, `.equipped-row`, `.equipped-slot`, `.inventory-header`, `.inventory-list`, `.inventory-row`, `.inventory-row.junk-tagged`, `.gear-comparison`, `.corrupt-warning`, `.corrupt-tag`, `.gear-notice`, `.gear-error`, `.log-area`, `.log-empty`, `.log-notice`, `.log-error`, `.log-link-text`, `.log-link-fallback`, `.move-mode`, `.move-dpad`, `.move-toggle-row`, `.combat-active-panel`, `.combat-active-name`, `.combat-ap`, `.combat-action-list`, `.combat-action`, `.combat-direction-grid`, `.combat-direction`, `.combat-protocol-list`, `.combat-item-list`, `.combat-item`, `.combat-target-list`, `.combat-target`, `.combat-confirm-row`, `.combat-terminal`, `.combat-resolving`, `.combat-hint`, `.combat-notice`, `.combat-error`
+
+**Per-tab gap disposition:**
+
+**Gear:** DOM verified — character selectors, slot row (weapon/armor/offhand), equipped section with UNEQUIP buttons, inventory list with EQUIP/TAG JUNK buttons, corrupt warning, junk-all. All present. CSS added for layout and spacing.
+
+**Log:** DOM verified — scrollable log area with entries, per-type coloring (already had `.log-entry.combat` etc.), COPY LINK button, link text fallback, notice/error. CSS added for `.log-area` max-height and remaining classes.
+
+**Move:** DOM verified — d-pad with 8 directions + center CONFIRM button already present (`./src/ui/console/move.js` lines 56-69). Uses existing `.dpad` and `.dpad-btn` classes. Auto-stop toggles (HOSTILE STOP LOCKED, DISCOVERY STOP, DAMAGE STOP) present. CSS added for `.move-mode` and `.move-toggle-row`.
+
+**Combat (console):** DOM verified — initiative rail, active combatant panel, action list (7 actions), direction grid, protocol list, item list, target list with preview, confirm/back row, terminal state. All present. CSS added for all combat console classes.
+
+**Setup helpers:** `openConsoleTab:gear`, `openConsoleTab:log`, `openConsoleTab:move`, `openConsoleTab:combat` — all already in `./scripts/screenshot-parity.js` from SESSION-04 fix. No changes needed.
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/console-gear.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/console-log.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/console-move.png` (side-by-side)
+
+**Verification:**
+- `npx vitest run` → 1768/1768 passing
+- `npm run design:scan` → 80 findings, 0 errors
+- `npm run parity:shots -- --screen console-gear/log/move` → all 3 PNGs produced
+
+**Deferred:**
+- None — all four tabs verified complete
+
+**Warnings for next sessions:**
+- Same `min-height: 96px` on `.console-row` applies to gear/log/move/combat elements. Combat direction buttons override with their own 56px grid. SESSION-13 may want to add compact overrides for log entries and gear rows.
