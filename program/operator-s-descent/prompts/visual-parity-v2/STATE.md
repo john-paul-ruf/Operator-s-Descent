@@ -48,7 +48,7 @@ Three concurrent problems:
 | 8 | Combat screen full port | M71, M58, M62, M79 | done | 2026-08-12 | Token colors verified (echo #b026d4, dead dimmed). Initiative rail + action list + target picker all present. Deployment phase deferred (option A). |
 | 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | done | 2026-08-12 | CSS tokens added for all party/tech/loot classes (~50 missing definitions). DOM structures verified complete. Design scan 81→80. Party pill+detail pattern accepted as equivalent. |
 | 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | done | 2026-08-12 | CSS tokens added for all gear/log/move/combat console classes (~45 missing definitions). D-pad already present in move.js. All DOM structures verified complete. |
-| 11 | Library + Scorecard + Import full port | M72, M73, M74, M79 | pending | — | Three small screens grouped |
+| 11 | Library + Scorecard + Import full port | M72, M73, M74, M79 | done | 2026-08-12 | CSS tokens added for library/scorecard/import (~25 missing definitions). DOM structures verified complete. Scorecard screenshot captured via skip setup (no completed-run fixture). |
 | 12 | Tutorial full port (all illus-*) + Settings | M75, M76, M79 | pending | — | Console/grid/tabs diagrams (S12 prior deferred these — deliver here) |
 | 13 | Full-matrix parity audit + regressions + final report | M99, all UI | pending | — | Run `npm run parity:shots -- --all`, triage every non-passing screen, wrap |
 
@@ -505,3 +505,34 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 
 **Warnings for next sessions:**
 - Same `min-height: 96px` on `.console-row` applies to gear/log/move/combat elements. Combat direction buttons override with their own 56px grid. SESSION-13 may want to add compact overrides for log entries and gear rows.
+
+### SESSION-11 (2026-08-12)
+
+**Built:** Added ~25 missing CSS token definitions for library/scorecard/import screens in `./styles/components.css`. All three screen files were verified — DOM structures are semantically complete. No JS changes needed.
+
+**Files modified:**
+- `./styles/components.css` — added CSS for: `.run-sigils`, `.run-info`, `.run-info strong`, `.run-controls`, `.run-row.broken`, `.load-error`, `.library-actions`, `.scorecard-screen`, `.scorecard-roster`, `.scorecard-cod`, `.scorecard-seed`, `.share-link-display`, `.scorecard-stats`, `.scorecard-stats h3`, `.scorecard-metrics`, `.scorecard-metric`, `.scorecard-metric strong`, `.scorecard-actions`, `.import-result`, `.import-actions`, `.import-failure-actions`
+
+**Per-screen gap disposition:**
+
+**Library:** DOM verified — header, notice, run rows (sigil strip + info + RESUME/DELETE controls), empty state panel, NEW RUN + TITLE actions. `.run-row` and `.accent-swatch` already had CSS from prior feature. Added CSS for `.run-sigils`, `.run-info`, `.run-controls`, `.library-actions`, `.load-error`.
+
+**Scorecard:** DOM verified — depth display, deletion status, roster with dead markers (✕ overlay via `.creature-sigil.dead::after`), cause of death, seed, share link display + COPY WORLD LINK button, stats grid with 8 metrics, RESTART SAME SEED / NEW RUN / TITLE actions. `.scorecard-roster-entry` and `.dead` already had CSS. Added CSS for `.scorecard-screen`, `.scorecard-cod`, `.scorecard-seed`, `.share-link-display`, `.scorecard-stats`, `.scorecard-metrics`, `.scorecard-metric`, `.scorecard-actions`.
+
+**Import:** DOM verified — header, textarea input, result area (with error panel for failures), IMPORT + RETURN TO TITLE actions. `.link-input` and `.import-result .panel.error` already had CSS. Added CSS for `.import-actions`, `.import-failure-actions`.
+
+**Setup helpers:** `navigateToLibrary` and `navigateToImport` already in `./scripts/screenshot-parity.js`. Scorecard uses `skip` setup (requires completed run — no fixture available; option A too complex for session budget per session prompt instructions).
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/library.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/import.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/scorecard.png` (side-by-side — scorecard uses `skip` setup, shows title screen as prod side)
+
+**Verification:**
+- `npx vitest run` → 1768/1768 passing
+- `npm run design:scan` → 80 findings, 0 errors
+- `npm run parity:shots -- --screen library/import/scorecard` → all 3 PNGs produced
+
+**Deferred:**
+- Scorecard screenshot with actual completed-run data — would need a fixture save or automated run-to-completion. Skip setup shows title screen, not the scorecard itself. Future feature could add a scorecard fixture.
+- Import char-count indicator (mock shows `1234 / 1500 chars`) — production has `maxLength` on textarea but no visible counter. Minor enhancement, defer.

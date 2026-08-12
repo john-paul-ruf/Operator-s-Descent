@@ -1360,3 +1360,28 @@ button.protocol-card[aria-selected="true"],
 .combat-hint { font-size: 10px; color: var(--text-dim); padding: 4px 0; }
 .combat-notice { font-size: 10px; color: var(--heal); padding: 4px 0; }
 .combat-error { font-size: 10px; color: var(--danger); padding: 4px 0; }
+
+.run-sigils { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.run-info { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-secondary); }
+.run-info strong { color: var(--text-primary); font-size: 11px; }
+.run-controls { display: flex; gap: 8px; flex-shrink: 0; }
+.run-row.broken { border-color: var(--danger); }
+.run-row.broken .load-error { color: var(--danger); font-size: 9px; }
+.load-error { color: var(--danger); font-size: 9px; }
+.library-actions { display: flex; gap: 12px; margin-top: 16px; }
+
+.scorecard-screen { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.scorecard-roster { display: flex; flex-direction: column; gap: 4px; }
+.scorecard-cod { font-size: 11px; color: var(--danger); text-transform: uppercase; letter-spacing: 0.1em; }
+.scorecard-seed { font-size: 10px; color: var(--text-secondary); }
+.share-link-display { font-size: 10px; color: var(--accent); padding: 8px; background: var(--bg-base); border: 1px solid var(--border-dim); word-break: break-all; }
+.scorecard-stats { display: flex; flex-direction: column; gap: 8px; }
+.scorecard-stats h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); }
+.scorecard-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+.scorecard-metric { display: flex; justify-content: space-between; font-size: 10px; padding: 4px 0; border-bottom: 1px solid var(--border-dim); }
+.scorecard-metric strong { color: var(--accent); }
+.scorecard-actions { display: flex; gap: 12px; }
+
+.import-result { margin: 12px 0; }
+.import-actions { display: flex; gap: 12px; margin-top: 12px; }
+.import-failure-actions { display: flex; gap: 12px; margin-top: 8px; }
