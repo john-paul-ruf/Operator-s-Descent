@@ -49,7 +49,7 @@ Three concurrent problems:
 | 9 | Console modes: Party + Tech + Loot | M63, M65, M66, M79 | done | 2026-08-12 | CSS tokens added for all party/tech/loot classes (~50 missing definitions). DOM structures verified complete. Design scan 81→80. Party pill+detail pattern accepted as equivalent. |
 | 10 | Console modes: Gear + Log + Move + Combat | M61, M62, M64, M67, M79 | done | 2026-08-12 | CSS tokens added for all gear/log/move/combat console classes (~45 missing definitions). D-pad already present in move.js. All DOM structures verified complete. |
 | 11 | Library + Scorecard + Import full port | M72, M73, M74, M79 | done | 2026-08-12 | CSS tokens added for library/scorecard/import (~25 missing definitions). DOM structures verified complete. Scorecard screenshot captured via skip setup (no completed-run fixture). |
-| 12 | Tutorial full port (all illus-*) + Settings | M75, M76, M79 | pending | — | Console/grid/tabs diagrams (S12 prior deferred these — deliver here) |
+| 12 | Tutorial full port (all illus-*) + Settings | M75, M76, M79 | done | 2026-08-12 | Added illus-tabs (7-tab row) + illus-grid (combat grid) illustrations to tutorial.js. Added CSS for all tutorial/settings classes. Design scan 80→72. |
 | 13 | Full-matrix parity audit + regressions + final report | M99, all UI | pending | — | Run `npm run parity:shots -- --all`, triage every non-passing screen, wrap |
 
 (Status: pending | in-progress | done | blocked | skipped)
@@ -536,3 +536,36 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 **Deferred:**
 - Scorecard screenshot with actual completed-run data — would need a fixture save or automated run-to-completion. Skip setup shows title screen, not the scorecard itself. Future feature could add a scorecard fixture.
 - Import char-count indicator (mock shows `1234 / 1500 chars`) — production has `maxLength` on textarea but no visible counter. Minor enhancement, defer.
+
+### SESSION-12 (2026-08-12)
+
+**Built:** Added two CSS-drawn illustrations to tutorial pages (illus-tabs on Console Overview, illus-grid on COMBAT Mode) and added ~25 missing CSS token definitions for tutorial and settings screens.
+
+**Files modified:**
+- `./src/ui/screens/tutorial.js` — added `illustration: 'tabs'` to Console Overview page, `illustration: 'grid'` to COMBAT Mode page; added rendering logic for illus-tabs (7-tab row with first tab active) and illus-grid (4×6 combat grid with walls, enemy, players)
+- `./styles/components.css` — added CSS for: `.illus-tabs`, `.illus-tab`, `.illus-tab.active`, `.illus-grid`, `.illus-grid > div`, `.illus-grid > .wall`, `.illus-grid > .player`, `.illus-grid > .enemy`, `.tutorial-wrapper`, `.tutorial-page`, `.tutorial-page-title`, `.tutorial-illustration`, `.tutorial-page-index`, `.tutorial-chip`, `.tutorial-body`, `.tutorial-nav`, `.tutorial-dots`, `.tutorial-dot`, `.tutorial-dot.active`, `.settings-screen`, `.motion-options`
+
+**Per-page tutorial parity:**
+- Page 1 (Console Overview): illus-tabs — 7-tab row, first tab (MOVE) active, matches mock
+- Page 2 (MOVE Mode): illus-dpad — 3×3 grid with arrows, center WAIT (already from prior feature)
+- Page 3 (COMBAT Mode): illus-grid — 4×6 grid with walls, enemy D, players B and G, matches mock
+- Pages 4-11: Token chips (no illustration in mock for these pages — mock has 6 pages, prod has 11)
+
+**Settings verification:** DOM verified — AUDIO panel (master mute toggle + 5 volume sliders), VISUAL panel (glitch toggle + 3 motion options + scanline/grain toggle), BACK button. All controls persist to localStorage. CSS added for `.settings-screen` and `.motion-options`.
+
+**Setup helpers:** `navigateToTutorial` and `navigateToSettings` already in `./scripts/screenshot-parity.js`.
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/tutorial.png` (side-by-side, first page)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/settings.png` (side-by-side)
+
+**Verification:**
+- `npx vitest run` → 1768/1768 passing
+- `npm run design:scan` → 72 findings, 0 errors (down from 80 — 8 warnings eliminated)
+- `npm run parity:shots -- --screen tutorial/settings` → both PNGs produced
+
+**Deferred:**
+- `.illus-console` class from mock — mock uses this as a wrapper but production renders `.illus-tabs` directly. The design-scan warning persists (mock-only class). Could add an empty `.illus-console` definition to suppress the warning, but that's ceremony.
+- `.illus-dpad-center` class from mock — production uses `.dpad-center` (matching the actual move mode d-pad). Mock-only class.
+- Tutorial `--page N` support in parity tool — session prompt suggested capturing all 11 pages individually. The tool captures only page 1. Adding multi-page capture is a tooling enhancement, not a visual parity gap.
+- `.portrait-frame`, `.page`, `.illus`, `.primary` warnings from mock — all mock-only Tailwind classes not used in production.

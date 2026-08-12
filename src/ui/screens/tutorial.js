@@ -8,7 +8,8 @@ const PAGES = [
   {
     title: 'Console Overview',
     body: 'Every meaningful action routes through the single bottom console. Tabs 1-7 select modes; the panel expands for detail and collapses to keep the playfield visible.',
-    tokens: ['MOVE', 'COMBAT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']
+    tokens: ['MOVE', 'COMBAT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG'],
+    illustration: 'tabs'
   },
   {
     title: 'MOVE Mode',
@@ -19,7 +20,8 @@ const PAGES = [
   {
     title: 'COMBAT Mode',
     body: 'COMBAT presents one actor turn at a time: choose an action, choose a target or path, then confirm. Turns follow initiative, AP, movement, reactions, and d20 outcomes.',
-    tokens: ['ACTION', 'TARGET', 'CONFIRM', 'ROLL', 'END']
+    tokens: ['ACTION', 'TARGET', 'CONFIRM', 'ROLL', 'END'],
+    illustration: 'grid'
   },
   {
     title: 'PARTY Mode',
@@ -147,6 +149,35 @@ export function mount(container) {
         cell.textContent = page.tokens[i];
         if (i === 4) cell.className = 'dpad-center';
         grid.appendChild(cell);
+      }
+      illustration.appendChild(grid);
+    } else if (page.illustration === 'tabs') {
+      const tabs = document.createElement('div');
+      tabs.className = 'illus-tabs';
+      for (let i = 0; i < page.tokens.length; i++) {
+        const tab = document.createElement('div');
+        tab.className = i === 0 ? 'illus-tab active' : 'illus-tab';
+        tab.textContent = page.tokens[i];
+        tabs.appendChild(tab);
+      }
+      illustration.appendChild(tabs);
+    } else if (page.illustration === 'grid') {
+      const grid = document.createElement('div');
+      grid.className = 'illus-grid';
+      const layout = [
+        ['wall', '', '', 'enemy', '', 'wall'],
+        ['wall', '', '', '', '', 'wall'],
+        ['', '', '', '', '', ''],
+        ['', '', 'player', '', 'player', '']
+      ];
+      for (const row of layout) {
+        for (const cellType of row) {
+          const cell = document.createElement('div');
+          if (cellType) cell.className = cellType;
+          if (cellType === 'player') cell.textContent = 'B';
+          if (cellType === 'enemy') cell.textContent = 'D';
+          grid.appendChild(cell);
+        }
       }
       illustration.appendChild(grid);
     } else {

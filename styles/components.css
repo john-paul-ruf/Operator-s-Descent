@@ -1385,3 +1385,27 @@ button.protocol-card[aria-selected="true"],
 .import-result { margin: 12px 0; }
 .import-actions { display: flex; gap: 12px; margin-top: 12px; }
 .import-failure-actions { display: flex; gap: 12px; margin-top: 8px; }
+
+.illus-tabs { display: flex; gap: 2px; }
+.illus-tab { flex: 1; padding: 6px 2px; text-align: center; font-size: 8px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border-dim); background: var(--bg-panel); color: var(--text-secondary); }
+.illus-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(126,200,227,0.1); box-shadow: 0 0 4px var(--accent); }
+.illus-grid { display: grid; grid-template-columns: repeat(6, 24px); grid-template-rows: repeat(4, 24px); gap: 1px; }
+.illus-grid > div { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+.illus-grid > .wall { background: var(--bg-base); border-color: var(--bg-panel-elevated); }
+.illus-grid > .player { color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; text-shadow: 0 0 4px var(--accent); }
+.illus-grid > .enemy { color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; text-shadow: 0 0 4px var(--danger); }
+
+.tutorial-wrapper { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.tutorial-page { display: flex; flex-direction: column; gap: 12px; }
+.tutorial-page-title { font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; }
+.tutorial-illustration { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; background: var(--bg-panel); border: 1px solid var(--border-dim); }
+.tutorial-page-index { font-size: 9px; color: var(--text-dim); align-self: flex-end; }
+.tutorial-chip { display: inline-block; padding: 2px 8px; font-size: 9px; border: 1px solid var(--border-dim); color: var(--text-secondary); margin: 2px; }
+.tutorial-body { font-size: 11px; color: var(--text-secondary); line-height: 1.6; }
+.tutorial-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.tutorial-dots { display: flex; gap: 4px; justify-content: center; }
+.tutorial-dot { width: 20px; height: 20px; border: 1px solid var(--border-dim); display: flex; align-items: center; justify-content: center; font-size: 8px; color: var(--text-dim); }
+.tutorial-dot.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 4px var(--accent); }
+
+.settings-screen { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.motion-options { display: flex; flex-direction: column; gap: 8px; }
