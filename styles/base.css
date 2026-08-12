@@ -86,7 +86,7 @@ body {
 
 /* Glow system */
 .glow { text-shadow: 0 0 8px var(--accent); }
-.glow-strong { text-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent); }
+.glow-strong { text-shadow: 0 0 16px var(--accent), 0 0 24px var(--accent); }
 .glow-danger { text-shadow: 0 0 8px var(--danger); }
 .accent-text { color: var(--accent); }
 .glow-border { box-shadow: 0 0 8px var(--accent); }
@@ -97,6 +97,61 @@ body {
   content: '◈';
   color: var(--accent);
   text-shadow: 0 0 8px var(--accent);
+}
+.ornament::after {
+  content: '◈';
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
+}
+.ornament::before { margin-right: 0.5em; }
+.ornament::after { margin-left: 0.5em; }
+
+.accent-border { border-color: var(--accent); }
+
+/* Title glitch — chromatic ghost */
+.title-glitch {
+  position: relative;
+  display: inline-block;
+}
+.title-glitch::before,
+.title-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  opacity: 0.47;
+  animation: chroma-ghost 3s steps(1) infinite;
+  pointer-events: none;
+}
+.title-glitch::before { color: #ff0000; transform: translate(-2px, 0); }
+.title-glitch::after { color: #0000ff; transform: translate(2px, 0); }
+@keyframes chroma-ghost {
+  0%, 70%  { opacity: 0; }
+  71%      { opacity: 0.47; }
+  85%      { opacity: 0.47; }
+  86%      { opacity: 0; }
+  100%     { opacity: 0; }
+}
+
+/* START button — pulsing accent border */
+.btn-crt.btn-start {
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  padding: 20px 48px;
+  font-size: 24px;
+  letter-spacing: 0.3em;
+  box-shadow: 0 0 16px var(--accent), inset 0 0 16px rgba(126, 200, 227, 0.1);
+  animation: start-pulse 2s ease-in-out infinite;
+}
+.btn-crt.btn-start:hover {
+  background: rgba(126, 200, 227, 0.1);
+  box-shadow: 0 0 32px var(--accent);
+}
+@keyframes start-pulse {
+  0%, 100% { box-shadow: 0 0 16px var(--accent), inset 0 0 16px rgba(126, 200, 227, 0.1); }
+  50%      { box-shadow: 0 0 24px var(--accent), inset 0 0 24px rgba(126, 200, 227, 0.15); }
 }
 
 /* Panel */

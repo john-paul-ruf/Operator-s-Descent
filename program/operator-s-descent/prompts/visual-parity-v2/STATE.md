@@ -42,7 +42,7 @@ Three concurrent problems:
 | 2 | CRT overlay renderer + wire into cold shell | M98 (new), M80, M82, M78, M53 | done | 2026-08-12 | All 10 CRT layer divs injected; timer-driven glitch bars/noise lines/VHS active; wired to scanlineGrain setting; service worker manifest + start-gate tests updated. |
 | 3 | Drop Rule 10 — collapse two-state title into single-state | M82, M86, M68, FORGE-CONFIG | done | 2026-08-12 | Rule 10 amended in FORGE-CONFIG; main.js calls activateRuntime at boot; title.js rewritten as single-state with START toggle; 6 test files updated; hash routing preserved. |
 | 4 | Diagnostic — class-card white-button regression | M69, M79, M77, M56 | done | 2026-08-12 | Root cause: stale SW cache. Runtime DOM inspection confirms class-card buttons render correctly (computedBg: rgb(19,9,42) = #13092a). SW cache version bumped to 2026-08-12-parity-v2. Regression test added. |
-| 5 | Title screen full port | M68, M79 | pending | — | Single-state, START toggles branches, `◈` ornaments, `DEPTH IS THE SCORE`, version footer, pulsing `.btn-start`, chromatic ghost via `.title-glitch` |
+| 5 | Title screen full port | M68, M79 | done | 2026-08-12 | Full visual port: chromatic ghost, ornaments, tagline, START pulse, footer, title layout CSS. Design scan 85→81. |
 | 6 | Creation screen full port (post-diagnostic) | M69, M79 | pending | — | 6 dark class cards, sigil grid, stat readout, back + finalize footer |
 | 7 | Exploration screen full port | M70, M58, M59, M79, M77 | pending | — | Playfield tokens, cell markers, status strip, alert-banner decision |
 | 8 | Combat screen full port | M71, M58, M62, M79 | pending | — | Playfield tokens (echo/dead/deploy decision), combat console actions |
@@ -294,3 +294,31 @@ it('class-card buttons retain class-card and btn-crt classes after render', asyn
 - **SESSION-06 (Creation port):** The class-card rendering is correct. The parity screenshot shows class cards with dark backgrounds. Focus should be on layout, sizing, typography matching the mock — not on the white-button bug (it's resolved).
 - **Sigil-choice buttons** may exhibit the same stale-cache class of issue if any prior CSS fix was cached. The same SW cache bump covers this.
 - The parity tool's `clickStart` setup now adds a character before screenshotting, so class cards are visible in the creation screenshot.
+
+### SESSION-05 (2026-08-12)
+
+**Built:** Full visual port of the title screen to match `./mocks/title.html`. Added chromatic ghost effect (`.title-glitch` + `chroma-ghost` keyframes), `.ornament::after` pseudo-element, `.accent-border`, `.btn-crt.btn-start` with `start-pulse` animation, title layout CSS (`.title-screen`, `.title-header`, `.title-main`, `.tagline`, `.title-footer`, `.branch-list`). Fixed `.glow-strong` to match mock values (16px/24px, was 8px/16px).
+
+**Files modified:**
+- `./src/ui/screens/title.js` — header now has `accent-text glow` classes + `data-testid="title-header"`; ornaments have `accent-text glow` classes; tagline has `data-testid="title-tagline"`; START button created via `createButton` (wired `onClick`) with `btn-start glow-border-strong` classes; footer is `<footer>` with `data-testid="title-footer"`; startButton cleanup added
+- `./styles/base.css` — updated `.glow-strong` to `0 0 16px, 0 0 24px` (was `8px, 16px`); added `.ornament::after`, `.accent-border`, `.title-glitch` + pseudo-elements + `@keyframes chroma-ghost`, `.btn-crt.btn-start` + `:hover` + `@keyframes start-pulse`
+- `./styles/components.css` — added `.title-screen`, `.title-header`, `.title-main`, `.tagline`, `.title-footer`, `.title-footer p`, `.branch-list`
+- `./tests/ui/front-door.test.js` — added assertions: `title-header` textContent, `title-tagline` textContent, `title-footer` content, two `<h1>` with `.title-glitch` and `data-text` attributes
+
+**Tokens already present (reused, not re-added):** `.glow`, `.accent-text`, `.glow-border`, `.glow-border-strong`, `.ornament::before`, `.display`, `.btn-link`, `.caption`
+
+**Design scan delta:** 85 → 81 findings (4 fewer warnings — `.btn-start`, `.title-glitch`, `.ornament::after`, `.accent-border` now defined)
+
+**Produced screenshots:**
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/title.png` (side-by-side)
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/title-prod.png`
+- `./program/operator-s-descent/prompts/visual-parity-v2/shots/title-mock.png`
+
+**Verification:**
+- `node --check` passes for `./src/ui/screens/title.js`
+- `npx vitest run` → 1768/1768 passing
+- `npm run parity:shots -- --screen title` → produces all 3 PNGs
+- `npm run design:scan` → 81 findings, 0 errors
+
+**Deferred:**
+- Whether `PRESS START TO POWER ON` should hide after START is clicked — user decision; mock doesn't address this.

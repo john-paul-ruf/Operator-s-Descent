@@ -28,17 +28,17 @@ export function mount(container) {
   screen.setAttribute('aria-label', 'Title screen');
 
   const header = document.createElement('div');
-  header.className = 'title-header';
-  const headerText = document.createElement('p');
-  headerText.className = 'caption';
-  headerText.textContent = 'GLITCH FORGEWORKS';
-  header.appendChild(headerText);
+  header.className = 'title-header caption accent-text glow';
+  header.style.color = 'var(--text-secondary)';
+  header.textContent = 'GLITCH FORGEWORKS';
+  header.dataset.testid = 'title-header';
 
   const main = document.createElement('div');
   main.className = 'title-main';
 
   const ornamentTop = document.createElement('div');
-  ornamentTop.className = 'ornament';
+  ornamentTop.className = 'ornament accent-text glow';
+  ornamentTop.style.color = 'var(--text-secondary)';
 
   const titleTop = document.createElement('h1');
   titleTop.className = 'display glow-strong title-glitch';
@@ -55,26 +55,25 @@ export function mount(container) {
   titleBottom.dataset.glitchIntensity = '0.10';
 
   const ornamentBottom = document.createElement('div');
-  ornamentBottom.className = 'ornament';
+  ornamentBottom.className = 'ornament accent-text glow';
+  ornamentBottom.style.color = 'var(--text-secondary)';
 
   const tagline = document.createElement('p');
   tagline.className = 'tagline';
   tagline.textContent = 'DEPTH IS THE SCORE';
+  tagline.dataset.testid = 'title-tagline';
 
-  const startButton = document.createElement('button');
-  startButton.className = 'btn-crt btn-start glow-border-strong';
-  startButton.type = 'button';
-  startButton.textContent = 'START';
+  const startButton = createButton('START', {
+    onClick: () => branchList.classList.toggle('hidden-branches')
+  });
+  startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';
+  cleanups.push(() => startButton.cleanup?.());
 
   const branchList = document.createElement('div');
   branchList.className = 'branch-list hidden-branches';
   branchList.id = 'title-branches';
   branchList.dataset.testid = 'title-branches';
-
-  startButton.addEventListener('click', () => {
-    branchList.classList.toggle('hidden-branches');
-  });
 
   for (const [label, route, testid] of BRANCHES) {
     const button = createButton(label, {
@@ -127,13 +126,12 @@ export function mount(container) {
     screen.append(header, main, notice);
   }
 
-  const footer = document.createElement('div');
+  const footer = document.createElement('footer');
   footer.className = 'title-footer';
+  footer.dataset.testid = 'title-footer';
   const footerVersion = document.createElement('p');
-  footerVersion.className = 'micro';
   footerVersion.textContent = 'v1.0 · BUILD · OFFLINE READY';
   const footerPrompt = document.createElement('p');
-  footerPrompt.className = 'micro';
   footerPrompt.textContent = 'PRESS START TO POWER ON';
   footer.append(footerVersion, footerPrompt);
   screen.appendChild(footer);

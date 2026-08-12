@@ -158,6 +158,19 @@ describe('title screen', () => {
     expect(allText(container)).toContain('DEPTH IS THE SCORE');
     expect(allText(container)).not.toContain('BEGIN NEW RUN');
 
+    expect(byTestId(container, 'title-header').textContent).toBe('GLITCH FORGEWORKS');
+    expect(byTestId(container, 'title-tagline').textContent).toBe('DEPTH IS THE SCORE');
+    const footer = byTestId(container, 'title-footer');
+    expect(allText(footer).join(' ')).toContain('v1.0');
+    expect(allText(footer).join(' ')).toContain('PRESS START TO POWER ON');
+
+    const h1s = collect(container, el => el.tagName === 'H1');
+    expect(h1s).toHaveLength(2);
+    expect(h1s[0].classList.contains('title-glitch')).toBe(true);
+    expect(h1s[0].getAttribute('data-text')).toBe("OPERATOR'S");
+    expect(h1s[1].classList.contains('title-glitch')).toBe(true);
+    expect(h1s[1].getAttribute('data-text')).toBe('DESCENT');
+
     const start = byTestId(container, 'title-start');
     expect(start).toBeTruthy();
     await start.click();
