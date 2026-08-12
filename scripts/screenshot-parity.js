@@ -74,8 +74,11 @@ async function setupProdPage(page, screenKey) {
   }
   if (setup === 'clickStart' || setup === 'startRunToExploration' || setup === 'startRunToCombat') {
     await page.goto(`${SERVER_URL}?seed=777#w=777`);
-    await page.getByRole('button', { name: 'START' }).click();
-    if (setup === 'clickStart') return;
+    await page.getByTestId('add-character').waitFor({ timeout: 10000 });
+    if (setup === 'clickStart') {
+      await page.getByTestId('add-character').click();
+      return;
+    }
     await page.getByTestId('add-character').click();
     await page.getByTestId('class-breacher').click();
     await page.getByTestId('tab-sigil').click();
@@ -88,7 +91,7 @@ async function setupProdPage(page, screenKey) {
   if (setup.startsWith('openConsoleTab:')) {
     const tab = setup.split(':')[1];
     await page.goto(`${SERVER_URL}?seed=777#w=777`);
-    await page.getByRole('button', { name: 'START' }).click();
+    await page.getByTestId('add-character').waitFor({ timeout: 10000 });
     await page.getByTestId('add-character').click();
     await page.getByTestId('class-breacher').click();
     await page.getByTestId('tab-sigil').click();
@@ -99,26 +102,26 @@ async function setupProdPage(page, screenKey) {
     return;
   }
   if (setup === 'navigateToLibrary') {
-    await page.goto(`${SERVER_URL}?seed=777#w=777`);
-    await page.getByRole('button', { name: 'START' }).click();
+    await page.goto(SERVER_URL);
+    await page.getByTestId('title-start').click();
     await page.getByTestId('title-run-library').click().catch(() => {});
     return;
   }
   if (setup === 'navigateToImport') {
-    await page.goto(`${SERVER_URL}?seed=777#w=777`);
-    await page.getByRole('button', { name: 'START' }).click();
+    await page.goto(SERVER_URL);
+    await page.getByTestId('title-start').click();
     await page.getByTestId('title-import-link').click().catch(() => {});
     return;
   }
   if (setup === 'navigateToTutorial') {
-    await page.goto(`${SERVER_URL}?seed=777#w=777`);
-    await page.getByRole('button', { name: 'START' }).click();
+    await page.goto(SERVER_URL);
+    await page.getByTestId('title-start').click();
     await page.getByTestId('title-tutorial').click().catch(() => {});
     return;
   }
   if (setup === 'navigateToSettings') {
-    await page.goto(`${SERVER_URL}?seed=777#w=777`);
-    await page.getByRole('button', { name: 'START' }).click();
+    await page.goto(SERVER_URL);
+    await page.getByTestId('title-start').click();
     await page.getByTestId('title-settings').click().catch(() => {});
     return;
   }

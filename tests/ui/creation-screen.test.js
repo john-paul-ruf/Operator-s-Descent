@@ -198,4 +198,13 @@ describe('creation screen workflow', () => {
     expect(seen).toHaveLength(1);
     off();
   });
+
+  it('class-card buttons retain class-card and btn-crt classes after render', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 42 });
+    byTestId(container, 'add-character').click();
+    const card = byTestId(container, 'class-breacher');
+    expect(card).not.toBeNull();
+    expect(card.classList.contains('class-card')).toBe(true);
+    expect(card.classList.contains('btn-crt')).toBe(true);
+  });
 });

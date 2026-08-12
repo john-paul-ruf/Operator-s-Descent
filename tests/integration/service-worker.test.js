@@ -112,7 +112,7 @@ describe('service worker lifecycle', () => {
 
     const namesAfterInstall = await worker.caches.keys();
     const cacheName = namesAfterInstall.find((name) => name.startsWith('operator-descent-') && name !== 'operator-descent-old');
-    expect(cacheName).toMatch(/^operator-descent-2026-08-11-release-v1$/);
+    expect(cacheName).toMatch(/^operator-descent-2026-08-12-parity-v2$/);
     expect(worker.caches.stores.get(cacheName).entries.size).toBe(manifest.length);
     expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
 
@@ -121,7 +121,7 @@ describe('service worker lifecycle', () => {
     await activate.settle();
 
     const namesAfterActivate = await worker.caches.keys();
-    expect(namesAfterActivate).toContain('operator-descent-2026-08-11-release-v1');
+    expect(namesAfterActivate).toContain('operator-descent-2026-08-12-parity-v2');
     expect(namesAfterActivate).toContain('unrelated-cache');
     expect(namesAfterActivate).not.toContain('operator-descent-old');
     expect(worker.self.clients.claim).toHaveBeenCalledOnce();
