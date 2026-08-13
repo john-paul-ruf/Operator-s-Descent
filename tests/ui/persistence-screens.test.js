@@ -243,6 +243,8 @@ describe('import screen', () => {
     const container = new FakeElement('div');
     mount(container);
 
+    expect(byTestId(container, 'import-input').parentNode.classList.contains('screen-body')).toBe(true);
+
     byTestId(container, 'import-input').value = `https://example.test/play/#w=${encodeSeed(987)}`;
     await byTestId(container, 'import-submit').click();
     expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 987 } });

@@ -166,6 +166,7 @@ export function mount(container) {
         resume(row);
       }
     }));
+    resumeButton.classList.remove('btn-primary');
     resumeButton.dataset.testid = `run-resume-${entry.key}`;
     const deleteButton = track(createButton('DELETE LOCAL STATE', {
       danger: true,
@@ -231,6 +232,7 @@ export function mount(container) {
       primary: true,
       onClick: () => navigate('creation')
     }));
+    newRun.classList.remove('btn-primary');
     newRun.dataset.testid = 'library-new-run';
     const title = track(createButton('TITLE', {
       onClick: () => navigate('title')

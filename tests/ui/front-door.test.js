@@ -212,6 +212,8 @@ describe('tutorial manual', () => {
     const container = new FakeElement('div');
     mount(container);
 
+    expect(byTestId(container, 'tutorial-page').parentNode.classList.contains('screen-body')).toBe(true);
+
     const titles = [];
     while (byTestId(container, 'tutorial-next')) {
       titles.push(byTestId(container, 'tutorial-page-title').textContent);
@@ -251,6 +253,8 @@ describe('settings screen', () => {
     const { mount } = await import('../../src/ui/screens/settings.js');
     const container = new FakeElement('div');
     mount(container, { from: 'exploration' });
+
+    expect(byTestId(container, 'settings-master-mute').parentNode.classList.contains('panel')).toBe(true);
 
     const muteInput = byTestId(container, 'settings-master-mute').children[1];
     muteInput.checked = true;

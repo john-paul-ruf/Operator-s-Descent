@@ -1,6 +1,6 @@
 import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
-import { createButton, createPanel, createSlider, createToggle } from '../components.js';
+import { createButton, createPanel, createScreenBody, createSlider, createToggle } from '../components.js';
 
 const LAYERS = [
   ['drone', 'DRONE'],
@@ -26,12 +26,23 @@ export function mount(container, params = {}) {
   const motionButtons = new Map();
 
   const screen = document.createElement('section');
-  screen.className = 'settings-screen';
+  screen.className = 'settings-screen screen-container';
+  screen.style.padding = '0';
+  screen.style.gap = '0';
   screen.setAttribute('aria-label', 'Settings');
 
-  const header = document.createElement('h2');
-  header.className = 'display';
-  header.textContent = 'SETTINGS';
+  const header = document.createElement('header');
+  header.className = 'panel-elevated s-3';
+  header.style.textAlign = 'center';
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'micro';
+  eyebrow.textContent = '◈ SETTINGS';
+  const heading = document.createElement('div');
+  heading.className = 'subheading accent-text glow';
+  heading.textContent = 'CONFIGURE TERMINAL';
+  header.append(eyebrow, heading);
+
+  const body = createScreenBody({ className: 's-4' });
 
   const status = document.createElement('p');
   status.className = 'console-note';
@@ -64,7 +75,11 @@ export function mount(container, params = {}) {
     }
   }
 
-  const audioPanel = createPanel({ title: 'AUDIO' });
+  const audioTitle = document.createElement('div');
+  audioTitle.className = 'section-header glow';
+  audioTitle.textContent = '◈ AUDIO';
+  const audioPanel = createPanel();
+  audioPanel.classList.add('s-3');
 
   const mute = createToggle('MASTER MUTE', settings.masterMute, (value) => {
     settings = { ...settings, masterMute: value };
@@ -90,7 +105,11 @@ export function mount(container, params = {}) {
     audioPanel.appendChild(slider);
   }
 
-  const visualPanel = createPanel({ title: 'VISUAL' });
+  const visualTitle = document.createElement('div');
+  visualTitle.className = 'section-header glow';
+  visualTitle.textContent = '◈ VISUAL';
+  const visualPanel = createPanel();
+  visualPanel.classList.add('s-3');
 
   const glitch = createToggle('GLITCH', settings.glitchEnabled, (value) => {
     settings = { ...settings, glitchEnabled: value };
@@ -147,7 +166,12 @@ export function mount(container, params = {}) {
   back.dataset.testid = 'settings-back';
   cleanups.push(() => back.cleanup?.());
 
-  screen.append(header, status, audioPanel, visualPanel, back);
+  const footer = document.createElement('footer');
+  footer.className = 'panel s-3';
+  footer.appendChild(back);
+
+  body.append(status, audioTitle, audioPanel, visualTitle, visualPanel);
+  screen.append(header, body, footer);
   container.replaceChildren(screen);
   updateMotionButtons();
 

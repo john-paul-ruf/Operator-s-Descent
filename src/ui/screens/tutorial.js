@@ -1,6 +1,6 @@
 import { setFlag } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
-import { createButton } from '../components.js';
+import { createButton, createScreenBody } from '../components.js';
 
 const TUTORIAL_FLAG = 'tutorialDeclined';
 
@@ -79,17 +79,27 @@ export function mount(container) {
   const cleanups = [];
 
   const wrapper = document.createElement('section');
-  wrapper.className = 'tutorial-wrapper';
+  wrapper.className = 'tutorial-wrapper screen-container';
+  wrapper.style.padding = '0';
+  wrapper.style.gap = '0';
   wrapper.setAttribute('aria-label', 'Operator manual');
 
-  const header = document.createElement('h2');
-  header.className = 'display';
-  header.textContent = 'OPERATOR MANUAL';
+  const header = document.createElement('header');
+  header.className = 'panel-elevated s-3';
+  header.style.textAlign = 'center';
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'micro';
+  eyebrow.textContent = "◈ OPERATOR'S MANUAL";
+  const headerTitle = document.createElement('div');
+  headerTitle.className = 'subheading accent-text glow';
+  header.append(eyebrow, headerTitle);
 
   const status = document.createElement('p');
   status.className = 'console-note';
   status.setAttribute('aria-live', 'polite');
   status.dataset.testid = 'tutorial-status';
+
+  const bodyContainer = createScreenBody({ className: 's-4' });
 
   const pageContainer = document.createElement('article');
   pageContainer.className = 'tutorial-page';
@@ -98,6 +108,12 @@ export function mount(container) {
   const dotsContainer = document.createElement('div');
   dotsContainer.className = 'tutorial-dots';
   dotsContainer.setAttribute('aria-label', 'Tutorial progress');
+
+  const footer = document.createElement('footer');
+  footer.className = 'panel s-3';
+  const navContainer = document.createElement('nav');
+  navContainer.className = 'tutorial-nav';
+  navContainer.setAttribute('aria-label', 'Tutorial navigation');
 
   function track(element) {
     pageCleanups.push(() => element.cleanup?.());
@@ -126,7 +142,9 @@ export function mount(container) {
   function renderPage() {
     while (pageCleanups.length) pageCleanups.pop()?.();
     pageContainer.replaceChildren();
+    navContainer.replaceChildren();
     const page = PAGES[currentPage];
+    headerTitle.textContent = page.title.toUpperCase();
 
     const title = document.createElement('h3');
     title.className = 'tutorial-page-title';
@@ -193,10 +211,6 @@ export function mount(container) {
     body.className = 'tutorial-body';
     body.textContent = page.body;
 
-    const navRow = document.createElement('nav');
-    navRow.className = 'tutorial-nav';
-    navRow.setAttribute('aria-label', 'Tutorial navigation');
-
     if (currentPage > 0) {
       const prev = track(createButton('PREV', {
         onClick: () => {
@@ -205,7 +219,7 @@ export function mount(container) {
         }
       }));
       prev.dataset.testid = 'tutorial-prev';
-      navRow.appendChild(prev);
+      navContainer.appendChild(prev);
     }
 
     if (currentPage < PAGES.length - 1) {
@@ -216,29 +230,33 @@ export function mount(container) {
           renderPage();
         }
       }));
+      next.classList.remove('btn-primary');
       next.dataset.testid = 'tutorial-next';
-      navRow.appendChild(next);
+      navContainer.appendChild(next);
     } else {
       const done = track(createButton('DONE', {
         primary: true,
         onClick: () => finish(true)
       }));
+      done.classList.remove('btn-primary');
       done.dataset.testid = 'tutorial-done';
-      navRow.appendChild(done);
+      navContainer.appendChild(done);
     }
 
     const skip = track(createButton('SKIP / BACK TO TITLE', {
       onClick: () => finish(false)
     }));
     skip.dataset.testid = 'tutorial-skip';
-    navRow.appendChild(skip);
+    navContainer.appendChild(skip);
 
-    pageContainer.append(title, illustration, body, navRow);
+    pageContainer.append(title, illustration, body);
     renderDots();
   }
 
   renderPage();
-  wrapper.append(header, status, pageContainer, dotsContainer);
+  bodyContainer.append(status, pageContainer);
+  footer.append(dotsContainer, navContainer);
+  wrapper.append(header, bodyContainer, footer);
   container.replaceChildren(wrapper);
 
   cleanups.push(() => {

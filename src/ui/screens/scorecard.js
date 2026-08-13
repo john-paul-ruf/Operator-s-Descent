@@ -188,6 +188,7 @@ export function mount(container, params = {}) {
     primary: true,
     onClick: () => navigate('creation', { preloadedSeed: seed })
   });
+  restart.classList.remove('btn-primary');
   restart.dataset.testid = 'scorecard-restart-seed';
   const newRun = createButton('NEW RUN', {
     onClick: () => navigate('creation')

@@ -1,7 +1,7 @@
 import { assignLocalRunKey, saveRun } from '../../state/library.js';
 import { decodeRun, decodeSeed } from '../../state/save-decode.js';
 import { bus } from '../../state/bus.js';
-import { createButton, createPanel } from '../components.js';
+import { createButton, createPanel, createScreenBody } from '../components.js';
 
 const MAX_IMPORT_TEXT_LENGTH = 2048;
 const MAX_FRAGMENT_LENGTH = 1500;
@@ -70,9 +70,25 @@ function navigate(screen, params = {}) {
 export function mount(container, params = {}) {
   const cleanups = [];
 
-  const header = document.createElement('h2');
-  header.className = 'display';
-  header.textContent = 'IMPORT LINK';
+  const screen = document.createElement('section');
+  screen.className = 'screen-container';
+  screen.setAttribute('aria-label', 'Import link');
+
+  const header = document.createElement('header');
+  header.className = 'panel-elevated s-3';
+  header.style.textAlign = 'center';
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'micro';
+  eyebrow.textContent = '◈ IMPORT LINK';
+  const heading = document.createElement('div');
+  heading.className = 'subheading accent-text glow';
+  heading.textContent = 'RESUME FROM URL';
+  header.append(eyebrow, heading);
+
+  const body = createScreenBody({ className: 's-4' });
+  const instructions = document.createElement('p');
+  instructions.className = 'caption';
+  instructions.textContent = 'Paste a run link to resume on this device. Full run state remains under 1500 characters.';
 
   const input = document.createElement('textarea');
   input.className = 'link-input';
@@ -85,6 +101,13 @@ export function mount(container, params = {}) {
   resultArea.className = 'import-result';
   resultArea.setAttribute('aria-live', 'polite');
   resultArea.dataset.testid = 'import-result';
+
+  const guide = createPanel({ title: '◈ HOW IT WORKS' });
+  guide.classList.add('s-3');
+  const guideText = document.createElement('p');
+  guideText.className = 'micro';
+  guideText.textContent = 'FULL STATE · CHECKSUM VERIFIED · VERSION CHECKED · BIT-FOR-BIT RESTORE';
+  guide.appendChild(guideText);
 
   function track(element) {
     cleanups.push(() => element.cleanup?.());
@@ -111,6 +134,7 @@ export function mount(container, params = {}) {
         primary: true,
         onClick: () => navigate('creation', { preloadedSeed: recoveredSeed })
       }));
+      fresh.classList.remove('btn-primary');
       fresh.dataset.testid = 'import-fresh-world';
       actions.appendChild(fresh);
     }
@@ -145,6 +169,7 @@ export function mount(container, params = {}) {
         });
       }
     }));
+    resume.classList.remove('btn-primary');
     resume.dataset.testid = 'import-resume';
     resultArea.appendChild(resume);
   }
@@ -198,14 +223,21 @@ export function mount(container, params = {}) {
   const actions = document.createElement('div');
   actions.className = 'import-actions';
   const importButton = track(createButton('IMPORT', { primary: true, onClick: doImport }));
+  importButton.classList.remove('btn-primary');
   importButton.dataset.testid = 'import-submit';
+  actions.appendChild(importButton);
+
+  const footer = document.createElement('footer');
+  footer.className = 'panel s-3';
   const titleButton = track(createButton('RETURN TO TITLE', {
     onClick: () => navigate('title')
   }));
   titleButton.dataset.testid = 'import-return-title';
-  actions.append(importButton, titleButton);
+  footer.appendChild(titleButton);
 
-  container.replaceChildren(header, input, resultArea, actions);
+  body.append(instructions, input, actions, resultArea, guide);
+  screen.append(header, body, footer);
+  container.replaceChildren(screen);
 
   return {
     unmount() {
