@@ -1,6 +1,6 @@
 import { deleteRunState, listRuns, loadRun } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
-import { createButton, createPanel, createScrollArea, createSigilToken } from '../components.js';
+import { createButton, createPanel, createScreenBody, createSigilToken } from '../components.js';
 
 const PLAYER_BANK_START = 0xE000;
 const PLAYER_BANK_END = 0xE030;
@@ -115,22 +115,38 @@ export function mount(container) {
     swatch.setAttribute('aria-label', `Accent ${safeAccent(entry.accentSwatch)}`);
     element.appendChild(swatch);
 
-    appendSigils(element, entry.partySigils);
+    const content = document.createElement('div');
+    content.className = 'run-info';
 
-    const info = document.createElement('div');
-    info.className = 'run-info';
+    const heading = document.createElement('div');
+    heading.style.display = 'flex';
+    heading.style.justifyContent = 'space-between';
+
     const seed = document.createElement('strong');
     seed.textContent = `SEED ${entry.worldSeed}`;
+    const theme = document.createElement('span');
+    theme.textContent = String(entry.theme || 'UNKNOWN THEME').replaceAll('_', ' ').toUpperCase();
+    heading.append(seed, theme);
+
+    const summary = document.createElement('div');
+    summary.style.display = 'flex';
+    summary.style.alignItems = 'center';
+    summary.style.justifyContent = 'space-between';
+    appendSigils(summary, entry.partySigils);
+
     const depth = document.createElement('span');
     depth.textContent = `DEPTH ${entry.depth}`;
+    depth.className = 'accent-text glow';
+    summary.appendChild(depth);
+
     const classes = document.createElement('span');
     classes.textContent = (entry.partyClasses || []).length
       ? `CLASSES ${(entry.partyClasses || []).join(' / ').toUpperCase()}`
       : 'CLASSES UNKNOWN';
     const played = document.createElement('span');
     played.textContent = `LAST ${formatDate(lastPlayed(entry))}`;
-    info.append(seed, depth, classes, played);
-    element.appendChild(info);
+    content.append(heading, summary, classes, played);
+    element.appendChild(content);
 
     if (broken) {
       const error = document.createElement('p');
@@ -168,9 +184,21 @@ export function mount(container) {
     cleanupRender();
     container.replaceChildren();
 
-    const header = document.createElement('h2');
-    header.className = 'display';
-    header.textContent = 'RUN LIBRARY';
+    const screen = document.createElement('section');
+    screen.className = 'screen-container';
+    screen.setAttribute('aria-label', 'Run library');
+
+    const rows = readRows();
+    const header = document.createElement('header');
+    header.className = 'panel-elevated s-3';
+    header.style.textAlign = 'center';
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'micro';
+    eyebrow.textContent = '◈ RUN LIBRARY';
+    const activeCount = document.createElement('div');
+    activeCount.className = 'subheading accent-text glow';
+    activeCount.textContent = `${rows.filter(row => row.result.success).length} ACTIVE RUNS`;
+    header.append(eyebrow, activeCount);
 
     const notice = document.createElement('p');
     notice.className = 'console-note';
@@ -178,22 +206,24 @@ export function mount(container) {
     notice.dataset.testid = 'library-notice';
     notice.textContent = noticeText;
 
-    container.append(header, notice);
+    header.appendChild(notice);
+    screen.appendChild(header);
 
-    const rows = readRows();
+    const body = createScreenBody({ className: 's-3' });
+    body.dataset.testid = 'library-list';
     if (rows.length === 0) {
       const empty = createPanel({ title: 'NO LIVING RUNS' });
       empty.dataset.testid = 'library-empty';
       const message = document.createElement('p');
       message.textContent = 'No saved living runs. Wiped runs remain seed tombstones only and do not appear here.';
       empty.appendChild(message);
-      container.appendChild(empty);
+      body.appendChild(empty);
     } else {
-      const scroll = createScrollArea({ label: 'Saved runs', focusable: true });
-      scroll.dataset.testid = 'library-list';
-      for (const row of rows) scroll.appendChild(createRunRow(row));
-      container.appendChild(scroll);
+      body.setAttribute('aria-label', 'Saved runs');
+      body.tabIndex = 0;
+      for (const row of rows) body.appendChild(createRunRow(row));
     }
+    screen.appendChild(body);
 
     const actions = document.createElement('div');
     actions.className = 'library-actions';
@@ -206,8 +236,10 @@ export function mount(container) {
       onClick: () => navigate('title')
     }));
     title.dataset.testid = 'library-title';
-    actions.append(newRun, title);
-    container.appendChild(actions);
+    actions.classList.add('panel', 's-3');
+    actions.append(title, newRun);
+    screen.appendChild(actions);
+    container.replaceChildren(screen);
   }
 
   render();

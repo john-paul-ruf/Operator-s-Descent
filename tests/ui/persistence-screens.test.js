@@ -208,6 +208,9 @@ describe('run library screen', () => {
     expect(text).toContain('CLASSES BREACHER / GHOST');
     expect(text).not.toContain('SEED 333');
     expect(allText(byTestId(container, 'library-list')).join(' ')).toMatch(/SEED 999.*SEED 222.*SEED 111/);
+    expect(byTestId(container, 'library-list').classList.contains('screen-body')).toBe(true);
+    expect(byTestId(container, `run-row-${second.key}`).classList.contains('run-row')).toBe(true);
+    expect(byTestId(container, `run-resume-${second.key}`).classList.contains('primary')).toBe(true);
 
     await byTestId(container, `run-resume-${second.key}`).click();
     expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, runState: expect.objectContaining({ worldSeed: 222, depth: 7 }) } });
@@ -313,7 +316,7 @@ describe('scorecard screen', () => {
     expect(loadRun(saved.key)).toEqual({ success: false, error: 'not_found' });
     expect(listRuns()).toEqual([]);
     expect(allText(container)).toEqual(expect.arrayContaining([
-      'DEPTH 12',
+      '12',
       'MUTABLE RUN STATE DELETED',
       'CAUSE OF DEATH: Party Wipe',
       'WORLD SEED: 777',
@@ -323,6 +326,8 @@ describe('scorecard screen', () => {
     const share = byTestId(container, 'scorecard-share-link').textContent;
     expect(share).toBe(`#w=${encodeSeed(777)}`);
     expect(allText(container).join(' ')).not.toContain('#r=');
+    expect(byTestId(container, 'scorecard-roster').children[0].children[0].classList.contains('sigil-dead')).toBe(true);
+    expect(byTestId(container, 'scorecard-library')).toBeTruthy();
 
     await byTestId(container, 'scorecard-copy-world').click();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`http://127.0.0.1:8080/index.html${share}`);
@@ -330,6 +335,8 @@ describe('scorecard screen', () => {
     expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 777 } });
     await byTestId(container, 'scorecard-title').click();
     expect(seen.at(-1)).toEqual({ screen: 'title', params: {} });
+    await byTestId(container, 'scorecard-library').click();
+    expect(seen.at(-1)).toEqual({ screen: 'library', params: {} });
     off();
   });
 });

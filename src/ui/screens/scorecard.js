@@ -1,7 +1,7 @@
 import { deleteRunState, getRunKey } from '../../state/library.js';
 import { encodeSeed } from '../../state/save-encode.js';
 import { bus } from '../../state/bus.js';
-import { createButton, createSigilToken } from '../components.js';
+import { createButton, createPanel, createScreenBody, createSigilToken } from '../components.js';
 
 const PLAYER_BANK_START = 0xE000;
 const PLAYER_BANK_END = 0xE030;
@@ -68,48 +68,78 @@ export function mount(container, params = {}) {
   ];
 
   const screen = document.createElement('section');
-  screen.className = 'scorecard-screen';
+  screen.className = 'scorecard-screen screen-container';
+  screen.style.padding = '0';
+  screen.style.gap = '0';
   screen.setAttribute('aria-label', 'Run scorecard');
 
+  const header = document.createElement('header');
+  header.style.textAlign = 'center';
+  header.className = 's-6';
+  const ornament = document.createElement('div');
+  ornament.className = 'micro';
+  ornament.textContent = '◈ ◈ ◈';
+  const conclusion = document.createElement('h1');
+  conclusion.className = 'heading glow-danger';
+  conclusion.textContent = 'PARTY WIPE';
+  const subtitle = document.createElement('div');
+  subtitle.className = 'micro';
+  subtitle.textContent = 'RUN CONCLUDED';
+  header.append(ornament, conclusion, subtitle);
+
+  const body = createScreenBody({ className: 's-4' });
+
+  const depthPanel = createPanel({ elevated: true });
+  depthPanel.classList.add('s-6');
+  depthPanel.style.textAlign = 'center';
+  const depthLabel = document.createElement('div');
+  depthLabel.className = 'micro';
+  depthLabel.textContent = '◈ FINAL DEPTH';
   const depthDisplay = document.createElement('div');
-  depthDisplay.className = 'display glow-strong';
+  depthDisplay.className = 'display accent-text glow-strong';
   depthDisplay.dataset.testid = 'scorecard-depth';
-  depthDisplay.textContent = `DEPTH ${depth}`;
+  depthDisplay.textContent = String(depth);
+  depthPanel.append(depthLabel, depthDisplay);
 
   const deletionStatus = document.createElement('p');
   deletionStatus.className = 'console-note';
   deletionStatus.dataset.testid = 'scorecard-deletion';
   deletionStatus.textContent = deletion.success ? 'MUTABLE RUN STATE DELETED' : `RUN STATE DELETE FAILED — ${deletion.error || 'storage_failed'}`;
 
+  const rosterPanel = createPanel({ title: '◈ PARTY ROSTER' });
+  rosterPanel.classList.add('s-4');
   const roster = document.createElement('div');
   roster.className = 'scorecard-roster';
   roster.dataset.testid = 'scorecard-roster';
   for (const character of party) {
     const entry = document.createElement('div');
-    entry.className = 'scorecard-roster-entry';
-    const isDead = (character?.currentHP ?? character?.hp ?? 1) <= 0;
-    if (isDead) entry.classList.add('dead');
+    entry.className = 'scorecard-roster-entry dead';
     const sigil = createSigilToken(safePlayerSigil(character), 72, { role: 'player' });
-    if (isDead) {
-      sigil.classList.add('dead');
-      sigil.style.position = 'relative';
-    }
-    sigil.style.opacity = isDead ? '0.4' : '1';
+    sigil.classList.add('sigil-dead');
     const label = document.createElement('span');
-    label.textContent = `${character?.id || 'UNKNOWN'} · ${(character?.classId || 'unknown').toUpperCase()}`;
+    const currentHP = getNumber(character?.currentHP, character?.hp);
+    const maxHP = getNumber(character?.maxHP, character?.hpMax, character?.hp);
+    label.textContent = `${(character?.classId || 'unknown').toUpperCase()} · CAL ${getNumber(character?.calibrationCount)} · HP ${currentHP}/${maxHP}`;
     entry.append(sigil, label);
     roster.appendChild(entry);
   }
+  rosterPanel.appendChild(roster);
 
+  const causePanel = createPanel({ title: '◈ CAUSE OF DEATH' });
+  causePanel.classList.add('s-4');
   const cod = document.createElement('p');
   cod.className = 'scorecard-cod';
   cod.dataset.testid = 'scorecard-cause';
   cod.textContent = `CAUSE OF DEATH: ${causeOfDeath}`;
+  causePanel.appendChild(cod);
 
+  const seedPanel = createPanel({ title: '◈ WORLD SEED' });
+  seedPanel.classList.add('s-4');
   const seedEl = document.createElement('p');
   seedEl.className = 'scorecard-seed';
   seedEl.dataset.testid = 'scorecard-seed';
   seedEl.textContent = `WORLD SEED: ${seed}`;
+  seedPanel.appendChild(seedEl);
 
   const seedFragment = `#w=${encodeSeed(seed)}`;
   const linkDisplay = document.createElement('output');
@@ -129,10 +159,15 @@ export function mount(container, params = {}) {
   copyBtn.dataset.testid = 'scorecard-copy-world';
   cleanups.push(() => copyBtn.cleanup?.());
 
-  const stats = document.createElement('div');
-  stats.className = 'scorecard-stats';
-  const summaryTitle = document.createElement('h3');
-  summaryTitle.textContent = 'RUN SUMMARY';
+  const sharePanel = createPanel({ title: '◈ SHARE THIS WORLD', elevated: true });
+  sharePanel.classList.add('s-4');
+  const shareNote = document.createElement('p');
+  shareNote.className = 'micro';
+  shareNote.textContent = 'SEED ONLY — NO RUN STATE';
+  sharePanel.append(shareNote, linkDisplay, copyBtn);
+
+  const stats = createPanel({ title: '◈ RUN SUMMARY' });
+  stats.classList.add('scorecard-stats', 's-4');
   const metricGrid = document.createElement('div');
   metricGrid.className = 'scorecard-metrics';
   for (const [label, value] of metrics) {
@@ -145,7 +180,7 @@ export function mount(container, params = {}) {
     metric.append(labelElement, valueElement);
     metricGrid.appendChild(metric);
   }
-  stats.append(summaryTitle, metricGrid);
+  stats.appendChild(metricGrid);
 
   const actions = document.createElement('div');
   actions.className = 'scorecard-actions';
@@ -162,10 +197,16 @@ export function mount(container, params = {}) {
     onClick: () => navigate('title')
   });
   title.dataset.testid = 'scorecard-title';
-  cleanups.push(() => restart.cleanup?.(), () => newRun.cleanup?.(), () => title.cleanup?.());
-  actions.append(restart, newRun, title);
+  const library = createButton('LIBRARY', {
+    onClick: () => navigate('library')
+  });
+  library.dataset.testid = 'scorecard-library';
+  cleanups.push(() => restart.cleanup?.(), () => newRun.cleanup?.(), () => title.cleanup?.(), () => library.cleanup?.());
+  actions.append(restart, newRun, title, library);
 
-  screen.append(depthDisplay, deletionStatus, roster, cod, seedEl, linkDisplay, copyBtn, stats, actions);
+  body.append(depthPanel, deletionStatus, rosterPanel, causePanel, seedPanel, sharePanel, stats);
+
+  screen.append(header, body, actions);
   container.replaceChildren(screen);
 
   return {
