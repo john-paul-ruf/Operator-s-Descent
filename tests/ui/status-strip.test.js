@@ -32,6 +32,15 @@ function textOf(root) {
   return [root.textContent, ...root.children.flatMap((child) => textOf(child))].filter(Boolean);
 }
 
+function findByClass(root, className) {
+  if (root.className.split(/\s+/).includes(className)) return root;
+  for (const child of root.children) {
+    const found = findByClass(child, className);
+    if (found) return found;
+  }
+  return null;
+}
+
 beforeEach(installDocument);
 
 describe('status strip', () => {
@@ -46,20 +55,21 @@ describe('status strip', () => {
 
     expect(strip.getAttribute('role')).toBe('status');
     expect(strip.getAttribute('aria-live')).toBe('polite');
-    expect(textOf(strip)).toEqual(expect.arrayContaining(['D7', 'SEED 123456…cdef', '8/10', 'COR 0.25', 'CLK 0.50']));
-    expect(strip.children.find((child) => child.className === 'status-seed').getAttribute('aria-label')).toBe('World seed 123456789abcdef');
+    expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '07', 'SEED', '123456…cdef', 'PARTY', '8/10', 'DANGER', 'COR 0.25', 'CLK', '0.50']));
+    expect(findByClass(strip, 'status-seed').getAttribute('aria-label')).toBe('World seed 123456789abcdef');
+    expect(['status-depth-group', 'status-seed-group', 'status-party-group', 'status-danger-group', 'status-clock-group'].every((name) => findByClass(strip, name))).toBe(true);
   });
 
   test('updates live clock and cleanup removes the subscription', () => {
     const runState = { depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] };
     const strip = createStatusBar(runState);
-    const clock = strip.children.find((child) => child.className === 'status-clock');
+    const clock = findByClass(strip, 'status-clock');
 
     bus.dispatch('state:danger-clock-tick', { progress: 0.75 });
-    expect(clock.textContent).toBe('CLK 0.75');
+    expect(clock.textContent).toBe('0.75');
     strip.cleanup();
     bus.dispatch('state:danger-clock-tick', { progress: 0.9 });
-    expect(clock.textContent).toBe('CLK 0.75');
+    expect(clock.textContent).toBe('0.75');
   });
 
   test('displays combat round initiative active resources ap and movement', () => {
@@ -69,7 +79,9 @@ describe('status strip', () => {
     ]);
     const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
 
-    expect(textOf(strip)).toEqual(expect.arrayContaining(['D3', 'R4', 'INIT p1 › e1', '9/12', '3/6', 'AP 2', 'MOVE READY']));
-    expect(strip.children.some((child) => child.className.includes('status-active-sigil'))).toBe(true);
+    expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '03', 'ROUND', '04', '◈ INITIATIVE ORDER', '1', '2', 'ACTIVE', '9/12', '3/6', 'AP 2', '1 MV']));
+    expect(findByClass(strip, 'status-active-sigil')).not.toBe(null);
+    expect(findByClass(strip, 'init-rail').children).toHaveLength(2);
+    expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');
   });
 });

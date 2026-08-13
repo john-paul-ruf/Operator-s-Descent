@@ -38,23 +38,35 @@ function appendText(parent, className, text, ariaLabel = null) {
   return el;
 }
 
+function createGroup(strip, className, label) {
+  const group = document.createElement('div');
+  group.className = `status-group ${className}-group`;
+  const labelEl = appendText(group, 'status-label', label);
+  labelEl.setAttribute('aria-hidden', 'true');
+  strip.appendChild(group);
+  return group;
+}
+
 function truncatedSeed(seed) {
   const text = String(seed ?? '—');
   return text.length > 10 ? `${text.slice(0, 6)}…${text.slice(-4)}` : text;
 }
 
 function appendActorSummary(strip, actor, active = false) {
+  const summary = document.createElement('div');
+  summary.className = active ? 'status-active-actor' : 'status-party-member';
   const role = roleOf(actor);
   const sigil = createSigilToken(sigilOf(actor), 34, { role, label: `${role} sigil ${actor.name || actor.id || ''}`.trim() });
   sigil.classList.add(active ? 'status-active-sigil' : 'status-party-sigil');
-  strip.appendChild(sigil);
+  summary.appendChild(sigil);
   const hp = hpOf(actor);
   const hpBar = createHPBar(hp.current, hp.max);
   hpBar.classList.add('status-mini-hp');
-  strip.appendChild(hpBar);
+  summary.appendChild(hpBar);
   sigil.setAttribute('data-glitch', '');
   sigil.dataset.glitchIntensity = '0.15';
-  return { hp };
+  strip.appendChild(summary);
+  return { hp, summary };
 }
 
 export function createStatusBar(runState, combatState = null) {
@@ -64,8 +76,6 @@ export function createStatusBar(runState, combatState = null) {
   strip.setAttribute('aria-live', 'polite');
   strip.setAttribute('aria-atomic', 'true');
   const cleanups = [];
-
-  appendText(strip, 'status-depth', `D${runState.depth}`, `Depth ${runState.depth}`);
 
   if (combatState) {
     renderCombatStatus(strip, runState, combatState);
@@ -78,31 +88,54 @@ export function createStatusBar(runState, combatState = null) {
 }
 
 function renderExplorationStatus(strip, runState) {
-  appendText(strip, 'status-seed', `SEED ${truncatedSeed(runState.worldSeed)}`, `World seed ${runState.worldSeed}`);
-  const party = runState.party || [];
-  for (const character of party) appendActorSummary(strip, character);
-  appendText(strip, 'status-corruption', `COR ${Number(runState.corruption || 0).toFixed(2)}`, `Corruption ${Number(runState.corruption || 0).toFixed(2)}`);
-  const clockEl = appendText(strip, 'status-clock', `CLK ${Number(runState.dangerClockProgress || 0).toFixed(2)}`, `Danger clock ${Number(runState.dangerClockProgress || 0).toFixed(2)}`);
+  appendText(createGroup(strip, 'status-depth', 'DEPTH'), 'status-depth', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
+  appendText(createGroup(strip, 'status-seed', 'SEED'), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
+  const partyGroup = createGroup(strip, 'status-party', 'PARTY');
+  const party = document.createElement('div');
+  party.className = 'status-party-list';
+  partyGroup.appendChild(party);
+  for (const character of runState.party || []) appendActorSummary(party, character);
+  appendText(createGroup(strip, 'status-danger', 'DANGER'), 'status-corruption', `COR ${Number(runState.corruption || 0).toFixed(2)}`, `Corruption ${Number(runState.corruption || 0).toFixed(2)}`);
+  const clockEl = appendText(createGroup(strip, 'status-clock', 'CLK'), 'status-clock', Number(runState.dangerClockProgress || 0).toFixed(2), `Danger clock ${Number(runState.dangerClockProgress || 0).toFixed(2)}`);
   return bus.on('state:danger-clock-tick', (payload = {}) => {
     const progress = Number(payload.progress ?? runState.dangerClockProgress ?? 0).toFixed(2);
-    clockEl.textContent = `CLK ${progress}`;
+    clockEl.textContent = progress;
     clockEl.setAttribute('aria-label', `Danger clock ${progress}`);
   });
 }
 
 function renderCombatStatus(strip, runState, combatState) {
-  appendText(strip, 'status-round', `R${combatState.round || 1}`, `Combat round ${combatState.round || 1}`);
+  appendText(createGroup(strip, 'status-depth-combat', 'DEPTH'), 'status-depth-combat', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
+  appendText(createGroup(strip, 'status-round', 'ROUND'), 'status-round', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`);
   const actors = actorList(combatState);
   const activeId = combatState.turnOrder?.[combatState.currentTurn];
   const active = actors.find((actor) => actor.id === activeId);
-  const preview = (combatState.turnOrder || []).slice(combatState.currentTurn || 0, (combatState.currentTurn || 0) + 5).join(' › ');
-  appendText(strip, 'status-initiative', `INIT ${preview || '—'}`, `Initiative preview ${preview || 'none'}`);
+  const order = (combatState.turnOrder || []).slice(combatState.currentTurn || 0, (combatState.currentTurn || 0) + 6);
+  const initiative = createGroup(strip, 'status-initiative', '◈ INITIATIVE ORDER');
+  const rail = document.createElement('div');
+  rail.className = 'init-rail status-initiative';
+  rail.setAttribute('aria-label', `Initiative preview ${order.join(', ') || 'none'}`);
+  for (const [index, id] of order.entries()) {
+    const actor = actors.find((candidate) => candidate.id === id);
+    if (!actor) continue;
+    const slot = document.createElement('div');
+    slot.className = `init-slot${index === 0 ? ' active' : ''}${roleOf(actor) === 'enemy' ? ' enemy' : ''}`;
+    const sigil = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `${actor.name || actor.id} initiative ${index + 1}` });
+    sigil.classList.add('init-sigil');
+    sigil.setAttribute('data-glitch', '');
+    sigil.dataset.glitchIntensity = '0.05';
+    slot.appendChild(sigil);
+    appendText(slot, 'init-position', String(index + 1));
+    rail.appendChild(slot);
+  }
+  initiative.appendChild(rail);
   if (!active) return;
-  appendActorSummary(strip, active, true);
+  const activeGroup = createGroup(strip, 'status-active', 'ACTIVE');
+  appendActorSummary(activeGroup, active, true);
   const charge = chargeOf(active);
   const chargeBar = createChargeBar(charge.current, charge.max);
   chargeBar.classList.add('status-mini-charge');
-  strip.appendChild(chargeBar);
-  appendText(strip, 'status-ap', `AP ${active.ap ?? 0}`, `Action points ${active.ap ?? 0}`);
-  appendText(strip, 'status-move', active.moveAvailable ? 'MOVE READY' : 'MOVE SPENT', active.moveAvailable ? 'Move available' : 'Move spent');
+  activeGroup.appendChild(chargeBar);
+  appendText(activeGroup, 'status-ap', `AP ${active.ap ?? 0}`, `Action points ${active.ap ?? 0}`);
+  appendText(activeGroup, 'status-move', active.moveAvailable ? '1 MV' : '0 MV', active.moveAvailable ? 'Move available' : 'Move spent');
 }
