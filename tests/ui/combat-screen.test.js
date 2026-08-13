@@ -85,6 +85,10 @@ class FakeCanvas extends FakeElement {
 
 class FakeContext {
   constructor() { this.calls = []; }
+  beginPath() { this.calls.push(['beginPath']); }
+  arc(...args) { this.calls.push(['arc', ...args]); }
+  fill() { this.calls.push(['fill', this.fillStyle]); }
+  stroke() { this.calls.push(['stroke', this.strokeStyle]); }
   clearRect(...args) { this.calls.push(['clearRect', ...args]); }
   fillRect(...args) { this.calls.push(['fillRect', this.fillStyle, ...args]); }
   strokeRect(...args) { this.calls.push(['strokeRect', this.strokeStyle, ...args]); }

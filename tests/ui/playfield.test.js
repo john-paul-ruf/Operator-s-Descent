@@ -25,6 +25,10 @@ class FakeCanvas extends FakeElement {
 
 class FakeContext {
   constructor() { this.calls = []; }
+  beginPath() { this.calls.push(['beginPath']); }
+  arc(...args) { this.calls.push(['arc', ...args]); }
+  fill() { this.calls.push(['fill', this.fillStyle]); }
+  stroke() { this.calls.push(['stroke', this.strokeStyle]); }
   clearRect(...args) { this.calls.push(['clearRect', ...args]); }
   fillRect(...args) { this.calls.push(['fillRect', this.fillStyle, ...args]); }
   strokeRect(...args) { this.calls.push(['strokeRect', this.strokeStyle, ...args]); }
@@ -61,6 +65,8 @@ describe('playfield rendering', () => {
     const text = canvas.context.calls.filter(([name]) => name === 'fillText').map((call) => call[2]);
     expect(text).not.toContain('HOSTILE');
     expect(text.some((value) => typeof value === 'string' && value.length === 1)).toBe(true);
+    expect(canvas.context.calls.some((call) => call[0] === 'arc' && call[3] === 9.36)).toBe(true);
+    expect(canvas.context.font).toBe("18px 'DESCENT SIGIL'");
     expect(canvas.getAttribute('role')).toBe('img');
     expect(canvas.style.pointerEvents).toBe('none');
     expect(canvas.listeners.size).toBe(0);
@@ -86,6 +92,7 @@ describe('playfield rendering', () => {
     const labels = canvas.context.calls.filter(([name]) => name === 'fillText').map((call) => call[2]);
     expect(labels).toEqual(expect.arrayContaining(['VALID', 'R', 'C', 'P', 'ACTIVE', 'TARGET']));
     expect(canvas.context.calls.some((call) => call[0] === 'fillRect' && call[4] === 48 && call[5] === 48)).toBe(true);
+    expect(canvas.context.font).toBe("32px 'DESCENT SIGIL'");
   });
 
   test('calculates bounded camera and writes accent only through CSS custom property', () => {
