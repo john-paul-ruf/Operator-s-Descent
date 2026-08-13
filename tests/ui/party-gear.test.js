@@ -132,7 +132,10 @@ describe('PARTY mode', () => {
 
     renderParty(container, { runState, combatState, data });
 
-    expect(byTestId(container, 'party-member-breacher')).toBeTruthy();
+    expect(textOf(byTestId(container, 'party-heading'))).toBe('◈ PARTY ROSTER');
+    expect(byTestId(container, 'party-member-breacher').getAttribute('role')).toBe('button');
+    expect(byTestId(container, 'party-member-breacher').getAttribute('aria-selected')).toBe('true');
+    expect(textOf(byTestId(container, 'party-detail-heading'))).toContain('BREACHER');
     expect(textOf(byTestId(container, 'party-combat-resources'))).toContain('AP 1');
     expect(textOf(byTestId(container, 'party-combat-resources'))).toContain('MOVE SPENT');
     expect(textOf(byTestId(container, 'party-defense'))).toContain('Defense');
@@ -143,6 +146,17 @@ describe('PARTY mode', () => {
 });
 
 describe('GEAR mode', () => {
+  it('uses mock-compatible character, equipped, and inventory groupings', () => {
+    const runState = run([item('fresh-sidearm')]);
+    const { container } = renderGearWith(runState);
+
+    expect(byTestId(container, 'gear-character-breacher').className).toContain('member-pill');
+    expect(byTestId(container, 'gear-character-breacher').className).toContain('active');
+    expect(textOf(byTestId(container, 'gear-equipped-heading'))).toContain('EQUIPPED — breacher');
+    expect(byTestId(container, 'gear-equipped-weapon').className).toContain('item-card equipped');
+    expect(textOf(byTestId(container, 'gear-inventory-heading'))).toBe('◈ INVENTORY');
+  });
+
   it('equips and unequips through atomic run-state transactions', () => {
     const runState = run([item('fresh-sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
     const { container } = renderGearWith(runState);

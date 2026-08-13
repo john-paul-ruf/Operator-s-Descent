@@ -236,7 +236,7 @@ export function render(container, context = {}) {
       selected: index === ui.charIndex,
       onClick: () => { ui.charIndex = index; ui.pendingCorruptItemId = null; ui.pendingJunkAll = false; context.refresh?.(); }
     });
-    button.className = 'gear-character console-row';
+    button.className = `gear-character member-pill console-row${index === ui.charIndex ? ' active' : ''}`;
     button.dataset.testid = `gear-character-${member.id}`;
     selectors.appendChild(button);
   }
@@ -254,6 +254,7 @@ export function render(container, context = {}) {
     slotRow.appendChild(button);
   }
   container.appendChild(slotRow);
+  container.appendChild(text('mode-indicator', `◈ EQUIPPED — ${character.name || character.classId || `C${ui.charIndex + 1}`}`, 'gear-equipped-heading'));
 
   renderEquipped(container, context, character, ui);
   renderInventory(container, context, character, ui);
@@ -265,11 +266,10 @@ function renderEquipped(container, context, character, ui) {
   const equipped = document.createElement('div');
   equipped.className = 'equipped-section';
   equipped.dataset.testid = 'gear-equipped';
-  equipped.appendChild(text('section-label', 'Equipped'));
   for (const slot of SLOTS) {
     const item = character.equipment?.[slot];
     const row = document.createElement('div');
-    row.className = 'equipped-row console-row';
+    row.className = 'equipped-row item-card equipped console-row';
     row.dataset.testid = `gear-equipped-${slot}`;
     row.appendChild(text('equipped-slot', `${SLOT_LABELS[slot]}: ${itemName(item)}`));
     if (item) {
@@ -286,6 +286,7 @@ function renderEquipped(container, context, character, ui) {
 
 function renderInventory(container, context, character, ui) {
   const inventory = context.runState.inventory || [];
+  container.appendChild(text('mode-indicator', '◈ INVENTORY', 'gear-inventory-heading'));
   const header = document.createElement('div');
   header.className = 'inventory-header console-row';
   header.dataset.testid = 'gear-inventory-header';

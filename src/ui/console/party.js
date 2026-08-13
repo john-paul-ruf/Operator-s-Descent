@@ -121,9 +121,12 @@ export function render(container, context = {}) {
 
   const state = getSelection(runState);
   state.index = Math.max(0, Math.min(state.index, living.length - 1));
+  container.appendChild(text('mode-indicator', '◈ PARTY ROSTER', 'party-heading'));
+
   const grid = document.createElement('div');
   grid.className = 'member-grid';
   grid.dataset.testid = 'party-roster';
+  const cards = [];
   living.forEach((character, index) => {
     const combatActor = combatActorFor(context, character);
     const hp = hpOf(character, combatActor);
@@ -132,7 +135,19 @@ export function render(container, context = {}) {
     const card = document.createElement('div');
     card.className = `member-card console-row${selected ? ' selected' : ''}`;
     card.dataset.testid = `party-member-${character.id}`;
-    card.addEventListener('click', () => { state.index = index; renderDetail(detail, living[state.index], context); });
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    card.setAttribute('aria-selected', String(selected));
+    const select = () => {
+      state.index = index;
+      for (let cardIndex = 0; cardIndex < cards.length; cardIndex++) {
+        cards[cardIndex].classList.toggle('selected', cardIndex === index);
+        cards[cardIndex].setAttribute('aria-selected', String(cardIndex === index));
+      }
+      renderDetail(detail, living[state.index], context);
+    };
+    card.addEventListener('click', select);
+    card.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') select(); });
     card.appendChild(createSigilToken(sigilOf(character), 34, { role: 'player', label: `Party member ${character.id}` }));
     const meta = document.createElement('div');
     meta.className = 'member-card-meta';
@@ -140,6 +155,7 @@ export function render(container, context = {}) {
     name.className = 'member-card-name';
     name.textContent = character.name || character.classId || `C${index + 1}`;
     meta.appendChild(name);
+    meta.appendChild(text('member-card-calibration', `Cal ${character.calibrationCount || 0} · T${getSignatureCapabilities(character, classDataFor(context.data || {}, character)).tier}`));
     card.appendChild(meta);
     card.appendChild(compactBar('HP', hp.current, hp.max, '--danger'));
     card.appendChild(compactBar('CHG', charge.current, charge.max, '--accent'));
@@ -148,6 +164,7 @@ export function render(container, context = {}) {
     equip.textContent = equipmentLine(character);
     card.appendChild(equip);
     grid.appendChild(card);
+    cards.push(card);
   });
   container.appendChild(grid);
 
@@ -170,8 +187,9 @@ function renderDetail(area, character, context) {
   const charge = chargeOf(character, combatActor);
   const signature = getSignatureCapabilities(character, classData);
 
+  area.appendChild(text('mode-indicator', `◈ ${String(classData?.name || character.classId || 'OPERATOR').toUpperCase()} DETAIL`, 'party-detail-heading'));
   const header = document.createElement('div');
-  header.className = 'detail-header console-row';
+  header.className = 'detail-header console-row panel-elevated';
   header.appendChild(createSigilToken(sigilOf(character), 72, { role: 'player', label: `${character.id} sigil` }));
   header.appendChild(text('detail-title', `${classData?.name || character.classId || 'Operator'} · Signature T${signature.tier} ${classData?.signature?.name || signature.signatureId || ''}`.trim(), 'party-class'));
   area.appendChild(header);
