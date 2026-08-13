@@ -63,6 +63,55 @@
   text-shadow: 0 0 4px var(--accent);
 }
 
+/* Screen body — scrollable region between status strip and console.
+   visual-parity-v4 SESSION-02. */
+.screen-body {
+  flex: 1 1 auto;
+  min-height: 0;                         /* critical: enables scroll inside flex parent */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;          /* stops iOS rubber-band leaking to page */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  /* Top + bottom edge fade so content dissolves into vignette */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--screen-body-fade),
+    #000 calc(100% - var(--screen-body-fade)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--screen-body-fade),
+    #000 calc(100% - var(--screen-body-fade)),
+    transparent 100%
+  );
+}
+
+.screen-body::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+}
+.screen-body::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+.screen-body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+.screen-body::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Opt out — use when content is known to always fit (e.g. title). */
+.screen-body--no-scroll {
+  overflow: hidden;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
 /* D-Pad */
 .dpad {
   display: grid;

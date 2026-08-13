@@ -20,6 +20,13 @@
   --sigil-player: var(--accent);
   --sigil-enemy: #e83a3a;
   --sigil-echo: #e83a3a;
+
+  /* Scroll body — visual-parity-v4 */
+  --screen-body-fade: 32px;                        /* edge-fade mask height */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: color-mix(in oklab, var(--accent) 40%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 70%, transparent);
+  --scrollbar-width: 6px;
 }
 
 * {

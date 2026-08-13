@@ -265,6 +265,11 @@ export function createPanel(opts = {}) {
   return panel;
 }
 
+/**
+ * @deprecated Use createScreenBody instead — the `.scroll-area` region is
+ * superseded by the `.screen-body` scroll container. Kept for current
+ * call-sites; per-screen sessions migrate.
+ */
 export function createScrollArea(opts = {}) {
   const area = document.createElement('div');
   area.className = 'scroll-area';
@@ -272,3 +277,18 @@ export function createScrollArea(opts = {}) {
   area.tabIndex = opts.focusable ? 0 : -1;
   return area;
 }
+
+/**
+ * createScreenBody — scrollable region between status strip and console.
+ * visual-parity-v4 SESSION-02.
+ *
+ * @param {{scroll?: boolean, className?: string}} [opts]
+ * @returns {HTMLDivElement}
+ */
+export const createScreenBody = ({ scroll = true, className = '' } = {}) => {
+  const el = document.createElement('div');
+  el.className = ['screen-body', scroll ? '' : 'screen-body--no-scroll', className]
+    .filter(Boolean)
+    .join(' ');
+  return el;
+};
