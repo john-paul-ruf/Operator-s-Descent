@@ -72,10 +72,6 @@ function gearChoices(data, slot) {
     .map(([id, item]) => ({ id, item }));
 }
 
-function fieldErrors(validation, fieldPrefix) {
-  return validation.errors.filter((error) => error.field === fieldPrefix || error.field.startsWith(`${fieldPrefix}.`));
-}
-
 function errorText(error) {
   const code = error?.code || error?.error || error?.field || 'invalid';
   return String(code).replace(/_/g, ' ');
@@ -84,10 +80,6 @@ function errorText(error) {
 function statusText(result) {
   if (!result) return '';
   return result.success ? result.message : `${result.error || result.reason || 'failed'}`;
-}
-
-function targetError(validation, code, field) {
-  return validation.errors.find((error) => error.code === code && (!field || error.field === field));
 }
 
 function actionChangesDraft(before, after) {
@@ -277,10 +269,11 @@ export function mount(container, params = {}) {
   }
 
   function renderActiveTab(summary) {
-    const panel = createPanel({ title: TABS.find(([id]) => id === activeTab)?.[1] || 'EDITOR' });
+    const panel = createPanel();
     panel.classList.add('creation-detail');
     panel.id = `creation-panel-${activeTab}`;
     panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-label', TABS.find(([id]) => id === activeTab)?.[1] || 'Editor');
     panel.dataset.testid = `panel-${activeTab}`;
     panel.style.padding = '12px 16px';
     panel.style.borderLeft = '0';
@@ -426,13 +419,19 @@ export function mount(container, params = {}) {
       panel.appendChild(text('p', 'creation-warning', 'ASSIGN A CLASS BEFORE BUYING EQUIPMENT.'));
       return;
     }
+    panel.append(
+      text('p', 'creation-note accent-text glow', `◈ EQUIPMENT — ${selected.classData.name.toUpperCase()}`),
+      text('p', 'creation-note', '1 WEAPON + 1 ARMOR + 1 OFF-HAND')
+    );
     const current = selected.equipment;
     for (const [slot, label] of [['weapon', 'WEAPON'], ['armor', 'ARMOR'], ['offhand', 'OFFHAND']]) {
       const group = document.createElement('div');
-      group.className = 'creation-choice-grid';
+      group.className = 'creation-section gear-slot-group';
       group.setAttribute('role', 'radiogroup');
       group.setAttribute('aria-label', label);
       group.appendChild(text('h3', 'section-header', label));
+      const choices = document.createElement('div');
+      choices.className = 'creation-choice-grid';
       const none = createButton(slot === 'armor' ? 'NO ARMOR' : 'NONE', {
         selected: current[slot] === null,
         onClick: () => dispatch({ type: 'unequip_gear', gearSlot: slot })
@@ -441,7 +440,7 @@ export function mount(container, params = {}) {
       none.setAttribute('role', 'radio');
       none.setAttribute('aria-checked', String(current[slot] === null));
       none.dataset.testid = `${slot}-none`;
-      group.appendChild(none);
+      choices.appendChild(none);
       for (const { id, item } of gearChoices(data, slot)) {
         const selectedItem = current[slot] === id;
         const preview = validateChangedDraft(draft, { type: 'equip_gear', gearSlot: slot, itemId: id }, data);
@@ -459,8 +458,9 @@ export function mount(container, params = {}) {
         card.dataset.testid = `${slot}-${id}`;
         card.appendChild(text('span', 'card-detail', `${item.creationCost ?? 0} PTS · ${item.rangeBand ?? 'DEF'}${item.defenseBonus ? ` · DEF +${item.defenseBonus}` : ''}`));
         if (reason) card.appendChild(text('span', 'disabled-reason', reason.toUpperCase()));
-        group.appendChild(card);
+        choices.appendChild(card);
       }
+      group.appendChild(choices);
       panel.appendChild(group);
     }
   }
@@ -471,11 +471,15 @@ export function mount(container, params = {}) {
       panel.appendChild(text('p', 'creation-warning', 'ASSIGN A CLASS BEFORE BUYING PROTOCOLS.'));
       return;
     }
-    const deck = text('p', 'creation-note', `DECK ${selected.deck.slotsUsed}/${selected.deck.capacity}`);
+    panel.appendChild(text('p', 'creation-note accent-text glow', `◈ TECH PROTOCOLS — ${selected.classData.name.toUpperCase()}`));
+    const schools = selected.classData.protocolGates?.schools?.map((school) => school.toUpperCase()).join(' / ') || 'NONE';
+    panel.appendChild(text('p', 'creation-note', `${schools} · MAX TIER ${selected.classData.protocolGates?.maxTier ?? 0} · DECK SLOTS ${selected.deck.capacity}`));
+    const deck = text('p', 'creation-note', `SLOTS USED ${selected.deck.slotsUsed} / ${selected.deck.capacity} · COST: TIER × 2 POINTS`);
     deck.dataset.testid = 'deck-summary';
     panel.appendChild(deck);
     const grid = document.createElement('div');
     grid.className = 'creation-choice-grid';
+    grid.style.gridTemplateColumns = '1fr';
     for (const protocol of flattenProtocols(data)) {
       const isSelected = selected.protocols.some((entry) => entry.school === protocol.school && entry.tier === protocol.tier);
       const action = isSelected
@@ -521,12 +525,15 @@ export function mount(container, params = {}) {
     const configs = listConfigs().slice(0, 10);
     const scroll = createScrollArea({ label: 'Saved party configurations', focusable: true });
     scroll.classList.add('blueprint-list');
+    scroll.style.display = 'flex';
+    scroll.style.overflowX = 'auto';
     scroll.dataset.testid = 'config-list';
     if (!configs.length) scroll.appendChild(text('p', 'creation-note', 'NO SAVED CONFIGS.'));
     for (const config of configs) {
       const validation = validateConfig(config, data);
       const row = document.createElement('article');
       row.className = `config-row console-row${validation.valid ? '' : ' invalid'}`;
+      row.style.minWidth = '240px';
       row.dataset.testid = `config-${config.name}`;
       row.append(text('strong', 'config-name', config.name), text('span', 'config-summary', shortBlueprintSummary(config)));
       if (!validation.valid) {
@@ -552,20 +559,31 @@ export function mount(container, params = {}) {
   function renderFooter(summary) {
     const footer = document.createElement('section');
     footer.className = 'creation-actions';
+    footer.classList.add('panel');
+    footer.style.display = 'block';
+    footer.style.padding = '8px 16px 12px';
     footer.dataset.testid = 'creation-actions';
-    const backButton = createButton('◀ BACK', {
-      onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
-    });
-    backButton.dataset.testid = 'back';
-    backButton.classList.add('footer-back-btn');
-    footer.appendChild(backButton);
+    footer.appendChild(renderSavedConfigStrip());
     const errors = summary.validation.errors;
     const errorBox = document.createElement('div');
     errorBox.className = errors.length ? 'creation-error' : 'creation-note';
     errorBox.id = 'creation-errors';
     errorBox.dataset.testid = 'validation-errors';
-    errorBox.textContent = errors.length ? errors.map(errorText).join(' · ') : 'VALID BUILDS FINALIZE ONCE.';
+    errorBox.style.minHeight = '0';
+    errorBox.style.padding = '2px 8px';
+    errorBox.textContent = errors.length ? errors.map(errorText).join(' · ') : 'BUILD VALID · READY TO DESCEND.';
     footer.appendChild(errorBox);
+    const actionRow = document.createElement('div');
+    actionRow.className = 'creation-footer-row';
+    actionRow.style.display = 'flex';
+    actionRow.style.gap = '8px';
+    actionRow.style.minHeight = '48px';
+    const backButton = createButton('◀ BACK', {
+      onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
+    });
+    backButton.dataset.testid = 'back';
+    backButton.classList.add('footer-back-btn');
+    backButton.style.minHeight = '48px';
     const finalizeButton = createButton(finalizing ? 'BOOTING…' : finalized ? 'FINALIZED' : 'FINALIZE & DESCEND', {
       primary: true,
       busy: finalizing,
@@ -575,15 +593,58 @@ export function mount(container, params = {}) {
     });
     finalizeButton.dataset.testid = 'finalize';
     finalizeButton.classList.add('finalize-btn');
-    footer.appendChild(finalizeButton);
-    if (notice && activeTab !== 'blueprints') footer.appendChild(text('p', notice.startsWith('LOADED') ? 'creation-note' : 'creation-error', notice));
-    const selected = selectedSummary(summary);
-    if (selected) {
-      const selectedErrors = fieldErrors(summary.validation, `characters.${summary.activeSlot}`);
-      if (selectedErrors.length) footer.appendChild(text('p', 'creation-error', `SELECTED: ${selectedErrors.map(errorText).join(' · ')}`));
-      if (targetError(summary.validation, 'point_budget')) footer.appendChild(text('p', 'creation-error', 'POINT BUDGET EXCEEDED. REFUND PURCHASES BEFORE FINALIZING.'));
+    finalizeButton.style.minHeight = '48px';
+    finalizeButton.style.padding = '12px 20px';
+    finalizeButton.style.fontSize = '12px';
+    finalizeButton.style.letterSpacing = '0.1em';
+    actionRow.append(backButton, finalizeButton);
+    footer.appendChild(actionRow);
+    if (notice && activeTab !== 'blueprints') {
+      const noticeElement = text('p', notice.startsWith('LOADED') ? 'creation-note' : 'creation-error', notice);
+      noticeElement.style.minHeight = '0';
+      footer.appendChild(noticeElement);
     }
     return footer;
+  }
+
+  function renderSavedConfigStrip() {
+    const section = document.createElement('section');
+    section.className = 'saved-config-strip';
+    section.style.minHeight = '0';
+    section.dataset.testid = 'saved-config-strip';
+    const heading = text('h3', 'section-header accent-text glow', '◈ SAVED CONFIGURATIONS (FR-51)');
+    heading.style.margin = '0 0 4px';
+    section.appendChild(heading);
+    const list = document.createElement('div');
+    list.className = 'blueprint-list';
+    list.style.display = 'flex';
+    list.style.gap = '8px';
+    list.style.overflowX = 'auto';
+    for (const config of listConfigs().slice(0, 10)) {
+      const validation = validateConfig(config, data);
+      const card = createButton(config.name, {
+        error: !validation.valid,
+        description: validation.valid ? shortBlueprintSummary(config) : 'configuration needs repair',
+        onClick: () => loadBlueprint(config.name)
+      });
+      card.classList.add(validation.valid ? 'panel' : 'invalid');
+      card.style.flex = '0 0 auto';
+      card.style.minWidth = '112px';
+      card.style.minHeight = '48px';
+      card.dataset.testid = `saved-strip-${config.name}`;
+      list.appendChild(card);
+    }
+    const save = createButton('+ SAVE', {
+      description: 'Open saved configuration editor',
+      onClick: () => { activeTab = 'blueprints'; render(); }
+    });
+    save.style.flex = '0 0 auto';
+    save.style.minWidth = '80px';
+    save.style.minHeight = '48px';
+    save.dataset.testid = 'open-blueprints';
+    list.appendChild(save);
+    section.appendChild(list);
+    return section;
   }
 
   function saveBlueprint() {

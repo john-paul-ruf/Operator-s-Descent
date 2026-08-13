@@ -156,7 +156,7 @@ describe('creation screen workflow', () => {
     expect(byTestId(container, 'protocol-disrupt-3').disabled).toBe(true);
     byTestId(container, 'protocol-disrupt-2').click();
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 17/80');
-    expect(byTestId(container, 'deck-summary').textContent).toBe('DECK 2/3');
+    expect(byTestId(container, 'deck-summary').textContent).toContain('SLOTS USED 2 / 3');
   });
 
   it('loads last-used blueprints and requires overwrite confirmation', async () => {
@@ -176,6 +176,8 @@ describe('creation screen workflow', () => {
 
     const { container } = await mountCreation({ preloadedSeed: 99 });
     expect(allText(container)).toContain('LOADED LAST USED — ghost cell');
+    expect(byTestId(container, 'saved-config-strip')).not.toBeNull();
+    expect(byTestId(container, 'saved-strip-ghost cell')).not.toBeNull();
     byTestId(container, 'tab-blueprints').click();
     expect(byTestId(container, 'config-bad gate').className).toContain('invalid');
 
@@ -183,6 +185,22 @@ describe('creation screen workflow', () => {
     expect(allText(container).join(' ')).toContain('CONFIRM OVERWRITE — ghost cell');
     byTestId(container, 'save-config').click();
     expect(allText(container).join(' ')).toContain('SAVED CONFIG — ghost cell');
+  });
+
+  it('groups gear, tech, saved configurations, and footer actions like the mock', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 64 });
+    addBreacher(container);
+    byTestId(container, 'tab-gear').click();
+    expect(byTestId(container, 'panel-gear').children.filter((child) => child.classList?.contains('gear-slot-group'))).toHaveLength(3);
+
+    byTestId(container, 'tab-tech').click();
+    expect(byTestId(container, 'deck-summary').textContent).toContain('SLOTS USED 0 / 3');
+    expect(byTestId(container, 'saved-config-strip')).not.toBeNull();
+    expect(byTestId(container, 'back').parentNode.className).toBe('creation-footer-row');
+    expect(byTestId(container, 'finalize').parentNode).toBe(byTestId(container, 'back').parentNode);
+
+    byTestId(container, 'open-blueprints').click();
+    expect(byTestId(container, 'panel-blueprints')).not.toBeNull();
   });
 
   it('finalizes once into a persisted run and navigates with floor one', async () => {
