@@ -8,11 +8,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const MOCKS_DIR = join(ROOT, 'mocks');
-const SHOTS_DIR = join(ROOT, 'program', 'operator-s-descent', 'prompts', 'visual-parity-v3', 'shots');
-const SERVER_URL = 'http://127.0.0.1:8080/';
-
-const VIEWPORT = { width: 1080, height: 1920 };
-const MOCK_VIEWPORT = { width: 600, height: 900 };
+const DEFAULT_SHOTS_DIR = join(ROOT, 'program', 'operator-s-descent', 'prompts', 'visual-parity-v3', 'shots');
+const SERVER_URL = `http://127.0.0.1:${process.env.PORT || 8080}/`;
+const DEFAULT_VIEWPORT = { width: 600, height: 900 };
 
 const SCREENS = {
   title:           { mockFile: 'title.html',          setup: null },
@@ -43,24 +41,22 @@ async function isServerRunning() {
 }
 
 async function ensureServer() {
-  if (await isServerRunning()) return false;
-  const child = spawn(process.execPath, [join(HERE, 'start.js')], {
-    detached: true,
+  if (await isServerRunning()) return null;
+  const child = spawn(process.execPath, [join(HERE, 'server.js')], {
     stdio: 'ignore',
-    cwd: ROOT
+    cwd: ROOT,
+    env: { ...process.env, HOST: '127.0.0.1', PORT: new URL(SERVER_URL).port }
   });
-  child.unref();
   for (let i = 0; i < 50; i++) {
     await sleep(200);
-    if (await isServerRunning()) return true;
+    if (await isServerRunning()) return child;
   }
+  child.kill();
   throw new Error('Server did not start within 10s');
 }
 
-async function stopServer() {
-  try {
-    spawn(process.execPath, [join(HERE, 'stop.js')], { stdio: 'ignore', cwd: ROOT });
-  } catch {}
+function stopServer(child) {
+  child?.kill();
 }
 
 async function setupProdPage(page, screenKey) {
@@ -128,23 +124,24 @@ async function setupProdPage(page, screenKey) {
   }
 }
 
-async function captureSideBySide(browser, screenKey) {
+async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
   const mockFile = SCREENS[screenKey].mockFile;
   const mockPath = join(MOCKS_DIR, mockFile);
   if (!existsSync(mockPath)) {
     console.error(`Mock file not found: ${mockPath}`);
-    return null;
+    return { screen: screenKey, setupStatus: 'mock-missing' };
   }
 
-  const mockPage = await browser.newPage({ viewport: MOCK_VIEWPORT });
+  const mockPage = await browser.newPage({ viewport });
   await mockPage.goto(`file://${mockPath}`, { waitUntil: 'domcontentloaded' });
   await mockPage.waitForTimeout(1500);
   const mockFrame = mockPage.locator('.portrait-frame').first();
   await mockFrame.waitFor({ state: 'visible', timeout: 5000 });
+  const mockSize = await mockFrame.boundingBox();
   const mockBuf = await mockFrame.screenshot({ type: 'png' });
   await mockPage.close();
 
-  const prodPage = await browser.newPage({ viewport: VIEWPORT });
+  const prodPage = await browser.newPage({ viewport });
   await prodPage.addInitScript(() => {
     localStorage.setItem('od_settings', JSON.stringify({
       masterMute: true,
@@ -161,21 +158,24 @@ async function captureSideBySide(browser, screenKey) {
   } catch (error) {
     console.error(`Setup failed for ${screenKey}: ${error.message}`);
     await prodPage.close();
-    return null;
+    return { screen: screenKey, setupStatus: `failed: ${error.message}` };
   }
   await prodPage.waitForTimeout(1000);
   const prodFrame = prodPage.locator('#portrait-frame').first();
   await prodFrame.waitFor({ state: 'visible', timeout: 5000 });
+  const prodSize = await prodFrame.boundingBox();
   const prodBuf = await prodFrame.screenshot({ type: 'png' });
   await prodPage.close();
 
   console.log(`  ${screenKey}: mock=${mockBuf.length}B prod=${prodBuf.length}B`);
 
-  const combinedPage = await browser.newPage({ viewport: { width: 2160, height: 1920 } });
+  const combinedWidth = Math.ceil(mockSize.width + prodSize.width);
+  const combinedHeight = Math.ceil(Math.max(mockSize.height, prodSize.height));
+  const combinedPage = await browser.newPage({ viewport: { width: combinedWidth, height: combinedHeight } });
   await combinedPage.setContent(
     `<html><body style="margin:0;padding:0;display:flex;background:#000">
-       <img src="data:image/png;base64,${prodBuf.toString('base64')}" style="width:1080px;height:1920px"/>
-       <img src="data:image/png;base64,${mockBuf.toString('base64')}" style="width:1080px;height:1920px"/>
+       <img src="data:image/png;base64,${prodBuf.toString('base64')}"/>
+       <img src="data:image/png;base64,${mockBuf.toString('base64')}"/>
      </body></html>`,
     { waitUntil: 'domcontentloaded' }
   );
@@ -184,16 +184,27 @@ async function captureSideBySide(browser, screenKey) {
   await combinedPage.close();
 
   const baseName = `${screenKey}.png`;
-  writeFileSync(join(SHOTS_DIR, baseName), sideBySideBuf);
-  writeFileSync(join(SHOTS_DIR, `${screenKey}-prod.png`), prodBuf);
-  writeFileSync(join(SHOTS_DIR, `${screenKey}-mock.png`), mockBuf);
+  const sideBySidePath = resolve(join(shotsDir, baseName));
+  const prodOutputPath = resolve(join(shotsDir, `${screenKey}-prod.png`));
+  const mockOutputPath = resolve(join(shotsDir, `${screenKey}-mock.png`));
+  writeFileSync(sideBySidePath, sideBySideBuf);
+  writeFileSync(prodOutputPath, prodBuf);
+  writeFileSync(mockOutputPath, mockBuf);
 
-  return resolve(join(SHOTS_DIR, baseName));
+  return {
+    screen: screenKey,
+    mockPath: mockOutputPath,
+    prodPath: prodOutputPath,
+    sideBySidePath,
+    mockSize: { width: Math.round(mockSize.width), height: Math.round(mockSize.height) },
+    prodSize: { width: Math.round(prodSize.width), height: Math.round(prodSize.height) },
+    setupStatus: 'ready'
+  };
 }
 
 function parseArgs(argv) {
   const args = argv.slice(2);
-  const result = { screen: null, all: false, list: false };
+  const result = { screen: null, all: false, list: false, viewport: DEFAULT_VIEWPORT, outDir: DEFAULT_SHOTS_DIR };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--screen') {
       result.screen = args[++i];
@@ -201,9 +212,24 @@ function parseArgs(argv) {
       result.all = true;
     } else if (args[i] === '--list') {
       result.list = true;
+    } else if (args[i] === '--viewport') {
+      const value = args[++i];
+      const match = /^(\d+)x(\d+)$/.exec(value || '');
+      if (!match || Number(match[1]) < 1 || Number(match[2]) < 1) {
+        console.error(`Invalid viewport: ${value}`);
+        process.exit(2);
+      }
+      result.viewport = { width: Number(match[1]), height: Number(match[2]) };
+    } else if (args[i] === '--out-dir') {
+      const value = args[++i];
+      if (!value) {
+        console.error('--out-dir requires a path');
+        process.exit(2);
+      }
+      result.outDir = resolve(ROOT, value);
     } else {
       console.error(`Unknown flag: ${args[i]}`);
-      console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list]');
+      console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list] [--viewport WIDTHxHEIGHT] [--out-dir <path>]');
       process.exit(2);
     }
   }
@@ -218,7 +244,7 @@ async function main() {
     return;
   }
 
-  mkdirSync(SHOTS_DIR, { recursive: true });
+  mkdirSync(args.outDir, { recursive: true });
 
   let targets;
   if (args.all) {
@@ -231,27 +257,28 @@ async function main() {
     }
     targets = [args.screen];
   } else {
-    console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list]');
+    console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list] [--viewport WIDTHxHEIGHT] [--out-dir <path>]');
     process.exit(2);
   }
 
-  const weStartedServer = await ensureServer();
+  const server = await ensureServer();
   const browser = await chromium.launch({ headless: true });
 
   try {
+    const report = [];
     for (const screenKey of targets) {
-      const path = await captureSideBySide(browser, screenKey);
-      if (path) {
-        console.log(path);
+      const entry = await captureSideBySide(browser, screenKey, args.viewport, args.outDir);
+      report.push(entry);
+      if (entry.sideBySidePath) {
+        console.log(entry.sideBySidePath);
       } else {
         console.log(`SKIP: ${screenKey}`);
       }
     }
+    writeFileSync(join(args.outDir, 'report.json'), `${JSON.stringify(report)}\n`);
   } finally {
     await browser.close();
-    if (weStartedServer) {
-      await stopServer();
-    }
+    stopServer(server);
   }
 }
 
