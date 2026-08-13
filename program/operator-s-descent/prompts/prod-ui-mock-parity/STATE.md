@@ -13,7 +13,7 @@
 
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---------|---------|------|--------|------------|-----------|-------|
-| 01 | Shared Visual System and Parity Harness | M56, M77, M78, M79, M97, M99 | `./styles/base.css`, `./styles/components.css`, `./styles/crt.css`, `./src/ui/components.js`, `./scripts/screenshot-parity.js`, `./tests/ui/components.test.js`, `./tests/tooling/check-mock-parity.test.js` | blocked | 3/4 | — | Checkpoint shortfall: handoff claimed 4, git log shows 3 `prod-ui-mock-parity SESSION-01` checkpoint commits. Mu reported done; see `./.forge/results/SESSION-01.result.md`. |
+| 01 | Shared Visual System and Parity Harness | M56, M77, M78, M79, M97, M99 | `./styles/base.css`, `./styles/components.css`, `./styles/crt.css`, `./src/ui/components.js`, `./scripts/screenshot-parity.js`, `./tests/ui/components.test.js`, `./tests/tooling/check-mock-parity.test.js` | done | 4/4 | 2026-08-13 | Fixed parity capture dimensions/reporting, aligned shared frame and CRT styling, and reduced mock-class warnings from 73 to 2 intentional deployment markers. Follow-up: SESSION-02 standalone spacing/overflow; SESSION-03 creation density; SESSION-04 in-run proportions; SESSION-05 console pane alignment. |
 | 02 | Standalone Screens Match Mocks | M68, M72, M73, M74, M75, M76 | `./src/ui/screens/title.js`, `./src/ui/screens/library.js`, `./src/ui/screens/scorecard.js`, `./src/ui/screens/import.js`, `./src/ui/screens/tutorial.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js`, `./tests/ui/persistence-screens.test.js` | pending | — | Runs after S01; disjoint from S03–S05. |
 | 03 | Creation Builder Mock Parity | M69, M92 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | pending | — | Runs after S01; disjoint from S02/S04/S05. |
 | 04 | In-Run Viewport, Status, and Combat Shell Parity | M58, M59, M70, M71 | `./src/ui/playfield.js`, `./src/ui/status-strip.js`, `./src/ui/screens/exploration.js`, `./src/ui/screens/combat.js`, `./tests/ui/playfield.test.js`, `./tests/ui/status-strip.test.js`, `./tests/ui/exploration-screen.test.js`, `./tests/ui/combat-screen.test.js` | pending | — | Runs after S01; reads console only. |
@@ -74,9 +74,9 @@ flowchart TD
 
 ## Handoff Notes (Jikijitsu writes here after each session — from Mu's handoff JSON, verbatim)
 
-### SESSION-01 — blocked — 2026-08-13
+### SESSION-01 — done — 2026-08-13
 
-**Jikijitsu receive note:** checkpoint shortfall; handoff claimed 4, git log shows 3 checkpoint commits for the lease paths. Dependents remain stalled unless human overrides.
+**Jikijitsu receive note:** full git log shows checkpoint 4 (`d6d970b`) as an empty checkpoint commit for the baseline-capture checkpoint; accepted after human correction. Path-limited lease log shows source-changing checkpoints 1–3.
 
 ```json
 {
