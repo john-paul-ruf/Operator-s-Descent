@@ -244,19 +244,34 @@ export function mount(container, params = {}) {
   };
 
   clear(container);
+  container.classList.add('combat-screen', 'in-run-screen');
+  container.style.position = 'relative';
+  container.style.overflow = 'hidden';
   const inputHandler = createInputHandler({ legacyActions: false });
   inputHandler.bindToElement(container);
 
   let statusBar = createStatusBar(runState, combatState);
+  statusBar.classList.add('panel', 'combat-status', 'in-run-status');
+  statusBar.style.flex = '0 0 auto';
   container.appendChild(statusBar);
 
+  const playfieldBody = document.createElement('div');
+  playfieldBody.className = 'combat-grid playfield-body combat-playfield';
+  playfieldBody.style.display = 'block';
+  playfieldBody.style.flex = '1 1 auto';
+  playfieldBody.style.minHeight = '0';
+  playfieldBody.style.marginBottom = '96px';
+  playfieldBody.style.overflow = 'hidden';
+  playfieldBody.style.position = 'relative';
+  container.appendChild(playfieldBody);
+
   const canvas = document.createElement('canvas');
-  canvas.className = 'playfield-canvas';
+  canvas.className = 'playfield-canvas combat-grid-canvas';
   canvas.width = 384;
   canvas.height = 768;
   canvas.dataset.testid = 'combat-canvas';
 
-  container.appendChild(canvas);
+  playfieldBody.appendChild(canvas);
   const playfield = createPlayfield(canvas);
   playfield.setAccent(themeFor(floor, data) || '#7ec8e3');
 
@@ -632,6 +647,8 @@ export function mount(container, params = {}) {
     if (!mounted) return;
     playfield.renderCombat(combatState, combatLattice, overlayOptions());
     const nextStatusBar = createStatusBar(runState, combatState);
+    nextStatusBar.classList.add('panel', 'combat-status', 'in-run-status');
+    nextStatusBar.style.flex = '0 0 auto';
     statusBar.cleanup?.();
     if (typeof statusBar.replaceWith === 'function') statusBar.replaceWith(nextStatusBar);
     else statusBar.parentNode?.replaceChild?.(nextStatusBar, statusBar);

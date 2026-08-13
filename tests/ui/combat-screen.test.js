@@ -112,6 +112,15 @@ function byTestId(root, testid) {
   return null;
 }
 
+function byClass(root, className) {
+  if (root.classList?.contains(className)) return root;
+  for (const child of root.children || []) {
+    const found = byClass(child, className);
+    if (found) return found;
+  }
+  return null;
+}
+
 function keyEvent(code) {
   return { code, key: code, repeat: false, preventDefault() { this.prevented = true; } };
 }
@@ -207,6 +216,25 @@ beforeEach(installDocument);
 afterEach(() => { delete globalThis.document; });
 
 describe('combat screen controller', () => {
+  it('composes mock-aligned status grid and COMBAT console regions', async () => {
+    const { container } = await mountCombat();
+    const canvas = byTestId(container, 'combat-canvas');
+    const playfield = byClass(container, 'combat-playfield');
+
+    expect(container.classList.contains('combat-screen')).toBe(true);
+    expect(container.children.map((child) => child.className)).toEqual([
+      expect.stringContaining('combat-status'),
+      expect.stringContaining('combat-grid'),
+      expect.stringContaining('console-bar')
+    ]);
+    expect(playfield.style.overflow).toBe('hidden');
+    expect(playfield.children).toEqual([canvas]);
+    expect([canvas.width, canvas.height]).toEqual([384, 768]);
+    expect(canvas.classList.contains('combat-grid-canvas')).toBe(true);
+    expect(byTestId(container, 'console-tab-combat').getAttribute('aria-selected')).toBe('true');
+    expect(byTestId(container, 'console-tab-move').disabled).toBe(true);
+  });
+
   it('requires target selection and explicit confirmation before resolving an attack', async () => {
     const combat = combatState([partyActor(), enemyActor({ hp: 10, hpMax: 10 })]);
     const { container } = await mountCombat({ combat });
