@@ -17,7 +17,7 @@
 | 02 | Standalone Screens Match Mocks | M68, M72, M73, M74, M75, M76 | `./src/ui/screens/title.js`, `./src/ui/screens/library.js`, `./src/ui/screens/scorecard.js`, `./src/ui/screens/import.js`, `./src/ui/screens/tutorial.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js`, `./tests/ui/persistence-screens.test.js` | done | 4/4 | 2026-08-13 | Aligned all six standalone screens with mock composition, fixed title branching, and preserved persistence/import/settings behavior. Follow-up: scorecard DOM/tests are aligned, but production screenshot route needs harness support for scorecard state. |
 | 03 | Creation Builder Mock Parity | M69, M92 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | pending | — | Runs after S01; disjoint from S02/S04/S05. |
 | 04 | In-Run Viewport, Status, and Combat Shell Parity | M58, M59, M70, M71 | `./src/ui/playfield.js`, `./src/ui/status-strip.js`, `./src/ui/screens/exploration.js`, `./src/ui/screens/combat.js`, `./tests/ui/playfield.test.js`, `./tests/ui/status-strip.test.js`, `./tests/ui/exploration-screen.test.js`, `./tests/ui/combat-screen.test.js` | done | 5/5 | 2026-08-13 | Aligned exploration/combat status groups, shell composition, canvas sizing, fog textures, markers, initiative rail, and targeting overlays with the mocks. Follow-up: future harness update should provide deterministic combat state and transient exploration-alert capture. |
-| 05 | Console Shell and Mode Pane Parity | M60–M67 | `./src/ui/console/console.js`, `./src/ui/console/move.js`, `./src/ui/console/combat.js`, `./src/ui/console/party.js`, `./src/ui/console/gear.js`, `./src/ui/console/tech.js`, `./src/ui/console/loot.js`, `./src/ui/console/log.js`, `./tests/ui/console.test.js`, `./tests/ui/party-gear.test.js`, `./tests/ui/tech-loot-log.test.js` | pending | — | Runs after S01; reads screen shell only. |
+| 05 | Console Shell and Mode Pane Parity | M60–M67 | `./src/ui/console/console.js`, `./src/ui/console/move.js`, `./src/ui/console/combat.js`, `./src/ui/console/party.js`, `./src/ui/console/gear.js`, `./src/ui/console/tech.js`, `./src/ui/console/loot.js`, `./src/ui/console/log.js`, `./tests/ui/console.test.js`, `./tests/ui/party-gear.test.js`, `./tests/ui/tech-loot-log.test.js` | done | 5/5 | 2026-08-13 | Aligned the seven-mode console shell and all mode panes with mock composition while preserving movement, combat, equipment, protocol, loot, junk, and sharing behavior. Follow-up: future parity-harness work should provide populated fixtures for LOOT/combat and map MOVE to `./mocks/exploration.html`. |
 
 ## Wave Plan
 
@@ -148,6 +148,37 @@ flowchart TD
     "./tests/ui/status-strip.test.js",
     "./tests/ui/exploration-screen.test.js",
     "./tests/ui/combat-screen.test.js"
+  ],
+  "blockedReason": null
+}
+```
+
+### SESSION-05 — done — 2026-08-13
+
+**Jikijitsu receive note:** full git log shows checkpoint 5 (`0a4aae3`) as an empty sweep checkpoint; path-limited lease log shows source-changing checkpoints 1–4. Accepted after prior human correction that empty checkpoint commits count.
+
+```json
+{
+  "session": "05",
+  "status": "done",
+  "checkpoint": 5,
+  "notes": "Aligned the seven-mode console shell and all mode panes with mock composition while preserving movement, combat, equipment, protocol, loot, junk, and sharing behavior.",
+  "delivered": "Added accessible shell state semantics, mock-aligned pane headings and groupings, corrected combat direction layout, target range/cover previews, timestamped log rows, share panel presentation, and expanded structural coverage.",
+  "verification": "Syntax checks passed; targeted Vitest: 19/19 passed; design scan: 0 errors and 10 warnings; six requested parity screenshots generated and inspected; full Vitest: 1771/1772 passed.",
+  "surprises": "Full Vitest retains one pre-existing failure because five scroll tokens in ./styles/base.css are absent from ./specs/design.md, both outside this lease. The parity harness maps console-move to ./mocks/console-log.html, cannot activate LOOT with its generated fixture, and does not initiate combat for the combat capture, limiting direct visual comparison for those states.",
+  "followUp": "Console PARTY, GEAR, TECH, and LOG compositions align structurally with their mocks. Future parity-harness work should provide populated fixtures for LOOT and combat and map MOVE to ./mocks/exploration.html.",
+  "filesTouched": [
+    "./src/ui/console/console.js",
+    "./src/ui/console/move.js",
+    "./src/ui/console/combat.js",
+    "./src/ui/console/party.js",
+    "./src/ui/console/gear.js",
+    "./src/ui/console/tech.js",
+    "./src/ui/console/loot.js",
+    "./src/ui/console/log.js",
+    "./tests/ui/console.test.js",
+    "./tests/ui/party-gear.test.js",
+    "./tests/ui/tech-loot-log.test.js"
   ],
   "blockedReason": null
 }
