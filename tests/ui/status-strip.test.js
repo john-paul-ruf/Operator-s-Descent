@@ -58,6 +58,7 @@ describe('status strip', () => {
     expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '07', 'SEED', '123456…cdef', 'PARTY', '8/10', 'DANGER', 'COR 0.25', 'CLK', '0.50']));
     expect(findByClass(strip, 'status-seed').getAttribute('aria-label')).toBe('World seed 123456789abcdef');
     expect(['status-depth-group', 'status-seed-group', 'status-party-group', 'status-danger-group', 'status-clock-group'].every((name) => findByClass(strip, name))).toBe(true);
+    expect(findByClass(strip, 'status-depth-group').style.flexDirection).toBe('column');
   });
 
   test('updates live clock and cleanup removes the subscription', () => {
@@ -79,7 +80,9 @@ describe('status strip', () => {
     ]);
     const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
 
-    expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '03', 'ROUND', '04', '◈ INITIATIVE ORDER', '1', '2', 'ACTIVE', '9/12', '3/6', 'AP 2', '1 MV']));
+    expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '03', 'ROUND', '04', 'SEED', '◈ INITIATIVE ORDER', '1', '2', 'ACTIVE', '9/12', '3/6', 'AP 2', '1 MV']));
+    expect(strip.className).toContain('status-strip-combat');
+    expect(strip.style.gridTemplateColumns).toBe('auto auto auto minmax(0, 1fr)');
     expect(findByClass(strip, 'status-active-sigil')).not.toBe(null);
     expect(findByClass(strip, 'init-rail').children).toHaveLength(2);
     expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');

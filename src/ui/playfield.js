@@ -39,9 +39,14 @@ function actorRole(actor) {
   return actor.side === 'enemy' ? 'enemy' : actor.side === 'echo' ? 'echo' : 'player';
 }
 
+function codepointFromSigilId(value) {
+  const match = typeof value === 'string' && /^pua-([0-9a-f]{1,6})$/i.exec(value);
+  return match ? Number.parseInt(match[1], 16) : null;
+}
+
 function actorSigil(actor) {
   const role = actorRole(actor);
-  return actor.sigilCodepoint || actor.sigilId || (role === 'enemy' ? 0xE030 : 0xE000);
+  return actor.sigilCodepoint || codepointFromSigilId(actor.sigilId) || (role === 'enemy' ? 0xE030 : 0xE000);
 }
 
 function drawCreatureSigil(ctx, { codepoint, size, renderSize = size, role, x, y, color }) {
@@ -75,15 +80,20 @@ function drawCell(ctx, x, y, size, cellType, visible = true) {
 }
 
 function drawToken(ctx, { x, y, radius, color, codepoint, size, renderSize, role }) {
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fillStyle = role === 'player' ? color : 'rgba(232,58,58,0.18)';
-  ctx.fill();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.shadowColor = color;
   ctx.shadowBlur = 8;
-  ctx.stroke();
+  if (typeof ctx.beginPath === 'function' && typeof ctx.arc === 'function') {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    ctx.strokeRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
   ctx.shadowBlur = 0;
   return drawCreatureSigil(ctx, { codepoint, size, renderSize, role, x, y, color });
 }
@@ -172,7 +182,7 @@ export function createPlayfield(canvas) {
       for (const e of lattice.getEnemySpawns?.() || []) {
         if (fogState[e.y * w + e.x] !== 2) continue;
         drawToken(ctx, {
-          codepoint: e.sigilCodepoint || 0xE030,
+          codepoint: e.sigilCodepoint || codepointFromSigilId(e.sigilId) || 0xE030,
           size: 72,
           renderSize: 14,
           role: 'enemy',

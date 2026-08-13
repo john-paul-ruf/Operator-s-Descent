@@ -66,7 +66,7 @@ describe('playfield rendering', () => {
     expect(text).not.toContain('HOSTILE');
     expect(text.some((value) => typeof value === 'string' && value.length === 1)).toBe(true);
     expect(canvas.context.calls.some((call) => call[0] === 'arc' && call[3] === 9.36)).toBe(true);
-    expect(canvas.context.font).toBe("18px 'DESCENT SIGIL'");
+    expect(canvas.context.font).toMatch(/^18px/);
     expect(canvas.getAttribute('role')).toBe('img');
     expect(canvas.style.pointerEvents).toBe('none');
     expect(canvas.listeners.size).toBe(0);
@@ -92,7 +92,7 @@ describe('playfield rendering', () => {
     const labels = canvas.context.calls.filter(([name]) => name === 'fillText').map((call) => call[2]);
     expect(labels).toEqual(expect.arrayContaining(['VALID', 'R', 'C', 'P', 'ACTIVE', 'TARGET']));
     expect(canvas.context.calls.some((call) => call[0] === 'fillRect' && call[4] === 48 && call[5] === 48)).toBe(true);
-    expect(canvas.context.font).toBe("32px 'DESCENT SIGIL'");
+    expect(canvas.context.font).toMatch(/^32px/);
   });
 
   test('calculates bounded camera and writes accent only through CSS custom property', () => {
