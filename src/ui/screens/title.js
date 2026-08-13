@@ -1,16 +1,16 @@
-import { getFlag, setFlag } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
-import { createButton, createPanel } from '../components.js';
+import { createButton } from '../components.js';
 import { createInputHandler } from '../input.js';
-
-const TUTORIAL_FLAG = 'tutorialDeclined';
 
 const BRANCHES = [
   ['◈ BEGIN NEW RUN', 'creation', 'title-begin-new-run'],
   ['◈ RUN LIBRARY', 'library', 'title-run-library'],
-  ['◈ IMPORT LINK', 'import', 'title-import-link'],
-  ['◈ TUTORIAL', 'tutorial', 'title-tutorial'],
-  ['◈ SETTINGS', 'settings', 'title-settings']
+  ['◈ IMPORT LINK', 'import', 'title-import-link']
+];
+
+const SECONDARY_BRANCHES = [
+  ['TUTORIAL', 'tutorial', 'title-tutorial'],
+  ['SETTINGS', 'settings', 'title-settings']
 ];
 
 function navigate(screen, params = {}) {
@@ -85,6 +85,20 @@ export function mount(container) {
     branchList.appendChild(button);
   }
 
+  const secondaryRow = document.createElement('div');
+  secondaryRow.style.display = 'flex';
+  secondaryRow.style.gap = '12px';
+  secondaryRow.dataset.testid = 'title-secondary-branches';
+  for (const [label, route, testid] of SECONDARY_BRANCHES) {
+    const button = createButton(label, { onClick: () => navigate(route) });
+    button.classList.add('btn-crt');
+    button.style.flex = '1';
+    button.dataset.testid = testid;
+    cleanups.push(() => button.cleanup?.());
+    secondaryRow.appendChild(button);
+  }
+  branchList.appendChild(secondaryRow);
+
   const notice = document.createElement('p');
   notice.className = 'console-note';
   notice.setAttribute('aria-live', 'polite');
@@ -92,39 +106,7 @@ export function mount(container) {
 
   main.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline, startButton, branchList);
 
-  if (getFlag(TUTORIAL_FLAG) !== true) {
-    const offer = createPanel({ title: 'FIRST-TIME BRIEFING', elevated: true });
-    offer.classList.add('tutorial-offer');
-    offer.dataset.testid = 'tutorial-offer';
-
-    const body = document.createElement('p');
-    body.textContent = 'Read the console manual now, or decline once and use the dedicated Tutorial control later.';
-
-    const tutorial = createButton('OPEN TUTORIAL', {
-      primary: true,
-      onClick: () => navigate('tutorial', { offered: true })
-    });
-    tutorial.dataset.testid = 'title-offer-tutorial';
-
-    const decline = createButton('DECLINE TUTORIAL', {
-      onClick: () => {
-        const result = setFlag(TUTORIAL_FLAG, true);
-        notice.textContent = result.success
-          ? 'TUTORIAL OFFER SUPPRESSED'
-          : `TUTORIAL DISMISSED FOR THIS SESSION — ${result.error || 'storage unavailable'}`;
-        tutorial.cleanup?.();
-        decline.cleanup?.();
-        offer.remove();
-      }
-    });
-    decline.dataset.testid = 'title-decline-tutorial';
-
-    cleanups.push(() => tutorial.cleanup?.(), () => decline.cleanup?.());
-    offer.append(body, tutorial, decline);
-    screen.append(header, main, offer, notice);
-  } else {
-    screen.append(header, main, notice);
-  }
+  screen.append(header, main, notice);
 
   const footer = document.createElement('footer');
   footer.className = 'title-footer';

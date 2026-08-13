@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
-import { getFlag, loadSettings, saveSettings, setFlag } from '../../src/state/library.js';
+import { getFlag, loadSettings, saveSettings } from '../../src/state/library.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 
 class FakeClassList {
@@ -178,6 +178,9 @@ describe('title screen', () => {
     const branches = byTestId(container, 'title-branches');
     expect(branches.classList.contains('hidden-branches')).toBe(false);
     expect(allText(container)).toContain('◈ BEGIN NEW RUN');
+    expect(byTestId(container, 'title-secondary-branches').children).toHaveLength(2);
+    expect(byTestId(container, 'title-tutorial').textContent).toBe('TUTORIAL');
+    expect(byTestId(container, 'title-settings').textContent).toBe('SETTINGS');
 
     await start.click();
     expect(branches.classList.contains('hidden-branches')).toBe(true);
@@ -190,31 +193,13 @@ describe('title screen', () => {
     offNavigate();
   });
 
-  it('shows the first-time tutorial offer and allows declining it', async () => {
-    const seen = [];
-    const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
-    const { mount } = await import('../../src/ui/screens/title.js');
-    const container = new FakeElement('div');
-    const controller = mount(container);
-
-    expect(byTestId(container, 'tutorial-offer')).toBeTruthy();
-    expect(byTestId(container, 'title-offer-tutorial')).toBeTruthy();
-
-    await byTestId(container, 'title-decline-tutorial').click();
-    expect(getFlag('tutorialDeclined')).toBe(true);
-    expect(byTestId(container, 'tutorial-offer')).toBeNull();
-
-    controller.unmount();
-    offNavigate();
-  });
-
-  it('does not auto-offer the tutorial once the flag exists', async () => {
-    setFlag('tutorialDeclined', true);
+  it('keeps the default composition free of a first-time tutorial offer', async () => {
     const { mount } = await import('../../src/ui/screens/title.js');
     const container = new FakeElement('div');
     mount(container);
 
     expect(byTestId(container, 'tutorial-offer')).toBeNull();
+    expect(byTestId(container, 'title-offer-tutorial')).toBeNull();
     expect(byTestId(container, 'title-tutorial')).toBeTruthy();
   });
 });
