@@ -15,7 +15,7 @@
 |---|---------|---------|------|--------|------------|-----------|-------|
 | 01 | Shared Visual System and Parity Harness | M56, M77, M78, M79, M97, M99 | `./styles/base.css`, `./styles/components.css`, `./styles/crt.css`, `./src/ui/components.js`, `./scripts/screenshot-parity.js`, `./tests/ui/components.test.js`, `./tests/tooling/check-mock-parity.test.js` | done | 4/4 | 2026-08-13 | Fixed parity capture dimensions/reporting, aligned shared frame and CRT styling, and reduced mock-class warnings from 73 to 2 intentional deployment markers. Follow-up: SESSION-02 standalone spacing/overflow; SESSION-03 creation density; SESSION-04 in-run proportions; SESSION-05 console pane alignment. |
 | 02 | Standalone Screens Match Mocks | M68, M72, M73, M74, M75, M76 | `./src/ui/screens/title.js`, `./src/ui/screens/library.js`, `./src/ui/screens/scorecard.js`, `./src/ui/screens/import.js`, `./src/ui/screens/tutorial.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js`, `./tests/ui/persistence-screens.test.js` | done | 4/4 | 2026-08-13 | Aligned all six standalone screens with mock composition, fixed title branching, and preserved persistence/import/settings behavior. Follow-up: scorecard DOM/tests are aligned, but production screenshot route needs harness support for scorecard state. |
-| 03 | Creation Builder Mock Parity | M69, M92 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | pending | — | Runs after S01; disjoint from S02/S04/S05. |
+| 03 | Creation Builder Mock Parity | M69, M92 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | done | 4/4 | 2026-08-13 | Aligned creation header, character rail, tabs, all builder panes, saved configurations, projected stats, and footer with the mock while preserving creation-model behavior. Follow-up: pane content scrolls internally while summary/tabs/saved-config strip/footer remain fixed. |
 | 04 | In-Run Viewport, Status, and Combat Shell Parity | M58, M59, M70, M71 | `./src/ui/playfield.js`, `./src/ui/status-strip.js`, `./src/ui/screens/exploration.js`, `./src/ui/screens/combat.js`, `./tests/ui/playfield.test.js`, `./tests/ui/status-strip.test.js`, `./tests/ui/exploration-screen.test.js`, `./tests/ui/combat-screen.test.js` | done | 5/5 | 2026-08-13 | Aligned exploration/combat status groups, shell composition, canvas sizing, fog textures, markers, initiative rail, and targeting overlays with the mocks. Follow-up: future harness update should provide deterministic combat state and transient exploration-alert capture. |
 | 05 | Console Shell and Mode Pane Parity | M60–M67 | `./src/ui/console/console.js`, `./src/ui/console/move.js`, `./src/ui/console/combat.js`, `./src/ui/console/party.js`, `./src/ui/console/gear.js`, `./src/ui/console/tech.js`, `./src/ui/console/loot.js`, `./src/ui/console/log.js`, `./tests/ui/console.test.js`, `./tests/ui/party-gear.test.js`, `./tests/ui/tech-loot-log.test.js` | done | 5/5 | 2026-08-13 | Aligned the seven-mode console shell and all mode panes with mock composition while preserving movement, combat, equipment, protocol, loot, junk, and sharing behavior. Follow-up: future parity-harness work should provide populated fixtures for LOOT/combat and map MOVE to `./mocks/exploration.html`. |
 
@@ -179,6 +179,26 @@ flowchart TD
     "./tests/ui/console.test.js",
     "./tests/ui/party-gear.test.js",
     "./tests/ui/tech-loot-log.test.js"
+  ],
+  "blockedReason": null
+}
+```
+
+### SESSION-03 — done — 2026-08-13
+
+```json
+{
+  "session": "03",
+  "status": "done",
+  "checkpoint": 4,
+  "notes": "Aligned creation header, character rail, tabs, all builder panes, saved configurations, projected stats, and footer with the mock while preserving creation-model behavior.",
+  "delivered": "Recomposed the creation screen with three primary readouts, four character slots, internal scrolling, two-column class cards, 220px sigils, 96px attribute controls, grouped gear and protocol panes, horizontal blueprint access, and compact footer actions.",
+  "verification": "Syntax passed; targeted Vitest: 6/6 passed; design scan: 0 errors and 10 pre-existing warnings; creation parity screenshot generated and inspected; full Vitest: 1772/1773 passed.",
+  "surprises": "Full Vitest retains one pre-existing token-registration failure involving five scroll tokens in ./styles/base.css and ./specs/design.md, outside this lease. The parity harness captures production after adding an unassigned character, while the mock depicts a configured Breacher. Untracked ./node_modules/ and ./.DS_Store remained untouched.",
+  "followUp": "All creation panes now use the scrollable ./src/ui/components.js screen-body contract. The class, sigil, attributes, gear, tech, and blueprint content scrolls internally while the summary, tabs, saved-config strip, and footer remain fixed.",
+  "filesTouched": [
+    "./src/ui/screens/creation.js",
+    "./tests/ui/creation-screen.test.js"
   ],
   "blockedReason": null
 }
