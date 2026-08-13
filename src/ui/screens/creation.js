@@ -2,7 +2,7 @@ import { createAttributeRow, createButton, createPanel, createScreenBody, create
 import { createInputHandler } from '../input.js';
 import { bus } from '../../state/bus.js';
 import { gameData as compatibilityData } from '../../main.js';
-import { ATTRIBUTE_KEYS } from '../../rules/attributes.js';
+import { ATTRIBUTE_KEYS, modifier } from '../../rules/attributes.js';
 import { deckSlotCost } from '../../rules/protocols.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { generateFloor } from '../../floor/generator.js';
@@ -15,6 +15,7 @@ import { blueprintFromDraft, deleteConfig, getLastUsed, listConfigs, loadConfig,
 import { applyCreationAction, createCreationDraft, selectCreationState } from '../creation-model.js';
 
 const ATTR_LABELS = { mgt: 'MGT', fin: 'FIN', vit: 'VIT', res: 'RES', foc: 'FOC', sig: 'SIG' };
+const ATTR_NAMES = { mgt: 'MIGHT', fin: 'FINESSE', vit: 'VITALITY', res: 'RESONANCE', foc: 'FOCUS', sig: 'SIGNAL' };
 const TABS = [
   ['class', 'CLASS'], ['sigil', 'SIGIL'], ['attrs', 'ATTRS'], ['gear', 'GEAR'], ['tech', 'TECH'], ['blueprints', 'BLUEPRINTS']
 ];
@@ -148,6 +149,8 @@ export function mount(container, params = {}) {
     clear(container);
     const root = document.createElement('main');
     root.className = 'creation-wrapper screen-container';
+    root.style.gap = '0';
+    root.style.padding = '0';
     root.dataset.testid = 'creation-root';
     root.appendChild(renderHeader(summary));
     root.appendChild(renderCharacterRail(summary));
@@ -163,6 +166,9 @@ export function mount(container, params = {}) {
   function renderHeader(summary) {
     const header = document.createElement('section');
     header.className = 'creation-header';
+    header.classList.add('panel-elevated');
+    header.style.gap = '0';
+    header.style.padding = '12px 16px';
     header.setAttribute('aria-label', 'Party creation summary');
     header.dataset.testid = 'summary';
     const remaining = readout('POINTS REMAINING', `${summary.pointsRemaining}/80`, 'remaining');
@@ -184,6 +190,11 @@ export function mount(container, params = {}) {
   function readout(label, value, id) {
     const item = document.createElement('div');
     item.className = 'creation-readout';
+    item.style.minWidth = '0';
+    item.style.minHeight = '64px';
+    item.style.padding = '4px 8px';
+    item.style.border = '0';
+    item.style.background = 'transparent';
     item.dataset.testid = id;
     item.append(text('span', 'readout-label', label), text('strong', 'readout-value', value));
     return item;
@@ -192,6 +203,11 @@ export function mount(container, params = {}) {
   function renderCharacterRail(summary) {
     const rail = document.createElement('section');
     rail.className = 'creation-char-bar';
+    rail.classList.add('panel');
+    rail.style.position = 'relative';
+    rail.style.flexWrap = 'nowrap';
+    rail.style.gap = '8px';
+    rail.style.padding = '12px 16px';
     rail.setAttribute('aria-label', 'Party members');
     rail.dataset.testid = 'character-rail';
     for (let index = 0; index < 4; index++) {
@@ -205,6 +221,11 @@ export function mount(container, params = {}) {
         onClick: () => dispatch(character ? { type: 'select_character', slot: index } : { type: 'add_character' })
       });
       slot.classList.add('char-slot', 'panel');
+      slot.style.flex = '1';
+      slot.style.minWidth = '0';
+      slot.style.minHeight = '72px';
+      slot.style.height = '72px';
+      slot.style.padding = '8px 4px';
       if (isSelected) slot.classList.add('active', 'panel-elevated');
       slot.dataset.testid = character ? `character-slot-${index}` : index === summary.characters.length ? 'add-character' : `empty-slot-${index}`;
       const marker = character?.sigil
@@ -222,6 +243,12 @@ export function mount(container, params = {}) {
     });
     remove.dataset.testid = 'remove-character';
     remove.classList.add('remove-character-btn');
+    remove.style.position = 'absolute';
+    remove.style.top = '4px';
+    remove.style.right = '4px';
+    remove.style.minHeight = '24px';
+    remove.style.padding = '2px 4px';
+    remove.style.fontSize = '8px';
     rail.appendChild(remove);
     return rail;
   }
@@ -229,6 +256,9 @@ export function mount(container, params = {}) {
   function renderTabs() {
     const tablist = document.createElement('div');
     tablist.className = 'creation-tabs';
+    tablist.classList.add('panel');
+    tablist.style.flexWrap = 'nowrap';
+    tablist.style.gap = '0';
     tablist.setAttribute('role', 'tablist');
     tablist.setAttribute('aria-label', 'Creation editor sections');
     for (const [id, label] of TABS) {
@@ -252,6 +282,9 @@ export function mount(container, params = {}) {
     panel.id = `creation-panel-${activeTab}`;
     panel.setAttribute('role', 'tabpanel');
     panel.dataset.testid = `panel-${activeTab}`;
+    panel.style.padding = '12px 16px';
+    panel.style.borderLeft = '0';
+    panel.style.borderRight = '0';
     if (!summary.characters.length && activeTab !== 'blueprints') {
       panel.appendChild(text('p', 'creation-warning', 'ADD A CHARACTER TO BEGIN.'));
       return panel;
@@ -267,6 +300,7 @@ export function mount(container, params = {}) {
 
   function renderClassPicker(panel, summary) {
     const selected = selectedSummary(summary);
+    panel.appendChild(text('p', 'creation-note accent-text glow', '◈ SELECT CLASS'));
     const group = document.createElement('div');
     group.className = 'class-card-row';
     group.setAttribute('role', 'radiogroup');
@@ -278,16 +312,36 @@ export function mount(container, params = {}) {
         onClick: () => dispatch({ type: 'set_class', classId: cls.id })
       });
       card.classList.add('class-card', 'console-row');
+      card.style.minHeight = '112px';
       card.setAttribute('role', 'radio');
       card.setAttribute('aria-checked', String(selected.classId === cls.id));
       card.dataset.testid = `class-${cls.id}`;
+      const marker = text('span', 'sigil-placeholder small class-marker', cls.name === 'Operator' ? 'OP' : cls.name.charAt(0).toUpperCase());
       const nameSpan = text('span', 'card-name accent-text', cls.name.toUpperCase());
       const subtitle = text('span', 'card-subtitle', `${ATTR_LABELS[cls.primaryAttribute] || ''} · Hit Die ${cls.hitDieBase || ''}`);
-      const desc = text('span', 'card-detail', cls.signature?.tiers?.[0] || '');
-      card.append(nameSpan, subtitle, desc);
+      const desc = text('span', 'card-detail', (cls.signature?.tiers?.[0] || '').split('.')[0]);
+      card.append(marker, nameSpan, subtitle, desc);
       group.appendChild(card);
     }
     panel.appendChild(group);
+    if (selected?.projectedStats) panel.appendChild(renderProjectedStats(selected));
+  }
+
+  function renderProjectedStats(selected) {
+    const stats = selected.projectedStats;
+    const projected = createPanel();
+    projected.classList.add('projected-stats');
+    projected.dataset.testid = 'selected-stats';
+    projected.appendChild(text('h3', 'section-header accent-text glow', `◈ PROJECTED STATS — ${selected.classData.name}`));
+    const grid = document.createElement('div');
+    grid.className = 'creation-choice-grid projected-stat-grid';
+    for (const [label, value] of [
+      ['HP', stats.hpMax], ['CHARGE', stats.chargeMax], ['DEF', stats.defenseBase],
+      ['INIT', `${stats.initiativeMod >= 0 ? '+' : ''}${stats.initiativeMod}`],
+      ['MGT', selected.attributes.mgt], ['FIN', selected.attributes.fin]
+    ]) grid.appendChild(readout(label, String(value), `projected-${label.toLowerCase()}`));
+    projected.append(grid, text('p', 'card-detail', `SIGNATURE: ${selected.classData.signature?.name?.toUpperCase()} — ${selected.classData.signature?.tiers?.[0] || ''}`));
+    return projected;
   }
 
   function renderSigilPicker(panel, summary) {
@@ -296,6 +350,10 @@ export function mount(container, params = {}) {
       panel.appendChild(text('p', 'creation-warning', 'ASSIGN A CLASS BEFORE SELECTING A SIGIL.'));
       return;
     }
+    panel.append(
+      text('p', 'creation-note accent-text glow', `◈ SELECT SIGIL — ${selected.classData.name.toUpperCase()} FAMILY`),
+      text('p', 'creation-note', 'FREE WITH CHASSIS · NO TWO CHARACTERS MAY SHARE')
+    );
     const family = data?.sigils?.playerBank?.families?.[selected.classData.sigilFamily]?.codepoints ?? [];
     const used = new Set(summary.characters.map((character, index) => index === summary.activeSlot ? null : character.sigil).filter(Number.isInteger));
     const group = document.createElement('div');
@@ -320,19 +378,24 @@ export function mount(container, params = {}) {
       group.appendChild(tokenButton);
     }
     panel.appendChild(group);
+    panel.appendChild(text('p', 'creation-note', `${family.length} SIGILS PER CLASS FAMILY · 220PX PREVIEW`));
   }
 
   function renderAttributes(panel, summary) {
     const selected = selectedSummary(summary);
     const section = document.createElement('div');
     section.className = 'creation-section';
+    section.append(
+      text('p', 'creation-note accent-text glow', `◈ ATTRIBUTES — ${selected.classData?.name?.toUpperCase() || 'UNASSIGNED'}`),
+      text('p', 'creation-note', 'START AT RANK 3 · 3→6: 1PT · 7→8: 2PT · 9→10: 3PT')
+    );
     for (const key of ATTRIBUTE_KEYS) {
       const rank = selected.attributes[key];
       const incPreview = validateChangedDraft(draft, { type: 'buy_attribute', attribute: key }, data);
       const decPreview = validateChangedDraft(draft, { type: 'refund_attribute', attribute: key }, data);
       const increaseReason = rank >= 10 ? 'maximum rank' : incPreview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
       const decreaseReason = rank <= 1 ? 'minimum rank' : !decPreview.changed ? 'minimum rank' : '';
-      const row = createAttributeRow(ATTR_LABELS[key], rank, {
+      const row = createAttributeRow(`${ATTR_NAMES[key]} · ${ATTR_LABELS[key]}${selected.classData?.primaryAttribute === key ? ' · PRIMARY' : ''}`, rank, {
         steppers: true,
         increaseDisabled: Boolean(increaseReason),
         decreaseDisabled: Boolean(decreaseReason),
@@ -340,6 +403,16 @@ export function mount(container, params = {}) {
         onDecrease: () => dispatch({ type: 'refund_attribute', attribute: key })
       });
       row.dataset.testid = `attribute-${key}`;
+      row.classList.add('panel');
+      row.style.minHeight = '96px';
+      row.setAttribute('aria-label', `${ATTR_NAMES[key]} rank ${rank}, modifier ${modifier(rank)}`);
+      const meter = document.createElement('span');
+      meter.className = 'bar-track';
+      const fill = document.createElement('span');
+      fill.className = 'bar-fill';
+      fill.style.width = `${rank * 10}%`;
+      meter.appendChild(fill);
+      row.append(meter, text('span', 'card-detail', `MODIFIER ${modifier(rank) >= 0 ? '+' : ''}${modifier(rank)}`));
       if (increaseReason) row.appendChild(text('span', 'disabled-reason', `+ ${increaseReason}`));
       if (decreaseReason) row.appendChild(text('span', 'disabled-reason', `− ${decreaseReason}`));
       section.appendChild(row);

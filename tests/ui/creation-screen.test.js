@@ -133,6 +133,9 @@ describe('creation screen workflow', () => {
     expect(byTestId(container, 'ap').children[1].textContent).toBe('1');
     expect(byTestId(container, 'character-slot-0').className).toContain('active');
     expect(byTestId(container, 'sigil-e000').children.some((child) => child.className.includes('sigil-220'))).toBe(true);
+    byTestId(container, 'tab-class').click();
+    expect(byTestId(container, 'selected-stats')).not.toBeNull();
+    expect(byTestId(container, 'projected-hp').children[1].textContent).toBe('28');
     controller.unmount();
   });
 
@@ -216,5 +219,11 @@ describe('creation screen workflow', () => {
     expect(cardName.textContent).toBe('BREACHER');
     const cardDetail = card.children.find((c) => c.classList?.contains('card-detail'));
     expect(cardDetail).toBeTruthy();
+    expect(card.children.find((c) => c.classList?.contains('class-marker'))?.textContent).toBe('B');
+    expect(byTestId(container, 'panel-class').children.find((c) => c.classList?.contains('class-card-row')).children).toHaveLength(6);
+
+    byTestId(container, 'tab-attrs').click();
+    expect(byTestId(container, 'attribute-mgt').style.minHeight).toBe('96px');
+    expect(byTestId(container, 'attribute-mgt').getAttribute('aria-label')).toContain('MIGHT rank 3');
   });
 });
