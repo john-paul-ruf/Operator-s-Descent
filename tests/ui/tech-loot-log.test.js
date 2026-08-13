@@ -150,6 +150,9 @@ describe('TECH mode', () => {
     const logs = [];
     const { container } = renderTechWith(runState, { combatState, rngCursor: cursor([19]), bus: { dispatch: (type, payload) => logs.push([type, payload]) } });
 
+    expect(byTestId(container, 'tech-charge-panel').className).toContain('panel-elevated');
+    expect(byTestId(container, 'tech-slot-panel').className).toContain('panel');
+    expect(textOf(byTestId(container, 'tech-deck-heading'))).toBe('◈ EQUIPPED PROTOCOLS');
     expect(textOf(byTestId(container, 'tech-slots'))).toContain('1/5');
     expect(textOf(byTestId(container, 'tech-detail-disrupt-1'))).toContain('Deal 1d6');
     byTestId(container, 'tech-cast-disrupt-1').click();
@@ -193,6 +196,10 @@ describe('LOOT mode', () => {
     const lootState = { container: { id: 0, x: 1, y: 1 }, items: [item('loot-sidearm')] };
     const { container, context } = renderLootWith(runState, lootState);
 
+    expect(byTestId(container, 'loot-container').className).toContain('panel-elevated');
+    expect(textOf(byTestId(container, 'loot-contents-heading'))).toBe('◈ CONTENTS');
+    expect(textOf(byTestId(container, 'loot-inventory-heading'))).toBe('◈ INVENTORY');
+    expect(byTestId(container, 'loot-item-loot-sidearm').className).toContain('item-card');
     expect(byTestId(container, 'loot-cap-warning')).toBeTruthy();
     expect(byTestId(container, 'loot-take-loot-sidearm').disabled).toBe(true);
     byTestId(container, 'loot-take-loot-sidearm').click();

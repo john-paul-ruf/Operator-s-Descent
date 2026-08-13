@@ -197,13 +197,13 @@ function requestJunkAll(context) {
 
 function renderContainerItems(container, context, lootContainer, items) {
   const list = createScrollArea({ label: 'Container contents', focusable: true });
-  list.className = 'loot-items';
+  list.className = 'loot-items scroll-area';
   list.dataset.testid = 'loot-items';
   if (!items.length) list.appendChild(text('loot-container empty console-row', isOpened(context.runState, lootContainer) ? 'Empty.' : 'Empty container.'));
   const inventoryFull = getInventoryCount(context.runState?.inventory || []) >= INVENTORY_CAP;
   for (const item of items) {
     const row = document.createElement('div');
-    row.className = 'loot-item-row console-row';
+    row.className = 'loot-item-row item-card console-row';
     row.dataset.testid = `loot-item-${item.id}`;
     row.appendChild(createEquipmentCard(displayItem(item, context.data || {})));
     row.appendChild(text('loot-detail', itemDetail(item, context.data || {}), `loot-detail-${item.id}`));
@@ -221,6 +221,7 @@ function renderContainerItems(container, context, lootContainer, items) {
 function renderInventoryJunk(container, context, state) {
   const inventory = context.runState?.inventory || [];
   const tagged = inventory.filter((item) => item.junkTagged);
+  container.appendChild(text('mode-indicator', '◈ INVENTORY', 'loot-inventory-heading'));
   const header = document.createElement('div');
   header.className = 'loot-inventory-header console-row';
   header.dataset.testid = 'loot-inventory-header';
@@ -255,7 +256,7 @@ export function render(container, context = {}) {
   const opened = isOpened(runState, lootContainer);
   const items = opened ? [] : itemsFor({ ...context, lootState }, lootContainer);
   const header = document.createElement('div');
-  header.className = 'loot-container-header console-row';
+  header.className = 'loot-container-header panel-elevated console-row';
   header.dataset.testid = 'loot-container';
   const glyph = document.createElement('span');
   glyph.className = 'container-icon';
@@ -270,6 +271,7 @@ export function render(container, context = {}) {
   });
   openButton.dataset.testid = 'loot-open';
   container.appendChild(openButton);
+  container.appendChild(text('mode-indicator', '◈ CONTENTS', 'loot-contents-heading'));
   if (getInventoryCount(runState.inventory || []) >= INVENTORY_CAP) container.appendChild(text('loot-warning console-row', 'Inventory full; pickup blocked until space is freed.', 'loot-cap-warning'));
   renderContainerItems(container, { ...context, lootState }, lootContainer, items);
   renderInventoryJunk(container, context, state);

@@ -262,6 +262,7 @@ function renderCharacters(container, context, ui, activeActor) {
         selected: index === ui.charIndex,
         onClick: () => { ui.charIndex = index; ui.phase = 'browse'; ui.protocol = null; context.refresh?.(); }
       });
+      button.className = `member-pill console-row${index === ui.charIndex ? ' active' : ''}`;
       button.dataset.testid = `tech-character-${character.id}`;
       row.appendChild(button);
     }
@@ -372,8 +373,20 @@ export function render(container, context = {}) {
   const deckStatus = validateProtocolDeck(character || caster, classData, data.protocols);
 
   renderCharacters(container, context, ui, activeActor);
-  container.appendChild(createChargeBar(chargeOf(caster), chargeMaxOf(caster)));
-  container.appendChild(text('tech-slots console-row', `Deck slots ${deckStatus.slotsUsed}/${deckStatus.capacity} · ${deckStatus.valid ? 'valid' : deckStatus.reason}`, 'tech-slots'));
+  const chargePanel = document.createElement('div');
+  chargePanel.className = 'tech-charge-panel panel-elevated';
+  chargePanel.dataset.testid = 'tech-charge-panel';
+  chargePanel.append(
+    text('mode-indicator', '◈ CHARGE POOL'),
+    createChargeBar(chargeOf(caster), chargeMaxOf(caster)),
+    text('tech-charge-regen', `Regen ${Math.max(0, Math.floor((character?.attributes?.res || 0) / 3))} per floor descent`)
+  );
+  container.appendChild(chargePanel);
+
+  const slotPanel = document.createElement('div');
+  slotPanel.className = 'tech-slot-panel panel';
+  slotPanel.dataset.testid = 'tech-slot-panel';
+  slotPanel.appendChild(text('tech-slots console-row', `Deck slots ${deckStatus.slotsUsed}/${deckStatus.capacity} · ${deckStatus.valid ? 'valid' : deckStatus.reason}`, 'tech-slots'));
   const pipRow = document.createElement('div');
   pipRow.className = 'tech-pip-row console-row';
   for (let i = 0; i < deckStatus.capacity; i++) {
@@ -381,7 +394,9 @@ export function render(container, context = {}) {
     pip.className = `deck-pip${i < deckStatus.slotsUsed ? ' filled' : ''}`;
     pipRow.appendChild(pip);
   }
-  container.appendChild(pipRow);
+  slotPanel.appendChild(pipRow);
+  container.appendChild(slotPanel);
+  container.appendChild(text('mode-indicator', '◈ EQUIPPED PROTOCOLS', 'tech-deck-heading'));
 
   const list = createScrollArea({ label: 'Prepared protocols', focusable: true });
   list.className = 'tech-deck';
