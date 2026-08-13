@@ -49,17 +49,22 @@ export function render(container, context = {}) {
   const root = document.createElement('div');
   root.className = 'move-mode';
 
-  const mode = text('mode-indicator', 'MOVE · 8-way console control');
+  const header = document.createElement('div');
+  header.className = 'move-header';
+  const mode = text('mode-indicator', '◈ MOVE MODE');
   mode.dataset.testid = 'move-indicator';
-  root.appendChild(mode);
+  header.append(mode, text('move-input-hint', 'Arrows / WASD / Numpad'));
+  root.appendChild(header);
 
   const dpad = document.createElement('div');
   dpad.className = 'dpad move-dpad';
   dpad.setAttribute('aria-label', 'Eight-way movement pad');
   for (const entry of DIRECTIONS) {
-    const button = createButton(entry.label, {
-      label: entry.name,
-      disabled: entry.action === 'confirm' && !context.canDescend?.()
+    const canDescend = Boolean(context.canDescend?.());
+    const label = entry.action === 'confirm' ? (canDescend ? 'DESCEND' : 'WAIT') : entry.label;
+    const button = createButton(label, {
+      label: entry.action === 'confirm' ? (canDescend ? 'Confirm descent' : 'Wait; no descent point underfoot') : entry.name,
+      disabled: entry.action === 'confirm' && !canDescend
     });
     button.className = entry.action === 'confirm' ? 'dpad-center console-row' : 'dpad-btn console-row';
     button.dataset.testid = entry.direction ? `move-${entry.direction}` : 'move-confirm';

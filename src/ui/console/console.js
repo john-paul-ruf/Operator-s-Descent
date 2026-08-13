@@ -58,7 +58,7 @@ export function createConsole(state) {
   tabBar.className = 'console-tab-bar';
   tabBar.setAttribute('role', 'tablist');
   const contentArea = document.createElement('div');
-  contentArea.className = 'console-content';
+  contentArea.className = 'console-content scroll-area';
   contentArea.setAttribute('role', 'tabpanel');
   contentArea.tabIndex = -1;
   const notice = document.createElement('div');
@@ -102,12 +102,18 @@ export function createConsole(state) {
   }
 
   function updateTabs() {
+    container.dataset.mode = currentMode;
+    container.setAttribute('aria-expanded', String(expanded));
+    contentArea.setAttribute('aria-hidden', String(!expanded));
+    dimLayer.hidden = !expanded;
     for (const { tab, mode } of modeTabs) {
       const active = mode.id === currentMode;
       const available = mode.available(state);
       tab.classList.toggle('active', active);
+      tab.classList.toggle('disabled', !available);
       tab.disabled = !available;
       tab.setAttribute('aria-selected', String(active));
+      tab.setAttribute('aria-expanded', String(active && expanded));
       tab.setAttribute('aria-disabled', String(!available));
       tab.title = available ? `${mode.label} · ${mode.key.replace('mode_', 'Key ')}` : mode.reason;
     }
@@ -127,6 +133,7 @@ export function createConsole(state) {
     mountedCleanup = typeof result === 'function' ? result : result?.cleanup || null;
     contentArea.id = 'console-content';
     contentArea.setAttribute('aria-labelledby', `console-tab-${mode.id}`);
+    contentArea.dataset.mode = mode.id;
     contentArea.focus?.({ preventScroll: true });
   }
 
@@ -152,6 +159,7 @@ export function createConsole(state) {
     expanded = true;
     container.classList.remove('collapsed');
     container.classList.add('expanded');
+    updateTabs();
     contentArea.focus?.({ preventScroll: true });
     bus.dispatch('ui:console-expand');
     bus.dispatch(CONSOLE_INTENTS.expand, { mode: currentMode });
@@ -163,6 +171,7 @@ export function createConsole(state) {
     expanded = false;
     container.classList.remove('expanded');
     container.classList.add('collapsed');
+    updateTabs();
     bus.dispatch('ui:console-collapse');
     bus.dispatch(CONSOLE_INTENTS.collapse, { mode: currentMode });
   }

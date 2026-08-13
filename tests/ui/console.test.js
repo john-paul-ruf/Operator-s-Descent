@@ -56,7 +56,11 @@ describe('console shell', () => {
     expect(consoleShell.setMode('combat')).toBe(false);
     expect(root.children[3].textContent).toBe('No active combat.');
     expect(root.children[1].children[1].disabled).toBe(true);
+    expect(root.children[1].children.map((tab) => tab.textContent)).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
     expect(root.children[1].children[0].getAttribute('aria-selected')).toBe('true');
+    expect(root.children[1].children[1].classList.contains('disabled')).toBe(true);
+    expect(root.children[2].className).toContain('scroll-area');
+    expect(root.getAttribute('aria-expanded')).toBe('false');
   });
 
   test('switching modes destroys previous content and focuses the mode panel', () => {
@@ -78,6 +82,8 @@ describe('console shell', () => {
     const consoleShell = createConsole({ inputHandler, runState: { party: [{ sigilCodepoint: 0xE000 }], inventory: [] } });
     consoleShell.render();
     consoleShell.expand();
+    expect(consoleShell.container.getAttribute('aria-expanded')).toBe('true');
+    expect(consoleShell.container.children[2].getAttribute('aria-hidden')).toBe('false');
 
     inputHandler.triggerAction('mode_3');
     expect(consoleShell.currentMode).toBe('party');
@@ -85,6 +91,7 @@ describe('console shell', () => {
     expect(consoleShell.currentMode).toBe('gear');
     inputHandler.triggerAction('cancel');
     expect(consoleShell.expanded).toBe(false);
+    expect(consoleShell.container.children[2].getAttribute('aria-hidden')).toBe('true');
     consoleShell.destroy();
     inputHandler.triggerAction('mode_7');
     expect(consoleShell.currentMode).toBe('gear');
