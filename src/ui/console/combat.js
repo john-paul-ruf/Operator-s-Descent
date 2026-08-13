@@ -11,8 +11,8 @@ const ACTIONS = [
 ];
 const DIRECTION_GRID = [
   ['nw', '↖'], ['n', '↑'], ['ne', '↗'],
-  ['w', '←'], ['s', '↓'], ['e', '→'],
-  ['sw', '↙'], ['se', '↘']
+  ['w', '←'], [null, '·'], ['e', '→'],
+  ['sw', '↙'], ['s', '↓'], ['se', '↘']
 ];
 const ACTION_TO_DIRECTION = {
   move_n: 'n', move_s: 's', move_w: 'w', move_e: 'e',
@@ -56,7 +56,7 @@ function actorName(actor) {
 function activeSummary(container, active) {
   if (!active) return;
   const panel = document.createElement('div');
-  panel.className = 'combat-active-panel console-row';
+  panel.className = 'combat-active-panel panel-elevated console-row';
   panel.dataset.testid = 'combat-active';
   panel.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${actorName(active)}` }));
   appendText(panel, 'combat-active-name', `${actorName(active)} · ${active.side?.toUpperCase() || 'ACTOR'}`);
@@ -69,7 +69,7 @@ function activeSummary(container, active) {
 
 function initiativeRail(container, combatState) {
   const rail = document.createElement('div');
-  rail.className = 'init-rail console-row';
+  rail.className = 'init-rail panel console-row';
   rail.dataset.testid = 'initiative-rail';
   const actors = new Map(getActors(combatState).map((actor) => [actor.id, actor]));
   for (const id of combatState.turnOrder || []) {
@@ -89,12 +89,12 @@ function renderActions(container, context, legalActions) {
   const selection = context.selection || {};
   for (const action of ACTIONS) {
     const disabled = selection.resolving || !legalActions.actions?.includes(action.id) || (action.id === 'retreat' && (context.combatGetActiveActor?.()?.ap ?? 0) <= 0);
-    const button = createButton(`${action.label} · ${action.needs}`, {
+    const button = createButton(`${action.label.toUpperCase()} · ${action.needs.toUpperCase()}`, {
       disabled,
       selected: selection.actionType === action.id,
       onClick: () => context.combatChooseAction?.(action.id)
     });
-    button.className = selectedClass('combat-action console-row', selection.actionType === action.id);
+    button.className = selectedClass(`combat-action action-btn console-row${action.id === 'retreat' ? ' danger' : ''}`, selection.actionType === action.id);
     button.dataset.testid = `combat-action-${action.id}`;
     list.appendChild(button);
   }
@@ -109,13 +109,13 @@ function renderDirections(container, context) {
   grid.dataset.testid = 'combat-directions';
   for (const [direction, label] of DIRECTION_GRID) {
     const button = createButton(label, {
-      label: `Move ${direction}`,
-      disabled: !legal.has(direction) || selection.resolving,
+      label: direction ? `Move ${direction}` : 'Center',
+      disabled: !direction || !legal.has(direction) || selection.resolving,
       selected: selection.direction === direction,
       onClick: () => context.combatSelectDirection?.(direction)
     });
-    button.className = selectedClass('combat-direction console-row', selection.direction === direction);
-    button.dataset.testid = `combat-dir-${direction}`;
+    button.className = selectedClass(`combat-direction console-row${direction ? '' : ' dpad-center'}`, selection.direction === direction);
+    button.dataset.testid = direction ? `combat-dir-${direction}` : 'combat-dir-center';
     grid.appendChild(button);
   }
   container.appendChild(grid);
@@ -171,6 +171,8 @@ function renderTargets(container, context) {
   const list = document.createElement('div');
   list.className = 'combat-target-list';
   list.dataset.testid = 'combat-targets';
+  const selected = targets.find((target) => String(target.id) === String(selection.targetId));
+  if (selected) appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${actorName(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-target-preview');
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);

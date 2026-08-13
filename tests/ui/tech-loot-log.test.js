@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
+import { render as renderCombat } from '../../src/ui/console/combat.js';
 import { render as renderTech } from '../../src/ui/console/tech.js';
 import { render as renderLoot } from '../../src/ui/console/loot.js';
 import { render as renderLog } from '../../src/ui/console/log.js';
@@ -227,6 +228,25 @@ describe('LOOT mode', () => {
   });
 });
 
+describe('COMBAT mode', () => {
+  it('groups mock-compatible actions and shows selected target range and cover', () => {
+    const active = { id: 'operator', name: 'Operator', side: 'party', sigilCodepoint: 0xE028, hp: 30, hpMax: 30, charge: 8, chargeMax: 10, ap: 2, moveAvailable: true, conditions: [] };
+    const enemy = { id: 'enemy', name: 'Drone', side: 'enemy', hp: 10, hpMax: 10 };
+    const container = new FakeElement('div');
+    renderCombat(container, {
+      combatState: { combatants: new Map([['operator', active], ['enemy', enemy]]), turnOrder: ['operator', 'enemy'], currentTurn: 0 },
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: 'enemy' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack', 'retreat'], legalMoveDirections: ['s'] }),
+      combatGetTargets: () => [enemy],
+      combatGetPreview: () => ({ distance: 3, range: { band: 'short', legal: true }, coverBonus: 2, flanked: false })
+    });
+
+    expect(byTestId(container, 'combat-action-attack').className).toContain('action-btn');
+    expect(textOf(byTestId(container, 'combat-target-preview'))).toContain('range short 3 · cover +2');
+  });
+});
+
 describe('LOG mode', () => {
   it('renders ordered entries and copies the live full-state #r link', async () => {
     const runState = run([]);
@@ -235,7 +255,9 @@ describe('LOG mode', () => {
     const container = new FakeElement('div');
 
     renderLog(container, { runState, data, logEntries: [{ sequence: 2, type: 'damage', message: 'HP -4' }, { sequence: 1, type: 'discovery', message: 'CONTAINER FOUND' }] });
-    expect(textOf(byTestId(container, 'log-entry-0'))).toContain('[E1] DISCOVERY');
+    expect(textOf(byTestId(container, 'log-entry-0'))).toContain('[E:001] DISCOVERY');
+    expect(byTestId(container, 'log-share').className).toContain('panel-elevated');
+    expect(textOf(byTestId(container, 'log-area'))).toContain('DAMAGE');
     byTestId(container, 'log-copy-link').click();
     await Promise.resolve();
     await Promise.resolve();

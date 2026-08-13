@@ -28,13 +28,6 @@ function stateFor(runState) {
   return stateByRun.get(key);
 }
 
-function lineText(entry, index) {
-  const order = entry.sequence ?? entry.turn ?? entry.eventIndex ?? index + 1;
-  const type = String(entry.type || 'info').toUpperCase();
-  const message = entry.message || entry.summary || entry.reason || JSON.stringify(entry.entry || entry);
-  return `[E${order}] ${type} · ${message}`;
-}
-
 function collectLogs(context = {}) {
   return [...(context.runState?.recentEvents || []), ...(context.logEntries || [])]
     .map((entry, index) => ({ ...entry, _index: index }))
@@ -108,8 +101,9 @@ export function render(container, context = {}) {
   const state = stateFor(context.runState);
   copyByRun.set(context.runState || globalThis, () => copyLink(container, context));
   const logs = collectLogs(context);
+  container.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator log-heading', textContent: `◈ EVENT LOG — FLOOR ${String(context.runState?.depth || 1).padStart(2, '0')}` }));
   const logArea = createScrollArea({ label: 'Recent event log', focusable: true });
-  logArea.className = 'log-area';
+  logArea.className = 'log-area scroll-area';
   logArea.dataset.testid = 'log-area';
 
   if (!logs.length) logArea.appendChild(Object.assign(document.createElement('div'), { className: 'log-empty console-row', textContent: 'No events logged.' }));
@@ -118,24 +112,37 @@ export function render(container, context = {}) {
     const el = document.createElement('div');
     el.className = `log-entry log-${entry.type || 'info'} console-row`;
     el.dataset.testid = `log-entry-${index}`;
-    el.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
-    el.textContent = lineText(entry, index);
+    const order = entry.sequence ?? entry.turn ?? entry.eventIndex ?? index + 1;
+    const stamp = document.createElement('span');
+    stamp.className = 'log-turn';
+    stamp.textContent = `[${entry.turn != null ? 'T' : 'E'}:${String(order).padStart(3, '0')}]`;
+    const message = document.createElement('span');
+    message.className = `log-${entry.type || 'info'}`;
+    message.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
+    message.textContent = `${String(entry.type || 'info').toUpperCase()} · ${entry.message || entry.summary || entry.reason || JSON.stringify(entry.entry || entry)}`;
+    el.append(stamp, message);
     logArea.appendChild(el);
   }
   container.appendChild(logArea);
 
-  const copyBtn = createButton('COPY LINK', { primary: true, disabled: !livingRun(context.runState) || context.runWiped, description: !livingRun(context.runState) || context.runWiped ? 'Full-state link unavailable after wipe.' : '', onClick: () => copyLink(container, context) });
-  copyBtn.dataset.testid = 'log-copy-link';
-  container.appendChild(copyBtn);
+  const share = document.createElement('div');
+  share.className = 'log-share panel-elevated';
+  share.dataset.testid = 'log-share';
+  share.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator', textContent: '◈ SHARE RUN' }));
+  share.appendChild(Object.assign(document.createElement('div'), { className: 'log-budget', textContent: 'URL < 1500 chars' }));
   if (state.link) {
-    const fallback = document.createElement('textarea');
+    const fallback = document.createElement('input');
+    fallback.type = 'text';
     fallback.className = 'log-link-text console-row';
     fallback.dataset.testid = 'log-link-text';
     fallback.value = state.link;
-    fallback.textContent = state.link;
     fallback.setAttribute('readonly', 'readonly');
-    container.appendChild(fallback);
+    share.appendChild(fallback);
   }
+  const copyBtn = createButton('◈ COPY LINK', { primary: true, disabled: !livingRun(context.runState) || context.runWiped, description: !livingRun(context.runState) || context.runWiped ? 'Full-state link unavailable after wipe.' : '', onClick: () => copyLink(container, context) });
+  copyBtn.dataset.testid = 'log-copy-link';
+  share.appendChild(copyBtn);
+  container.appendChild(share);
   if (state.notice) {
     const notice = document.createElement('div');
     notice.className = 'log-notice console-row';
