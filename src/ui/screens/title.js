@@ -36,6 +36,11 @@ export function mount(container) {
   const main = document.createElement('div');
   main.className = 'title-main';
 
+  const titleBlock = document.createElement('div');
+  titleBlock.style.display = 'flex';
+  titleBlock.style.flexDirection = 'column';
+  titleBlock.style.alignItems = 'center';
+
   const ornamentTop = document.createElement('div');
   ornamentTop.className = 'ornament accent-text glow';
   ornamentTop.style.color = 'var(--text-secondary)';
@@ -46,6 +51,7 @@ export function mount(container) {
   titleTop.setAttribute('data-text', "OPERATOR'S");
   titleTop.setAttribute('data-glitch', '');
   titleTop.dataset.glitchIntensity = '0.10';
+  titleTop.style.fontSize = '36px';
 
   const titleBottom = document.createElement('h1');
   titleBottom.className = 'display glow-strong title-glitch';
@@ -53,6 +59,7 @@ export function mount(container) {
   titleBottom.setAttribute('data-text', 'DESCENT');
   titleBottom.setAttribute('data-glitch', '');
   titleBottom.dataset.glitchIntensity = '0.10';
+  titleBottom.style.fontSize = '36px';
 
   const ornamentBottom = document.createElement('div');
   ornamentBottom.className = 'ornament accent-text glow';
@@ -104,7 +111,8 @@ export function mount(container) {
   notice.setAttribute('aria-live', 'polite');
   notice.dataset.testid = 'title-notice';
 
-  main.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline, startButton, branchList);
+  titleBlock.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline);
+  main.append(titleBlock, startButton, branchList);
 
   screen.append(header, main, notice);
 
