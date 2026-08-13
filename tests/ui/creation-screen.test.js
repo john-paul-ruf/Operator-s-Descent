@@ -115,18 +115,23 @@ afterEach(() => {
 });
 
 describe('creation screen workflow', () => {
-  it('starts blank and renders truthful model readouts with 220px class sigils', async () => {
+  it('matches the mock header, four-slot character rail, and tab frame', async () => {
     const { container, controller } = await mountCreation({ preloadedSeed: 123 });
-    expect(byTestId(container, 'spent').children[1].textContent).toBe('0/80');
-    expect(byTestId(container, 'remaining').children[1].textContent).toBe('80');
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('80/80');
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 0/80');
+    expect(byTestId(container, 'seed').textContent).toBe('SEED 123');
+    expect(byTestId(container, 'creation-body').className).toContain('screen-body');
+    expect(byTestId(container, 'empty-slot-3')).not.toBeNull();
+    expect(byTestId(container, 'tab-attrs').textContent).toBe('ATTRS');
+    expect(byTestId(container, 'tab-class').getAttribute('aria-selected')).toBe('true');
 
     addBreacher(container);
 
-    expect(byTestId(container, 'spent').children[1].textContent).toBe('5/80');
-    expect(byTestId(container, 'remaining').children[1].textContent).toBe('75');
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 5/80');
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('75/80');
     expect(byTestId(container, 'credits').children[1].textContent).toBe('750');
     expect(byTestId(container, 'ap').children[1].textContent).toBe('1');
-    expect(byTestId(container, 'selected-stats').children[1].textContent).toContain('HP 28');
+    expect(byTestId(container, 'character-slot-0').className).toContain('active');
     expect(byTestId(container, 'sigil-e000').children.some((child) => child.className.includes('sigil-220'))).toBe(true);
     controller.unmount();
   });
@@ -141,13 +146,13 @@ describe('creation screen workflow', () => {
     byTestId(container, 'weapon-heavy_melee').click();
     byTestId(container, 'armor-heavy').click();
     byTestId(container, 'offhand-shield').click();
-    expect(byTestId(container, 'spent').children[1].textContent).toBe('13/80');
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 13/80');
 
     byTestId(container, 'tab-tech').click();
     expect(byTestId(container, 'protocol-ward-1').disabled).toBe(true);
     expect(byTestId(container, 'protocol-disrupt-3').disabled).toBe(true);
     byTestId(container, 'protocol-disrupt-2').click();
-    expect(byTestId(container, 'spent').children[1].textContent).toBe('17/80');
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 17/80');
     expect(byTestId(container, 'deck-summary').textContent).toBe('DECK 2/3');
   });
 

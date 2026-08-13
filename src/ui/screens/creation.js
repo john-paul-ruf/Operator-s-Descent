@@ -1,4 +1,4 @@
-import { createAttributeRow, createButton, createPanel, createScrollArea, createSigilToken, createTextInput } from '../components.js';
+import { createAttributeRow, createButton, createPanel, createScreenBody, createScrollArea, createSigilToken, createTextInput } from '../components.js';
 import { createInputHandler } from '../input.js';
 import { bus } from '../../state/bus.js';
 import { gameData as compatibilityData } from '../../main.js';
@@ -16,7 +16,7 @@ import { applyCreationAction, createCreationDraft, selectCreationState } from '.
 
 const ATTR_LABELS = { mgt: 'MGT', fin: 'FIN', vit: 'VIT', res: 'RES', foc: 'FOC', sig: 'SIG' };
 const TABS = [
-  ['class', 'CLASS'], ['sigil', 'SIGIL'], ['attrs', 'ATTR'], ['gear', 'GEAR'], ['tech', 'TECH'], ['blueprints', 'BLUEPRINTS']
+  ['class', 'CLASS'], ['sigil', 'SIGIL'], ['attrs', 'ATTRS'], ['gear', 'GEAR'], ['tech', 'TECH'], ['blueprints', 'BLUEPRINTS']
 ];
 const SAVE_NAME_MAX = 80;
 
@@ -147,12 +147,15 @@ export function mount(container, params = {}) {
     const summary = selectCreationState(draft, data);
     clear(container);
     const root = document.createElement('main');
-    root.className = 'creation-wrapper';
+    root.className = 'creation-wrapper screen-container';
     root.dataset.testid = 'creation-root';
     root.appendChild(renderHeader(summary));
     root.appendChild(renderCharacterRail(summary));
     root.appendChild(renderTabs());
-    root.appendChild(renderActiveTab(summary));
+    const body = createScreenBody({ className: 'creation-body' });
+    body.dataset.testid = 'creation-body';
+    body.appendChild(renderActiveTab(summary));
+    root.appendChild(body);
     root.appendChild(renderFooter(summary));
     container.appendChild(root);
   }
@@ -162,20 +165,19 @@ export function mount(container, params = {}) {
     header.className = 'creation-header';
     header.setAttribute('aria-label', 'Party creation summary');
     header.dataset.testid = 'summary';
-    header.append(
-      readout('SEED', String(worldSeed), 'seed'),
-      readout('SPENT', `${summary.pointsSpent}/80`, 'spent'),
-      readout('REMAIN', String(summary.pointsRemaining), 'remaining'),
-      readout('CREDITS', String(summary.credits), 'credits'),
-      readout('PARTY', `${summary.characters.length}/4`, 'party-count'),
-      readout('AP/RD', String(summary.actionsPerRound), 'ap')
-    );
-    const selected = selectedSummary(summary);
-    if (selected?.projectedStats) {
-      const stats = selected.projectedStats;
-      const deck = selected.deck;
-      header.append(readout('SELECTED', `HP ${stats.hpMax} · CHG ${stats.chargeMax} · DEF ${stats.defenseBase} · PDF ${stats.protocolDefenseBase} · DECK ${deck.slotsUsed}/${deck.capacity}`, 'selected-stats'));
-    }
+    const remaining = readout('POINTS REMAINING', `${summary.pointsRemaining}/80`, 'remaining');
+    const spent = text('span', 'creation-note', `SPENT ${summary.pointsSpent}/80`);
+    spent.dataset.testid = 'spent';
+    remaining.appendChild(spent);
+    const credits = readout('CREDITS', String(summary.credits), 'credits');
+    const seed = text('span', 'creation-note', `SEED ${worldSeed}`);
+    seed.dataset.testid = 'seed';
+    credits.appendChild(seed);
+    const ap = readout('AP/ROUND', String(summary.actionsPerRound), 'ap');
+    const partyCount = text('span', 'creation-note', `PARTY ${summary.characters.length}/4`);
+    partyCount.dataset.testid = 'party-count';
+    ap.appendChild(partyCount);
+    header.append(remaining, credits, ap);
     return header;
   }
 
@@ -192,26 +194,25 @@ export function mount(container, params = {}) {
     rail.className = 'creation-char-bar';
     rail.setAttribute('aria-label', 'Party members');
     rail.dataset.testid = 'character-rail';
-    for (let index = 0; index < summary.characters.length; index++) {
+    for (let index = 0; index < 4; index++) {
       const character = summary.characters[index];
-      const className = character.classData?.name || 'Unassigned';
-      const slot = createButton(`${index + 1} · ${className}`, {
-        selected: index === summary.activeSlot,
-        label: `Select character ${index + 1}`,
-        onClick: () => dispatch({ type: 'select_character', slot: index })
+      const isSelected = Boolean(character) && index === summary.activeSlot;
+      const className = character?.classData?.name || (character ? 'UNASSIGNED' : 'ADD');
+      const slot = createButton('', {
+        selected: isSelected,
+        label: character ? `Select character ${index + 1}` : `Add character ${index + 1}`,
+        disabled: !character && summary.characters.length >= 4,
+        onClick: () => dispatch(character ? { type: 'select_character', slot: index } : { type: 'add_character' })
       });
-      slot.classList.add('char-slot');
-      slot.dataset.testid = `character-slot-${index}`;
+      slot.classList.add('char-slot', 'panel');
+      if (isSelected) slot.classList.add('active', 'panel-elevated');
+      slot.dataset.testid = character ? `character-slot-${index}` : index === summary.characters.length ? 'add-character' : `empty-slot-${index}`;
+      const marker = character?.sigil
+        ? createSigilToken(character.sigil, 34, { role: 'player', label: `${className} sigil` })
+        : text('span', 'sigil-placeholder small', character ? className.charAt(0) : '+');
+      slot.append(marker, text('span', isSelected ? 'card-name accent-text' : 'card-name', className.toUpperCase()));
       rail.appendChild(slot);
     }
-    const addReason = summary.characters.length >= 4 ? 'party full' : actionReason(draft, { type: 'add_character' }, data);
-    const add = createButton('+ ADD', {
-      disabled: Boolean(addReason),
-      description: addReason || 'Add character chassis',
-      onClick: () => dispatch({ type: 'add_character' })
-    });
-    add.dataset.testid = 'add-character';
-    rail.appendChild(add);
     const removeReason = summary.characters.length <= 1 ? 'minimum party size' : '';
     const remove = createButton('− REMOVE', {
       danger: true,
@@ -220,6 +221,7 @@ export function mount(container, params = {}) {
       onClick: () => dispatch({ type: 'remove_character' })
     });
     remove.dataset.testid = 'remove-character';
+    remove.classList.add('remove-character-btn');
     rail.appendChild(remove);
     return rail;
   }
@@ -237,6 +239,7 @@ export function mount(container, params = {}) {
       tab.className = `tab-btn${activeTab === id ? ' active' : ''}`;
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-controls', `creation-panel-${id}`);
+      tab.setAttribute('aria-selected', String(activeTab === id));
       tab.dataset.testid = `tab-${id}`;
       tablist.appendChild(tab);
     }
