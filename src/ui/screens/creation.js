@@ -92,13 +92,6 @@ function validateChangedDraft(draft, action, data) {
   return { result, summary, changed: actionChangesDraft(draft, result.draft) };
 }
 
-function actionReason(draft, action, data) {
-  const preview = validateChangedDraft(draft, action, data);
-  if (preview.result.result.success === false) return preview.result.result.reason || 'invalid';
-  if (preview.summary.validation.pointsSpent > 80) return 'point budget exceeded';
-  return preview.changed ? '' : 'not allowed';
-}
-
 function shortBlueprintSummary(config) {
   const classes = (config.partyClasses ?? []).join('/') || 'blank';
   return `${config.characters?.length ?? 0} OP · ${classes} · ${config.pointsSpent ?? 0} PTS · ${config.credits ?? 0} CR`;
