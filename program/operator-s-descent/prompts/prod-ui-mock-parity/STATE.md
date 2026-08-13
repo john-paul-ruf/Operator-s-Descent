@@ -14,7 +14,7 @@
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---------|---------|------|--------|------------|-----------|-------|
 | 01 | Shared Visual System and Parity Harness | M56, M77, M78, M79, M97, M99 | `./styles/base.css`, `./styles/components.css`, `./styles/crt.css`, `./src/ui/components.js`, `./scripts/screenshot-parity.js`, `./tests/ui/components.test.js`, `./tests/tooling/check-mock-parity.test.js` | done | 4/4 | 2026-08-13 | Fixed parity capture dimensions/reporting, aligned shared frame and CRT styling, and reduced mock-class warnings from 73 to 2 intentional deployment markers. Follow-up: SESSION-02 standalone spacing/overflow; SESSION-03 creation density; SESSION-04 in-run proportions; SESSION-05 console pane alignment. |
-| 02 | Standalone Screens Match Mocks | M68, M72, M73, M74, M75, M76 | `./src/ui/screens/title.js`, `./src/ui/screens/library.js`, `./src/ui/screens/scorecard.js`, `./src/ui/screens/import.js`, `./src/ui/screens/tutorial.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js`, `./tests/ui/persistence-screens.test.js` | pending | — | Runs after S01; disjoint from S03–S05. |
+| 02 | Standalone Screens Match Mocks | M68, M72, M73, M74, M75, M76 | `./src/ui/screens/title.js`, `./src/ui/screens/library.js`, `./src/ui/screens/scorecard.js`, `./src/ui/screens/import.js`, `./src/ui/screens/tutorial.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js`, `./tests/ui/persistence-screens.test.js` | done | 4/4 | 2026-08-13 | Aligned all six standalone screens with mock composition, fixed title branching, and preserved persistence/import/settings behavior. Follow-up: scorecard DOM/tests are aligned, but production screenshot route needs harness support for scorecard state. |
 | 03 | Creation Builder Mock Parity | M69, M92 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | pending | — | Runs after S01; disjoint from S02/S04/S05. |
 | 04 | In-Run Viewport, Status, and Combat Shell Parity | M58, M59, M70, M71 | `./src/ui/playfield.js`, `./src/ui/status-strip.js`, `./src/ui/screens/exploration.js`, `./src/ui/screens/combat.js`, `./tests/ui/playfield.test.js`, `./tests/ui/status-strip.test.js`, `./tests/ui/exploration-screen.test.js`, `./tests/ui/combat-screen.test.js` | pending | — | Runs after S01; reads console only. |
 | 05 | Console Shell and Mode Pane Parity | M60–M67 | `./src/ui/console/console.js`, `./src/ui/console/move.js`, `./src/ui/console/combat.js`, `./src/ui/console/party.js`, `./src/ui/console/gear.js`, `./src/ui/console/tech.js`, `./src/ui/console/loot.js`, `./src/ui/console/log.js`, `./tests/ui/console.test.js`, `./tests/ui/party-gear.test.js`, `./tests/ui/tech-loot-log.test.js` | pending | — | Runs after S01; reads screen shell only. |
@@ -101,3 +101,28 @@ flowchart TD
 }
 ```
 
+### SESSION-02 — done — 2026-08-13
+
+```json
+{
+  "session": "02",
+  "status": "done",
+  "checkpoint": 4,
+  "notes": "Aligned all six standalone screens with mock composition, fixed title branching, and preserved persistence/import/settings behavior.",
+  "delivered": "Rebuilt title, library, scorecard, import, tutorial, and settings layouts using shared panels and scroll bodies; added scorecard library navigation, dead-roster styling, named import states, and structural tests.",
+  "verification": "Syntax passed; targeted Vitest: 9/9 passed; design scan: 0 errors, 10 warnings; parity shots: 6/6 generated and inspected; full Vitest: 1767/1768 passed with one pre-existing token-registration failure.",
+  "surprises": "Full Vitest still fails because five SESSION-01 scroll tokens in ./styles/base.css are absent from ./specs/design.md, both outside this lease. The scorecard parity harness captures the production title instead of a populated scorecard, while its mock side renders correctly.",
+  "followUp": "Standalone title, library, import, tutorial, and settings compositions are visually aligned. Scorecard DOM/tests are aligned, but its production screenshot route needs harness support for scorecard state.",
+  "filesTouched": [
+    "./src/ui/screens/title.js",
+    "./src/ui/screens/library.js",
+    "./src/ui/screens/scorecard.js",
+    "./src/ui/screens/import.js",
+    "./src/ui/screens/tutorial.js",
+    "./src/ui/screens/settings.js",
+    "./tests/ui/front-door.test.js",
+    "./tests/ui/persistence-screens.test.js"
+  ],
+  "blockedReason": null
+}
+```
