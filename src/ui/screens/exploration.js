@@ -45,8 +45,13 @@ export function mount(container, params = {}) {
   const inputHandler = createInputHandler({ legacyActions: false });
   inputHandler.bindToElement(container);
   clear(container);
+  container.classList.add('exploration-screen', 'in-run-screen');
+  container.style.position = 'relative';
+  container.style.overflow = 'hidden';
 
   const statusBar = createStatusBar(runState);
+  statusBar.classList.add('panel', 'in-run-status');
+  statusBar.style.flex = '0 0 auto';
   container.appendChild(statusBar);
 
   const alertBanner = document.createElement('div');
@@ -56,12 +61,21 @@ export function mount(container, params = {}) {
   alertBanner.dataset.testid = 'alert-banner';
   container.appendChild(alertBanner);
 
+  const playfieldBody = document.createElement('div');
+  playfieldBody.className = 'exploration-playfield playfield-body';
+  playfieldBody.style.flex = '1 1 auto';
+  playfieldBody.style.minHeight = '0';
+  playfieldBody.style.marginBottom = '96px';
+  playfieldBody.style.overflow = 'hidden';
+  playfieldBody.style.position = 'relative';
+  container.appendChild(playfieldBody);
+
   const canvas = document.createElement('canvas');
-  canvas.className = 'playfield-canvas';
+  canvas.className = 'playfield-canvas lattice-canvas';
   canvas.width = 480;
   canvas.height = 768;
   canvas.dataset.testid = 'exploration-canvas';
-  container.appendChild(canvas);
+  playfieldBody.appendChild(canvas);
   const playfield = createPlayfield(canvas);
 
   const lattice = createLattice(floor, runState);

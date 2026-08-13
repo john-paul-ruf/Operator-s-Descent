@@ -83,6 +83,15 @@ function byTestId(root, testid) {
   return null;
 }
 
+function byClass(root, className) {
+  if (root.classList?.contains(className)) return root;
+  for (const child of root.children || []) {
+    const found = byClass(child, className);
+    if (found) return found;
+  }
+  return null;
+}
+
 function textOf(root) {
   return [root.textContent, ...(root.children || []).flatMap((child) => textOf(child))].filter(Boolean).join(' ');
 }
@@ -129,6 +138,27 @@ beforeEach(installDocument);
 afterEach(() => { delete globalThis.document; });
 
 describe('exploration screen controller', () => {
+  it('composes the pinned status alert playfield and console shell in mock order', async () => {
+    const { container } = await mountExploration();
+    const canvas = byTestId(container, 'exploration-canvas');
+    const alert = byTestId(container, 'alert-banner');
+    const playfieldBody = byClass(container, 'exploration-playfield');
+
+    expect(container.classList.contains('exploration-screen')).toBe(true);
+    expect(container.children.map((child) => child.className)).toEqual([
+      expect.stringContaining('status-strip'),
+      'alert-banner',
+      'exploration-playfield playfield-body',
+      expect.stringContaining('console-bar')
+    ]);
+    expect(alert.hidden).toBe(true);
+    expect(alert.textContent).toBe('◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE');
+    expect(playfieldBody.style.overflow).toBe('hidden');
+    expect(playfieldBody.children).toEqual([canvas]);
+    expect([canvas.width, canvas.height]).toEqual([480, 768]);
+    expect(canvas.classList.contains('lattice-canvas')).toBe(true);
+  });
+
   it('routes keyboard movement through MOVE and pushes visible proximity audio', async () => {
     const audio = [];
     const off = bus.on('audio:update-state', (payload) => audio.push(payload));
