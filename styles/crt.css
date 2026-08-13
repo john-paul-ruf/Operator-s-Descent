@@ -12,7 +12,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 50;
+  z-index: 60;
   background: repeating-linear-gradient(to bottom,
     transparent 0, transparent 1px,
     rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
@@ -23,18 +23,18 @@
   100% { transform: translateY(2px); }
 }
 
-/* Aperture grille: 3px RGB triad stripes, screen blend at 50% opacity */
+/* Aperture grille: 3px RGB triad stripes, screen blend at 15% visual opacity */
 .crt-grille {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 51;
+  z-index: 59;
   background: repeating-linear-gradient(to right,
     rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px,
     rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
     rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
   mix-blend-mode: screen;
-  opacity: 0.50;
+  opacity: 0.15;
 }
 
 /* Vignette: radial gradient, 4s ease-in-out pulse, opacity 0.65↔0.92 */
@@ -42,7 +42,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 52;
+  z-index: 58;
   background: radial-gradient(ellipse at center,
     transparent 30%, rgba(0,0,0,0.65) 100%);
   animation: vignette-pulse 4s ease-in-out infinite;
@@ -59,7 +59,7 @@
   right: 0;
   width: 100%;
   height: 28%;
-  z-index: 53;
+  z-index: 57;
   pointer-events: none;
   background: rgba(126,200,227,0.05);
   mix-blend-mode: screen;
@@ -75,7 +75,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 54;
+  z-index: 56;
   opacity: 0.5;
   background-image:
     radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
@@ -146,7 +146,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 56;
+  z-index: 62;
   background: rgba(208,38,212,0.05);
   opacity: 0;
   animation: frame-flash 3.2s steps(1) infinite;
