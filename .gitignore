@@ -3,3 +3,6 @@
 /program/
 /.devserver.log
 /.devserver.pid
+
+/.forge/
+/design-scan.err
