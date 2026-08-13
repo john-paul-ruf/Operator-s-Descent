@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createButton, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
+import { createButton, createChargeBar, createHPBar, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -56,6 +56,12 @@ describe('semantic components', () => {
     button.cleanup();
     button.dispatch('click');
     expect(clicked).toBe(1);
+  });
+
+  test('primary buttons and meters expose mock-compatible classes', () => {
+    expect(createButton('Confirm', { primary: true }).className).toBe('btn-crt btn-primary primary');
+    expect(createHPBar(3, 10).children[1].children[0].className).toContain('bar-fill-danger');
+    expect(createChargeBar(3, 10).children[1].children[0].className).toContain('bar-fill-charge');
   });
 
   test('toggles, ranges, and text entry use labelled native inputs', () => {

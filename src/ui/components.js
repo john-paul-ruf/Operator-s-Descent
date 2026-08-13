@@ -41,7 +41,7 @@ function applyControlState(element, opts) {
 export function createButton(label, opts = {}) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = opts.primary ? 'btn-primary' : 'btn-crt';
+  button.className = opts.primary ? 'btn-crt btn-primary primary' : 'btn-crt';
   button.textContent = label;
   if (opts.danger) button.classList.add('danger');
   if (opts.selected) button.classList.add('selected');
@@ -162,7 +162,9 @@ function createMeter(textValue, current, max, className) {
   const bar = document.createElement('div');
   bar.className = 'bar-track';
   const fill = document.createElement('div');
-  fill.className = className === 'hp-bar' ? 'bar-fill bar-fill-hp' : 'bar-fill';
+  fill.className = className === 'hp-bar'
+    ? 'bar-fill bar-fill-hp bar-fill-danger'
+    : 'bar-fill bar-fill-charge';
   const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
   fill.style.width = `${pct}%`;
   if (className === 'hp-bar' && pct < 25) fill.classList.add('danger');

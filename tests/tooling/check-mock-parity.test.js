@@ -7,9 +7,12 @@ describe('check-mock-parity', () => {
     expect(checkMockTokens()).toEqual([]);
   });
 
-  it('runs the mock-class parity check without throwing and returns warning-level findings only', () => {
+  it('ignores only mock-generated combat deployment markers', () => {
     const findings = checkMockClasses();
-    expect(Array.isArray(findings)).toBe(true);
+    expect(findings.map(({ mockFile, className }) => `${mockFile}:${className}`)).toEqual([
+      'combat.html:deploy-p',
+      'combat.html:deploy-e'
+    ]);
     for (const finding of findings) expect(finding.level).toBe('warning');
   });
 });
