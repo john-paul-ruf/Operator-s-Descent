@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Character Creation (Wide) — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIDE SHELL BLOCK — byte-identical across every mocks/wide/*.html file.
+       Do NOT edit per-file. Copy verbatim from mocks/wide/exploration.html.
+       (Keystone — SESSION-02.)
+       ═══════════════════════════════════════════════════════════════════════════ */
+
+    :root {
+      --accent: #7ec8e3;
+      --accent-dim: rgba(126,200,227,0.25);
+      --accent-faint: rgba(126,200,227,0.06);
+      --bg-base: #0a0612;
+      --bg-panel: #13092a;
+      --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a;
+      --text-primary: #e0d8f0;
+      --text-secondary: #8a7aa8;
+      --text-dim: #5a4a78;
+      --danger: #e83a3a;
+      --heal: #3ae8a8;
+      --wall-color: #2a1048;
+      --wall-highlight: #4a2090;
+      --floor-color: #14092e;
+      --floor-visited: #0c061a;
+    }
+
+    /* Wide-scope extras — do NOT edit :root above (byte-shared with portrait). */
+    body {
+      --warning: #e8632a;
+      --border-active: var(--accent);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ═══ FULL-VIEWPORT CRT / VHS EFFECT SYSTEM (per FR-23 timing constants) ═══ */
+
+    .crt-scanlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom,
+        transparent 0, transparent 1px,
+        rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite;
+    }
+    @keyframes scanline-drift {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(2px); }
+    }
+
+    .crt-grille {
+      position: fixed; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right,
+        rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px,
+        rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
+        rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen;
+      opacity: 0.15;
+    }
+
+    .crt-vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center,
+        transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite;
+    }
+    @keyframes vignette-pulse {
+      0%, 100% { opacity: 0.65; }
+      50% { opacity: 0.92; }
+    }
+
+    .crt-tracking {
+      position: fixed; left: 0; right: 0; height: 28%; z-index: 57;
+      pointer-events: none;
+      background: rgba(126,200,227,0.05);
+      mix-blend-mode: screen;
+      animation: tracking-loop 7s linear infinite;
+    }
+    @keyframes tracking-loop {
+      0% { top: -28%; }
+      100% { top: 100%; }
+    }
+
+    .crt-grain {
+      position: fixed; inset: 0; pointer-events: none; z-index: 56;
+      opacity: 0.5;
+      background-image:
+        radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px),
+        radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%;
+      animation: grain-rescatter 1s steps(4) infinite;
+    }
+    @keyframes grain-rescatter {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-2px, 1px); }
+      50% { transform: translate(1px, -2px); }
+      75% { transform: translate(-1px, -1px); }
+      100% { transform: translate(2px, 1px); }
+    }
+
+    .crt-border {
+      position: fixed; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow:
+        inset 0 0 3px rgba(126,200,227,0.3),
+        inset 0 0 8px rgba(126,200,227,0.15),
+        inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite;
+    }
+    @keyframes border-flicker {
+      0% { opacity: 0.7; }
+      35% { opacity: 0.7; }
+      36% { opacity: 0.5; }
+      42% { opacity: 0.9; }
+      50% { opacity: 0.6; }
+      55% { opacity: 0.8; }
+      100% { opacity: 0.7; }
+    }
+
+    .crt-flash {
+      position: fixed; inset: 0; pointer-events: none; z-index: 62;
+      background: rgba(208,38,212,0.05);
+      opacity: 0;
+      animation: frame-flash 3.2s steps(1) infinite;
+    }
+    @keyframes frame-flash {
+      0%, 85% { opacity: 0; }
+      86% { opacity: 0.05; }
+      88% { opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    .crt-glitch-bars { position: fixed; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .glitch-bar { position: absolute; left: 0; right: 0; background: rgba(126,200,227,0.3); mix-blend-mode: screen; }
+
+    .crt-noise-lines { position: fixed; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .noise-line {
+      position: absolute; left: 0; right: 0;
+      font-family: monospace; font-size: 8px;
+      color: rgba(126,200,227,0.4);
+      white-space: nowrap; overflow: hidden;
+      letter-spacing: 1px; line-height: 10px;
+      mix-blend-mode: screen;
+    }
+
+    .crt-vhs { position: fixed; inset: 0; pointer-events: none; z-index: 61; opacity: 0; overflow: hidden; }
+    .crt-vhs.active { animation: vhs-event 0.2s steps(1); }
+    @keyframes vhs-event {
+      0% { opacity: 0; }
+      20% { opacity: 1; transform: translateX(3px); }
+      40% { opacity: 0.8; transform: translateX(-4px); }
+      60% { opacity: 1; transform: translateX(2px); }
+      80% { opacity: 0.5; transform: translateX(-1px); }
+      100% { opacity: 0; transform: translateX(0); }
+    }
+    .crt-vhs::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to right,
+        rgba(255,0,0,0.08) 0%, transparent 3%,
+        rgba(0,0,255,0.08) 97%, transparent 100%);
+    }
+    .crt-vhs::after {
+      content: ''; position: absolute; left: 0; right: 0; top: 30%;
+      height: 4px; background: rgba(255,255,255,0.15);
+      mix-blend-mode: screen;
+    }
+
+    /* ═══ PER-ELEMENT TEXT GLITCH (FR-23) ═══ */
+    [data-glitch] { position: relative; }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text);
+      position: absolute; top: 0; left: 0; width: 100%;
+      pointer-events: none;
+      text-shadow: none;
+    }
+    [data-glitch].text-swapping::before { color: rgba(255, 0, 0, 0.47); transform: translate(-2px, 0); }
+    [data-glitch].text-swapping::after  { color: rgba(0, 0, 255, 0.47); transform: translate( 2px, 0); }
+
+    /* ═══ SHARED UTILITIES ═══ */
+    .glow { text-shadow: 0 0 8px var(--accent); }
+    .glow-strong { text-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent); }
+    .accent-text { color: var(--accent); }
+    .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+    .panel-elevated { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); }
+    .bar-track { background: var(--bg-base); height: 4px; border: 1px solid var(--border-dim); }
+    .bar-fill { height: 100%; background: var(--accent); box-shadow: 0 0 2px var(--accent); }
+    .bar-fill-danger { background: var(--danger); box-shadow: 0 0 2px var(--danger); }
+    .bar-fill-charge { background: var(--accent); box-shadow: 0 0 2px var(--accent); }
+    .bar-fill-hp { background: var(--danger); box-shadow: 0 0 2px var(--danger); }
+    .sigil-mini {
+      width: 24px; height: 24px;
+      border: 1px solid var(--accent); border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--accent); font-size: 9px; font-weight: bold;
+      text-shadow: 0 0 4px var(--accent);
+      box-shadow: 0 0 4px var(--accent);
+    }
+    .theme-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--accent-faint);
+      border: 1px solid var(--accent-dim);
+      color: var(--accent); border-radius: 2px;
+      box-shadow: 0 0 4px var(--accent-dim);
+    }
+    .chroma-text { position: relative; text-shadow: 0 0 8px var(--accent); }
+    .jitter-target { will-change: transform; }
+    .alert-banner {
+      background: rgba(232,58,58,0.15);
+      border: 1px solid var(--danger);
+      box-shadow: 0 0 8px var(--danger), 0 0 16px rgba(232,58,58,0.2);
+    }
+    .scroll-area {
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent) var(--bg-panel);
+    }
+    .scroll-area::-webkit-scrollbar { width: 4px; }
+    .scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
+    .scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+
+    /* ═══ LOG ENTRY CLASSES (used by telemetry dock live-feed AND LOG mode) ═══ */
+    .log-entry {
+      padding: 6px 10px;
+      border-bottom: 1px solid rgba(42,26,74,0.4);
+      font-size: 10px; line-height: 1.45;
+    }
+    .log-turn { color: var(--text-dim); font-size: 9px; margin-right: 6px; }
+    .log-combat { color: var(--danger); }
+    .log-discovery { color: #e8d23a; }
+    .log-damage { color: var(--danger); }
+    .log-death { color: var(--danger); font-weight: bold; }
+    .log-heal { color: var(--heal); }
+    .log-info { color: var(--accent); }
+    .log-move { color: var(--text-secondary); }
+
+    /* ═══ WIDE SHELL — three-region grid (Adaptive Layout System) ═══ */
+    .wide-shell {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, 1.2fr);
+      grid-template-rows: 100vh;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+    }
+
+    /* Telemetry dock (left region): stacked status fields + persistent LOG feed */
+    .wide-telemetry-dock {
+      display: flex; flex-direction: column;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-dim);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .wide-telemetry-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-dim);
+      background: var(--bg-panel-elevated);
+    }
+    .wide-telemetry-field {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px dashed rgba(42,26,74,0.5);
+    }
+    .wide-telemetry-field:last-child { border-bottom: 0; }
+    .wide-telemetry-label {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--text-secondary);
+    }
+    .wide-telemetry-value {
+      font-size: 14px; color: var(--accent);
+      text-shadow: 0 0 8px var(--accent);
+    }
+    .wide-log-feed {
+      flex: 1;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .wide-log-feed-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-dim);
+      background: var(--bg-panel);
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      position: sticky; top: 0;
+    }
+    .wide-log-feed-scroll { flex: 1; }
+
+    /* Playfield column (center region): portrait-proportioned, 9:16 anchored to viewport height */
+    .wide-playfield-column {
+      position: relative;
+      display: flex; flex-direction: column;
+      background: var(--bg-base);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .wide-playfield-inner {
+      flex: 1;
+      display: flex; flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Console dock (right region): vertical mode tabs on inner (left) edge, content fills the rest */
+    .wide-console-dock {
+      display: grid;
+      grid-template-columns: 96px 1fr;   /* 96px vertical tab rail = touch-target minimum */
+      grid-template-rows: 100vh;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-dim);
+      box-shadow: -2px 0 12px rgba(0,0,0,0.6), -1px 0 4px rgba(126,200,227,0.1);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .wide-console-tabs {
+      display: flex; flex-direction: column;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-dim);
+      overflow: hidden;
+    }
+    .wide-mode-tab {
+      flex: 1;
+      min-height: 96px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      border-bottom: 1px solid rgba(42,26,74,0.5);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      writing-mode: horizontal-tb;
+    }
+    .wide-mode-tab:hover { color: var(--text-primary); }
+    .wide-mode-tab.active {
+      border-left-color: var(--accent);
+      color: var(--accent);
+      text-shadow: 0 0 8px var(--accent);
+      background: var(--accent-faint);
+      box-shadow: inset 4px 0 8px rgba(126,200,227,0.1);
+    }
+    .wide-mode-tab.disabled { opacity: 0.3; cursor: not-allowed; }
+    .wide-console-content {
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+      background: var(--bg-panel);
+    }
+    .wide-console-content-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border-dim);
+      background: var(--bg-panel-elevated);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .wide-console-content-body {
+      flex: 1;
+      padding: 20px;
+      display: flex; flex-direction: column;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       END WIDE SHELL BLOCK
+       ═══════════════════════════════════════════════════════════════════════════ */
+
+    /* ═══ CREATION-SPECIFIC ═══ */
+
+    /* Two-pane grid — roster/readout/saved-configs (left) | editor stack (right).
+       Left pane fixed to spec width minmax(360px, 40%); right pane fills the rest.
+       Action footer spans both columns. */
+    .wide-creation-shell {
+      position: relative; z-index: 10;
+      display: grid;
+      grid-template-columns: minmax(360px, 40%) 1fr;
+      grid-template-rows: 1fr auto;
+      width: 100vw; height: 100vh;
+    }
+    .wide-creation-left {
+      grid-column: 1; grid-row: 1;
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border-dim);
+      background: var(--bg-panel);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .wide-creation-right {
+      grid-column: 2; grid-row: 1;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+      background: var(--bg-base);
+    }
+    .wide-creation-footer {
+      grid-column: 1 / -1; grid-row: 2;
+      display: flex; gap: 14px; padding: 16px 24px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-dim);
+    }
+
+    /* Readout header (points/credits/AP): always visible at top of left pane. */
+    .wide-readout {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--bg-panel-elevated);
+      border-bottom: 1px solid var(--accent);
+    }
+    .wide-readout-cell {
+      display: flex; flex-direction: column;
+    }
+    .wide-readout-cell .label {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--text-secondary);
+    }
+    .wide-readout-cell .value {
+      font-size: 22px; font-weight: bold;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      margin-top: 2px;
+    }
+    .wide-readout-cell .value .denom {
+      font-size: 12px; color: var(--text-dim); font-weight: normal;
+    }
+
+    /* Roster — character slot row inside the left pane. */
+    .wide-roster {
+      padding: 14px 20px 8px;
+      border-bottom: 1px solid var(--border-dim);
+    }
+    .wide-roster-heading {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--text-secondary); margin-bottom: 10px;
+    }
+    .wide-roster-row {
+      display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    .char-slot {
+      width: 96px; height: 96px;
+      border: 1px solid var(--border-dim);
+      background: var(--bg-panel);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .char-slot:hover { border-color: var(--text-secondary); }
+    .char-slot.active {
+      background: var(--bg-panel-elevated);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .char-slot .label {
+      font-size: 9px; margin-top: 6px; letter-spacing: 0.05em;
+    }
+    .char-slot.active .label { color: var(--accent); }
+    .char-slot .label.dim { color: var(--text-dim); }
+
+    /* Saved configurations row (bottom of left pane). */
+    .wide-saved-configs {
+      padding: 14px 20px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    .wide-saved-configs-heading {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      margin-bottom: 10px;
+    }
+    .wide-saved-configs-list {
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .config-card {
+      padding: 10px 12px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .config-card:hover { border-color: var(--accent); }
+    .config-card.active {
+      background: var(--bg-panel-elevated);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .config-card .name {
+      font-size: 12px; font-weight: bold;
+      color: var(--text-primary);
+    }
+    .config-card.active .name { color: var(--accent); }
+    .config-card .meta {
+      font-size: 10px; color: var(--text-dim); margin-top: 2px;
+    }
+    .config-card.save-slot {
+      border-style: dashed;
+      opacity: 0.7;
+      text-align: center;
+    }
+    .config-card.save-slot .name { color: var(--text-dim); }
+
+    /* Right pane — stacked editor sections, all creation subsections visible at once. */
+    .wide-editor {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px 20px;
+      display: flex; flex-direction: column;
+      gap: 24px;
+    }
+    .wide-section {
+      display: flex; flex-direction: column;
+    }
+    .wide-section-heading {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      padding-bottom: 8px; margin-bottom: 12px;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex; align-items: baseline; gap: 12px;
+    }
+    .wide-section-heading .subtitle {
+      font-size: 10px; letter-spacing: 0.1em;
+      color: var(--text-dim); text-shadow: none;
+    }
+
+    /* Buttons & controls — class-independent visuals from portrait. */
+    .btn-crt {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      color: var(--text-primary);
+      padding: 14px 24px;
+      font-family: inherit; font-size: 13px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      cursor: pointer; transition: all 0.15s ease;
+      text-align: center;
+      min-height: 48px;
+    }
+    .btn-crt:hover, .btn-crt:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent), inset 0 0 8px rgba(126,200,227,0.1);
+      color: var(--accent);
+      outline: none;
+    }
+    .btn-crt:active { background: var(--bg-panel-elevated); }
+    .btn-primary {
+      background: rgba(126,200,227,0.1);
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+    .btn-primary:hover { background: rgba(126,200,227,0.2); box-shadow: 0 0 20px var(--accent); }
+    .btn-link { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+    /* Wide is pointer-friendlier — steppers may densify to 44px per Custom Rule 8. */
+    .stepper-btn {
+      width: 44px; height: 44px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      color: var(--text-primary);
+      font-family: inherit; font-size: 18px;
+      cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .stepper-btn:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 4px var(--accent); }
+    .stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Class picker: 3-column grid at 1440+ (fits all 6 in two rows); 2-col at 1024. */
+    .class-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .class-card {
+      padding: 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      min-height: 96px;
+    }
+    .class-card:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .class-card.selected {
+      background: var(--bg-panel-elevated);
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+    .class-card .row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+    }
+    .class-card .title { font-size: 14px; font-weight: bold; color: var(--text-primary); }
+    .class-card.selected .title { color: var(--accent); text-shadow: 0 0 8px var(--accent); }
+    .class-card .stats { font-size: 10px; color: var(--text-dim); }
+    .class-card .desc { font-size: 11px; color: var(--text-secondary); }
+
+    /* Projected stats readout under class picker. */
+    .projected-stats {
+      margin-top: 12px;
+      padding: 12px 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+    }
+    .projected-stats .heading {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      margin-bottom: 8px;
+    }
+    .projected-stats .grid {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      font-size: 12px;
+    }
+    .projected-stats .grid > div { display: flex; flex-direction: column; }
+    .projected-stats .grid .label { font-size: 9px; color: var(--text-secondary); letter-spacing: 0.1em; }
+    .projected-stats .grid .val { color: var(--accent); font-weight: bold; font-size: 14px; }
+    .projected-stats .signature {
+      margin-top: 8px; font-size: 10px; color: var(--text-dim);
+    }
+
+    /* Sigil picker: sigil-220 hero preview + 8-option thumbnail grid. */
+    .sigil-picker {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .sigil-preview {
+      width: 220px; height: 220px;
+      border: 2px solid var(--accent); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); font-size: 90px; font-weight: bold;
+      text-shadow: 0 0 16px var(--accent), 0 0 32px var(--accent);
+      box-shadow: 0 0 24px var(--accent), inset 0 0 24px rgba(126,200,227,0.1);
+      font-family: ui-monospace, monospace;
+      justify-self: start;
+    }
+    .sigil-preview-caption {
+      grid-column: 1;
+      font-size: 10px; letter-spacing: 0.15em; text-align: center;
+      color: var(--text-dim); text-transform: uppercase;
+      margin-top: 8px; width: 220px;
+    }
+    .sigil-thumbs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .sigil-option {
+      aspect-ratio: 1;
+      border: 2px solid var(--accent); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); font-weight: bold; font-size: 22px;
+      text-shadow: 0 0 8px var(--accent);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: ui-monospace, monospace;
+      min-height: 72px;
+    }
+    .sigil-option:hover { box-shadow: 0 0 12px var(--accent); transform: scale(1.05); }
+    .sigil-option.selected {
+      box-shadow: 0 0 16px var(--accent), 0 0 24px var(--accent);
+      transform: scale(1.08);
+    }
+    .sigil-note {
+      grid-column: 1 / -1;
+      font-size: 10px; color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* Attribute rows: two columns at 1440+, one column at 1024. */
+    .attr-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 10px;
+    }
+    .attr-row {
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+    }
+    .attr-row .head {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .attr-row .name {
+      display: flex; flex-direction: column;
+    }
+    .attr-row .name .full { font-size: 12px; font-weight: bold; color: var(--text-primary); }
+    .attr-row .name .abbrev { font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; }
+    .attr-row.primary .name .full { color: var(--accent); text-shadow: 0 0 8px var(--accent); }
+    .attr-row .stepper {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .attr-row .stepper .val {
+      font-size: 20px; font-weight: bold; width: 32px; text-align: center;
+      color: var(--text-primary);
+    }
+    .attr-row.primary .stepper .val { color: var(--accent); }
+    .attr-row .desc {
+      font-size: 10px; color: var(--text-dim); margin-top: 6px;
+    }
+
+    /* Gear pick-lists — one section per slot group. */
+    .gear-group { margin-bottom: 12px; }
+    .gear-group-heading {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--text-secondary); margin-bottom: 6px;
+    }
+    .gear-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-bottom: 6px;
+      min-height: 56px;
+    }
+    .gear-row:hover { border-color: var(--accent); }
+    .gear-row.selected {
+      border-color: var(--accent);
+      background: var(--bg-panel-elevated);
+      box-shadow: 0 0 6px var(--accent);
+    }
+    .gear-row .info .name { font-size: 13px; color: var(--text-primary); }
+    .gear-row.selected .info .name { color: var(--accent); }
+    .gear-row .info .stat { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+    .gear-row .cost { font-size: 12px; color: var(--text-secondary); font-weight: bold; }
+    .gear-row.selected .cost { color: var(--accent); text-shadow: 0 0 4px var(--accent); }
+
+    /* Tech protocol pick-list — same visuals as gear-row. */
+    .tech-list { display: flex; flex-direction: column; gap: 6px; }
+    .tech-gate-note {
+      font-size: 10px; color: var(--text-dim); margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- ═══ FULL-VIEWPORT CRT EFFECT LAYERS ═══ -->
+  <div class="crt-grille"></div>
+  <div class="crt-vignette"></div>
+  <div class="crt-tracking"></div>
+  <div class="crt-scanlines"></div>
+  <div class="crt-grain"></div>
+  <div class="crt-border"></div>
+  <div class="crt-flash"></div>
+  <div class="crt-glitch-bars" id="glitch-bars"></div>
+  <div class="crt-noise-lines" id="noise-lines"></div>
+  <div class="crt-vhs" id="vhs-event"></div>
+
+  <!-- ═══ TWO-PANE CREATION SHELL ═══ -->
+  <div class="wide-creation-shell">
+
+    <!-- LEFT PANE: readout · roster · saved configurations -->
+    <aside class="wide-creation-left">
+
+      <!-- Readout header: points remaining, credits, AP/round -->
+      <div class="wide-readout">
+        <div class="wide-readout-cell">
+          <span class="label">Points Remaining</span>
+          <span class="value">42<span class="denom">/80</span></span>
+        </div>
+        <div class="wide-readout-cell">
+          <span class="label">Credits</span>
+          <span class="value">420</span>
+        </div>
+        <div class="wide-readout-cell">
+          <span class="label">AP/Round</span>
+          <span class="value">2</span>
+        </div>
+      </div>
+
+      <!-- Roster: 4 character slots -->
+      <div class="wide-roster">
+        <div class="wide-roster-heading">◈ Roster · 4 max</div>
+        <div class="wide-roster-row">
+          <div class="char-slot active" onclick="selectChar(this, 0)">
+            <div class="sigil-option" style="width:48px;height:48px;font-size:18px;">B</div>
+            <div class="label">BREACHER</div>
+          </div>
+          <div class="char-slot" onclick="selectChar(this, 1)">
+            <div class="sigil-option" style="width:48px;height:48px;font-size:18px;opacity:0.5;">?</div>
+            <div class="label dim">EMPTY</div>
+          </div>
+          <div class="char-slot" onclick="selectChar(this, 2)">
+            <div class="sigil-option" style="width:48px;height:48px;font-size:18px;opacity:0.3;">+</div>
+            <div class="label dim">ADD</div>
+          </div>
+          <div class="char-slot" style="opacity:0.5;">
+            <div class="sigil-option" style="width:48px;height:48px;font-size:18px;opacity:0.3;">+</div>
+            <div class="label dim">ADD</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Saved configurations (FR-51) -->
+      <div class="wide-saved-configs">
+        <div class="wide-saved-configs-heading">◈ Saved Configurations (FR-51)</div>
+        <div class="wide-saved-configs-list">
+          <div class="config-card active">
+            <div class="name">Solo Breacher</div>
+            <div class="meta">38pt spent · 1 char</div>
+          </div>
+          <div class="config-card">
+            <div class="name">Quad Assault</div>
+            <div class="meta">72pt spent · 4 char</div>
+          </div>
+          <div class="config-card save-slot">
+            <div class="name">+ SAVE CURRENT</div>
+            <div class="meta">10 max</div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- RIGHT PANE: all creation subsections stacked, no tab switching -->
+    <section class="wide-creation-right">
+      <div class="wide-editor scroll-area">
+
+        <!-- CLASS section -->
+        <div class="wide-section" id="section-class">
+          <div class="wide-section-heading">
+            ◈ Class
+            <span class="subtitle">6 chassis · signature ability defines role</span>
+          </div>
+          <div class="class-grid">
+            <div class="class-card selected" onclick="selectClass(this, 'Breacher')">
+              <div class="row">
+                <div class="sigil-option" style="width:44px;height:44px;font-size:16px;">B</div>
+                <div>
+                  <div class="title">BREACHER</div>
+                  <div class="stats">MGT · Hit Die 16</div>
+                </div>
+              </div>
+              <div class="desc">Frontline armor pen. Ignores cover.</div>
+            </div>
+            <div class="class-card" onclick="selectClass(this, 'Ghost')">
+              <div class="row">
+                <div class="sigil-option" style="width:44px;height:44px;font-size:16px;">G</div>
+                <div>
+                  <div class="title">GHOST</div>
+                  <div class="stats">FIN · Hit Die 10</div>
+                </div>
+              </div>
+              <div class="desc">Ranged burst. Phase through walls.</div>
+            </div>
+            <div class="class-card" onclick="selectClass(this, 'Compiler')">
+              <div class="row">
+                <div class="sigil-option" style="width:44px;height:44px;font-size:16px;">C</div>
+                <div>
+                  <div class="title">COMPILER</div>
+                  <div class="stats">RES · Hit Die 8</div>
+                </div>
+              </div>
+              <div class="desc">Magic powerhouse. Overclock economy.</div>
+            </div>
+            <div class="class-card" onclick="selectClass(this, 'Anchor')">
+              <div class="row">
+                <div class="sigil-option" style="width:44px;height:44px;font-size:16px;">A</div>
+                <div>
+                  <div class="title">ANCHOR</div>
+                  <div class="stats">VIT · Hit Die 14</div>
+                </div>
+              </div>
+              <div class="desc">Defensive anchor. Party protection.</div>
+            </div>
+            <div class="class-card" onclick="selectClass(this, 'Oracle')">
+              <div class="row">
+                <div class="sigil-option" style="width:44px;height:44px;font-size:16px;">O</div>
+                <div>
+                  <div class="title">ORACLE</div>
+                  <div class="stats">FOC · Hit Die 6</div>
+                </div>
+              </div>
+              <div class="desc">Information. Telepathic detection.</div>
+            </div>
+            <div class="class-card" onclick="selectClass(this, 'Operator')">
+              <div class="row">
+                <div class="sigil-option" style="width:44px;height:44px;font-size:16px;">Op</div>
+                <div>
+                  <div class="title">OPERATOR</div>
+                  <div class="stats">SIG · Hit Die 12</div>
+                </div>
+              </div>
+              <div class="desc">Support buffs. Flexible coverage.</div>
+            </div>
+          </div>
+
+          <div class="projected-stats">
+            <div class="heading">◈ Projected Stats — Breacher</div>
+            <div class="grid">
+              <div><span class="label">HP</span><span class="val">28</span></div>
+              <div><span class="label">CHARGE</span><span class="val">9</span></div>
+              <div><span class="label">DEF</span><span class="val">10</span></div>
+              <div><span class="label">INIT</span><span class="val">+0</span></div>
+              <div><span class="label">MGT</span><span class="val">5</span></div>
+              <div><span class="label">FIN</span><span class="val">3</span></div>
+            </div>
+            <div class="signature">Signature: BREACH — ignores cover on attacks</div>
+          </div>
+        </div>
+
+        <!-- SIGIL section (sigil-220 picker per spec) -->
+        <div class="wide-section" id="section-sigil">
+          <div class="wide-section-heading">
+            ◈ Sigil — Breacher Family
+            <span class="subtitle">Free with chassis · No two characters may share</span>
+          </div>
+          <div class="sigil-picker">
+            <div>
+              <div class="sigil-preview">B1</div>
+              <div class="sigil-preview-caption">Sigil-220 preview · selected glyph</div>
+            </div>
+            <div class="sigil-thumbs">
+              <div class="sigil-option selected">B1</div>
+              <div class="sigil-option">B2</div>
+              <div class="sigil-option">B3</div>
+              <div class="sigil-option">B4</div>
+              <div class="sigil-option">B5</div>
+              <div class="sigil-option">B6</div>
+              <div class="sigil-option">B7</div>
+              <div class="sigil-option">B8</div>
+              <div class="sigil-note">8 sigils per class family</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ATTRIBUTES section -->
+        <div class="wide-section" id="section-attrs">
+          <div class="wide-section-heading">
+            ◈ Attributes — Breacher
+            <span class="subtitle">Start at rank 3 · 3→6: 1pt · 7→8: 2pt · 9→10: 3pt</span>
+          </div>
+          <div class="attr-grid">
+            <div class="attr-row primary">
+              <div class="head">
+                <div class="name"><span class="full">MIGHT</span><span class="abbrev">MGT · Primary</span></div>
+                <div class="stepper">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="val">5</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:50%;"></div></div>
+              <div class="desc">Melee dmg, athletics · Modifier: +0</div>
+            </div>
+            <div class="attr-row">
+              <div class="head">
+                <div class="name"><span class="full">FINESSE</span><span class="abbrev">FIN</span></div>
+                <div class="stepper">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="val">3</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:30%;"></div></div>
+              <div class="desc">Ranged acc, initiative · Modifier: −2</div>
+            </div>
+            <div class="attr-row">
+              <div class="head">
+                <div class="name"><span class="full">VITALITY</span><span class="abbrev">VIT</span></div>
+                <div class="stepper">
+                  <button class="stepper-btn">−</button>
+                  <span class="val">5</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:50%;"></div></div>
+              <div class="desc">HP base, stamina · Modifier: +0 · HP: 36</div>
+            </div>
+            <div class="attr-row">
+              <div class="head">
+                <div class="name"><span class="full">RESONANCE</span><span class="abbrev">RES</span></div>
+                <div class="stepper">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="val">3</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:30%;"></div></div>
+              <div class="desc">CHARGE pool, protocol power · Modifier: −2</div>
+            </div>
+            <div class="attr-row">
+              <div class="head">
+                <div class="name"><span class="full">FOCUS</span><span class="abbrev">FOC</span></div>
+                <div class="stepper">
+                  <button class="stepper-btn" disabled>−</button>
+                  <span class="val">3</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:30%;"></div></div>
+              <div class="desc">Protocol acc, perception · Modifier: −2</div>
+            </div>
+            <div class="attr-row">
+              <div class="head">
+                <div class="name"><span class="full">SIGNAL</span><span class="abbrev">SIG</span></div>
+                <div class="stepper">
+                  <button class="stepper-btn">−</button>
+                  <span class="val">4</span>
+                  <button class="stepper-btn">+</button>
+                </div>
+              </div>
+              <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:40%;"></div></div>
+              <div class="desc">Protocol range, detection · Modifier: −1</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GEAR section -->
+        <div class="wide-section" id="section-gear">
+          <div class="wide-section-heading">
+            ◈ Equipment — Breacher
+            <span class="subtitle">1 weapon + 1 armor + 1 off-hand</span>
+          </div>
+
+          <div class="gear-group">
+            <div class="gear-group-heading">Weapons</div>
+            <div class="gear-row selected">
+              <div class="info">
+                <div class="name">◈ Heavy Melee — Axe</div>
+                <div class="stat">d10 · adjacent · +0 acc</div>
+              </div>
+              <div class="cost">2pt</div>
+            </div>
+            <div class="gear-row">
+              <div class="info">
+                <div class="name">◈ Sidearm</div>
+                <div class="stat">d6 · adjacent · +1 acc</div>
+              </div>
+              <div class="cost">1pt</div>
+            </div>
+            <div class="gear-row">
+              <div class="info">
+                <div class="name">◈ Polearm</div>
+                <div class="stat">d8 · reach 2 · +0 acc</div>
+              </div>
+              <div class="cost">2pt</div>
+            </div>
+          </div>
+
+          <div class="gear-group">
+            <div class="gear-group-heading">Armor</div>
+            <div class="gear-row">
+              <div class="info">
+                <div class="name">◈ Light Armor</div>
+                <div class="stat">+1 DEF · no FIN penalty</div>
+              </div>
+              <div class="cost">1pt</div>
+            </div>
+            <div class="gear-row selected">
+              <div class="info">
+                <div class="name">◈ Medium Armor</div>
+                <div class="stat">+3 DEF · −1 FIN (Breacher ignores)</div>
+              </div>
+              <div class="cost">2pt</div>
+            </div>
+            <div class="gear-row">
+              <div class="info">
+                <div class="name">◈ Heavy Armor</div>
+                <div class="stat">+5 DEF · −2 FIN (Breacher ignores)</div>
+              </div>
+              <div class="cost">3pt</div>
+            </div>
+          </div>
+
+          <div class="gear-group">
+            <div class="gear-group-heading">Off-Hand</div>
+            <div class="gear-row selected">
+              <div class="info">
+                <div class="name">◈ Shield</div>
+                <div class="stat">+2 DEF</div>
+              </div>
+              <div class="cost">3pt</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TECH section -->
+        <div class="wide-section" id="section-tech">
+          <div class="wide-section-heading">
+            ◈ Tech Protocols — Breacher
+            <span class="subtitle">DISRUPT only · Max tier 2 · Deck slots: 3 · Slots used 0/3 · Cost tier × 2 pt</span>
+          </div>
+          <div class="tech-list">
+            <div class="gear-row">
+              <div class="info">
+                <div class="name">SPARK <span style="font-size:10px;color:var(--text-dim);letter-spacing:0.1em;">DISRUPT T1</span></div>
+                <div class="stat">1d6 + RES mod · range SIG×2</div>
+              </div>
+              <div class="cost">2pt</div>
+            </div>
+            <div class="gear-row">
+              <div class="info">
+                <div class="name">SURGE <span style="font-size:10px;color:var(--text-dim);letter-spacing:0.1em;">DISRUPT T2</span></div>
+                <div class="stat">2d6 + RES mod · splash d4 adjacent</div>
+              </div>
+              <div class="cost">4pt</div>
+            </div>
+          </div>
+          <div class="tech-gate-note">Higher tiers not available for Breacher (gate: tier ≤ 2)</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FOOTER: spans both panes -->
+    <footer class="wide-creation-footer">
+      <a href="title.html" class="btn-crt btn-link" style="flex:0 0 200px;">◀ Back</a>
+      <div style="flex:1;"></div>
+      <a href="exploration.html" class="btn-crt btn-primary btn-link" style="flex:0 0 320px;">◈ Finalize &amp; Descend</a>
+    </footer>
+
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════
+    //  WIDE SHELL SCRIPT BLOCK — copy verbatim across all mocks/wide/*.html files.
+    //  (CRT glitch scheduler + text-glitch + jitter + tab handler + log auto-scroll.)
+    // ═══════════════════════════════════════════════
+
+    // Safe pool for character substitution (Latin, digits, box-drawing)
+    const safePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+
+    // — Glitch bars: 350-999ms, 40% fire, 80-249ms, 1-4px tall, ±8px offset, alpha 0.1-0.5 —
+    const glitchBarsEl = document.getElementById('glitch-bars');
+    function scheduleGlitchBar() {
+      const delay = 350 + Math.random() * 649;
+      setTimeout(() => {
+        if (Math.random() < 0.40) {
+          const bar = document.createElement('div');
+          bar.className = 'glitch-bar';
+          const height = 1 + Math.floor(Math.random() * 4);
+          const offset = -8 + Math.floor(Math.random() * 17);
+          const alpha = 0.1 + Math.random() * 0.4;
+          const top = Math.random() * 100;
+          bar.style.cssText = `top: ${top}%; height: ${height}px; opacity: ${alpha}; transform: translateX(${offset}px);`;
+          glitchBarsEl.appendChild(bar);
+          setTimeout(() => bar.remove(), 80 + Math.random() * 169);
+        }
+        scheduleGlitchBar();
+      }, delay);
+    }
+    scheduleGlitchBar();
+
+    // — Noise lines: 1200-3499ms, 30% fire, 80-299ms —
+    const noiseLinesEl = document.getElementById('noise-lines');
+    function scheduleNoiseLine() {
+      const delay = 1200 + Math.random() * 2299;
+      setTimeout(() => {
+        if (Math.random() < 0.30) {
+          const line = document.createElement('div');
+          line.className = 'noise-line';
+          const charCount = 8 + Math.floor(Math.random() * 21);
+          let noise = '';
+          for (let i = 0; i < charCount * 4; i++) noise += safePool[Math.floor(Math.random() * safePool.length)];
+          const top = Math.random() * 100;
+          line.style.cssText = `top: ${top}%;`;
+          line.textContent = noise;
+          noiseLinesEl.appendChild(line);
+          setTimeout(() => line.remove(), 80 + Math.random() * 219);
+        }
+        scheduleNoiseLine();
+      }, delay);
+    }
+    scheduleNoiseLine();
+
+    // — VHS events: 4000-9999ms, 80-249ms —
+    const vhsEl = document.getElementById('vhs-event');
+    function scheduleVHSEvent() {
+      const delay = 4000 + Math.random() * 5999;
+      setTimeout(() => {
+        vhsEl.classList.add('active');
+        setTimeout(() => vhsEl.classList.remove('active'), 80 + Math.random() * 169);
+        scheduleVHSEvent();
+      }, delay);
+    }
+    scheduleVHSEvent();
+
+    // — Element jitter: 500-1399ms, 30% per-element fire, 70-199ms, ±3px x / ±2px y —
+    const jitterTargets = document.querySelectorAll('.jitter-target');
+    function scheduleJitter() {
+      const delay = 500 + Math.random() * 899;
+      setTimeout(() => {
+        jitterTargets.forEach(el => {
+          if (Math.random() < 0.30) {
+            const dx = -3 + Math.floor(Math.random() * 7);
+            const dy = -2 + Math.floor(Math.random() * 5);
+            el.style.transform = `translate(${dx}px, ${dy}px)`;
+            setTimeout(() => { el.style.transform = ''; }, 70 + Math.random() * 129);
+          }
+        });
+        scheduleJitter();
+      }, delay);
+    }
+    scheduleJitter();
+
+    // — Per-element text glitch (FR-23): character substitution + chromatic ghosts —
+    const glitchSafePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch() {
+      const sels = ['.glow','.glow-strong','.accent-text','.chroma-text','.wide-mode-tab','.theme-badge'];
+      const seen = new Set();
+      sels.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          if (seen.has(el)) return; seen.add(el);
+          const text = el.textContent.trim();
+          if (text.length < 2 || text.length > 40) return;
+          if (el.closest('button,.dpad-btn,.action-btn,.stepper-btn')) return;
+          let intensity = 0.06;
+          if (el.classList.contains('glow-strong') || el.classList.contains('chroma-text')) intensity = 0.20;
+          else if (el.classList.contains('accent-text')) intensity = 0.10;
+          else if (el.classList.contains('wide-mode-tab')) intensity = 0.08;
+          else if (el.classList.contains('theme-badge')) intensity = 0.12;
+          el.dataset.glitch = intensity;
+          const heartbeat = 700 + Math.random() * 1099;
+          function tick() {
+            setTimeout(() => {
+              if (el.offsetParent !== null && Math.random() < parseFloat(el.dataset.glitch)) doTextSwap(el);
+              tick();
+            }, heartbeat);
+          }
+          tick();
+        });
+      });
+    }
+    function doTextSwap(el) {
+      const orig = el.textContent;
+      if (orig.length < 1) return;
+      const numSwaps = Math.min(orig.length, 1 + Math.floor(Math.random() * 2));
+      const positions = [];
+      while (positions.length < numSwaps && positions.length < orig.length) {
+        const pos = Math.floor(Math.random() * orig.length);
+        if (!positions.includes(pos)) positions.push(pos);
+      }
+      const chars = orig.split('');
+      positions.forEach(pos => { chars[pos] = glitchSafePool[Math.floor(Math.random() * glitchSafePool.length)]; });
+      el.textContent = chars.join('');
+      el.dataset.ghostText = chars.join('');
+      el.classList.add('text-swapping');
+      el.style.transform = `translate(${-3 + Math.floor(Math.random() * 7)}px, ${-1 + Math.floor(Math.random() * 3)}px)`;
+      setTimeout(() => {
+        el.textContent = orig;
+        el.classList.remove('text-swapping');
+        el.style.transform = '';
+        delete el.dataset.ghostText;
+      }, 120 + Math.random() * 229);
+    }
+    initTextGlitch();
+
+    // — Console tab click handler (wide) —
+    document.querySelectorAll('.wide-mode-tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        if (this.classList.contains('disabled')) return;
+        document.querySelectorAll('.wide-mode-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // — Telemetry log auto-scroll to newest —
+    const telemetryLog = document.getElementById('telemetry-log');
+    if (telemetryLog) telemetryLog.scrollTop = telemetryLog.scrollHeight;
+
+    // ═══════════════════════════════════════════════
+    //  END WIDE SHELL SCRIPT BLOCK
+    // ═══════════════════════════════════════════════
+
+    // ═══════════════════════════════════════════════
+    //  CREATION-SPECIFIC — class/character/sigil selection handlers.
+    //  Behavior parity with mocks/creation.html (portrait), minus the tab bar
+    //  (no tab switching needed — all sections visible at once in wide).
+    // ═══════════════════════════════════════════════
+    function selectClass(el, name) {
+      document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+    function selectChar(el, idx) {
+      document.querySelectorAll('.char-slot').forEach(s => s.classList.remove('active'));
+      el.classList.add('active');
+    }
+    document.querySelectorAll('.gear-row').forEach(row => {
+      row.addEventListener('click', function() {
+        const group = this.closest('.gear-group, .tech-list');
+        if (group) group.querySelectorAll('.gear-row').forEach(r => r.classList.remove('selected'));
+        this.classList.add('selected');
+      });
+    });
+    document.querySelectorAll('.sigil-thumbs .sigil-option').forEach(opt => {
+      opt.addEventListener('click', function() {
+        document.querySelectorAll('.sigil-thumbs .sigil-option').forEach(o => o.classList.remove('selected'));
+        this.classList.add('selected');
+        const preview = document.querySelector('.sigil-preview');
+        if (preview) preview.textContent = this.textContent;
+      });
+    });
+    document.querySelectorAll('.config-card:not(.save-slot)').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.config-card').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
