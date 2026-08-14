@@ -256,6 +256,10 @@ describe('settings screen', () => {
 
     expect(byTestId(container, 'settings-master-mute').parentNode.classList.contains('panel')).toBe(true);
 
+    const eyebrow = collect(container, (el) => el.classList.contains('micro') && el.textContent.includes('SETTINGS'))[0];
+    expect(eyebrow.getAttribute('role')).toBe('heading');
+    expect(eyebrow.getAttribute('aria-level')).toBe('1');
+
     const muteInput = byTestId(container, 'settings-master-mute').children[1];
     muteInput.checked = true;
     await muteInput.dispatch('change');
