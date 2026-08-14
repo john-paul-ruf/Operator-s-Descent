@@ -1248,7 +1248,7 @@ button.protocol-card[aria-selected="true"],
   color: var(--text-dim);
 }
 
-.hidden-branches { display: none; }
+.branch-list.hidden-branches { display: none; }
 
 .title-screen {
   position: relative;
