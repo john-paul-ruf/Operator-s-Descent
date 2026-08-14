@@ -115,8 +115,8 @@
 /* D-Pad */
 .dpad {
   display: grid;
-  grid-template-columns: repeat(3, 56px);
-  grid-template-rows: repeat(3, 56px);
+  grid-template-columns: repeat(3, 96px);
+  grid-template-rows: repeat(3, 96px);
   gap: 4px;
   justify-content: center;
 }
