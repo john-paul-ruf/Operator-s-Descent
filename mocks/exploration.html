@@ -32,8 +32,8 @@
       display: flex; justify-content: center; align-items: center;
     }
     .portrait-frame {
-      width: 100%; max-width: 450px;
-      aspect-ratio: 1080/1920; max-height: 100vh;
+      width: min(100vw, calc(100vh * 1080 / 1920));
+      aspect-ratio: 1080 / 1920; max-height: 100vh;
       position: relative; background: var(--bg-base);
       overflow: hidden; display: flex; flex-direction: column;
     }
