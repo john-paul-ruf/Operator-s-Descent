@@ -3,6 +3,7 @@
 /program/
 /.devserver.log
 /.devserver.pid
+/test-results/.last-run.json
 /MU.md
 /.forge/
 /design-scan.err
