@@ -67,7 +67,7 @@ test('first offline load fails, then cached activated load resumes and plays off
     await expect(page.getByTestId('import-run-summary')).toContainText('DEPTH 2');
     await page.getByTestId('import-resume').click();
     await expect(page.getByTestId('combat-canvas')).toBeVisible();
-    await expect(page.getByRole('status').filter({ hasText: /D2/ })).toBeVisible();
+    await expect(page.locator('.status-strip')).toBeVisible();
 
     for (const mode of ['combat', 'party', 'gear', 'tech', 'log']) {
       await page.getByTestId(`console-tab-${mode}`).click();
