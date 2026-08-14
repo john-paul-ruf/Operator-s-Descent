@@ -174,10 +174,26 @@ function installDocument() {
   return { html, appRoot, portraitFrame };
 }
 
-function installBrowserGlobals() {
-  const register = vi.fn(() => Promise.resolve({ scope: './' }));
+function installBrowserGlobals({ hasController = false } = {}) {
+  const update = vi.fn(() => Promise.resolve());
+  const register = vi.fn(() => Promise.resolve({ scope: './', update }));
+  const swListeners = new Map();
+  const addEventListener = vi.fn((type, listener) => {
+    swListeners.set(type, [...(swListeners.get(type) || []), listener]);
+  });
+  const removeEventListener = vi.fn((type, listener) => {
+    swListeners.set(type, (swListeners.get(type) || []).filter((candidate) => candidate !== listener));
+  });
   Object.defineProperty(globalThis, 'navigator', {
-    value: { serviceWorker: { register }, clipboard: { writeText: vi.fn(() => Promise.resolve()) } },
+    value: {
+      serviceWorker: {
+        register,
+        controller: hasController ? {} : null,
+        addEventListener,
+        removeEventListener
+      },
+      clipboard: { writeText: vi.fn(() => Promise.resolve()) }
+    },
     configurable: true
   });
   globalThis.window = {
@@ -190,7 +206,7 @@ function installBrowserGlobals() {
     status: 200,
     json: async () => JSON.parse(readFileSync(new URL(`../../${String(file)}`, import.meta.url), 'utf8'))
   });
-  return { register };
+  return { register, update, swListeners };
 }
 
 function openFloor() {
@@ -404,5 +420,38 @@ describe('runtime autosave checkpoints', () => {
     await waitForRoute(api, 'exploration');
     expect(api.getRuntimeSnapshot().route).toBe('exploration');
     off();
+  });
+});
+
+describe('service worker update handling', () => {
+  beforeEach(() => {
+    runtimeApi?.shutdownRuntime();
+    runtimeApi = null;
+    vi.resetModules();
+  });
+
+  it('reloads once when a returning visit\'s controller changes', async () => {
+    browser = installBrowserGlobals({ hasController: true });
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    await flushAsync();
+
+    const handlers = browser.swListeners.get('controllerchange') || [];
+    expect(handlers).toHaveLength(1);
+
+    handlers[0]();
+    handlers[0]();
+
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    expect(api.getRuntimeSnapshot().serviceWorkerStatus.reloading).toBe(true);
+  });
+
+  it('does not arm a controllerchange reload on a first-ever visit', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    await flushAsync();
+
+    expect(browser.swListeners.has('controllerchange')).toBe(false);
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 });

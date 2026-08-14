@@ -569,8 +569,19 @@ function registerServiceWorkerOnce() {
   serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, reloading: false, scope: null, error: null };
   if (!serviceWorkerStatus.supported) return null;
   serviceWorkerStarted = true;
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  if (hadController) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (serviceWorkerReloadPending) return;
+      serviceWorkerReloadPending = true;
+      serviceWorkerStatus = { ...serviceWorkerStatus, reloading: true };
+      bus.dispatch('runtime:update-applied', {});
+      window.location.reload();
+    });
+  }
   return navigator.serviceWorker.register('./service-worker.js').then(async (registration) => {
     serviceWorkerStatus = { ...serviceWorkerStatus, registered: true, scope: registration?.scope || null };
+    serviceWorkerRegistration = registration;
     if (!registration?.update) return registration;
     try {
       await registration.update();
