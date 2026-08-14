@@ -12,7 +12,7 @@
     body { background: var(--bg-base); color: var(--text-primary);
       font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
       margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
-    .portrait-frame { width: 100%; max-width: 450px; aspect-ratio: 1080/1920; max-height: 100vh;
+    .portrait-frame { width: min(100vw, calc(100vh * 1080 / 1920)); aspect-ratio: 1080 / 1920; max-height: 100vh;
       position: relative; background: var(--bg-base); overflow: hidden; display: flex; flex-direction: column; }
     /* ═══ CRT / VHS EFFECT SYSTEM (FR-23) ═══ */
     .crt-scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 60;
