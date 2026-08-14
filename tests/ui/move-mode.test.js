@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render as renderMove } from '../../src/ui/console/move.js';
+import { render as renderMove, handleInput } from '../../src/ui/console/move.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -148,6 +148,65 @@ describe('MOVE mode', () => {
       renderMove(container, { lastMoveResult: { moved: true, position: { x: 5, y: 9 } } });
 
       expect(textOf(byTestId(container, 'move-notice'))).toBe('MOVED TO 5:9.');
+    });
+  });
+
+  describe('handleInput()', () => {
+    const directions = [
+      ['move_n', 'n'], ['move_s', 's'], ['move_e', 'e'], ['move_w', 'w'],
+      ['move_ne', 'ne'], ['move_nw', 'nw'], ['move_se', 'se'], ['move_sw', 'sw']
+    ];
+
+    it.each(directions)('%s resolves to onMove(%s, { source: "console" })', (action, direction) => {
+      const onMove = vi.fn();
+      handleInput({ action }, { onMove });
+      expect(onMove).toHaveBeenCalledWith(direction, { source: 'console' });
+    });
+
+    it("uses the event's own source when provided instead of the console default", () => {
+      const onMove = vi.fn();
+      handleInput({ action: 'move_n', source: 'keyboard' }, { onMove });
+      expect(onMove).toHaveBeenCalledWith('n', { source: 'keyboard' });
+    });
+
+    const legacyDirections = [
+      ['move-north', 'n'], ['move-south', 's'], ['move-east', 'e'], ['move-west', 'w'],
+      ['move-northeast', 'ne'], ['move-northwest', 'nw'], ['move-southeast', 'se'], ['move-southwest', 'sw']
+    ];
+
+    it.each(legacyDirections)('legacy action %s maps to the same direction as its current-format equivalent', (legacyAction, direction) => {
+      const onMove = vi.fn();
+      handleInput({ action: legacyAction }, { onMove });
+      expect(onMove).toHaveBeenCalledWith(direction, { source: 'console' });
+    });
+
+    it('confirm calls onConfirmDescent when canDescend() is true', () => {
+      const onConfirmDescent = vi.fn();
+      handleInput({ action: 'confirm' }, { canDescend: () => true, onConfirmDescent });
+      expect(onConfirmDescent).toHaveBeenCalled();
+    });
+
+    it('confirm returns false and does not call onConfirmDescent when canDescend() is false', () => {
+      const onConfirmDescent = vi.fn();
+      const result = handleInput({ action: 'confirm' }, { canDescend: () => false, onConfirmDescent });
+      expect(result).toBe(false);
+      expect(onConfirmDescent).not.toHaveBeenCalled();
+    });
+
+    it('confirm returns false and does not call onConfirmDescent when canDescend is absent', () => {
+      const onConfirmDescent = vi.fn();
+      const result = handleInput({ action: 'confirm' }, { onConfirmDescent });
+      expect(result).toBe(false);
+      expect(onConfirmDescent).not.toHaveBeenCalled();
+    });
+
+    it('an unrecognized action returns null and calls neither onMove nor onConfirmDescent', () => {
+      const onMove = vi.fn();
+      const onConfirmDescent = vi.fn();
+      const result = handleInput({ action: 'nonsense' }, { onMove, onConfirmDescent });
+      expect(result).toBeNull();
+      expect(onMove).not.toHaveBeenCalled();
+      expect(onConfirmDescent).not.toHaveBeenCalled();
     });
   });
 });
