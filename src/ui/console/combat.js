@@ -172,7 +172,7 @@ function renderTargets(container, context) {
   list.className = 'combat-target-list';
   list.dataset.testid = 'combat-targets';
   const selected = targets.find((target) => String(target.id) === String(selection.targetId));
-  if (selected) appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${actorName(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-target-preview');
+  if (selected) appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${actorName(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);

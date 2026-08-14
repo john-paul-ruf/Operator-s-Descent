@@ -243,7 +243,7 @@ describe('COMBAT mode', () => {
     });
 
     expect(byTestId(container, 'combat-action-attack').className).toContain('action-btn');
-    expect(textOf(byTestId(container, 'combat-target-preview'))).toContain('range short 3 · cover +2');
+    expect(textOf(byTestId(container, 'combat-selected-preview'))).toContain('range short 3 · cover +2');
   });
 });
 
