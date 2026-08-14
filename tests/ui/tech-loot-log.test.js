@@ -79,6 +79,12 @@ function byTestId(root, testid) {
   return null;
 }
 
+function collectByTestIdPrefix(root, prefix, matches = []) {
+  if (root.dataset?.testid?.startsWith(prefix)) matches.push(root);
+  for (const child of root.children || []) collectByTestIdPrefix(child, prefix, matches);
+  return matches;
+}
+
 function textOf(root) {
   if (!root) return '';
   return [root.textContent, root.value, ...(root.children || []).flatMap((child) => textOf(child))].filter(Boolean).join(' ');
@@ -244,6 +250,33 @@ describe('COMBAT mode', () => {
 
     expect(byTestId(container, 'combat-action-attack').className).toContain('action-btn');
     expect(textOf(byTestId(container, 'combat-selected-preview'))).toContain('range short 3 · cover +2');
+  });
+
+  it('never lets the combat-target- prefix match the non-interactive selected-target preview', () => {
+    const active = { id: 'operator', name: 'Operator', side: 'party', sigilCodepoint: 0xE028, hp: 30, hpMax: 30, charge: 8, chargeMax: 10, ap: 2, moveAvailable: true, conditions: [] };
+    const enemyA = { id: 'enemy-a', name: 'Drone A', side: 'enemy', hp: 10, hpMax: 10 };
+    const enemyB = { id: 'enemy-b', name: 'Drone B', side: 'enemy', hp: 12, hpMax: 12 };
+    const container = new FakeElement('div');
+    const selectedIds = [];
+    renderCombat(container, {
+      combatState: { combatants: new Map([['operator', active], ['enemy-a', enemyA], ['enemy-b', enemyB]]), turnOrder: ['operator', 'enemy-a', 'enemy-b'], currentTurn: 0 },
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: 'enemy-a' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack', 'retreat'], legalMoveDirections: ['s'] }),
+      combatGetTargets: () => [enemyA, enemyB],
+      combatGetPreview: () => ({ distance: 3, range: { band: 'short', legal: true }, coverBonus: 2, flanked: false }),
+      combatSelectTarget: (id) => selectedIds.push(id)
+    });
+
+    const preview = byTestId(container, 'combat-selected-preview');
+    expect(preview.dataset.testid.startsWith('combat-target-')).toBe(false);
+
+    const prefixMatches = collectByTestIdPrefix(container, 'combat-target-');
+    expect(prefixMatches.length).toBe(2);
+    for (const match of prefixMatches) expect(match.tagName).toBe('BUTTON');
+
+    prefixMatches[0].click();
+    expect(selectedIds).toEqual(['enemy-a']);
   });
 });
 
