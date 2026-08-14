@@ -274,11 +274,102 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 - Visual: illustration area (CSS-drawn mock of the console in each mode) + text explanation.
 - Decline button on first offer; remembered in `localStorage`.
 
-### Portrait Layout & Letterboxing
-- Fixed 1080×1920 portrait aspect ratio.
-- On phones: full-bleed.
-- On desktop/wider: letterboxed — portrait area centered, surrounding space is solid black (`--bg-base`).
-- No responsive reflow — one fixed layout at all sizes.
+### Adaptive Layout System
+
+Owner directive (2026-08-14, superseding the earlier "no responsive reflow" premise): the UI
+targets **two layout classes**, each optimal at its resolution and fluid within its class.
+Selection is by a single media-query rule; there is no per-screen or per-component breakpoint.
+
+**Layout classes and selection**
+
+| Class | Selection rule | Default use |
+|-------|----------------|-------------|
+| portrait | Anything not matching wide (default) | Phones, tablets in portrait, narrow desktop windows |
+| wide | (min-width: 900px) AND (min-aspect-ratio: 1/1) | Desktop, tablet-landscape, any viewport with room for the three-region shell |
+
+The breakpoint switches **structure**, not just scale. Within a class the layout is **fluid** —
+the portrait frame fills the viewport width up to the class boundary; the wide grid regions
+flex around their minmax bounds. Typography, sigil scales, spacing, corner radii, shadow/glow
+levels, and CRT/glitch timing constants are class-independent — the class switch reshapes
+composition, never re-tunes the design tokens.
+
+**Full-viewport CRT.** In every class the CRT/VHS overlay (scanlines, vignette, aperture
+grille, tracking band, grain, border flicker, frame flash, glitch bars, noise lines, VHS
+events, per-element text glitch) covers the entire viewport. No letterboxed column, no dead
+black margins outside a portrait frame — the machine IS the screen. Portrait fills the
+viewport width up to the class boundary and has no fixed max-width cap in production; the
+450px max-width in the current mocks is a preview convenience, not a design constraint.
+
+**Wide game-screen shell (exploration, combat).** A three-region grid running the full
+viewport height. Region names are the CSS grid-area identifiers; region proportions are
+derived from the current portrait dimensions in `styles/components.css` (`.console-tab-bar`
+min-height 96px, `.console-bar.expanded` height 720px, `.status-strip` min-height 48px) — the
+playfield column preserves the portrait aspect, the docks receive the width the portrait
+design would have letterboxed away.
+
+| Grid area | CSS grid-template-columns value | Contents |
+|-----------|--------------------------------|----------|
+| telemetry | minmax(280px, 1fr) | Status-strip fields (depth, seed, party HP sigils, danger clock, corruption; round/initiative/AP in combat) stacked vertically at the top; persistent live LOG feed occupies the remainder |
+| playfield | minmax(320px, calc(100vh * 9 / 16)) | Canvas playfield — stays **portrait-proportioned** (9:16 aspect anchored to viewport height); the descent premise stays vertical in every class |
+| console | minmax(360px, 1.2fr) | Console dock — always expanded, seven vertical mode tabs on the inner edge, mode content in the remainder |
+
+The grid template is `grid-template-columns: minmax(280px, 1fr) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, 1.2fr);` with `grid-template-rows: 100vh;`. At the 900px minimum breakpoint the three regions sum to their floors (960px, slightly over the breakpoint by design so the shell never collapses awkwardly during resize).
+
+**Wide flow-screen layouts.** Non-game screens each use the width purposefully. Full per-screen
+matrix in **Screen Layouts by Class** below; summary:
+
+- **title** — centered column, wider ornament field, branch list unchanged
+- **creation** — two-pane: roster + saved configs (left) / editor (right)
+- **library** — run-card grid
+- **tutorial** — two-page spread
+- **settings** — two-column form
+- **scorecard** — two-pane: summary (left) / share panel (right)
+- **import** — centered column (unchanged width)
+
+**Console dock (wide).** Same seven mode content, same bus events, same keyboard shortcuts,
+same touch parity — only the container changes:
+
+- Always expanded — the collapse state does not exist in wide; the dock is a fixed shell.
+- The seven mode tabs (MOVE, COMBAT, PARTY, GEAR, TECH, LOOT, LOG) stack **vertically** along
+  the dock's inner edge. Each tab still uses the `.mode-tab` visual language (accent underline
+  becomes an accent left-border in vertical orientation; active state, hover state, and
+  `.disabled` behavior unchanged).
+- The disabled-tab convention from portrait (COMBAT during exploration, LOOT during combat,
+  etc.) applies identically.
+- Expanded content fills the remainder of the dock at the mode's native layout — no scaling,
+  no reflow between mode swaps.
+- The `.console-dim-layer` overlay does NOT apply in wide — the playfield is not dimmed
+  because the dock does not overlap it.
+- Mode-switch bus event `ui:mode-change` is emitted identically; portrait and wide subscribers
+  share the handler.
+
+**Telemetry dock (wide).** The status-strip fields — currently a single horizontal row in
+portrait per **Status Strip (Top)** above — rearrange into a vertical stack at the top of the
+dock. Same fields, same content, same accessibility guarantees (danger clock stays numeric,
+never color-only). Below the fields, a **persistent live LOG feed** streams the same entries
+LOG mode displays: same `.log-entry` container class, same log-severity classes
+(`.log-combat`, `.log-discovery`, `.log-damage`, `.log-death`, `.log-heal`, `.log-info`,
+`.log-move`), same `[T:NNN]` timestamp prefix, same sticky "◈ Event Log — Floor NN" header,
+same auto-scroll-to-newest behavior as `mocks/console-log.html`. The feed does not require
+opening the LOG mode tab; LOG mode remains reachable in the console dock for the copy-link
+action and full-history scroll.
+
+**Input target rules.**
+
+| Class | Touch-capable rows | Pointer-only affordances |
+|-------|--------------------|--------------------------|
+| portrait | 96px minimum (unchanged, per **Console Interaction Model** and the Spacing System floor) | — |
+| wide | 96px minimum on any touch-capable row | May densify to 44px minimum on hover-driven or pointer-only controls — never below |
+
+The 96px touch-target minimum in the Spacing System is a **class-independent floor** for any
+row a touch device may hit. Wide only permits densification on rows that are explicitly
+pointer-only (e.g. hover-revealed secondary controls, keyboard-cycled item chips in a
+desktop-only editor).
+
+**Class namespace.** New CSS structures that exist only in wide use a `wide-` class prefix
+(e.g. `.wide-shell`, `.wide-telemetry-dock`, `.wide-console-dock`, `.wide-mode-tab`). This
+lets tooling exclude planned-only structures from portrait-scope parity checks and marks the
+implementation surface unambiguously for the follow-up implementation feature.
 
 ## Prototype Navigation Notes
 
