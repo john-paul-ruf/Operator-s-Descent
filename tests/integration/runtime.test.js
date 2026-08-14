@@ -165,13 +165,21 @@ function installDocument() {
   appRoot.id = 'app-root';
   portraitFrame.append(appRoot, overlays);
   html.appendChild(portraitFrame);
+  const docListeners = new Map();
   globalThis.document = {
     documentElement: html,
     createElement: (tagName) => tagName === 'canvas' ? new FakeCanvas() : new FakeElement(tagName),
     createTextNode: (value) => new FakeText(value),
-    getElementById: (id) => findById(html, id)
+    getElementById: (id) => findById(html, id),
+    addEventListener: (type, listener) => {
+      docListeners.set(type, [...(docListeners.get(type) || []), listener]);
+    },
+    removeEventListener: (type, listener) => {
+      docListeners.set(type, (docListeners.get(type) || []).filter((candidate) => candidate !== listener));
+    },
+    visibilityState: 'visible'
   };
-  return { html, appRoot, portraitFrame };
+  return { html, appRoot, portraitFrame, docListeners };
 }
 
 function installBrowserGlobals({ hasController = false } = {}) {
@@ -258,6 +266,7 @@ async function waitForRoute(api, route) {
 
 let storage;
 let browser;
+let doc;
 let runtimeApi;
 
 async function runtime() {
@@ -268,7 +277,7 @@ async function runtime() {
 beforeEach(() => {
   vi.useRealTimers();
   resetGameDataForTests();
-  installDocument();
+  doc = installDocument();
   browser = installBrowserGlobals();
   storage = installMockStorage();
   saveSettings({ glitchEnabled: false, reducedMotion: 'reduce', scanlineGrainEnabled: true });
@@ -453,5 +462,21 @@ describe('service worker update handling', () => {
 
     expect(browser.swListeners.has('controllerchange')).toBe(false);
     expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('re-checks the registration when the tab becomes visible again', async () => {
+    browser = installBrowserGlobals({ hasController: true });
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    await flushAsync();
+
+    expect(browser.update).toHaveBeenCalledTimes(1);
+
+    const visibilityHandlers = doc.docListeners.get('visibilitychange') || [];
+    expect(visibilityHandlers).toHaveLength(1);
+    visibilityHandlers[0]();
+    await flushAsync();
+
+    expect(browser.update).toHaveBeenCalledTimes(2);
   });
 });

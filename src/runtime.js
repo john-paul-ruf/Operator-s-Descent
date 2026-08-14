@@ -582,6 +582,14 @@ function registerServiceWorkerOnce() {
   return navigator.serviceWorker.register('./service-worker.js').then(async (registration) => {
     serviceWorkerStatus = { ...serviceWorkerStatus, registered: true, scope: registration?.scope || null };
     serviceWorkerRegistration = registration;
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible' || !serviceWorkerRegistration?.update) return;
+        serviceWorkerRegistration.update().catch((error) => {
+          bus.dispatch('runtime:error', { error: 'service_worker_revalidate_failed', message: error?.message || String(error) });
+        });
+      });
+    }
     if (!registration?.update) return registration;
     try {
       await registration.update();
