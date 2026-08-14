@@ -42,11 +42,11 @@ test('native semantics, focus, status text, and no-playfield-input contracts hol
   await expect(page.getByTestId('title-begin-new-run')).toBeVisible();
   await createExploration(page);
 
-  await expect(page.getByRole('status').filter({ hasText: /D1/ })).toContainText(/CLK \d+\.\d{2}/);
+  await expect(page.locator('.status-strip')).toContainText(/CLK\d+\.\d{2}/);
   await expect(page.getByRole('img', { name: /Exploration map/ })).toBeVisible();
   await expect(page.getByTestId('exploration-canvas')).toHaveCSS('pointer-events', 'none');
   await expect(page.getByRole('tab', { name: 'MOVE' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tab', { name: 'COMBAT' })).toBeDisabled();
+  await expect(page.getByRole('tab', { name: 'CMBT' })).toBeDisabled();
 
   await page.getByTestId('console-tab-move').focus();
   const outlineStyle = await page.getByTestId('console-tab-move').evaluate((node) => getComputedStyle(node).outlineStyle);
@@ -64,7 +64,7 @@ test('portrait frame keeps fixed ratio and centered letterbox without tab reorde
   expect(Math.abs(frame.x - (1600 - frame.width) / 2)).toBeLessThan(2);
 
   const labels = await page.locator('.mode-tab').evaluateAll((tabs) => tabs.map((tab) => tab.textContent?.trim()));
-  expect(labels).toEqual(['MOVE', 'COMBAT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
+  expect(labels).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
   await expect(page.locator('.console-bar')).toHaveCSS('bottom', '0px');
 });
 
