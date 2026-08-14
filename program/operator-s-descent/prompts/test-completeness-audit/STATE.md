@@ -26,8 +26,8 @@
 | 01 | Fix Combat Target Testid Collision | M62 | `./src/ui/console/combat.js`, `./tests/ui/tech-loot-log.test.js` | done | 2/2 | 2026-08-14 | Renamed `combat-target-preview` testid to `combat-selected-preview`, fixing the prefix collision with `combat-target-<id>` real target buttons; added a regression test locking in the prefix-namespace invariant. |
 | 02 | Restore Semantic Headings on Settings/Library/Import | M72, M74, M76 | `./src/ui/screens/settings.js`, `./src/ui/screens/library.js`, `./src/ui/screens/import.js`, `./tests/ui/persistence-screens.test.js`, `./tests/ui/front-door.test.js` | done | 2/2 | 2026-08-14 | Added `role="heading"` + `aria-level="1"` to the stable eyebrow div on all three screens, matching the still-native-`<h1>` title/scorecard screens. No visible/CSS change. |
 | 03 | D-pad Touch Target Sizing | M61, M79 | `./styles/components.css` | done | 2/2 | 2026-08-14 | `.dpad` grid cells increased from 56px to 96px, confirmed via live Pixel-7-viewport measurement in `touch-flow.spec.js`. See Jikijitsu receive note below re: checkpoint-2 commit count. |
-| 04 | Direct Unit Coverage for Move Console Pane | M61 | `./tests/ui/move-mode.test.js` | pending | — | — | — |
-| 05 | Document Missing Design Tokens | M77, M97 | `./specs/design.md` | pending | — | — | — |
+| 04 | Direct Unit Coverage for Move Console Pane | M61 | `./tests/ui/move-mode.test.js` | done | 2/2 | 2026-08-14 | New `./tests/ui/move-mode.test.js` (29 tests) directly covers `render()`/`handleInput()` for `./src/ui/console/move.js`, closing the audit's one source-file-with-zero-coverage gap. |
+| 05 | Document Missing Design Tokens | M77, M97 | `./specs/design.md` | blocked | 0/2 | — | Blocked: `extractColorTokens()` in `./scripts/design-scan/extract-design-spec.js` hardcodes `assertCount(rows, 15, ...)` for the Color Palette table, outside this session's lease. Adding any of the 5 undocumented token rows pushes the count past 15 and the function throws. See Handoff Notes for full detail and required fix location. |
 | 06 | Realign E2E Suite With Current Production UI | M95 | `./tests/e2e/accessibility.spec.js`, `./tests/e2e/offline.spec.js` | pending | — | — | — |
 
 ## Wave Plan
@@ -120,6 +120,42 @@ flowchart TD
 ```
 
 **Jikijitsu note:** the `test-results/` directory this handoff flagged (from SESSION-03's concurrently-running Playwright checkpoint) is gone by the time all three receives were processed — transient cross-session noise per MU.md Orchestrated Mode rule 6, not a lease violation. No action taken.
+
+### SESSION-04 — done — 2026-08-14
+
+```json
+{
+  "session": "04",
+  "status": "done",
+  "checkpoint": 2,
+  "notes": "Added ./tests/ui/move-mode.test.js with direct render()/handleInput() unit coverage for ./src/ui/console/move.js, closing the one source-file-with-zero-test-coverage gap found by the audit. 29 tests, 2 checkpoints, both committed separately.",
+  "delivered": "New test file ./tests/ui/move-mode.test.js (213 lines) directly importing render/handleInput from ./src/ui/console/move.js. Checkpoint 1 (render()): 9-button D-pad testid enumeration, DESCEND/enabled vs WAIT/disabled center-button branching on canDescend, HOSTILE STOP LOCKED always-disabled + live DISCOVERY/DAMAGE toggle state and click-through to setAutoStopToggle, and 4 of the 9 noticeFor() branches (descent-point, hostile-contact, blocked, default MOVED TO x:y). Checkpoint 2 (handleInput()): all 8 move_* actions resolve to onMove with correct direction and default 'console' source (plus an event-supplied source override case), all 8 legacy move-* actions map to the same directions, confirm gating on canDescend() (true/false/absent), and the unrecognized-action null/no-call case.",
+  "verification": "npx vitest run tests/ui/move-mode.test.js -> 29/29 pass (verified at both checkpoint boundaries: 8 pass after checkpoint 1 render-only, 29 pass after checkpoint 2 full file). node --check tests/ui/move-mode.test.js -> OK. npx vitest run (full suite) -> 1797 passed / 6 failed across 4 files, all pre-existing tests/tooling/* design-token failures outside this lease (check-tokens.test.js is the STATE.md-documented pre-existing gap; the other 3 files/5 additional failures are the same root-cause design.md token-count drift, addressed by pending SESSION-05, not touched here). npm run design:scan -> PASS, 0 errors, 10 warnings/2 info (unchanged from prior sessions' baseline) — unaffected by this test-only change.",
+  "surprises": "Full-suite pre-existing-failure count is larger than STATE.md's audit snapshot (1 failing file/test noted there vs 4 files/6 tests now) — all in tests/tooling/scan-design-compliance.test.js, check-tokens.test.js, check-mock-parity.test.js, and extract-design-spec.test.js, all stemming from the same 'expected 15 color tokens, found 18' design.md drift. This is exactly the gap SESSION-05 (Document Missing Design Tokens) is scoped to fix; none of it touches ./src/ui/console/move.js or my lease.",
+  "followUp": "SESSION-05 should confirm its design.md token fix brings the count from 18 back in line with what check-tokens.test.js/extract-design-spec.test.js/check-mock-parity.test.js/scan-design-compliance.test.js all expect (they currently all fail on the same token-count mismatch, not just the 5 originally documented in STATE.md audit evidence).",
+  "filesTouched": ["tests/ui/move-mode.test.js"],
+  "blockedReason": null
+}
+```
+
+### SESSION-05 — blocked — 2026-08-14
+
+**Jikijitsu receive note:** `git log --oneline -- ./specs/design.md` shows no test-completeness-audit commits (last touch is the initial import) and `git status` is clean — no lease violation, no lost work, `filesTouched: []` matches. This is a genuine architectural block, not a Mu error: the scanner's `extractColorTokens()` hardcodes an exact row count for the Color Palette table, so this session's own instructions (add rows to that table) and its own commit-when criterion are mechanically incompatible without a change outside the Write set. Nothing depends on SESSION-05 in the Dependency Graph, so this does not stall SESSION-06.
+
+```json
+{
+  "session": "05",
+  "status": "blocked",
+  "checkpoint": 0,
+  "notes": "Reproduced the session live and confirmed the 5 undocumented tokens, but checkpoint 1 cannot be completed inside this session's lease: checkColorTokens()'s absent-from-spec warning is driven solely by extractColorTokens() in ./scripts/design-scan/extract-design-spec.js, which hardcodes assertCount(rows, 15, ...) for the ### Color Palette table. Adding any new row to that table (required for the warning to disappear) pushes the count to 18 (checkpoint 1) / 20 (checkpoint 2) and the function throws instead of returning findings — verified live, then reverted before returning.",
+  "delivered": "No file changes — investigation only. ./specs/design.md is unmodified (clean git diff).",
+  "verification": "npx vitest run tests/tooling/check-tokens.test.js baseline reproduced: 1 failed / 2 passed, 5 color-token warnings (--screen-body-fade, --scrollbar-track, --scrollbar-thumb, --scrollbar-thumb-hover, --scrollbar-width). Live experiment (reverted): added the 3 color-token rows to specs/design.md's Color Palette table and called checkColorTokens() directly via node -> threw 'design.md color palette tokens: expected 15 extracted, found 18 — spec text may have changed shape' instead of returning findings. git diff -- specs/design.md is empty; git status clean aside from pre-existing untracked .DS_Store/node_modules/.",
+  "surprises": "The session brief (SESSION-05.md) instructs adding rows to the existing Color Palette table and, for the 2 dimension tokens, the same table if no dedicated section exists — but ./scripts/design-scan/extract-design-spec.js's extractColorTokens() hardcodes assertCount(rows, 15, 'design.md color palette tokens'), with zero slack for new rows. This makes the session's own checkpoint-1 'Commit when' criterion (warning count for the 3 tokens drops via a clean vitest run) mechanically unreachable without also editing that assertCount call — outside this session's Write set (./specs/design.md only) and outside the envelope's read-only ./scripts/design-scan/ tooling. All 5 tokens are affected, not just the 3 color ones, since checkpoint 2's dimension tokens must land in the same bounded table per the session's own instructions.",
+  "followUp": "A future session with write access to ./scripts/design-scan/extract-design-spec.js needs to bump the assertCount(rows, 15, 'design.md color palette tokens') call (line 8, inside extractColorTokens()) to assertCount(rows, 20, ...) — 15 existing + 5 new (3 color + 2 dimension, all landing in the same ### Color Palette bounded table since that's the only section extractColorTokens() parses). Once that lands, SESSION-05 as written (documenting the 5 tokens in ./specs/design.md) becomes mechanically achievable and can be replayed unchanged.",
+  "filesTouched": [],
+  "blockedReason": "Fixing the 5 undocumented ./styles/base.css tokens requires editing ./scripts/design-scan/extract-design-spec.js's hardcoded assertCount(rows, 15, 'design.md color palette tokens') (in extractColorTokens(), line 8) to accommodate the new rows — otherwise checkColorTokens() throws instead of returning zero findings. That file is outside this session's Write set (./specs/design.md only)."
+}
+```
 
 ### SESSION-03 — done — 2026-08-14
 
