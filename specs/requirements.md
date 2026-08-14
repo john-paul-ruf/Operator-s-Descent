@@ -538,15 +538,30 @@
   - [ ] Settings persist in `localStorage` across sessions.
   - [ ] The settings list is final and enumerated — no additional settings are in scope for v1.
 
-### FR-35: Portrait Orientation & Layout
+### FR-35: Adaptive Layout System
 
-- **User story:** As a player, I want a fixed portrait layout, so that the vertical-descent premise is reinforced by the screen shape.
+- **User story:** As a player, I want the UI to be optimal at whatever resolution I'm playing at — a phone-shaped column on a phone, a three-region desktop dock on a desktop — so that the vertical-descent premise reads on any screen and no viewport is wasted on dead margins.
 - **Acceptance criteria:**
-  - [ ] Fixed 1080×1920 portrait aspect ratio.
-  - [ ] On phones: full-bleed portrait.
-  - [ ] On wider displays (desktop, tablet landscape): letterboxed — portrait area centered, surrounding space filled with a neutral background (black or theme-appropriate).
-  - [ ] No landscape layout exists.
-  - [ ] No responsive reflow or layout breakpoints — the game is one fixed layout.
+  - [ ] The UI has exactly two layout classes: `portrait` (default) and `wide`.
+  - [ ] `wide` is selected by the media query `(min-width: 900px) and (min-aspect-ratio: 1/1)`. All other viewports use `portrait`.
+  - [ ] There is exactly one breakpoint (the class switch). No other breakpoint reflows the layout within a class.
+  - [ ] Within a class the layout is **fluid**: the portrait frame fills the viewport width up to the class boundary (no fixed 450px cap in production); the wide grid regions flex around their minmax bounds.
+  - [ ] Class-independent design tokens: palette, typography scale, sigil sizes, spacing scale, corner radii, shadow/glow levels, CRT/glitch timing constants (per FR-23), and bus event names are identical in both classes.
+  - [ ] Wide game screens (exploration, combat) use a three-region grid: **telemetry dock** (left) · **playfield column** (center, portrait-proportioned 9:16 aspect anchored to viewport height) · **console dock** (right). Grid template columns: `minmax(280px, 1fr) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, 1.2fr)` (canonical definition in `specs/design.md` §Adaptive Layout System).
+  - [ ] The wide playfield column preserves the portrait 9:16 aspect ratio so the vertical-descent premise reads in every class.
+  - [ ] The wide console dock is **always expanded**; the collapse state does not exist in `wide`.
+  - [ ] The wide console dock's seven mode tabs (MOVE, COMBAT, PARTY, GEAR, TECH, LOOT, LOG) stack vertically along the dock's inner edge; disabled-tab behavior (COMBAT during exploration, LOOT during combat, etc.) is preserved.
+  - [ ] Every action reachable in the portrait bottom-pinned expanded console is reachable in the wide right-anchored console dock — full parity, upholding the parity criteria in FR-15 (§lines 249–260) in both classes.
+  - [ ] Every action is reachable by keyboard and by touch in both classes (per FR-15).
+  - [ ] The `ui:mode-change` bus event fires identically in both classes; a single subscriber contract serves both class UIs.
+  - [ ] The wide telemetry dock stacks the status-strip fields vertically at the top (same fields, same accessibility guarantees — danger clock stays numeric, never color-only) and streams a **persistent live LOG feed** below (same `.log-entry` container, same log-severity classes, same `[T:NNN]` timestamp prefix, same sticky "◈ Event Log — Floor NN" header, same auto-scroll-to-newest behavior as FR-22 LOG mode).
+  - [ ] The full LOG history and the copy-link action remain reachable via LOG mode in the console dock (the telemetry-dock feed is a live tail, not a replacement for LOG mode).
+  - [ ] The CRT/VHS effect overlay (scanlines, vignette, aperture grille, tracking band, grain, border flicker, frame flash, glitch bars, noise lines, VHS events, per-element text glitch) covers the **full viewport** in both classes — no letterboxed column and no dead margins in `wide`.
+  - [ ] Touch-capable rows keep the 96px minimum hit height in **both** classes (per FR-15 and the Spacing System floor in `specs/design.md`).
+  - [ ] Pointer-only affordances in `wide` may densify to a 44px minimum hit height — never below.
+  - [ ] Wide non-game screens each use the width purposefully per the per-screen matrix in `specs/design.md` §Screen Layouts by Class: title = centered column with wider ornament field; creation = roster/editor two-pane; library = run-card grid; scorecard = summary/share two-pane; settings = two-column form; tutorial = two-page spread; import = centered column (unchanged width).
+  - [ ] The `wide-` CSS class prefix is reserved for wide-only structures (e.g. `.wide-shell`, `.wide-telemetry-dock`, `.wide-console-dock`, `.wide-mode-tab`) so tooling can distinguish planned-only structures from portrait-shipped ones.
+  - [ ] The playfield remains a readout, not a control surface, in both classes (per FR-15).
 
 ### FR-36: Neon-on-Violet Palette & Glow
 
@@ -960,7 +975,7 @@
 - **Target:** Modern mobile and desktop browsers supporting ES modules, WebAudio, Canvas 2D, Service Workers, and `localStorage`.
 - **No build step:** No bundler, no transpiler, no npm at runtime. Native ES modules served directly.
 - **No third-party runtime dependencies:** Zero external libraries loaded at runtime.
-- **Portrait-first:** Designed for portrait mobile; letterboxed on desktop.
+- **Adaptive-first:** Two layout classes selected by media query — `portrait` (default, mobile-optimized, fluid width) and `wide` (`(min-width: 900px) and (min-aspect-ratio: 1/1)`, three-region desktop/tablet-landscape shell). Per FR-35.
 
 ---
 
@@ -974,7 +989,7 @@
 - **No sprite art:** All visuals are Canvas 2D, SVG, or CSS.
 - **No audio files:** All audio is synthesized via WebAudio.
 - **No hand-authored floors:** All content is procedural. The tutorial is a manual, not a level.
-- **No landscape layout:** Fixed portrait only.
+- **Adaptive layout system:** Two layout classes — `portrait` (default) and `wide` (`(min-width: 900px) and (min-aspect-ratio: 1/1)`). No third class; no per-screen or per-component breakpoint. See FR-35.
 - **No meta-progression:** No run-to-run carryover of any kind.
 - **No vendor nodes:** Credits exist only as the 10:1 unspent-points conversion. No shops, no vendors.
 - **Sigil font is the sole authored asset:** Everything else is code or data files.
@@ -1018,7 +1033,11 @@
 - **Calibration:** A build-defining upgrade available every third floor; the in-run character advancement.
 - **Chassis:** The 5-point base cost to instantiate a character in the 80-point buy.
 - **Charge:** The resource spent to cast tech protocols. Per-character.
-- **Console:** The single bottom-pinned input surface with seven modes through which all game actions are routed.
+- **Console:** The single input surface with seven modes through which all game actions are routed. Bottom-pinned in `portrait` (collapsible); a right-anchored, always-expanded dock in `wide` — the same seven modes, same content, same bus events in both classes. See FR-15 and FR-35.
+- **Console dock:** The right region of the wide game-screen shell. Always expanded, with the seven mode tabs stacked vertically along its inner edge. Portrait's collapse state does not exist in `wide`. Defined in FR-35.
+- **Layout class:** One of two structural UI configurations selected by media query — `portrait` (default) or `wide` (`(min-width: 900px) and (min-aspect-ratio: 1/1)`). Governs composition (single-column frame vs. three-region shell) but never re-tunes typography, sigil scales, spacing, corner radii, shadow/glow, or CRT/glitch timing constants. Defined in FR-35.
+- **Playfield column:** The center region of the wide game-screen shell. Preserves the portrait 9:16 aspect ratio so the vertical-descent premise reads in every layout class. Defined in FR-35.
+- **Telemetry dock:** The left region of the wide game-screen shell. Stacks the status-strip fields vertically at the top and streams a persistent live LOG feed (same entry format as FR-22 LOG mode) below. Defined in FR-35.
 - **CORRUPT:** An item rarity tier. CORRUPT items are strictly stronger and permanently raise the run's danger clock rate.
 - **Danger clock:** The mechanism by which special hunts are scheduled; rate increases with corruption.
 - **Descent point:** The cell on a floor that leads to the next deeper floor.
