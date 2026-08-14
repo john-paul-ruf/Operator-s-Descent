@@ -137,6 +137,10 @@ export const EVENT_CONTRACTS = Object.freeze({
   'runtime:error': {
     description: 'Runtime-owned recoverable error notification.',
     validate: (payload) => isObject(payload) && typeof payload.error === 'string'
+  },
+  'runtime:update-applied': {
+    description: 'A new service worker took control of the page; runtime is reloading to apply it.',
+    validate: optionalObject
   }
 });
 

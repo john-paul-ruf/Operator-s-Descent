@@ -39,8 +39,10 @@ let gestureAudioContext = null;
 let busUnsubscribers = [];
 let runtimeActive = false;
 let serviceWorkerStarted = false;
+let serviceWorkerReloadPending = false;
+let serviceWorkerRegistration = null;
 let lastAutosaveResult = null;
-let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, scope: null, error: null };
+let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, reloading: false, scope: null, error: null };
 
 let gameData = null;
 
@@ -564,7 +566,7 @@ function setupBus() {
 
 function registerServiceWorkerOnce() {
   if (serviceWorkerStarted) return null;
-  serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, scope: null, error: null };
+  serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, reloading: false, scope: null, error: null };
   if (!serviceWorkerStatus.supported) return null;
   serviceWorkerStarted = true;
   return navigator.serviceWorker.register('./service-worker.js').then(async (registration) => {
