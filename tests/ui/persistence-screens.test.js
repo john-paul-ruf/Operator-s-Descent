@@ -123,6 +123,12 @@ function allText(root) {
   return [root.textContent, ...(root.children || []).flatMap((child) => allText(child))].filter(Boolean);
 }
 
+function collect(root, predicate, matches = []) {
+  if (predicate(root)) matches.push(root);
+  for (const child of root.children || []) collect(child, predicate, matches);
+  return matches;
+}
+
 function makeState(seed, timestamp, depth = 1) {
   const state = createRunState(seed, makeParty(2), { creationTimestamp: timestamp });
   state.depth = depth;
@@ -201,6 +207,10 @@ describe('run library screen', () => {
     const container = new FakeElement('div');
     mount(container);
 
+    const eyebrow = collect(container, (el) => el.classList.contains('micro') && el.textContent.includes('RUN LIBRARY'))[0];
+    expect(eyebrow.getAttribute('role')).toBe('heading');
+    expect(eyebrow.getAttribute('aria-level')).toBe('1');
+
     const text = allText(container).join(' ');
     expect(text).toContain('QUARANTINED — MALFORMED');
     expect(text).toContain('SEED 222');
@@ -244,6 +254,10 @@ describe('import screen', () => {
     mount(container);
 
     expect(byTestId(container, 'import-input').parentNode.classList.contains('screen-body')).toBe(true);
+
+    const eyebrow = collect(container, (el) => el.classList.contains('micro') && el.textContent.includes('IMPORT LINK'))[0];
+    expect(eyebrow.getAttribute('role')).toBe('heading');
+    expect(eyebrow.getAttribute('aria-level')).toBe('1');
 
     byTestId(container, 'import-input').value = `https://example.test/play/#w=${encodeSeed(987)}`;
     await byTestId(container, 'import-submit').click();

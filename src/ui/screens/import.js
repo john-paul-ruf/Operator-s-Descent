@@ -80,6 +80,8 @@ export function mount(container, params = {}) {
   const eyebrow = document.createElement('div');
   eyebrow.className = 'micro';
   eyebrow.textContent = '◈ IMPORT LINK';
+  eyebrow.setAttribute('role', 'heading');
+  eyebrow.setAttribute('aria-level', '1');
   const heading = document.createElement('div');
   heading.className = 'subheading accent-text glow';
   heading.textContent = 'RESUME FROM URL';

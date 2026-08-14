@@ -196,6 +196,8 @@ export function mount(container) {
     const eyebrow = document.createElement('div');
     eyebrow.className = 'micro';
     eyebrow.textContent = '◈ RUN LIBRARY';
+    eyebrow.setAttribute('role', 'heading');
+    eyebrow.setAttribute('aria-level', '1');
     const activeCount = document.createElement('div');
     activeCount.className = 'subheading accent-text glow';
     activeCount.textContent = `${rows.filter(row => row.result.success).length} ACTIVE RUNS`;
