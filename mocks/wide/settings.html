@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings (Wide) — Operator's Descent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIDE SHELL BLOCK — byte-identical across every mocks/wide/*.html file.
+       Do NOT edit per-file. Copy verbatim from mocks/wide/exploration.html.
+       (Keystone — SESSION-02.)
+       ═══════════════════════════════════════════════════════════════════════════ */
+
+    :root {
+      --accent: #7ec8e3;
+      --accent-dim: rgba(126,200,227,0.25);
+      --accent-faint: rgba(126,200,227,0.06);
+      --bg-base: #0a0612;
+      --bg-panel: #13092a;
+      --bg-panel-elevated: #1a0e36;
+      --border-dim: #2a1a4a;
+      --text-primary: #e0d8f0;
+      --text-secondary: #8a7aa8;
+      --text-dim: #5a4a78;
+      --danger: #e83a3a;
+      --heal: #3ae8a8;
+      --wall-color: #2a1048;
+      --wall-highlight: #4a2090;
+      --floor-color: #14092e;
+      --floor-visited: #0c061a;
+    }
+
+    /* Wide-scope extras — do NOT edit :root above (byte-shared with portrait). */
+    body {
+      --warning: #e8632a;
+      --border-active: var(--accent);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ═══ FULL-VIEWPORT CRT / VHS EFFECT SYSTEM (per FR-23 timing constants) ═══ */
+
+    .crt-scanlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 60;
+      background: repeating-linear-gradient(to bottom,
+        transparent 0, transparent 1px,
+        rgba(255,255,255,0.10) 1px, rgba(255,255,255,0.10) 2px);
+      animation: scanline-drift 4s linear infinite;
+    }
+    @keyframes scanline-drift {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(2px); }
+    }
+
+    .crt-grille {
+      position: fixed; inset: 0; pointer-events: none; z-index: 59;
+      background: repeating-linear-gradient(to right,
+        rgba(255,0,0,0.50) 0, rgba(255,0,0,0.50) 1px,
+        rgba(0,255,0,0.50) 1px, rgba(0,255,0,0.50) 2px,
+        rgba(0,0,255,0.50) 2px, rgba(0,0,255,0.50) 3px);
+      mix-blend-mode: screen;
+      opacity: 0.15;
+    }
+
+    .crt-vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 58;
+      background: radial-gradient(ellipse at center,
+        transparent 30%, rgba(0,0,0,0.65) 100%);
+      animation: vignette-pulse 4s ease-in-out infinite;
+    }
+    @keyframes vignette-pulse {
+      0%, 100% { opacity: 0.65; }
+      50% { opacity: 0.92; }
+    }
+
+    .crt-tracking {
+      position: fixed; left: 0; right: 0; height: 28%; z-index: 57;
+      pointer-events: none;
+      background: rgba(126,200,227,0.05);
+      mix-blend-mode: screen;
+      animation: tracking-loop 7s linear infinite;
+    }
+    @keyframes tracking-loop {
+      0% { top: -28%; }
+      100% { top: 100%; }
+    }
+
+    .crt-grain {
+      position: fixed; inset: 0; pointer-events: none; z-index: 56;
+      opacity: 0.5;
+      background-image:
+        radial-gradient(circle at 3% 7%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 17% 13%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 31% 3%, rgba(255,255,255,0.18) 0.5px, transparent 1px),
+        radial-gradient(circle at 43% 19%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 57% 7%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 71% 23%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 83% 11%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 91% 29%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 7% 37%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 21% 43%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 37% 31%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 51% 47%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 63% 41%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 77% 37%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 89% 49%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 11% 61%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 27% 53%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 41% 67%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 53% 59%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 67% 73%, rgba(255,255,255,0.12) 0.5px, transparent 1px),
+        radial-gradient(circle at 79% 61%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 93% 71%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 5% 83%, rgba(255,255,255,0.11) 0.5px, transparent 1px),
+        radial-gradient(circle at 19% 79%, rgba(255,255,255,0.15) 0.5px, transparent 1px),
+        radial-gradient(circle at 33% 91%, rgba(255,255,255,0.13) 0.5px, transparent 1px),
+        radial-gradient(circle at 47% 83%, rgba(255,255,255,0.17) 0.5px, transparent 1px),
+        radial-gradient(circle at 61% 89%, rgba(255,255,255,0.10) 0.5px, transparent 1px),
+        radial-gradient(circle at 73% 81%, rgba(255,255,255,0.14) 0.5px, transparent 1px),
+        radial-gradient(circle at 87% 93%, rgba(255,255,255,0.16) 0.5px, transparent 1px),
+        radial-gradient(circle at 97% 87%, rgba(255,255,255,0.12) 0.5px, transparent 1px);
+      background-size: 100% 100%;
+      animation: grain-rescatter 1s steps(4) infinite;
+    }
+    @keyframes grain-rescatter {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-2px, 1px); }
+      50% { transform: translate(1px, -2px); }
+      75% { transform: translate(-1px, -1px); }
+      100% { transform: translate(2px, 1px); }
+    }
+
+    .crt-border {
+      position: fixed; inset: 0; pointer-events: none; z-index: 55;
+      box-shadow:
+        inset 0 0 3px rgba(126,200,227,0.3),
+        inset 0 0 8px rgba(126,200,227,0.15),
+        inset 0 0 20px rgba(0,0,0,0.4);
+      animation: border-flicker 0.8s steps(1) infinite;
+    }
+    @keyframes border-flicker {
+      0% { opacity: 0.7; }
+      35% { opacity: 0.7; }
+      36% { opacity: 0.5; }
+      42% { opacity: 0.9; }
+      50% { opacity: 0.6; }
+      55% { opacity: 0.8; }
+      100% { opacity: 0.7; }
+    }
+
+    .crt-flash {
+      position: fixed; inset: 0; pointer-events: none; z-index: 62;
+      background: rgba(208,38,212,0.05);
+      opacity: 0;
+      animation: frame-flash 3.2s steps(1) infinite;
+    }
+    @keyframes frame-flash {
+      0%, 85% { opacity: 0; }
+      86% { opacity: 0.05; }
+      88% { opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    .crt-glitch-bars { position: fixed; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .glitch-bar { position: absolute; left: 0; right: 0; background: rgba(126,200,227,0.3); mix-blend-mode: screen; }
+
+    .crt-noise-lines { position: fixed; inset: 0; pointer-events: none; z-index: 61; overflow: hidden; }
+    .noise-line {
+      position: absolute; left: 0; right: 0;
+      font-family: monospace; font-size: 8px;
+      color: rgba(126,200,227,0.4);
+      white-space: nowrap; overflow: hidden;
+      letter-spacing: 1px; line-height: 10px;
+      mix-blend-mode: screen;
+    }
+
+    .crt-vhs { position: fixed; inset: 0; pointer-events: none; z-index: 61; opacity: 0; overflow: hidden; }
+    .crt-vhs.active { animation: vhs-event 0.2s steps(1); }
+    @keyframes vhs-event {
+      0% { opacity: 0; }
+      20% { opacity: 1; transform: translateX(3px); }
+      40% { opacity: 0.8; transform: translateX(-4px); }
+      60% { opacity: 1; transform: translateX(2px); }
+      80% { opacity: 0.5; transform: translateX(-1px); }
+      100% { opacity: 0; transform: translateX(0); }
+    }
+    .crt-vhs::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to right,
+        rgba(255,0,0,0.08) 0%, transparent 3%,
+        rgba(0,0,255,0.08) 97%, transparent 100%);
+    }
+    .crt-vhs::after {
+      content: ''; position: absolute; left: 0; right: 0; top: 30%;
+      height: 4px; background: rgba(255,255,255,0.15);
+      mix-blend-mode: screen;
+    }
+
+    /* ═══ PER-ELEMENT TEXT GLITCH (FR-23) ═══ */
+    [data-glitch] { position: relative; }
+    [data-glitch].text-swapping::before,
+    [data-glitch].text-swapping::after {
+      content: attr(data-ghost-text);
+      position: absolute; top: 0; left: 0; width: 100%;
+      pointer-events: none;
+      text-shadow: none;
+    }
+    [data-glitch].text-swapping::before { color: rgba(255, 0, 0, 0.47); transform: translate(-2px, 0); }
+    [data-glitch].text-swapping::after  { color: rgba(0, 0, 255, 0.47); transform: translate( 2px, 0); }
+
+    /* ═══ SHARED UTILITIES ═══ */
+    .glow { text-shadow: 0 0 8px var(--accent); }
+    .glow-strong { text-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent); }
+    .accent-text { color: var(--accent); }
+    .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); }
+    .panel-elevated { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); }
+    .btn-crt {
+      background: var(--bg-panel); border: 1px solid var(--border-dim); color: var(--text-primary);
+      padding: 14px 24px; font-family: inherit; font-size: 14px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      cursor: pointer; transition: all 0.15s ease; text-align: center; min-height: 48px;
+    }
+    .btn-crt:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); color: var(--accent); }
+    .btn-link { text-decoration: none; display: inline-block; }
+    .scroll-area {
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent) var(--bg-panel);
+    }
+    .scroll-area::-webkit-scrollbar { width: 4px; }
+    .scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
+    .scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       END WIDE SHELL BLOCK
+       ═══════════════════════════════════════════════════════════════════════════ */
+
+    /* ═══ SETTINGS-SPECIFIC (WIDE TWO-COLUMN FORM) ═══ */
+
+    /* Per spec §Screen Layouts by Class row 11:
+       "two-column form — left column = audio (master mute + five volume sliders),
+       right column = visual (glitch toggle, reduced-motion override, scanline/grain toggle)
+       + back action spanning both columns."
+       96px touch-row minimum applies on every settings row per spec, even in wide. */
+    .wide-settings-shell {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      width: 100vw; height: 100vh;
+      z-index: 10;
+    }
+    .wide-settings-header {
+      padding: 18px 28px;
+      background: var(--bg-panel-elevated);
+      border-bottom: 1px solid var(--accent);
+      text-align: center;
+    }
+    .wide-settings-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      padding: 24px 28px;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .wide-settings-column {
+      display: flex; flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      min-height: 0;
+      padding-right: 4px;
+    }
+    .wide-settings-footer {
+      padding: 16px 28px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-dim);
+      /* Back action spans both columns per spec. */
+      display: flex; justify-content: center;
+    }
+    .section-header {
+      font-size: 12px; text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--accent); text-shadow: 0 0 8px var(--accent);
+      margin: 0 0 6px 0;
+    }
+
+    /* Toggle switch — production class + visual language identical to portrait. */
+    .toggle {
+      position: relative; width: 44px; height: 22px; background: var(--bg-base);
+      border: 1px solid var(--border-dim); cursor: pointer; transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    .toggle-knob {
+      position: absolute; top: 1px; left: 1px; width: 18px; height: 18px;
+      background: var(--text-dim); transition: all 0.2s ease;
+    }
+    .toggle.on { border-color: var(--accent); box-shadow: 0 0 4px var(--accent); }
+    .toggle.on .toggle-knob { left: 23px; background: var(--accent); box-shadow: 0 0 4px var(--accent); }
+
+    /* Slider — production class + visual language identical to portrait. */
+    .slider-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+      background: var(--bg-base); border: 1px solid var(--border-dim); outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 24px;
+      background: var(--accent); box-shadow: 0 0 4px var(--accent); cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 24px; background: var(--accent);
+      box-shadow: 0 0 4px var(--accent); cursor: pointer; border: 0;
+    }
+    .slider-value {
+      min-width: 40px; text-align: right; font-size: 12px;
+      color: var(--accent); font-weight: bold;
+    }
+    .slider-label {
+      min-width: 96px; font-size: 11px;
+      color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;
+    }
+
+    /* 96px minimum on every settings row (touch-target parity floor). */
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      min-height: 96px;
+      padding: 8px 12px;
+      border-top: 1px solid var(--border-dim);
+    }
+    .settings-row:first-child { border-top: 0; }
+    .settings-row-label { flex: 1; padding-right: 12px; }
+    .settings-row-label .row-title { font-size: 12px; font-weight: bold; color: var(--text-primary); }
+    .settings-row-label .row-hint { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <!-- ═══ FULL-VIEWPORT CRT EFFECT LAYERS ═══ -->
+  <div class="crt-grille"></div>
+  <div class="crt-vignette"></div>
+  <div class="crt-tracking"></div>
+  <div class="crt-scanlines"></div>
+  <div class="crt-grain"></div>
+  <div class="crt-border"></div>
+  <div class="crt-flash"></div>
+  <div class="crt-glitch-bars" id="glitch-bars"></div>
+  <div class="crt-noise-lines" id="noise-lines"></div>
+  <div class="crt-vhs" id="vhs-event"></div>
+
+  <!-- ═══ TWO-COLUMN FORM SHELL ═══ -->
+  <div class="wide-settings-shell">
+
+    <div class="wide-settings-header">
+      <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-secondary);">◈ Settings</div>
+      <div class="text-base accent-text glow-strong">CONFIGURE TERMINAL</div>
+    </div>
+
+    <div class="wide-settings-body">
+
+      <!-- COLUMN 1: AUDIO -->
+      <div class="wide-settings-column">
+        <div class="section-header">◈ AUDIO</div>
+        <div class="panel">
+          <!-- Master mute -->
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="row-title">Master Mute</div>
+              <div class="row-hint">Silence all audio</div>
+            </div>
+            <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+          </div>
+          <!-- Per-layer volume sliders (5) -->
+          <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <div class="text-[9px] uppercase tracking-wider" style="color: var(--text-dim);">Per-Layer Volume</div>
+            <div class="slider-row">
+              <span class="slider-label">Drone</span>
+              <input type="range" min="0" max="100" value="70">
+              <span class="slider-value">70%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Pulse</span>
+              <input type="range" min="0" max="100" value="60">
+              <span class="slider-value">60%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Sparkle</span>
+              <input type="range" min="0" max="100" value="50">
+              <span class="slider-value">50%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Lead</span>
+              <input type="range" min="0" max="100" value="65">
+              <span class="slider-value">65%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Noise Bed</span>
+              <input type="range" min="0" max="100" value="40">
+              <span class="slider-value">40%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 2: VISUAL + INFO -->
+      <div class="wide-settings-column">
+        <div class="section-header">◈ VISUAL</div>
+        <div class="panel">
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="row-title">Glitch Effects</div>
+              <div class="row-hint">Char substitution, VHS, jitter, bars, flash</div>
+            </div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="row-title">Reduced Motion</div>
+              <div class="row-hint">Manual override · Disables glitch + transitions</div>
+            </div>
+            <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="row-title">Scanlines &amp; Grain</div>
+              <div class="row-hint">CRT frame texture (independent of glitch)</div>
+            </div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+          </div>
+        </div>
+
+        <div class="section-header">◈ INFO</div>
+        <div class="panel p-3 text-[11px] space-y-1" style="color: var(--text-secondary);">
+          <div class="flex justify-between"><span>Version</span><span class="accent-text">1.0</span></div>
+          <div class="flex justify-between"><span>Build</span><span class="accent-text">OFFLINE</span></div>
+          <div class="flex justify-between"><span>Cache</span><span class="accent-text">Service Worker</span></div>
+          <div class="flex justify-between"><span>Transfer</span><span class="accent-text">&lt; 500 KB</span></div>
+        </div>
+
+        <div class="text-[10px] text-center mt-2" style="color: var(--text-dim);">
+          ◈ Settings persist in localStorage ◈
+        </div>
+      </div>
+
+    </div>
+
+    <div class="wide-settings-footer">
+      <a href="title.html" class="btn-crt btn-link" style="min-width: 240px;">◀ Back</a>
+    </div>
+
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════
+    //  WIDE SHELL SCRIPT BLOCK — copy verbatim across all mocks/wide/*.html files.
+    //  (CRT glitch scheduler + text-glitch + jitter + tab handler + log auto-scroll.)
+    // ═══════════════════════════════════════════════
+
+    // Safe pool for character substitution (Latin, digits, box-drawing)
+    const safePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█▀▄';
+
+    // — Glitch bars: 350-999ms, 40% fire, 80-249ms, 1-4px tall, ±8px offset, alpha 0.1-0.5 —
+    const glitchBarsEl = document.getElementById('glitch-bars');
+    function scheduleGlitchBar() {
+      const delay = 350 + Math.random() * 649;
+      setTimeout(() => {
+        if (Math.random() < 0.40) {
+          const bar = document.createElement('div');
+          bar.className = 'glitch-bar';
+          const height = 1 + Math.floor(Math.random() * 4);
+          const offset = -8 + Math.floor(Math.random() * 17);
+          const alpha = 0.1 + Math.random() * 0.4;
+          const top = Math.random() * 100;
+          bar.style.cssText = `top: ${top}%; height: ${height}px; opacity: ${alpha}; transform: translateX(${offset}px);`;
+          glitchBarsEl.appendChild(bar);
+          setTimeout(() => bar.remove(), 80 + Math.random() * 169);
+        }
+        scheduleGlitchBar();
+      }, delay);
+    }
+    scheduleGlitchBar();
+
+    // — Noise lines: 1200-3499ms, 30% fire, 80-299ms —
+    const noiseLinesEl = document.getElementById('noise-lines');
+    function scheduleNoiseLine() {
+      const delay = 1200 + Math.random() * 2299;
+      setTimeout(() => {
+        if (Math.random() < 0.30) {
+          const line = document.createElement('div');
+          line.className = 'noise-line';
+          const charCount = 8 + Math.floor(Math.random() * 21);
+          let noise = '';
+          for (let i = 0; i < charCount * 4; i++) noise += safePool[Math.floor(Math.random() * safePool.length)];
+          const top = Math.random() * 100;
+          line.style.cssText = `top: ${top}%;`;
+          line.textContent = noise;
+          noiseLinesEl.appendChild(line);
+          setTimeout(() => line.remove(), 80 + Math.random() * 219);
+        }
+        scheduleNoiseLine();
+      }, delay);
+    }
+    scheduleNoiseLine();
+
+    // — VHS events: 4000-9999ms, 80-249ms —
+    const vhsEl = document.getElementById('vhs-event');
+    function scheduleVHSEvent() {
+      const delay = 4000 + Math.random() * 5999;
+      setTimeout(() => {
+        vhsEl.classList.add('active');
+        setTimeout(() => vhsEl.classList.remove('active'), 80 + Math.random() * 169);
+        scheduleVHSEvent();
+      }, delay);
+    }
+    scheduleVHSEvent();
+
+    // — Per-element text glitch (FR-23): character substitution + chromatic ghosts —
+    const glitchSafePool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789░▒▓█▀▄■□';
+    function initTextGlitch() {
+      const sels = ['.glow','.glow-strong','.accent-text','.chroma-text','.section-header'];
+      const seen = new Set();
+      sels.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          if (seen.has(el)) return; seen.add(el);
+          const text = el.textContent.trim();
+          if (text.length < 2 || text.length > 40) return;
+          if (el.closest('button,.dpad-btn,.action-btn,.stepper-btn')) return;
+          let intensity = 0.06;
+          if (el.classList.contains('glow-strong') || el.classList.contains('chroma-text')) intensity = 0.20;
+          else if (el.classList.contains('accent-text')) intensity = 0.10;
+          else if (el.classList.contains('section-header')) intensity = 0.12;
+          el.dataset.glitch = intensity;
+          const heartbeat = 700 + Math.random() * 1099;
+          function tick() {
+            setTimeout(() => {
+              if (el.offsetParent !== null && Math.random() < parseFloat(el.dataset.glitch)) doTextSwap(el);
+              tick();
+            }, heartbeat);
+          }
+          tick();
+        });
+      });
+    }
+    function doTextSwap(el) {
+      const orig = el.textContent;
+      if (orig.length < 1) return;
+      const numSwaps = Math.min(orig.length, 1 + Math.floor(Math.random() * 2));
+      const positions = [];
+      while (positions.length < numSwaps && positions.length < orig.length) {
+        const pos = Math.floor(Math.random() * orig.length);
+        if (!positions.includes(pos)) positions.push(pos);
+      }
+      const chars = orig.split('');
+      positions.forEach(pos => { chars[pos] = glitchSafePool[Math.floor(Math.random() * glitchSafePool.length)]; });
+      el.textContent = chars.join('');
+      el.dataset.ghostText = chars.join('');
+      el.classList.add('text-swapping');
+      el.style.transform = `translate(${-3 + Math.floor(Math.random() * 7)}px, ${-1 + Math.floor(Math.random() * 3)}px)`;
+      setTimeout(() => {
+        el.textContent = orig;
+        el.classList.remove('text-swapping');
+        el.style.transform = '';
+        delete el.dataset.ghostText;
+      }, 120 + Math.random() * 229);
+    }
+    initTextGlitch();
+
+    // ═══════════════════════════════════════════════
+    //  END WIDE SHELL SCRIPT BLOCK
+    // ═══════════════════════════════════════════════
+  </script>
+</body>
+</html>
