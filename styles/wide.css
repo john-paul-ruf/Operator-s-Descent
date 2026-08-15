@@ -845,4 +845,230 @@
     line-height: 1.6;
     max-width: 340px;
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CREATION SCREEN (wide) — two-pane roster/editor split
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .wide-creation-shell {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: minmax(360px, 40%) 1fr;
+    grid-template-rows: 1fr auto;
+    width: 100vw;
+    height: 100vh;
+  }
+  .wide-creation-left {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-dim);
+    background: var(--bg-panel);
+    overflow: hidden;
+    min-width: 0;
+  }
+  .wide-creation-right {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+    background: var(--bg-base);
+  }
+  .wide-creation-footer {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    gap: 14px;
+    padding: 16px 24px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-dim);
+    align-items: center;
+  }
+  .wide-creation-footer .btn-crt { min-height: 56px; padding: 14px 24px; }
+
+  /* Readout header (points/credits/AP) */
+  .wide-readout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--bg-panel-elevated);
+    border-bottom: 1px solid var(--accent);
+  }
+  .wide-readout-cell { display: flex; flex-direction: column; }
+  .wide-readout-cell .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+  }
+  .wide-readout-cell .value {
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent);
+    margin-top: 2px;
+  }
+  .wide-readout-cell .value.dim {
+    color: var(--text-dim);
+    text-shadow: none;
+  }
+  .wide-readout-cell .value .denom {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-weight: normal;
+  }
+
+  /* Roster — 4 character slots */
+  .wide-roster {
+    padding: 14px 20px 8px;
+    border-bottom: 1px solid var(--border-dim);
+    display: flex;
+    flex-direction: column;
+  }
+  .wide-roster-heading {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+  .wide-roster-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .wide-roster .char-slot {
+    width: 96px;
+    height: 96px;
+    border: 1px solid var(--border-dim);
+    background: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+  }
+  .wide-roster .char-slot:hover { border-color: var(--text-secondary); }
+  .wide-roster .char-slot.active {
+    background: var(--bg-panel-elevated);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .wide-roster .char-slot .label {
+    font-size: 9px;
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
+  }
+  .wide-roster .char-slot.active .label {
+    color: var(--accent);
+    text-shadow: 0 0 4px var(--accent);
+  }
+  .wide-roster .char-slot .label.dim { color: var(--text-dim); }
+  .wide-roster .remove-character-btn {
+    align-self: flex-start;
+    margin-top: 10px;
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  /* Saved configs list */
+  .wide-saved-configs {
+    padding: 14px 20px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .wide-saved-configs-heading {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent);
+    margin-bottom: 10px;
+  }
+  .wide-saved-configs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .wide-saved-configs .config-card {
+    padding: 10px 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-dim);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .wide-saved-configs .config-card:hover { border-color: var(--accent); }
+  .wide-saved-configs .config-card.active {
+    background: var(--bg-panel-elevated);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .wide-saved-configs .config-card.invalid { border-color: var(--danger); }
+  .wide-saved-configs .config-card .name {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+  }
+  .wide-saved-configs .config-card.active .name { color: var(--accent); }
+  .wide-saved-configs .config-card .meta {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .wide-saved-configs .config-card.save-slot {
+    border-style: dashed;
+    opacity: 0.8;
+    align-items: center;
+    text-align: center;
+  }
+  .wide-saved-configs .config-card.save-slot .name { color: var(--text-dim); }
+  .wide-save-name-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+  }
+  .wide-save-name-row .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+  }
+  .wide-save-name-input {
+    background: var(--bg-base);
+    border: 1px solid var(--border-dim);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 8px 10px;
+    outline: none;
+  }
+  .wide-save-name-input:focus { border-color: var(--accent); box-shadow: 0 0 4px var(--accent); }
+
+  /* Right pane — stacked editor sections */
+  .wide-editor {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
 }

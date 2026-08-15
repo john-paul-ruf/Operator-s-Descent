@@ -74,6 +74,11 @@ function installDocument() {
   };
 }
 
+function installMatchMedia(match) {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.matchMedia = () => ({ matches: Boolean(match), addEventListener() {}, removeEventListener() {} });
+}
+
 function byTestId(root, testid) {
   if (root.dataset?.testid === testid) return root;
   for (const child of root.children || []) {
@@ -112,6 +117,7 @@ afterEach(() => {
   vi.useRealTimers();
   delete globalThis.requestAnimationFrame;
   delete globalThis.document;
+  delete globalThis.window;
 });
 
 describe('creation screen workflow', () => {
@@ -243,5 +249,91 @@ describe('creation screen workflow', () => {
     byTestId(container, 'tab-attrs').click();
     expect(byTestId(container, 'attribute-mgt').style.minHeight).toBe('96px');
     expect(byTestId(container, 'attribute-mgt').getAttribute('aria-label')).toContain('MIGHT rank 3');
+  });
+});
+
+describe('creation screen — wide layout', () => {
+  it('renders the two-pane shell with data-wide-root, readout, roster, and saved-configs list', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 555 });
+
+    const shell = container.children[0];
+    expect(shell.classList.contains('wide-creation-shell')).toBe(true);
+    expect(shell.dataset.wideRoot).toBe('');
+    expect(shell.dataset.testid).toBe('creation-root');
+
+    const left = byTestId(container, 'wide-creation-left');
+    const right = byTestId(container, 'wide-creation-right');
+    const footer = byTestId(container, 'wide-creation-footer');
+    expect(left).not.toBeNull();
+    expect(right).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(byTestId(container, 'wide-editor')).not.toBeNull();
+    expect(byTestId(container, 'wide-editor-empty')).not.toBeNull();
+
+    const readout = byTestId(container, 'wide-readout');
+    expect(readout).not.toBeNull();
+    expect(readout.children).toHaveLength(3);
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('80');
+    const denom = byTestId(container, 'remaining').children[1].children[0];
+    expect(denom.classList.contains('denom')).toBe(true);
+    expect(denom.textContent).toBe('/80');
+    expect(byTestId(container, 'credits').children[1].textContent).toBe('800');
+    expect(byTestId(container, 'ap').children[1].textContent).toBe('0');
+    expect(byTestId(container, 'ap').children[1].classList.contains('dim')).toBe(true);
+
+    const roster = byTestId(container, 'wide-roster');
+    expect(roster).not.toBeNull();
+    expect(roster.children.find((c) => c.classList?.contains('wide-roster-row')).children).toHaveLength(4);
+    expect(byTestId(container, 'add-character')).not.toBeNull();
+    expect(byTestId(container, 'empty-slot-1')).not.toBeNull();
+    expect(byTestId(container, 'empty-slot-3')).not.toBeNull();
+
+    expect(byTestId(container, 'wide-saved-configs')).not.toBeNull();
+    expect(byTestId(container, 'wide-save-slot')).not.toBeNull();
+    expect(byTestId(container, 'wide-save-slot').disabled).toBe(true);
+
+    expect(byTestId(container, 'back')).not.toBeNull();
+    expect(byTestId(container, 'finalize')).not.toBeNull();
+    expect(byTestId(container, 'finalize').disabled).toBe(true);
+  });
+
+  it('adding a character updates the wide readout and marks the slot active', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 42 });
+
+    byTestId(container, 'add-character').click();
+    const first = byTestId(container, 'character-slot-0');
+    expect(first).not.toBeNull();
+    expect(first.classList.contains('active')).toBe(true);
+    // Chassis cost = 5, credits fall from 800 → 750.
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('75');
+    expect(byTestId(container, 'credits').children[1].textContent).toBe('750');
+    expect(byTestId(container, 'ap').children[1].textContent).toBe('1');
+    // Save slot enables now that we have a character.
+    expect(byTestId(container, 'wide-save-slot').disabled).toBe(false);
+  });
+
+  it('renders saved configuration cards in the left pane sourced from party-configs.js', async () => {
+    installMatchMedia(true);
+    const draft = {
+      characters: [{
+        classId: 'ghost',
+        sigil: 0xe008,
+        attributes: { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+        equipment: { weapon: 'sniper', armor: 'light', offhand: null },
+        protocols: []
+      }]
+    };
+    const blueprint = blueprintFromDraft(draft, gameData, 'ghost cell');
+    expect(saveConfig('ghost cell', blueprint)).toMatchObject({ success: true });
+    setLastUsed('ghost cell');
+
+    const { container } = await mountCreation({ preloadedSeed: 12 });
+    const card = byTestId(container, 'wide-saved-config-ghost cell');
+    expect(card).not.toBeNull();
+    expect(card.classList.contains('config-card')).toBe(true);
+    expect(card.classList.contains('active')).toBe(true);
+    expect(card.children.find((c) => c.classList?.contains('name')).textContent).toBe('ghost cell');
   });
 });

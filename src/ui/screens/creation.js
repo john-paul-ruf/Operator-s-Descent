@@ -1,5 +1,6 @@
 import { createAttributeRow, createButton, createPanel, createScreenBody, createScrollArea, createSigilToken, createTextInput } from '../components.js';
 import { createInputHandler } from '../input.js';
+import { currentLayoutClass } from '../layout.js';
 import { bus } from '../../state/bus.js';
 import { gameData as compatibilityData } from '../../main.js';
 import { ATTRIBUTE_KEYS, modifier } from '../../rules/attributes.js';
@@ -132,6 +133,11 @@ export function mount(container, params = {}) {
   function render() {
     const summary = selectCreationState(draft, data);
     clear(container);
+    if (currentLayoutClass() === 'wide') renderWide(summary);
+    else renderPortrait(summary);
+  }
+
+  function renderPortrait(summary) {
     const root = document.createElement('main');
     root.className = 'creation-wrapper screen-container';
     root.style.gap = '0';
@@ -146,6 +152,193 @@ export function mount(container, params = {}) {
     root.appendChild(body);
     root.appendChild(renderFooter(summary));
     container.appendChild(root);
+  }
+
+  function renderWide(summary) {
+    const shell = document.createElement('div');
+    shell.className = 'wide-creation-shell';
+    shell.dataset.wideRoot = '';
+    shell.dataset.testid = 'creation-root';
+
+    const left = document.createElement('aside');
+    left.className = 'wide-creation-left';
+    left.dataset.testid = 'wide-creation-left';
+    left.setAttribute('aria-label', 'Party roster and saved configurations');
+    left.append(renderWideReadout(summary), renderWideRoster(summary), renderWideSavedConfigs(summary));
+
+    const right = document.createElement('section');
+    right.className = 'wide-creation-right';
+    right.dataset.testid = 'wide-creation-right';
+    right.setAttribute('aria-label', 'Editor');
+    const editor = document.createElement('div');
+    editor.className = 'wide-editor scroll-area';
+    editor.dataset.testid = 'wide-editor';
+    if (!summary.characters.length) {
+      const empty = text('p', 'creation-warning', 'ADD A CHARACTER TO BEGIN.');
+      empty.dataset.testid = 'wide-editor-empty';
+      editor.appendChild(empty);
+    }
+    right.appendChild(editor);
+
+    shell.append(left, right, renderWideFooter(summary));
+    container.appendChild(shell);
+  }
+
+  function renderWideReadout(summary) {
+    const readout = document.createElement('div');
+    readout.className = 'wide-readout';
+    readout.dataset.testid = 'wide-readout';
+    readout.append(
+      wideReadoutCell('POINTS REMAINING', String(summary.pointsRemaining), '/80', 'remaining'),
+      wideReadoutCell('CREDITS', String(summary.credits), null, 'credits'),
+      wideReadoutCell('AP/ROUND', String(summary.actionsPerRound), null, 'ap')
+    );
+    return readout;
+  }
+
+  function wideReadoutCell(labelText, valueText, denomText, id) {
+    const cell = document.createElement('div');
+    cell.className = 'wide-readout-cell';
+    cell.dataset.testid = id;
+    cell.appendChild(text('span', 'label', labelText));
+    const value = document.createElement('span');
+    value.className = valueText === '0' ? 'value dim' : 'value';
+    value.textContent = valueText;
+    if (denomText) value.appendChild(text('span', 'denom', denomText));
+    cell.appendChild(value);
+    return cell;
+  }
+
+  function renderWideRoster(summary) {
+    const section = document.createElement('div');
+    section.className = 'wide-roster';
+    section.dataset.testid = 'wide-roster';
+    section.appendChild(text('div', 'wide-roster-heading', '◈ ROSTER · 4 MAX'));
+    const row = document.createElement('div');
+    row.className = 'wide-roster-row';
+    for (let index = 0; index < 4; index++) row.appendChild(renderWideRosterSlot(summary, index));
+    section.appendChild(row);
+    const removeReason = summary.characters.length <= 1 ? 'minimum party size' : '';
+    const remove = createButton('− REMOVE', {
+      danger: true,
+      disabled: Boolean(removeReason),
+      description: removeReason || 'Remove selected character',
+      onClick: () => dispatch({ type: 'remove_character' })
+    });
+    remove.dataset.testid = 'remove-character';
+    remove.classList.add('remove-character-btn');
+    remove.style.marginTop = '8px';
+    remove.style.alignSelf = 'flex-start';
+    section.appendChild(remove);
+    return section;
+  }
+
+  function renderWideRosterSlot(summary, index) {
+    const character = summary.characters[index];
+    const isSelected = Boolean(character) && index === summary.activeSlot;
+    const isNextAdd = !character && index === summary.characters.length;
+    const partyFull = summary.characters.length >= 4;
+    const className = character?.classData?.name || (character ? 'UNASSIGNED' : (isNextAdd ? 'ADD' : 'EMPTY'));
+    const slot = createButton('', {
+      selected: isSelected,
+      label: character ? `Select character ${index + 1}` : `Add character ${index + 1}`,
+      disabled: !character && (partyFull || !isNextAdd),
+      onClick: () => dispatch(character ? { type: 'select_character', slot: index } : { type: 'add_character' })
+    });
+    slot.className = 'char-slot' + (isSelected ? ' active' : '');
+    slot.dataset.testid = character ? `character-slot-${index}` : (isNextAdd ? 'add-character' : `empty-slot-${index}`);
+    const glyph = character?.sigil
+      ? createSigilToken(character.sigil, 34, { role: 'player', label: `${className} sigil` })
+      : text('span', 'sigil-option', isNextAdd ? '+' : '?');
+    const labelSpan = text('span', character ? 'label' : 'label dim', className.toUpperCase());
+    slot.append(glyph, labelSpan);
+    return slot;
+  }
+
+  function renderWideSavedConfigs(summary) {
+    const section = document.createElement('div');
+    section.className = 'wide-saved-configs';
+    section.dataset.testid = 'wide-saved-configs';
+    section.appendChild(text('div', 'wide-saved-configs-heading', '◈ SAVED CONFIGURATIONS (FR-51)'));
+    const list = document.createElement('div');
+    list.className = 'wide-saved-configs-list';
+    const configs = listConfigs().slice(0, 10);
+    for (const config of configs) {
+      const validation = validateConfig(config, data);
+      const meta = shortBlueprintSummary(config);
+      const card = createButton('', {
+        description: validation.valid ? meta : 'configuration needs repair',
+        error: !validation.valid,
+        onClick: () => loadBlueprint(config.name)
+      });
+      card.className = 'config-card' + (saveName === config.name ? ' active' : '') + (validation.valid ? '' : ' invalid');
+      card.dataset.testid = `wide-saved-config-${config.name}`;
+      card.append(text('div', 'name', config.name), text('div', 'meta', validation.valid ? meta : `REPAIR: ${validation.invalidItems.map((item) => item.field).join(', ')}`));
+      list.appendChild(card);
+    }
+    const nameRow = document.createElement('label');
+    nameRow.className = 'wide-save-name-row';
+    nameRow.dataset.testid = 'wide-save-name-row';
+    nameRow.append(text('span', 'label', 'NAME'));
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'wide-save-name-input';
+    nameInput.value = saveName;
+    nameInput.placeholder = 'CONFIG NAME';
+    nameInput.dataset.testid = 'wide-save-name-input';
+    nameInput.addEventListener('input', (event) => {
+      saveName = String(event.target.value || '').slice(0, SAVE_NAME_MAX);
+      pendingOverwriteName = null;
+    });
+    nameRow.appendChild(nameInput);
+    list.appendChild(nameRow);
+    const saveSlot = createButton('', {
+      disabled: draft.characters.length === 0,
+      description: pendingOverwriteName === saveName.trim() ? 'confirm overwrite' : 'save current party as a new configuration',
+      onClick: saveBlueprint
+    });
+    saveSlot.className = 'config-card save-slot';
+    saveSlot.dataset.testid = 'wide-save-slot';
+    saveSlot.append(
+      text('div', 'name', pendingOverwriteName === saveName.trim() && saveName.trim() ? '+ CONFIRM OVERWRITE' : '+ SAVE CURRENT'),
+      text('div', 'meta', `${configs.length}/10`)
+    );
+    list.appendChild(saveSlot);
+    section.appendChild(list);
+    if (notice) section.appendChild(text('p', notice.startsWith('LOADED') || notice.startsWith('SAVED') ? 'creation-note' : 'creation-error', notice));
+    return section;
+  }
+
+  function renderWideFooter(summary) {
+    const footer = document.createElement('footer');
+    footer.className = 'wide-creation-footer';
+    footer.dataset.testid = 'wide-creation-footer';
+    const backButton = createButton('◀ BACK', {
+      onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
+    });
+    backButton.dataset.testid = 'back';
+    backButton.classList.add('footer-back-btn', 'btn-link');
+    const spacer = document.createElement('div');
+    spacer.style.flex = '1';
+    const finalizeButton = createButton(finalizing ? 'BOOTING…' : finalized ? 'FINALIZED' : '◈ FINALIZE & DESCEND', {
+      primary: true,
+      busy: finalizing,
+      disabled: finalizing || finalized || !summary.validation.valid,
+      describedBy: 'creation-errors',
+      onClick: finalize
+    });
+    finalizeButton.dataset.testid = 'finalize';
+    finalizeButton.classList.add('finalize-btn', 'btn-link');
+    const errors = summary.validation.errors;
+    const errorBox = document.createElement('div');
+    errorBox.className = errors.length ? 'creation-error' : 'creation-note';
+    errorBox.id = 'creation-errors';
+    errorBox.dataset.testid = 'validation-errors';
+    errorBox.style.flex = '1';
+    errorBox.style.textAlign = 'center';
+    errorBox.textContent = errors.length ? errors.map(errorText).join(' · ') : 'BUILD VALID · READY TO DESCEND.';
+    footer.append(backButton, errorBox, finalizeButton);
+    return footer;
   }
 
   function renderHeader(summary) {
