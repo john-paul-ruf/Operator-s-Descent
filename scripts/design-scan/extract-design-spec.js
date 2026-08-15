@@ -57,11 +57,37 @@ export function extractGlitchTimings(requirementsMd = readText('specs/requiremen
   return timings;
 }
 
+export function extractLayoutClasses(designMd = readText('specs/design.md')) {
+  const start = designMd.indexOf('**Layout classes and selection**');
+  if (start === -1) throw new Error('design.md: "**Layout classes and selection**" table not found — spec text may have changed shape');
+  const section = designMd.slice(start, designMd.indexOf('**Full-viewport CRT.**', start));
+  const rows = [...section.matchAll(/^\|\s*(portrait|wide)\s*\|([^|\n]+)\|([^|\n]+)\|/gm)]
+    .map(([, name, selection, defaultUse]) => ({ name, selection: selection.trim(), defaultUse: defaultUse.trim() }));
+  return assertCount(rows, 2, 'design.md layout classes');
+}
+
+export function extractScreenLayoutsByClass(designMd = readText('specs/design.md')) {
+  const start = designMd.indexOf('### Screen Layouts by Class');
+  if (start === -1) throw new Error('design.md: "### Screen Layouts by Class" section not found — spec text may have changed shape');
+  const section = designMd.slice(start, designMd.indexOf('## Prototype Navigation Notes', start));
+  const rows = [];
+  for (const line of section.split('\n')) {
+    if (!/^\|\s*\d+\s*\|/.test(line)) continue;
+    const cells = line.split(/(?<!\\)\|/).slice(1, -1).map((cell) => cell.replace(/\\\|/g, '|').trim());
+    const file = cells[1]?.match(/`mocks\/([\w.-]+\.html)`/)?.[1];
+    if (!file) continue;
+    rows.push({ file, portrait: cells[2], wide: cells[3], shared: cells[4] });
+  }
+  return assertCount(rows, 15, 'design.md screen-layouts-by-class matrix rows');
+}
+
 export function extractDesignSpec() {
   return {
     colorTokens: extractColorTokens(),
     cornerRadius: extractCornerRadius(),
     touchTargetMinHeightPx: extractTouchTargetMinHeight(),
-    glitchTimings: extractGlitchTimings()
+    glitchTimings: extractGlitchTimings(),
+    layoutClasses: extractLayoutClasses(),
+    screenLayoutsByClass: extractScreenLayoutsByClass()
   };
 }

@@ -32,7 +32,7 @@ function styleBlockOf(html) {
 export const extractMockRootTokens = parseRootTokens;
 
 export function extractDeclaredClasses(html) {
-  return parseClassSelectors(styleBlockOf(html));
+  return parseClassSelectors(styleBlockOf(html).replace(/\/\*[\s\S]*?\*\//g, ''));
 }
 
 export function extractModeTabLabels(html) {

@@ -8,9 +8,16 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const MOCKS_DIR = join(ROOT, 'mocks');
+const WIDE_MOCKS_DIR = join(ROOT, 'mocks', 'wide');
 const DEFAULT_SHOTS_DIR = join(ROOT, 'program', 'operator-s-descent', 'prompts', 'visual-parity-v3', 'shots');
 const SERVER_URL = `http://127.0.0.1:${process.env.PORT || 8080}/`;
-const DEFAULT_VIEWPORT = { width: 600, height: 900 };
+const LAYOUT_DEFAULT_VIEWPORTS = {
+  portrait: { width: 450, height: 800 },
+  wide: { width: 1440, height: 900 }
+};
+const WIDE_NOT_IMPLEMENTED_NOTE =
+  'NOTE: the wide layout class is not implemented in production yet (FORGE-CONFIG Custom Rule 8 — design phase only).\n' +
+  'Capturing wide mocks only — no production capture, no side-by-side, until the implementation feature lands.';
 
 const SCREENS = {
   title:           { mockFile: 'title.html',          setup: null },
@@ -124,6 +131,35 @@ async function setupProdPage(page, screenKey) {
   }
 }
 
+async function captureWideMockOnly(browser, screenKey, viewport, shotsDir) {
+  const mockFile = SCREENS[screenKey].mockFile;
+  const mockPath = join(WIDE_MOCKS_DIR, mockFile);
+  if (!existsSync(mockPath)) {
+    console.error(`Wide mock file not found: ${mockPath}`);
+    return { screen: screenKey, layout: 'wide', setupStatus: 'mock-missing' };
+  }
+
+  const mockPage = await browser.newPage({ viewport });
+  await mockPage.goto(`file://${mockPath}`, { waitUntil: 'domcontentloaded' });
+  await mockPage.waitForTimeout(1500);
+  const mockBuf = await mockPage.screenshot({ type: 'png' });
+  await mockPage.close();
+
+  console.log(`  ${screenKey} [wide]: mock=${mockBuf.length}B prod=skipped (wide not implemented in prod)`);
+
+  const mockOutputPath = resolve(join(shotsDir, `${screenKey}-wide-mock.png`));
+  writeFileSync(mockOutputPath, mockBuf);
+
+  return {
+    screen: screenKey,
+    layout: 'wide',
+    mockPath: mockOutputPath,
+    mockSize: { width: viewport.width, height: viewport.height },
+    prodStatus: 'wide-not-implemented-in-prod',
+    setupStatus: 'mock-only'
+  };
+}
+
 async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
   const mockFile = SCREENS[screenKey].mockFile;
   const mockPath = join(MOCKS_DIR, mockFile);
@@ -204,7 +240,7 @@ async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
 
 function parseArgs(argv) {
   const args = argv.slice(2);
-  const result = { screen: null, all: false, list: false, viewport: DEFAULT_VIEWPORT, outDir: DEFAULT_SHOTS_DIR };
+  const result = { screen: null, all: false, list: false, layout: 'portrait', viewport: null, outDir: DEFAULT_SHOTS_DIR };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--screen') {
       result.screen = args[++i];
@@ -212,6 +248,13 @@ function parseArgs(argv) {
       result.all = true;
     } else if (args[i] === '--list') {
       result.list = true;
+    } else if (args[i] === '--layout') {
+      const value = args[++i];
+      if (value !== 'portrait' && value !== 'wide') {
+        console.error(`Invalid layout: ${value} (expected portrait or wide)`);
+        process.exit(2);
+      }
+      result.layout = value;
     } else if (args[i] === '--viewport') {
       const value = args[++i];
       const match = /^(\d+)x(\d+)$/.exec(value || '');
@@ -229,10 +272,11 @@ function parseArgs(argv) {
       result.outDir = resolve(ROOT, value);
     } else {
       console.error(`Unknown flag: ${args[i]}`);
-      console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list] [--viewport WIDTHxHEIGHT] [--out-dir <path>]');
+      console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list] [--layout portrait|wide] [--viewport WIDTHxHEIGHT] [--out-dir <path>]');
       process.exit(2);
     }
   }
+  if (!result.viewport) result.viewport = LAYOUT_DEFAULT_VIEWPORTS[result.layout];
   return result;
 }
 
@@ -257,8 +301,29 @@ async function main() {
     }
     targets = [args.screen];
   } else {
-    console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list] [--viewport WIDTHxHEIGHT] [--out-dir <path>]');
+    console.error('Usage: node ./scripts/screenshot-parity.js [--screen <name> | --all | --list] [--layout portrait|wide] [--viewport WIDTHxHEIGHT] [--out-dir <path>]');
     process.exit(2);
+  }
+
+  if (args.layout === 'wide') {
+    console.log(WIDE_NOT_IMPLEMENTED_NOTE);
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const report = [];
+      for (const screenKey of targets) {
+        const entry = await captureWideMockOnly(browser, screenKey, args.viewport, args.outDir);
+        report.push(entry);
+        if (entry.mockPath) {
+          console.log(entry.mockPath);
+        } else {
+          console.log(`SKIP: ${screenKey}`);
+        }
+      }
+      writeFileSync(join(args.outDir, 'report-wide.json'), `${JSON.stringify(report)}\n`);
+    } finally {
+      await browser.close();
+    }
+    return;
   }
 
   const server = await ensureServer();
