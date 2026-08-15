@@ -143,6 +143,25 @@ describe('PARTY mode', () => {
     expect(textOf(byTestId(container, 'party-equipment'))).toContain('sidearm');
     expect(textOf(byTestId(container, 'party-deck'))).toContain('SPARK');
   });
+
+  it('applies sigil-lg to the selected member detail sigil in wide layout only', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    renderParty(container, { runState, data, layout: 'wide' });
+
+    const heading = byTestId(container, 'party-detail-heading');
+    // The header sits under the same parent (party-detail scroll area); locate the detail-header row.
+    const detailHeader = heading.parentNode.children.find((child) => child.className && child.className.split(/\s+/).includes('detail-header'));
+    expect(detailHeader).toBeTruthy();
+    const sigil = detailHeader.children[0];
+    expect(sigil.classList.contains('sigil-lg')).toBe(true);
+
+    const portraitContainer = new FakeElement('div');
+    renderParty(portraitContainer, { runState, data });
+    const portraitHeading = byTestId(portraitContainer, 'party-detail-heading');
+    const portraitDetail = portraitHeading.parentNode.children.find((child) => child.className && child.className.split(/\s+/).includes('detail-header'));
+    expect(portraitDetail.children[0].classList.contains('sigil-lg')).toBe(false);
+  });
 });
 
 describe('GEAR mode', () => {

@@ -172,7 +172,23 @@ function renderTargets(container, context) {
   list.className = 'combat-target-list';
   list.dataset.testid = 'combat-targets';
   const selected = targets.find((target) => String(target.id) === String(selection.targetId));
-  if (selected) appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${actorName(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
+  if (selected) {
+    if (context.layout === 'wide') {
+      const info = document.createElement('div');
+      info.className = 'target-info';
+      info.dataset.testid = 'combat-selected-preview';
+      const name = document.createElement('div');
+      name.className = 'target-name';
+      name.textContent = `◈ TARGET: ${actorName(selected)}`;
+      const detail = document.createElement('div');
+      detail.className = 'target-detail';
+      detail.textContent = previewText(context.combatGetPreview?.(selected.id));
+      info.append(name, detail);
+      list.appendChild(info);
+    } else {
+      appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${actorName(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
+    }
+  }
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);
@@ -198,6 +214,7 @@ function renderConfirm(container, context) {
     onClick: () => context.combatConfirm?.()
   });
   confirm.dataset.testid = 'combat-confirm';
+  if (context.layout === 'wide') confirm.classList.add('btn-confirm');
   row.appendChild(confirm);
   const back = createButton('BACK', { disabled: selection.resolving, onClick: () => context.combatCancel?.() });
   back.dataset.testid = 'combat-back';

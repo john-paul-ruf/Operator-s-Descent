@@ -214,6 +214,21 @@ describe('LOOT mode', () => {
     expect(runState.inventory).toHaveLength(1);
   });
 
+  it('applies container-icon-lg to the container header glyph in wide layout only', () => {
+    const runState = run([]);
+    const lootState = { container: { id: 1, x: 1, y: 1 }, items: [item('loot-sidearm')] };
+    const { container } = renderLootWith(runState, lootState, { layout: 'wide' });
+    const header = byTestId(container, 'loot-container');
+    const glyph = header.children[0];
+    expect(glyph.className.split(/\s+/)).toContain('container-icon');
+    expect(glyph.className.split(/\s+/)).toContain('container-icon-lg');
+
+    const portrait = renderLootWith(runState, lootState);
+    const portraitGlyph = byTestId(portrait.container, 'loot-container').children[0];
+    expect(portraitGlyph.className.split(/\s+/)).toContain('container-icon');
+    expect(portraitGlyph.className.split(/\s+/)).not.toContain('container-icon-lg');
+  });
+
   it('takes items, opens only exhausted containers, and salvages tagged inventory', () => {
     const runState = run([]);
     const lootState = { container: { id: 1, x: 1, y: 1 }, items: [item('loot-sidearm', 'sidearm', { salvageValue: 5 })] };
@@ -308,5 +323,26 @@ describe('LOG mode', () => {
 
     expect(byTestId(container, 'log-copy-link').disabled).toBe(true);
     expect(byTestId(container, 'log-link-text')).toBe(null);
+  });
+
+  it('wide layout renders log-history-header, share-panel, and share-input', async () => {
+    const runState = run([]);
+    Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { writeText: async () => {} } }, configurable: true });
+    const container = new FakeElement('div');
+
+    renderLog(container, { runState, data, layout: 'wide', logEntries: [{ sequence: 1, type: 'info', message: 'boot' }] });
+
+    const heading = container.children[0];
+    expect(heading.className).toContain('log-history-header');
+    expect(heading.className.split(/\s+/)).not.toContain('mode-indicator');
+    const share = byTestId(container, 'log-share');
+    expect(share.className.split(/\s+/)).toContain('share-panel');
+
+    byTestId(container, 'log-copy-link').click();
+    await Promise.resolve();
+    await Promise.resolve();
+    const link = byTestId(container, 'log-link-text');
+    expect(link).not.toBe(null);
+    expect(link.className.split(/\s+/)).toContain('share-input');
   });
 });

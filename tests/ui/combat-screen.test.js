@@ -103,6 +103,11 @@ function installDocument() {
   };
 }
 
+function installMatchMedia(match) {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.matchMedia = () => ({ matches: Boolean(match), addEventListener() {}, removeEventListener() {} });
+}
+
 function byTestId(root, testid) {
   if (root.dataset?.testid === testid) return root;
   for (const child of root.children || []) {
@@ -212,8 +217,8 @@ async function mountCombat({ state = runState(), combat = combatState([partyActo
   return { container, controller, runState: state, combatState: combat };
 }
 
-beforeEach(installDocument);
-afterEach(() => { delete globalThis.document; });
+beforeEach(() => { installDocument(); installMatchMedia(false); });
+afterEach(() => { delete globalThis.document; delete globalThis.window; });
 
 describe('combat screen controller', () => {
   it('composes mock-aligned status grid and COMBAT console regions', async () => {
@@ -334,6 +339,41 @@ describe('combat screen controller', () => {
     expect(deaths[0].character.id).toBe('hero');
     expect(state.party.map((member) => member.id)).toEqual(['ally']);
     off();
+  });
+
+  it('renders three-region wide shell with telemetry (combat variant) and dock (COMBAT active)', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCombat();
+    const shell = byTestId(container, 'wide-shell');
+
+    expect(shell).not.toBe(null);
+    expect(shell.className).toContain('wide-shell');
+    expect(shell.dataset.wideRoot).toBe('');
+    expect(shell.children.map((child) => child.className.split(/\s+/)[0])).toEqual([
+      'wide-telemetry-dock', 'wide-playfield-column', 'wide-console-dock'
+    ]);
+    expect(byTestId(container, 'combat-canvas')).not.toBe(null);
+    expect(byTestId(container, 'telemetry-init-block')).not.toBe(null);
+    expect(byTestId(container, 'telemetry-active-actor')).not.toBe(null);
+    expect(byTestId(container, 'console-tab-combat').getAttribute('aria-selected')).toBe('true');
+    expect(byTestId(container, 'console-tab-loot').disabled).toBe(true);
+    expect(byTestId(container, 'console-tab-move').disabled).toBe(true);
+    expect(byClass(container, 'console-dim-layer')).toBe(null);
+  });
+
+  it('targeting sub-mode renders inside the dock using target-info/target-name/target-detail and btn-confirm', async () => {
+    installMatchMedia(true);
+    const combat = combatState([partyActor(), enemyActor({ hp: 10, hpMax: 10 })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    byTestId(container, 'combat-target-0').click();
+
+    const preview = byTestId(container, 'combat-selected-preview');
+    expect(preview.className).toContain('target-info');
+    expect(byClass(preview, 'target-name')).not.toBe(null);
+    expect(byClass(preview, 'target-detail')).not.toBe(null);
+    expect(byTestId(container, 'combat-confirm').className).toContain('btn-confirm');
   });
 
   it('routes party wipe to scorecard intent and removes input on unmount', async () => {

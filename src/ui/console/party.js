@@ -190,7 +190,9 @@ function renderDetail(area, character, context) {
   area.appendChild(text('mode-indicator', `◈ ${String(classData?.name || character.classId || 'OPERATOR').toUpperCase()} DETAIL`, 'party-detail-heading'));
   const header = document.createElement('div');
   header.className = 'detail-header console-row panel-elevated';
-  header.appendChild(createSigilToken(sigilOf(character), 72, { role: 'player', label: `${character.id} sigil` }));
+  const sigilToken = createSigilToken(sigilOf(character), 72, { role: 'player', label: `${character.id} sigil` });
+  if (context.layout === 'wide') sigilToken.classList.add('sigil-lg');
+  header.appendChild(sigilToken);
   header.appendChild(text('detail-title', `${classData?.name || character.classId || 'Operator'} · Signature T${signature.tier} ${classData?.signature?.name || signature.signatureId || ''}`.trim(), 'party-class'));
   area.appendChild(header);
   area.appendChild(createHPBar(hp.current, hp.max));

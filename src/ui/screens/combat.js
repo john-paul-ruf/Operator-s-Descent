@@ -1,7 +1,8 @@
-import { createStatusBar } from '../status-strip.js';
+import { createStatusBar, createTelemetryDock } from '../status-strip.js';
 import { createPlayfield } from '../playfield.js';
 import { createConsole } from '../console/console.js';
 import { createInputHandler } from '../input.js';
+import { currentLayoutClass } from '../layout.js';
 import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
@@ -250,20 +251,49 @@ export function mount(container, params = {}) {
   const inputHandler = createInputHandler({ legacyActions: false });
   inputHandler.bindToElement(container);
 
-  let statusBar = createStatusBar(runState, combatState);
-  statusBar.classList.add('panel', 'combat-status', 'in-run-status');
-  statusBar.style.flex = '0 0 auto';
-  container.appendChild(statusBar);
+  const layout = currentLayoutClass();
+  const isWide = layout === 'wide';
 
-  const playfieldBody = document.createElement('div');
-  playfieldBody.className = 'combat-grid playfield-body combat-playfield';
-  playfieldBody.style.display = 'block';
-  playfieldBody.style.flex = '1 1 auto';
-  playfieldBody.style.minHeight = '0';
-  playfieldBody.style.marginBottom = '96px';
-  playfieldBody.style.overflow = 'hidden';
-  playfieldBody.style.position = 'relative';
-  container.appendChild(playfieldBody);
+  let statusBar = null;
+  let telemetryDock = null;
+  let playfieldBody;
+  let widePlayfieldColumn = null;
+  let shell = null;
+
+  if (isWide) {
+    shell = document.createElement('div');
+    shell.className = 'wide-shell';
+    shell.dataset.wideRoot = '';
+    shell.dataset.testid = 'wide-shell';
+
+    telemetryDock = createTelemetryDock(runState, combatState);
+    shell.appendChild(telemetryDock);
+
+    widePlayfieldColumn = document.createElement('section');
+    widePlayfieldColumn.className = 'wide-playfield-column';
+    playfieldBody = document.createElement('div');
+    playfieldBody.className = 'combat-grid playfield-body combat-playfield wide-playfield-inner';
+    playfieldBody.style.overflow = 'hidden';
+    playfieldBody.style.position = 'relative';
+    widePlayfieldColumn.appendChild(playfieldBody);
+    shell.appendChild(widePlayfieldColumn);
+    container.appendChild(shell);
+  } else {
+    statusBar = createStatusBar(runState, combatState);
+    statusBar.classList.add('panel', 'combat-status', 'in-run-status');
+    statusBar.style.flex = '0 0 auto';
+    container.appendChild(statusBar);
+
+    playfieldBody = document.createElement('div');
+    playfieldBody.className = 'combat-grid playfield-body combat-playfield';
+    playfieldBody.style.display = 'block';
+    playfieldBody.style.flex = '1 1 auto';
+    playfieldBody.style.minHeight = '0';
+    playfieldBody.style.marginBottom = '96px';
+    playfieldBody.style.overflow = 'hidden';
+    playfieldBody.style.position = 'relative';
+    container.appendChild(playfieldBody);
+  }
 
   const canvas = document.createElement('canvas');
   canvas.className = 'playfield-canvas combat-grid-canvas';
@@ -300,8 +330,9 @@ export function mount(container, params = {}) {
     combatConfirm: confirmSelection,
     combatCanConfirm: canConfirm
   };
-  const consoleController = createConsole(viewState);
-  container.appendChild(consoleController.render());
+  const consoleController = createConsole(viewState, { variant: isWide ? 'dock' : 'bar' });
+  if (isWide) shell.appendChild(consoleController.render());
+  else container.appendChild(consoleController.render());
   consoleController.setMode('combat');
 
   resolveToPartyTurn();
@@ -646,13 +677,15 @@ export function mount(container, params = {}) {
   function renderAll() {
     if (!mounted) return;
     playfield.renderCombat(combatState, combatLattice, overlayOptions());
-    const nextStatusBar = createStatusBar(runState, combatState);
-    nextStatusBar.classList.add('panel', 'combat-status', 'in-run-status');
-    nextStatusBar.style.flex = '0 0 auto';
-    statusBar.cleanup?.();
-    if (typeof statusBar.replaceWith === 'function') statusBar.replaceWith(nextStatusBar);
-    else statusBar.parentNode?.replaceChild?.(nextStatusBar, statusBar);
-    statusBar = nextStatusBar;
+    if (!isWide) {
+      const nextStatusBar = createStatusBar(runState, combatState);
+      nextStatusBar.classList.add('panel', 'combat-status', 'in-run-status');
+      nextStatusBar.style.flex = '0 0 auto';
+      statusBar.cleanup?.();
+      if (typeof statusBar.replaceWith === 'function') statusBar.replaceWith(nextStatusBar);
+      else statusBar.parentNode?.replaceChild?.(nextStatusBar, statusBar);
+      statusBar = nextStatusBar;
+    }
     consoleController.refresh();
   }
 
@@ -660,7 +693,8 @@ export function mount(container, params = {}) {
     unmount() {
       if (!mounted) return;
       mounted = false;
-      statusBar.cleanup?.();
+      statusBar?.cleanup?.();
+      telemetryDock?.cleanup?.();
       consoleController.destroy();
       inputHandler.destroy();
     }

@@ -121,7 +121,11 @@ export function render(container, context = {}) {
   const state = stateFor(context.runState);
   copyByRun.set(context.runState || globalThis, () => copyLink(container, context));
   const logs = collectLogs(context);
-  container.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator log-heading', textContent: `◈ EVENT LOG — FLOOR ${String(context.runState?.depth || 1).padStart(2, '0')}` }));
+  const isWide = context.layout === 'wide';
+  const heading = document.createElement('div');
+  heading.className = isWide ? 'log-history-header' : 'mode-indicator log-heading';
+  heading.textContent = `◈ EVENT LOG — FLOOR ${String(context.runState?.depth || 1).padStart(2, '0')}`;
+  container.appendChild(heading);
   const logArea = createScrollArea({ label: 'Recent event log', focusable: true });
   logArea.className = 'log-area scroll-area';
   logArea.dataset.testid = 'log-area';
@@ -131,14 +135,14 @@ export function render(container, context = {}) {
   container.appendChild(logArea);
 
   const share = document.createElement('div');
-  share.className = 'log-share panel-elevated';
+  share.className = isWide ? 'log-share share-panel panel-elevated' : 'log-share panel-elevated';
   share.dataset.testid = 'log-share';
   share.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator', textContent: '◈ SHARE RUN' }));
   share.appendChild(Object.assign(document.createElement('div'), { className: 'log-budget', textContent: 'URL < 1500 chars' }));
   if (state.link) {
     const fallback = document.createElement('input');
     fallback.type = 'text';
-    fallback.className = 'log-link-text console-row';
+    fallback.className = isWide ? 'log-link-text share-input console-row' : 'log-link-text console-row';
     fallback.dataset.testid = 'log-link-text';
     fallback.value = state.link;
     fallback.setAttribute('readonly', 'readonly');

@@ -259,7 +259,7 @@ export function render(container, context = {}) {
   header.className = 'loot-container-header panel-elevated console-row';
   header.dataset.testid = 'loot-container';
   const glyph = document.createElement('span');
-  glyph.className = 'container-icon';
+  glyph.className = context.layout === 'wide' ? 'container-icon container-icon-lg' : 'container-icon';
   glyph.textContent = lootContainer.kind === 'vault' ? '◈' : '▣';
   header.appendChild(glyph);
   header.appendChild(document.createTextNode(` CONTAINER ${lootContainer.id} · ${lootContainer.kind || 'standard'} · ${opened ? 'OPENED' : 'UNOPENED'} · ${items.length} item(s)`));
