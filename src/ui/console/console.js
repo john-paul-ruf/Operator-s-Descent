@@ -47,18 +47,33 @@ function normalizeConsoleAction(action) {
   return legacy ? `mode_${legacy[1]}` : action;
 }
 
-export function createConsole(state) {
+export function createConsole(state, options = {}) {
+  const variant = options.variant === 'dock' ? 'dock' : 'bar';
+  const isDock = variant === 'dock';
+  const layout = isDock ? 'wide' : 'portrait';
+
   const container = document.createElement('section');
-  container.className = 'console-bar collapsed';
+  container.className = isDock ? 'wide-console-dock' : 'console-bar collapsed';
   container.setAttribute('aria-label', 'Command console');
-  const dimLayer = document.createElement('div');
-  dimLayer.className = 'console-dim-layer';
-  dimLayer.setAttribute('aria-hidden', 'true');
+  const dimLayer = isDock ? null : document.createElement('div');
+  if (dimLayer) {
+    dimLayer.className = 'console-dim-layer';
+    dimLayer.setAttribute('aria-hidden', 'true');
+  }
   const tabBar = document.createElement('div');
-  tabBar.className = 'console-tab-bar';
+  tabBar.className = isDock ? 'wide-console-tabs' : 'console-tab-bar';
   tabBar.setAttribute('role', 'tablist');
+  const contentShell = isDock ? document.createElement('div') : null;
+  const contentHeader = isDock ? document.createElement('div') : null;
+  const contentHeaderLabel = isDock ? document.createElement('div') : null;
+  if (contentShell) {
+    contentShell.className = 'wide-console-content';
+    contentHeader.className = 'wide-console-content-header';
+    contentHeaderLabel.className = 'wide-console-content-mode';
+    contentHeader.appendChild(contentHeaderLabel);
+  }
   const contentArea = document.createElement('div');
-  contentArea.className = 'console-content scroll-area';
+  contentArea.className = isDock ? 'wide-console-content-body scroll-area' : 'console-content scroll-area';
   contentArea.setAttribute('role', 'tabpanel');
   contentArea.tabIndex = -1;
   const notice = document.createElement('div');
@@ -67,7 +82,7 @@ export function createConsole(state) {
   notice.setAttribute('aria-live', 'polite');
 
   let currentMode = firstAvailableMode(state);
-  let expanded = false;
+  let expanded = isDock;
   let mountedCleanup = null;
   let inputCleanup = null;
   let rendered = false;
@@ -75,7 +90,7 @@ export function createConsole(state) {
   const modeTabs = MODE_REGISTRY.map((mode, index) => {
     const tab = document.createElement('button');
     tab.type = 'button';
-    tab.className = 'mode-tab console-row';
+    tab.className = isDock ? 'wide-mode-tab console-row' : 'mode-tab console-row';
     tab.textContent = mode.label;
     tab.id = `console-tab-${mode.id}`;
     tab.setAttribute('role', 'tab');
@@ -86,6 +101,7 @@ export function createConsole(state) {
       const wasActive = currentMode === mode.id;
       const wasExpanded = expanded;
       if (!setMode(mode.id, { source: 'touch' })) return;
+      if (isDock) return;
       if (wasActive && wasExpanded) collapse();
       else expand();
     });
@@ -93,7 +109,7 @@ export function createConsole(state) {
   });
 
   function createModeContext() {
-    return { ...state, bus, refresh: renderCurrentMode, expanded, console: api };
+    return { ...state, bus, refresh: renderCurrentMode, expanded, layout, console: api };
   }
 
   function setNotice(text) {
@@ -105,7 +121,7 @@ export function createConsole(state) {
     container.dataset.mode = currentMode;
     container.setAttribute('aria-expanded', String(expanded));
     contentArea.setAttribute('aria-hidden', String(!expanded));
-    dimLayer.hidden = !expanded;
+    if (dimLayer) dimLayer.hidden = !expanded;
     for (const { tab, mode } of modeTabs) {
       const active = mode.id === currentMode;
       const available = mode.available(state);
@@ -116,6 +132,10 @@ export function createConsole(state) {
       tab.setAttribute('aria-expanded', String(active && expanded));
       tab.setAttribute('aria-disabled', String(!available));
       tab.title = available ? `${mode.label} · ${mode.key.replace('mode_', 'Key ')}` : mode.reason;
+    }
+    if (contentHeaderLabel) {
+      const mode = modeById(currentMode);
+      contentHeaderLabel.textContent = `◈ ${mode.label} MODE`;
     }
   }
 
@@ -157,8 +177,10 @@ export function createConsole(state) {
   function expand() {
     if (expanded) return;
     expanded = true;
-    container.classList.remove('collapsed');
-    container.classList.add('expanded');
+    if (!isDock) {
+      container.classList.remove('collapsed');
+      container.classList.add('expanded');
+    }
     updateTabs();
     contentArea.focus?.({ preventScroll: true });
     bus.dispatch('ui:console-expand');
@@ -167,7 +189,7 @@ export function createConsole(state) {
   }
 
   function collapse() {
-    if (!expanded) return;
+    if (isDock || !expanded) return;
     expanded = false;
     container.classList.remove('expanded');
     container.classList.add('collapsed');
@@ -183,6 +205,7 @@ export function createConsole(state) {
       const wasActive = currentMode === focusedTab;
       const wasExpanded = expanded;
       if (!setMode(focusedTab, { source: details.source || 'keyboard' })) return false;
+      if (isDock) return true;
       if (wasActive && wasExpanded) collapse();
       else expand();
       return true;
@@ -199,7 +222,15 @@ export function createConsole(state) {
         if (entry.available(state)) return setMode(entry.id, { source: details.source || 'keyboard' });
       }
     }
-    if (normalized === 'cancel') { collapse(); return true; }
+    if (normalized === 'cancel') {
+      if (isDock) {
+        const mode = modeById(currentMode);
+        const handled = mode.module.handleInput?.({ action: normalized }, createModeContext());
+        return handled != null ? true : true;
+      }
+      collapse();
+      return true;
+    }
     const mode = modeById(currentMode);
     const handled = mode.module.handleInput?.({ action: normalized }, createModeContext());
     if (handled == null) bus.dispatch('console:intent', { mode: mode.id, action: normalized, source: details.source || 'keyboard' });
@@ -216,7 +247,12 @@ export function createConsole(state) {
   function render() {
     if (rendered) return container;
     for (const { tab } of modeTabs) tabBar.appendChild(tab);
-    container.append(dimLayer, tabBar, contentArea, notice);
+    if (isDock) {
+      contentShell.append(contentHeader, contentArea, notice);
+      container.append(tabBar, contentShell);
+    } else {
+      container.append(dimLayer, tabBar, contentArea, notice);
+    }
     rendered = true;
     updateTabs();
     renderCurrentMode();
@@ -236,6 +272,6 @@ export function createConsole(state) {
     rendered = false;
   }
 
-  const api = { setMode, expand, collapse, refresh, render, destroy, container, get currentMode() { return currentMode; }, get expanded() { return expanded; }, getRegistry() { return MODE_REGISTRY; } };
+  const api = { setMode, expand, collapse, refresh, render, destroy, container, variant, get currentMode() { return currentMode; }, get expanded() { return expanded; }, getRegistry() { return MODE_REGISTRY; } };
   return api;
 }
