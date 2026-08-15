@@ -132,6 +132,11 @@ function allText(root) {
   return [root.textContent, ...(root.children || []).flatMap((child) => allText(child))].filter(Boolean);
 }
 
+function installMatchMedia(match) {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.matchMedia = () => ({ matches: Boolean(match), addEventListener() {}, removeEventListener() {} });
+}
+
 let storage;
 
 beforeEach(() => {
@@ -142,6 +147,7 @@ beforeEach(() => {
 afterEach(() => {
   storage.uninstall();
   delete globalThis.document;
+  delete globalThis.window;
   vi.restoreAllMocks();
 });
 
@@ -201,6 +207,28 @@ describe('title screen', () => {
     expect(byTestId(container, 'tutorial-offer')).toBeNull();
     expect(byTestId(container, 'title-offer-tutorial')).toBeNull();
     expect(byTestId(container, 'title-tutorial')).toBeTruthy();
+  });
+
+  it('renders the wide-layout title composition with a data-wide-root and toggling branch list', async () => {
+    installMatchMedia(true);
+    const { mount } = await import('../../src/ui/screens/title.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const screen = container.children[0];
+    expect(screen.classList.contains('wide-title-screen')).toBe(true);
+    expect(screen.dataset.wideRoot).toBe('');
+
+    const branches = byTestId(container, 'title-branches');
+    expect(branches.classList.contains('wide-title-branches')).toBe(true);
+    expect(branches.classList.contains('hidden-branches')).toBe(true);
+
+    const secondary = byTestId(container, 'title-secondary-branches');
+    expect(secondary.classList.contains('branch-row')).toBe(true);
+    expect(secondary.children).toHaveLength(2);
+
+    await byTestId(container, 'title-start').click();
+    expect(branches.classList.contains('hidden-branches')).toBe(false);
   });
 });
 
@@ -294,5 +322,21 @@ describe('settings screen', () => {
 
     offSettings();
     offNavigate();
+  });
+
+  it('renders the wide-layout settings composition with two settings columns and a wide root', async () => {
+    installMatchMedia(true);
+    const { mount } = await import('../../src/ui/screens/settings.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const screen = container.children[0];
+    expect(screen.classList.contains('wide-settings-shell')).toBe(true);
+    expect(screen.dataset.wideRoot).toBe('');
+
+    expect(byTestId(container, 'settings-audio-column').classList.contains('wide-settings-column')).toBe(true);
+    expect(byTestId(container, 'settings-visual-column').classList.contains('wide-settings-column')).toBe(true);
+    expect(byTestId(container, 'settings-master-mute').parentNode.classList.contains('panel')).toBe(true);
+    expect(byTestId(container, 'settings-glitch').parentNode.classList.contains('panel')).toBe(true);
   });
 });

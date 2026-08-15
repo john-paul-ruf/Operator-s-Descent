@@ -1,6 +1,7 @@
 import { bus } from '../../state/bus.js';
 import { createButton } from '../components.js';
 import { createInputHandler } from '../input.js';
+import { currentLayoutClass } from '../layout.js';
 
 const BRANCHES = [
   ['◈ BEGIN NEW RUN', 'creation', 'title-begin-new-run'],
@@ -17,12 +18,7 @@ function navigate(screen, params = {}) {
   bus.dispatch('ui:navigate', { screen, params });
 }
 
-export function mount(container) {
-  const cleanups = [];
-  const inputHandler = createInputHandler();
-  inputHandler.bindToElement(container);
-  cleanups.push(() => inputHandler.destroy());
-
+function mountPortrait(container, cleanups) {
   const screen = document.createElement('section');
   screen.className = 'title-screen';
   screen.setAttribute('aria-label', 'Title screen');
@@ -127,6 +123,112 @@ export function mount(container) {
   screen.appendChild(footer);
 
   container.replaceChildren(screen);
+}
+
+function mountWide(container, cleanups) {
+  const screen = document.createElement('section');
+  screen.className = 'wide-title-screen';
+  screen.dataset.wideRoot = '';
+  screen.setAttribute('aria-label', 'Title screen');
+
+  const header = document.createElement('div');
+  header.className = 'wide-title-header caption glow';
+  header.textContent = 'GLITCH FORGEWORKS';
+  header.dataset.testid = 'title-header';
+
+  const body = document.createElement('div');
+  body.className = 'wide-title-body';
+
+  const lockup = document.createElement('div');
+  lockup.className = 'wide-title-lockup';
+
+  const ornamentTop = document.createElement('div');
+  ornamentTop.className = 'wide-title-ornament';
+
+  const titleTop = document.createElement('h1');
+  titleTop.className = 'wide-title-word glow-strong title-glitch';
+  titleTop.textContent = "OPERATOR'S";
+  titleTop.setAttribute('data-text', "OPERATOR'S");
+  titleTop.setAttribute('data-glitch', '');
+  titleTop.dataset.glitchIntensity = '0.10';
+
+  const titleBottom = document.createElement('h1');
+  titleBottom.className = 'wide-title-word glow-strong title-glitch';
+  titleBottom.textContent = 'DESCENT';
+  titleBottom.setAttribute('data-text', 'DESCENT');
+  titleBottom.setAttribute('data-glitch', '');
+  titleBottom.dataset.glitchIntensity = '0.10';
+
+  const ornamentBottom = document.createElement('div');
+  ornamentBottom.className = 'wide-title-ornament';
+
+  const tagline = document.createElement('p');
+  tagline.className = 'wide-title-tagline';
+  tagline.textContent = 'DEPTH IS THE SCORE';
+  tagline.dataset.testid = 'title-tagline';
+
+  lockup.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline);
+
+  const startButton = createButton('START', {
+    onClick: () => branchList.classList.toggle('hidden-branches')
+  });
+  startButton.classList.add('btn-start', 'glow-border-strong');
+  startButton.dataset.testid = 'title-start';
+  cleanups.push(() => startButton.cleanup?.());
+
+  const branchList = document.createElement('div');
+  branchList.className = 'wide-title-branches branch-list hidden-branches';
+  branchList.id = 'title-branches';
+  branchList.dataset.testid = 'title-branches';
+
+  for (const [label, route, testid] of BRANCHES) {
+    const button = createButton(label, { onClick: () => navigate(route) });
+    button.classList.add('btn-crt');
+    button.dataset.testid = testid;
+    cleanups.push(() => button.cleanup?.());
+    branchList.appendChild(button);
+  }
+
+  const branchRow = document.createElement('div');
+  branchRow.className = 'branch-row';
+  branchRow.dataset.testid = 'title-secondary-branches';
+  for (const [label, route, testid] of SECONDARY_BRANCHES) {
+    const button = createButton(label, { onClick: () => navigate(route) });
+    button.classList.add('btn-crt');
+    button.dataset.testid = testid;
+    cleanups.push(() => button.cleanup?.());
+    branchRow.appendChild(button);
+  }
+  branchList.appendChild(branchRow);
+
+  body.append(lockup, startButton, branchList);
+
+  const notice = document.createElement('p');
+  notice.className = 'console-note';
+  notice.setAttribute('aria-live', 'polite');
+  notice.dataset.testid = 'title-notice';
+
+  const footer = document.createElement('footer');
+  footer.className = 'wide-title-footer';
+  footer.dataset.testid = 'title-footer';
+  const footerVersion = document.createElement('p');
+  footerVersion.textContent = 'v1.0 · BUILD · OFFLINE READY';
+  const footerPrompt = document.createElement('p');
+  footerPrompt.textContent = 'PRESS START TO POWER ON';
+  footer.append(footerVersion, footerPrompt);
+
+  screen.append(header, body, notice, footer);
+  container.replaceChildren(screen);
+}
+
+export function mount(container) {
+  const cleanups = [];
+  const inputHandler = createInputHandler();
+  inputHandler.bindToElement(container);
+  cleanups.push(() => inputHandler.destroy());
+
+  if (currentLayoutClass() === 'wide') mountWide(container, cleanups);
+  else mountPortrait(container, cleanups);
 
   return {
     unmount() {

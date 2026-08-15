@@ -2,6 +2,7 @@ import { assignLocalRunKey, saveRun } from '../../state/library.js';
 import { decodeRun, decodeSeed } from '../../state/save-decode.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel, createScreenBody } from '../components.js';
+import { currentLayoutClass } from '../layout.js';
 
 const MAX_IMPORT_TEXT_LENGTH = 2048;
 const MAX_FRAGMENT_LENGTH = 1500;
@@ -69,13 +70,15 @@ function navigate(screen, params = {}) {
 
 export function mount(container, params = {}) {
   const cleanups = [];
+  const isWide = currentLayoutClass() === 'wide';
 
   const screen = document.createElement('section');
-  screen.className = 'screen-container';
+  screen.className = isWide ? 'screen-container wide-import-shell' : 'screen-container';
+  if (isWide) screen.dataset.wideRoot = '';
   screen.setAttribute('aria-label', 'Import link');
 
   const header = document.createElement('header');
-  header.className = 'panel-elevated s-3';
+  header.className = isWide ? 'panel-elevated wide-import-header' : 'panel-elevated s-3';
   header.style.textAlign = 'center';
   const eyebrow = document.createElement('div');
   eyebrow.className = 'micro';
@@ -87,7 +90,14 @@ export function mount(container, params = {}) {
   heading.textContent = 'RESUME FROM URL';
   header.append(eyebrow, heading);
 
-  const body = createScreenBody({ className: 's-4' });
+  const body = createScreenBody({ className: isWide ? 'wide-import-stage' : 's-4' });
+  const column = isWide ? document.createElement('div') : body;
+  if (isWide) {
+    column.className = 'wide-import-column';
+    column.dataset.testid = 'import-column';
+    body.appendChild(column);
+  }
+
   const instructions = document.createElement('p');
   instructions.className = 'caption';
   instructions.textContent = 'Paste a run link to resume on this device. Full run state remains under 1500 characters.';
@@ -100,7 +110,7 @@ export function mount(container, params = {}) {
   input.dataset.testid = 'import-input';
 
   const resultArea = document.createElement('div');
-  resultArea.className = 'import-result';
+  resultArea.className = isWide ? 'import-result wide-import-state' : 'import-result';
   resultArea.setAttribute('aria-live', 'polite');
   resultArea.dataset.testid = 'import-result';
 
@@ -123,6 +133,7 @@ export function mount(container, params = {}) {
 
     const panel = createPanel({ title });
     panel.classList.add('error');
+    if (isWide) panel.classList.add('wide-import-state');
     panel.dataset.testid = `import-failure-${code}`;
     const message = document.createElement('p');
     message.textContent = body;
@@ -151,6 +162,7 @@ export function mount(container, params = {}) {
   function showRunSummary(runState) {
     resultArea.replaceChildren();
     const panel = createPanel({ title: 'RUN DECODED' });
+    if (isWide) panel.classList.add('wide-import-state');
     panel.dataset.testid = 'import-run-summary';
     const info = document.createElement('p');
     info.textContent = `SEED ${runState.worldSeed} · DEPTH ${runState.depth} · ${runState.party.length} MEMBERS${runState.activeCombat ? ' · ACTIVE COMBAT SNAPSHOT' : ''}`;
@@ -230,14 +242,14 @@ export function mount(container, params = {}) {
   actions.appendChild(importButton);
 
   const footer = document.createElement('footer');
-  footer.className = 'panel s-3';
+  footer.className = isWide ? 'panel wide-import-footer' : 'panel s-3';
   const titleButton = track(createButton('RETURN TO TITLE', {
     onClick: () => navigate('title')
   }));
   titleButton.dataset.testid = 'import-return-title';
   footer.appendChild(titleButton);
 
-  body.append(instructions, input, actions, resultArea, guide);
+  column.append(instructions, input, actions, resultArea, guide);
   screen.append(header, body, footer);
   container.replaceChildren(screen);
 

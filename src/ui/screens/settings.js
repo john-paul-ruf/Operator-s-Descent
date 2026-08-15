@@ -1,6 +1,7 @@
 import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel, createScreenBody, createSlider, createToggle } from '../components.js';
+import { currentLayoutClass } from '../layout.js';
 
 const LAYERS = [
   ['drone', 'DRONE'],
@@ -24,15 +25,17 @@ export function mount(container, params = {}) {
   let settings = loadSettings();
   const cleanups = [];
   const motionButtons = new Map();
+  const isWide = currentLayoutClass() === 'wide';
 
   const screen = document.createElement('section');
-  screen.className = 'settings-screen screen-container';
+  screen.className = isWide ? 'settings-screen wide-settings-shell' : 'settings-screen screen-container';
+  if (isWide) screen.dataset.wideRoot = '';
   screen.style.padding = '0';
   screen.style.gap = '0';
   screen.setAttribute('aria-label', 'Settings');
 
   const header = document.createElement('header');
-  header.className = 'panel-elevated s-3';
+  header.className = isWide ? 'panel-elevated wide-settings-header' : 'panel-elevated s-3';
   header.style.textAlign = 'center';
   const eyebrow = document.createElement('div');
   eyebrow.className = 'micro';
@@ -44,7 +47,9 @@ export function mount(container, params = {}) {
   heading.textContent = 'CONFIGURE TERMINAL';
   header.append(eyebrow, heading);
 
-  const body = createScreenBody({ className: 's-4' });
+  const body = isWide
+    ? Object.assign(document.createElement('div'), { className: 'wide-settings-body' })
+    : createScreenBody({ className: 's-4' });
 
   const status = document.createElement('p');
   status.className = 'console-note';
@@ -169,10 +174,23 @@ export function mount(container, params = {}) {
   cleanups.push(() => back.cleanup?.());
 
   const footer = document.createElement('footer');
-  footer.className = 'panel s-3';
+  footer.className = isWide ? 'panel wide-settings-footer' : 'panel s-3';
   footer.appendChild(back);
 
-  body.append(status, audioTitle, audioPanel, visualTitle, visualPanel);
+  if (isWide) {
+    const audioColumn = document.createElement('div');
+    audioColumn.className = 'wide-settings-column';
+    audioColumn.dataset.testid = 'settings-audio-column';
+    audioColumn.append(status, audioTitle, audioPanel);
+    const visualColumn = document.createElement('div');
+    visualColumn.className = 'wide-settings-column';
+    visualColumn.dataset.testid = 'settings-visual-column';
+    visualColumn.append(visualTitle, visualPanel);
+    body.append(audioColumn, visualColumn);
+  } else {
+    body.append(status, audioTitle, audioPanel, visualTitle, visualPanel);
+  }
+
   screen.append(header, body, footer);
   container.replaceChildren(screen);
   updateMotionButtons();
