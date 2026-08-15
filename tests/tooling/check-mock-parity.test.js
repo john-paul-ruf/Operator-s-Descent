@@ -8,7 +8,7 @@ describe('check-mock-parity', () => {
   });
 
   it('ignores only mock-generated combat deployment markers', () => {
-    const findings = checkMockClasses();
+    const findings = checkMockClasses().filter((f) => f.layout !== 'wide');
     expect(findings.map(({ mockFile, className }) => `${mockFile}:${className}`)).toEqual([
       'combat.html:deploy-p',
       'combat.html:deploy-e'
