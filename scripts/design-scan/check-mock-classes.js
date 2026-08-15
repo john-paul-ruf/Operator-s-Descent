@@ -1,8 +1,8 @@
 import { readText, parseClassSelectors } from './lib.js';
 import { extractAllMocksAcrossLayouts } from './extract-mocks.js';
 
-const PRODUCTION_CSS_FILES = ['styles/base.css', 'styles/components.css', 'styles/crt.css'];
-const WIDE_ONLY_PREFIX = 'wide-';
+const PRODUCTION_CSS_FILES = ['styles/base.css', 'styles/components.css', 'styles/crt.css', 'styles/wide.css'];
+const MOCK_GENERATED_MARKERS = new Set(['deploy-p', 'deploy-e']);
 
 function productionClassSet() {
   const classes = new Set();
@@ -17,12 +17,12 @@ export function checkMockClasses() {
   const findings = [];
   for (const mock of extractAllMocksAcrossLayouts()) {
     const isWide = mock.layout === 'wide';
+    const mockPath = isWide ? `mocks/wide/${mock.file}` : mock.file;
+    const layoutPrefix = isWide ? '[wide] ' : '';
     for (const cls of mock.classes) {
-      if (isWide && cls.startsWith(WIDE_ONLY_PREFIX)) continue;
       if (produced.has(cls)) continue;
-      const label = isWide ? '[wide — unimplemented] ' : '';
-      const mockPath = isWide ? `mocks/wide/${mock.file}` : mock.file;
-      findings.push({ level: 'warning', category: 'mock-class-parity', layout: mock.layout, mockFile: mock.file, className: cls, message: `${label}.${cls} appears in ${mockPath} but is not defined in styles/base.css, styles/components.css, or styles/crt.css` });
+      const level = MOCK_GENERATED_MARKERS.has(cls) ? 'warning' : 'error';
+      findings.push({ level, category: 'mock-class-parity', layout: mock.layout, mockFile: mock.file, className: cls, message: `${layoutPrefix}.${cls} appears in ${mockPath} but is not defined in styles/base.css, styles/components.css, styles/crt.css, or styles/wide.css` });
     }
   }
   return findings;
