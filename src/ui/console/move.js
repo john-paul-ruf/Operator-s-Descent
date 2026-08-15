@@ -92,12 +92,32 @@ export function render(container, context = {}) {
   toggleRow.appendChild(damageToggle);
   root.appendChild(toggleRow);
 
+  if (context.layout === 'wide') {
+    root.appendChild(autoStopRow('Auto-Stop on hostile detect', true, true, 'autostop-hostile'));
+    root.appendChild(autoStopRow('Auto-Stop on container in view', toggles.discovery !== false, false, 'autostop-discovery'));
+    root.appendChild(autoStopRow('Auto-Stop on damage taken', toggles.damage !== false, false, 'autostop-damage'));
+  }
+
   const notice = text('console-notice', context.notice || noticeFor(context.lastMoveResult, context.canDescend?.()));
   notice.dataset.testid = 'move-notice';
   root.appendChild(notice);
 
   container.appendChild(root);
   return () => cleanups.forEach((cleanup) => cleanup?.());
+}
+
+function autoStopRow(label, on, locked, testid) {
+  const row = document.createElement('div');
+  row.className = 'autostop-row';
+  row.dataset.testid = testid;
+  const labelEl = document.createElement('span');
+  labelEl.className = 'autostop-label';
+  labelEl.textContent = locked ? `${label} (locked)` : label;
+  const pill = document.createElement('span');
+  pill.className = on ? 'autostop-pill' : 'autostop-pill off';
+  pill.textContent = on ? 'ON' : 'OFF';
+  row.append(labelEl, pill);
+  return row;
 }
 
 export function handleInput(event, context = {}) {

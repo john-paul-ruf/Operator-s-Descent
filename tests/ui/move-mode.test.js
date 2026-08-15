@@ -149,6 +149,35 @@ describe('MOVE mode', () => {
 
       expect(textOf(byTestId(container, 'move-notice'))).toBe('MOVED TO 5:9.');
     });
+
+    it('portrait layout omits the wide autostop-row block entirely', () => {
+      const container = new FakeElement('div');
+      renderMove(container, { autoStopToggles: { discovery: true, damage: true } });
+
+      expect(byTestId(container, 'autostop-hostile')).toBe(null);
+      expect(collect(container, (el) => el.className?.split?.(/\s+/).includes('autostop-row'))).toHaveLength(0);
+    });
+
+    it('wide layout appends three autostop-row entries with the correct pill state', () => {
+      const container = new FakeElement('div');
+      renderMove(container, { layout: 'wide', autoStopToggles: { discovery: false, damage: true } });
+
+      const hostile = byTestId(container, 'autostop-hostile');
+      const discovery = byTestId(container, 'autostop-discovery');
+      const damage = byTestId(container, 'autostop-damage');
+      expect(hostile).toBeTruthy();
+      expect(discovery).toBeTruthy();
+      expect(damage).toBeTruthy();
+      expect(hostile.className).toContain('autostop-row');
+      const hostilePill = collect(hostile, (el) => el.className?.split?.(/\s+/).includes('autostop-pill'))[0];
+      const discoveryPill = collect(discovery, (el) => el.className?.split?.(/\s+/).includes('autostop-pill'))[0];
+      const damagePill = collect(damage, (el) => el.className?.split?.(/\s+/).includes('autostop-pill'))[0];
+      expect(hostilePill.textContent).toBe('ON');
+      expect(discoveryPill.textContent).toBe('OFF');
+      expect(discoveryPill.className.split(/\s+/)).toContain('off');
+      expect(damagePill.textContent).toBe('ON');
+      expect(damagePill.className.split(/\s+/)).not.toContain('off');
+    });
   });
 
   describe('handleInput()', () => {

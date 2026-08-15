@@ -1,7 +1,8 @@
-import { createStatusBar } from '../status-strip.js';
+import { createStatusBar, createTelemetryDock } from '../status-strip.js';
 import { createPlayfield } from '../playfield.js';
 import { createConsole } from '../console/console.js';
 import { createInputHandler } from '../input.js';
+import { currentLayoutClass } from '../layout.js';
 import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
@@ -49,26 +50,64 @@ export function mount(container, params = {}) {
   container.style.position = 'relative';
   container.style.overflow = 'hidden';
 
-  const statusBar = createStatusBar(runState);
-  statusBar.classList.add('panel', 'in-run-status');
-  statusBar.style.flex = '0 0 auto';
-  container.appendChild(statusBar);
+  const layout = currentLayoutClass();
+  const isWide = layout === 'wide';
 
-  const alertBanner = document.createElement('div');
-  alertBanner.className = 'alert-banner';
-  alertBanner.hidden = true;
-  alertBanner.textContent = '◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE';
-  alertBanner.dataset.testid = 'alert-banner';
-  container.appendChild(alertBanner);
+  let statusBar = null;
+  let telemetryDock = null;
+  let alertBanner;
+  let playfieldBody;
+  let widePlayfieldColumn = null;
 
-  const playfieldBody = document.createElement('div');
-  playfieldBody.className = 'exploration-playfield playfield-body';
-  playfieldBody.style.flex = '1 1 auto';
-  playfieldBody.style.minHeight = '0';
-  playfieldBody.style.marginBottom = '96px';
-  playfieldBody.style.overflow = 'hidden';
-  playfieldBody.style.position = 'relative';
-  container.appendChild(playfieldBody);
+  if (isWide) {
+    const shell = document.createElement('div');
+    shell.className = 'wide-shell';
+    shell.dataset.wideRoot = '';
+    shell.dataset.testid = 'wide-shell';
+
+    telemetryDock = createTelemetryDock(runState);
+    shell.appendChild(telemetryDock);
+
+    widePlayfieldColumn = document.createElement('section');
+    widePlayfieldColumn.className = 'wide-playfield-column';
+
+    alertBanner = document.createElement('div');
+    alertBanner.className = 'alert-banner playfield-alert-banner';
+    alertBanner.hidden = true;
+    alertBanner.textContent = '◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE';
+    alertBanner.dataset.testid = 'alert-banner';
+    widePlayfieldColumn.appendChild(alertBanner);
+
+    playfieldBody = document.createElement('div');
+    playfieldBody.className = 'exploration-playfield playfield-body wide-playfield-inner';
+    playfieldBody.style.overflow = 'hidden';
+    playfieldBody.style.position = 'relative';
+    widePlayfieldColumn.appendChild(playfieldBody);
+
+    shell.appendChild(widePlayfieldColumn);
+    container.appendChild(shell);
+  } else {
+    statusBar = createStatusBar(runState);
+    statusBar.classList.add('panel', 'in-run-status');
+    statusBar.style.flex = '0 0 auto';
+    container.appendChild(statusBar);
+
+    alertBanner = document.createElement('div');
+    alertBanner.className = 'alert-banner';
+    alertBanner.hidden = true;
+    alertBanner.textContent = '◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE';
+    alertBanner.dataset.testid = 'alert-banner';
+    container.appendChild(alertBanner);
+
+    playfieldBody = document.createElement('div');
+    playfieldBody.className = 'exploration-playfield playfield-body';
+    playfieldBody.style.flex = '1 1 auto';
+    playfieldBody.style.minHeight = '0';
+    playfieldBody.style.marginBottom = '96px';
+    playfieldBody.style.overflow = 'hidden';
+    playfieldBody.style.position = 'relative';
+    container.appendChild(playfieldBody);
+  }
 
   const canvas = document.createElement('canvas');
   canvas.className = 'playfield-canvas lattice-canvas';
@@ -110,8 +149,12 @@ export function mount(container, params = {}) {
     }
   };
 
-  const consoleController = createConsole(viewState);
-  container.appendChild(consoleController.render());
+  const consoleController = createConsole(viewState, { variant: isWide ? 'dock' : 'bar' });
+  if (isWide) {
+    container.firstChild.appendChild(consoleController.render());
+  } else {
+    container.appendChild(consoleController.render());
+  }
 
   const theme = themeFor(floor, data);
   playfield.setAccent(theme?.accentColor || '#7ec8e3');
@@ -228,7 +271,8 @@ export function mount(container, params = {}) {
       if (unmounted) return;
       unmounted = true;
       for (const unsubscribe of unsubscribers) unsubscribe();
-      statusBar.cleanup?.();
+      statusBar?.cleanup?.();
+      telemetryDock?.cleanup?.();
       consoleController.destroy();
       inputHandler.destroy();
     }

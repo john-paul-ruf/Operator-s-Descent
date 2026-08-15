@@ -78,6 +78,11 @@ function installDocument() {
   };
 }
 
+function installMatchMedia(match) {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.matchMedia = () => ({ matches: Boolean(match), addEventListener() {}, removeEventListener() {} });
+}
+
 function byTestId(root, testid) {
   if (root.dataset?.testid === testid) return root;
   for (const child of root.children || []) {
@@ -138,8 +143,8 @@ async function mountExploration(setup = {}) {
   return { container, controller, runState: state };
 }
 
-beforeEach(installDocument);
-afterEach(() => { delete globalThis.document; });
+beforeEach(() => { installDocument(); installMatchMedia(false); });
+afterEach(() => { delete globalThis.document; delete globalThis.window; });
 
 describe('exploration screen controller', () => {
   it('composes the pinned status alert playfield and console shell in mock order', async () => {
@@ -239,5 +244,26 @@ describe('exploration screen controller', () => {
     container.dispatch('keydown', keyEvent('ArrowRight'));
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
+  it('renders the three-region wide shell with telemetry, playfield column, and dock', async () => {
+    installMatchMedia(true);
+    const { container } = await mountExploration();
+    const shell = byTestId(container, 'wide-shell');
+
+    expect(shell).not.toBe(null);
+    expect(shell.className).toContain('wide-shell');
+    expect(shell.dataset.wideRoot).toBe('');
+    expect(shell.children.map((child) => child.className.split(/\s+/)[0])).toEqual([
+      'wide-telemetry-dock', 'wide-playfield-column', 'wide-console-dock'
+    ]);
+    const alert = byTestId(container, 'alert-banner');
+    expect(alert).not.toBe(null);
+    expect(alert.className.split(/\s+/)).toContain('playfield-alert-banner');
+    expect(byTestId(container, 'exploration-canvas')).not.toBe(null);
+    expect(byTestId(container, 'telemetry-dock')).not.toBe(null);
+    expect(byTestId(container, 'console-tab-move').getAttribute('aria-selected')).toBe('true');
+    expect(byTestId(container, 'console-tab-combat').disabled).toBe(true);
+    expect(byClass(container, 'console-dim-layer')).toBe(null);
   });
 });
