@@ -10,6 +10,7 @@ import { initEncoder } from './state/save-encode.js';
 import { createRNGCursorForRun } from './core/rng-cursor.js';
 import { generateFloor } from './floor/generator.js';
 import { beginFloorTransition, completeFloorTransition } from './rules/progression.js';
+import { initLayoutController } from './ui/layout.js';
 
 export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
 export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'import-resume', 'explicit-exit']);
@@ -23,6 +24,7 @@ const DEFAULT_ATTRIBUTES = { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 };
 let currentScreenController = null;
 let currentScreenContainer = null;
 let currentRoute = null;
+let currentRouteParams = {};
 let audioEngine = null;
 let glitchSystem = null;
 let grainController = null;
@@ -37,6 +39,7 @@ let pendingDeathEchoes = [];
 let mountSequence = 0;
 let gestureAudioContext = null;
 let busUnsubscribers = [];
+let layoutControllerCleanup = null;
 let runtimeActive = false;
 let serviceWorkerStarted = false;
 let serviceWorkerReloadPending = false;
@@ -159,6 +162,7 @@ export async function mountScreen(name, params = {}) {
 
     currentScreenController = controller;
     currentRoute = name;
+    currentRouteParams = params;
     registerGlitchElements(container);
     bus.dispatch('runtime:route', { screen: name, params });
     return true;
@@ -495,6 +499,10 @@ function setupBus() {
 
   listen('ui:navigate', (payload) => { void handleNavigation(payload); });
 
+  listen('ui:layout-change', () => {
+    if (currentRoute) void mountScreen(currentRoute, currentRouteParams);
+  });
+
   listen('ui:audio-start', () => {
     startAudioEngine(loadSettings());
   });
@@ -643,6 +651,8 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
     getCrtOverlaysController()?.setEnabled(false);
   }
 
+  layoutControllerCleanup?.();
+  layoutControllerCleanup = initLayoutController({ bus });
   setupBus();
 
   const hash = typeof initialHash === 'string' ? initialHash : '';
@@ -706,6 +716,8 @@ export function shutdownRuntime() {
   mountSequence += 1;
   for (const unsubscribe of busUnsubscribers) unsubscribe();
   busUnsubscribers = [];
+  layoutControllerCleanup?.();
+  layoutControllerCleanup = null;
   currentScreenController?.unmount?.();
   currentScreenController = null;
   if (currentScreenContainer) {
@@ -728,6 +740,7 @@ export function shutdownRuntime() {
   currentRunState = null;
   setCurrentFloor(null, null);
   currentRoute = null;
+  currentRouteParams = {};
   runtimeLogEntries = [];
   pendingDeathEchoes = [];
   runtimeSettings = null;
