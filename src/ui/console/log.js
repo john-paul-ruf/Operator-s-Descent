@@ -35,6 +35,26 @@ function collectLogs(context = {}) {
     .slice(-64);
 }
 
+export function createLogEntryElement(entry, index) {
+  const el = document.createElement('div');
+  el.className = `log-entry log-${entry.type || 'info'} console-row`;
+  el.dataset.testid = `log-entry-${index}`;
+  const order = entry.sequence ?? entry.turn ?? entry.eventIndex ?? index + 1;
+  const stamp = document.createElement('span');
+  stamp.className = 'log-turn';
+  stamp.textContent = `[${entry.turn != null ? 'T' : 'E'}:${String(order).padStart(3, '0')}]`;
+  const message = document.createElement('span');
+  message.className = `log-${entry.type || 'info'}`;
+  message.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
+  message.textContent = `${String(entry.type || 'info').toUpperCase()} · ${entry.message || entry.summary || entry.reason || JSON.stringify(entry.entry || entry)}`;
+  el.append(stamp, message);
+  return el;
+}
+
+export function collectLogEntries(context = {}) {
+  return collectLogs(context);
+}
+
 function baseUrl() {
   const location = globalThis.window?.location || globalThis.location;
   if (!location) return '';
@@ -107,22 +127,7 @@ export function render(container, context = {}) {
   logArea.dataset.testid = 'log-area';
 
   if (!logs.length) logArea.appendChild(Object.assign(document.createElement('div'), { className: 'log-empty console-row', textContent: 'No events logged.' }));
-  for (let index = 0; index < logs.length; index++) {
-    const entry = logs[index];
-    const el = document.createElement('div');
-    el.className = `log-entry log-${entry.type || 'info'} console-row`;
-    el.dataset.testid = `log-entry-${index}`;
-    const order = entry.sequence ?? entry.turn ?? entry.eventIndex ?? index + 1;
-    const stamp = document.createElement('span');
-    stamp.className = 'log-turn';
-    stamp.textContent = `[${entry.turn != null ? 'T' : 'E'}:${String(order).padStart(3, '0')}]`;
-    const message = document.createElement('span');
-    message.className = `log-${entry.type || 'info'}`;
-    message.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
-    message.textContent = `${String(entry.type || 'info').toUpperCase()} · ${entry.message || entry.summary || entry.reason || JSON.stringify(entry.entry || entry)}`;
-    el.append(stamp, message);
-    logArea.appendChild(el);
-  }
+  for (let index = 0; index < logs.length; index++) logArea.appendChild(createLogEntryElement(logs[index], index));
   container.appendChild(logArea);
 
   const share = document.createElement('div');

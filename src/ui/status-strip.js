@@ -1,5 +1,6 @@
 import { bus } from '../state/bus.js';
 import { createSigilToken, createHPBar, createChargeBar } from './components.js';
+import { createLogEntryElement, collectLogEntries } from './console/log.js';
 
 function actorList(combatState) {
   return combatState?.combatants instanceof Map
@@ -162,4 +163,188 @@ function renderCombatStatus(strip, runState, combatState) {
   activeGroup.appendChild(chargeBar);
   appendText(activeGroup, 'status-ap', `AP ${active.ap ?? 0}`, `Action points ${active.ap ?? 0}`);
   appendText(activeGroup, 'status-move', active.moveAvailable ? '1 MV' : '0 MV', active.moveAvailable ? 'Move available' : 'Move spent');
+}
+
+function appendDockField(header, label, valueBuilder) {
+  const row = document.createElement('div');
+  row.className = 'wide-telemetry-field';
+  const labelEl = document.createElement('span');
+  labelEl.className = 'wide-telemetry-label';
+  labelEl.textContent = label;
+  labelEl.setAttribute('aria-label', label);
+  const valueEl = valueBuilder();
+  valueEl.classList.add('wide-telemetry-value');
+  row.append(labelEl, valueEl);
+  header.appendChild(row);
+  return { row, valueEl };
+}
+
+function textSpan(className, text, ariaLabel = null) {
+  const el = document.createElement('span');
+  el.className = className;
+  el.textContent = text;
+  if (ariaLabel) el.setAttribute('aria-label', ariaLabel);
+  return el;
+}
+
+function renderPartySigils(runState) {
+  const wrap = document.createElement('span');
+  wrap.className = 'wide-telemetry-party';
+  wrap.style.display = 'flex';
+  wrap.style.gap = '6px';
+  wrap.style.alignItems = 'center';
+  for (const character of runState?.party || []) {
+    const role = roleOf(character);
+    const sigil = createSigilToken(sigilOf(character), 34, { role, label: `${role} sigil ${character.name || character.id || ''}`.trim() });
+    sigil.classList.add('wide-telemetry-party-sigil');
+    const hp = hpOf(character);
+    const bar = createHPBar(hp.current, hp.max);
+    bar.classList.add('wide-telemetry-party-hp');
+    wrap.append(sigil, bar);
+  }
+  return wrap;
+}
+
+function renderCombatDock(dock, runState, combatState) {
+  const actors = actorList(combatState);
+  const activeId = combatState.turnOrder?.[combatState.currentTurn];
+  const active = actors.find((actor) => actor.id === activeId) || null;
+
+  const initBlock = document.createElement('div');
+  initBlock.className = 'wide-init-block';
+  initBlock.dataset.testid = 'telemetry-init-block';
+  const initHeader = document.createElement('div');
+  initHeader.className = 'wide-init-header';
+  initHeader.textContent = '◈ INITIATIVE ORDER';
+  initBlock.appendChild(initHeader);
+  const rail = document.createElement('div');
+  rail.className = 'wide-init-rail init-rail';
+  rail.setAttribute('aria-label', 'Combat initiative rail');
+  const currentTurn = combatState.currentTurn || 0;
+  const turnOrder = combatState.turnOrder || [];
+  for (const [index, id] of turnOrder.entries()) {
+    const actor = actors.find((candidate) => candidate.id === id);
+    if (!actor) continue;
+    const slot = document.createElement('div');
+    const isActive = index === currentTurn;
+    const isSpent = index < currentTurn || (actor.hp ?? actor.currentHP ?? 1) <= 0;
+    slot.className = `init-slot${isActive ? ' active' : ''}${roleOf(actor) === 'enemy' ? ' enemy' : ''}${isSpent ? ' spent' : ''}`;
+    slot.dataset.testid = `telemetry-init-${id}`;
+    const sigil = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `${actor.name || actor.id} initiative ${index + 1}` });
+    sigil.classList.add('init-sigil');
+    slot.appendChild(sigil);
+    const order = document.createElement('span');
+    order.className = 'init-order';
+    order.textContent = `${index + 1} · ${actor.name || actor.id}`;
+    slot.appendChild(order);
+    rail.appendChild(slot);
+  }
+  initBlock.appendChild(rail);
+  dock.appendChild(initBlock);
+
+  if (!active) return;
+  const activeBlock = document.createElement('div');
+  activeBlock.className = 'wide-active-actor';
+  activeBlock.dataset.testid = 'telemetry-active-actor';
+  const header = document.createElement('div');
+  header.className = 'wide-active-header';
+  header.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${active.name || active.id}` }));
+  const nameEl = document.createElement('div');
+  nameEl.className = 'wide-active-name';
+  nameEl.textContent = `${(active.name || active.id || 'ACTIVE').toString().toUpperCase()} · ACTIVE`;
+  header.appendChild(nameEl);
+  const apEl = document.createElement('div');
+  apEl.className = 'wide-active-ap';
+  apEl.textContent = `${active.ap ?? 0} AP · ${active.moveAvailable ? '1 MV' : '0 MV'}`;
+  header.appendChild(apEl);
+  activeBlock.appendChild(header);
+
+  const hp = hpOf(active);
+  const hpRow = document.createElement('div');
+  hpRow.className = 'wide-active-bar-row';
+  hpRow.append(textSpan('wide-active-hp-label', 'HP'), createHPBar(hp.current, hp.max), textSpan('wide-active-hp-value', `${hp.current} / ${hp.max}`));
+  activeBlock.appendChild(hpRow);
+
+  const charge = chargeOf(active);
+  const chargeRow = document.createElement('div');
+  chargeRow.className = 'wide-active-bar-row';
+  chargeRow.append(textSpan('wide-active-charge-label accent-text', 'CHG'), createChargeBar(charge.current, charge.max), textSpan('wide-active-charge-value accent-text', `${charge.current} / ${charge.max}`));
+  activeBlock.appendChild(chargeRow);
+
+  const conds = document.createElement('div');
+  conds.className = 'wide-active-conds';
+  for (const condition of active.conditions || []) {
+    const tag = document.createElement('span');
+    const id = condition.id || condition.conditionId || String(condition);
+    tag.className = `condition-tag cond-${id}`;
+    tag.textContent = condition.duration != null ? `${id} (${condition.duration})` : id;
+    conds.appendChild(tag);
+  }
+  activeBlock.appendChild(conds);
+  dock.appendChild(activeBlock);
+}
+
+export function createTelemetryDock(runState, combatState = null) {
+  const dock = document.createElement('aside');
+  dock.className = 'wide-telemetry-dock';
+  dock.setAttribute('role', 'status');
+  dock.setAttribute('aria-live', 'polite');
+  dock.dataset.testid = 'telemetry-dock';
+  const cleanups = [];
+
+  const header = document.createElement('div');
+  header.className = 'wide-telemetry-header';
+  dock.appendChild(header);
+
+  appendDockField(header, 'Depth', () => textSpan('', String(runState?.depth ?? 0).padStart(2, '0'), `Depth ${runState?.depth ?? 0}`));
+  if (combatState) {
+    appendDockField(header, 'Round', () => textSpan('', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`));
+  }
+  appendDockField(header, 'Seed', () => textSpan('', truncatedSeed(runState?.worldSeed), `World seed ${runState?.worldSeed}`));
+  appendDockField(header, 'Party', () => renderPartySigils(runState));
+
+  const clockValue = String(Number(runState?.dangerClockProgress || 0).toFixed(2));
+  const clockField = appendDockField(header, 'Danger Clock', () => {
+    const el = textSpan('wide-telemetry-clock', clockValue, `Danger clock ${clockValue}`);
+    el.dataset.testid = 'telemetry-clock';
+    return el;
+  });
+  cleanups.push(bus.on('state:danger-clock-tick', (payload = {}) => {
+    const progress = Number(payload.progress ?? runState?.dangerClockProgress ?? 0).toFixed(2);
+    clockField.valueEl.textContent = progress;
+    clockField.valueEl.setAttribute('aria-label', `Danger clock ${progress}`);
+  }));
+
+  appendDockField(header, 'Corruption', () => textSpan('', Number(runState?.corruption || 0).toFixed(2), `Corruption ${Number(runState?.corruption || 0).toFixed(2)}`));
+
+  if (combatState) renderCombatDock(dock, runState, combatState);
+
+  const feed = document.createElement('div');
+  feed.className = 'wide-log-feed';
+  const feedHeader = document.createElement('div');
+  feedHeader.className = 'wide-log-feed-header';
+  feedHeader.textContent = `◈ Event Log — Floor ${String(runState?.depth || 1).padStart(2, '0')}`;
+  const scroll = document.createElement('div');
+  scroll.className = 'wide-log-feed-scroll scroll-area';
+  scroll.dataset.testid = 'telemetry-log-feed';
+  feed.append(feedHeader, scroll);
+  dock.appendChild(feed);
+
+  const localEntries = [];
+  function paint() {
+    while (scroll.firstChild) scroll.removeChild(scroll.firstChild);
+    const entries = collectLogEntries({ runState, logEntries: localEntries });
+    entries.forEach((entry, index) => scroll.appendChild(createLogEntryElement(entry, index)));
+    scroll.scrollTop = scroll.scrollHeight;
+  }
+  paint();
+  cleanups.push(bus.on('ui:log-entry', (entry) => {
+    if (!entry) return;
+    localEntries.push(entry);
+    if (localEntries.length > 128) localEntries.splice(0, localEntries.length - 128);
+    paint();
+  }));
+
+  dock.cleanup = () => cleanups.forEach((cleanup) => cleanup?.());
+  return dock;
 }

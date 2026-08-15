@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import { bus } from '../../src/state/bus.js';
-import { createStatusBar } from '../../src/ui/status-strip.js';
+import { createStatusBar, createTelemetryDock } from '../../src/ui/status-strip.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
-  add(...names) { for (const name of names) this.values.add(name); this.element.className = [...this.values].join(' '); }
+  add(...names) { for (const name of names) if (name) this.values.add(name); this.sync(); }
+  remove(...names) { for (const name of names) this.values.delete(name); this.sync(); }
+  toggle(name, force) { const next = force == null ? !this.values.has(name) : Boolean(force); if (next) this.values.add(name); else this.values.delete(name); this.sync(); return next; }
+  contains(name) { return this.values.has(name); }
+  sync() { this.element._className = [...this.values].join(' '); }
 }
 
 class FakeElement {
@@ -15,11 +19,17 @@ class FakeElement {
     this.dataset = {};
     this.style = {};
     this.classList = new FakeClassList(this);
-    this.className = '';
+    this._className = '';
     this.textContent = '';
+    this.scrollTop = 0;
+    this.scrollHeight = 0;
   }
+  set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
+  get className() { return this._className; }
+  get firstChild() { return this.children[0] || null; }
   appendChild(child) { this.children.push(child); return child; }
   append(...children) { for (const child of children) this.appendChild(child); }
+  removeChild(child) { this.children = this.children.filter((entry) => entry !== child); return child; }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
 }
@@ -36,6 +46,21 @@ function findByClass(root, className) {
   if (root.className.split(/\s+/).includes(className)) return root;
   for (const child of root.children) {
     const found = findByClass(child, className);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findAllByClass(root, className, matches = []) {
+  if (root.className.split(/\s+/).includes(className)) matches.push(root);
+  for (const child of root.children) findAllByClass(child, className, matches);
+  return matches;
+}
+
+function byTestId(root, testid) {
+  if (root.dataset?.testid === testid) return root;
+  for (const child of root.children || []) {
+    const found = byTestId(child, testid);
     if (found) return found;
   }
   return null;
@@ -86,5 +111,86 @@ describe('status strip', () => {
     expect(findByClass(strip, 'status-active-sigil')).not.toBe(null);
     expect(findByClass(strip, 'init-rail').children).toHaveLength(2);
     expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');
+  });
+});
+
+describe('telemetry dock (wide)', () => {
+  test('renders exploration fields, numeric clock accessible label, and no combat blocks', () => {
+    const runState = { depth: 7, worldSeed: 'A4F29C1E', corruption: 0.1, dangerClockProgress: 0.32, party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 8, maxHP: 10 }] };
+    const dock = createTelemetryDock(runState);
+
+    expect(dock.className).toContain('wide-telemetry-dock');
+    expect(dock.getAttribute('role')).toBe('status');
+    expect(findByClass(dock, 'wide-telemetry-header')).not.toBe(null);
+    const labels = findAllByClass(dock, 'wide-telemetry-label').map((el) => el.textContent);
+    expect(labels).toEqual(['Depth', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
+    const clock = byTestId(dock, 'telemetry-clock');
+    expect(clock.textContent).toBe('0.32');
+    expect(clock.getAttribute('aria-label')).toBe('Danger clock 0.32');
+    expect(byTestId(dock, 'telemetry-init-block')).toBe(null);
+    expect(byTestId(dock, 'telemetry-active-actor')).toBe(null);
+    dock.cleanup();
+  });
+
+  test('live-updates the clock through the danger-clock bus event and cleanup removes it', () => {
+    const runState = { depth: 3, worldSeed: 1, dangerClockProgress: 0, party: [] };
+    const dock = createTelemetryDock(runState);
+    const clock = byTestId(dock, 'telemetry-clock');
+
+    bus.dispatch('state:danger-clock-tick', { progress: 0.65 });
+    expect(clock.textContent).toBe('0.65');
+    dock.cleanup();
+    bus.dispatch('state:danger-clock-tick', { progress: 0.99 });
+    expect(clock.textContent).toBe('0.65');
+  });
+
+  test('adds combat round, initiative rail with spent marker, and active-actor block', () => {
+    const combatants = new Map([
+      ['p1', { id: 'p1', name: 'Breacher', side: 'party', sigilCodepoint: 0xE000, hp: 24, hpMax: 36, charge: 0, chargeMax: 9, ap: 2, moveAvailable: true, conditions: [{ id: 'burning', duration: 3 }] }],
+      ['e1', { id: 'e1', name: 'Drone', side: 'enemy', sigilCodepoint: 0xE030, hp: 4, hpMax: 9 }],
+      ['e2', { id: 'e2', name: 'Ghost', side: 'party', sigilCodepoint: 0xE001, hp: 0, hpMax: 22 }]
+    ]);
+    const combatState = { combatants, turnOrder: ['p1', 'e1', 'e2'], currentTurn: 0, round: 3 };
+    const runState = { depth: 7, worldSeed: 'A4F29C1E', dangerClockProgress: 0.32, corruption: 0.1, party: [] };
+    const dock = createTelemetryDock(runState, combatState);
+
+    const labels = findAllByClass(dock, 'wide-telemetry-label').map((el) => el.textContent);
+    expect(labels).toEqual(['Depth', 'Round', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
+    const init = byTestId(dock, 'telemetry-init-block');
+    expect(init).not.toBe(null);
+    const rail = findByClass(init, 'wide-init-rail');
+    expect(rail.children).toHaveLength(3);
+    expect(rail.children[0].className).toContain('active');
+    expect(rail.children[2].className).toContain('spent');
+    expect(findByClass(init, 'init-order')).not.toBe(null);
+    const active = byTestId(dock, 'telemetry-active-actor');
+    expect(active).not.toBe(null);
+    expect(findByClass(active, 'wide-active-name').textContent).toBe('BREACHER · ACTIVE');
+    expect(findByClass(active, 'wide-active-ap').textContent).toBe('2 AP · 1 MV');
+    dock.cleanup();
+  });
+
+  test('renders sticky feed header, mirrors LOG entry classes, and appends new bus entries with autoscroll', () => {
+    const runState = { depth: 7, worldSeed: 1, dangerClockProgress: 0, party: [], recentEvents: [{ sequence: 1, type: 'discovery', message: 'CONTAINER at (5,8)' }] };
+    const dock = createTelemetryDock(runState);
+    const feed = byTestId(dock, 'telemetry-log-feed');
+
+    expect(findByClass(dock, 'wide-log-feed-header').textContent).toBe('◈ Event Log — Floor 07');
+    expect(feed.children).toHaveLength(1);
+    expect(feed.children[0].className).toContain('log-entry');
+    expect(feed.children[0].className).toContain('log-discovery');
+    expect(feed.children[0].children[0].className).toContain('log-turn');
+    expect(feed.children[0].children[0].textContent).toBe('[E:001]');
+
+    // Simulate scroll dimensions so autoscroll writes scrollTop.
+    feed.scrollHeight = 512;
+    bus.dispatch('ui:log-entry', { sequence: 2, type: 'combat', message: 'Attack lands' });
+    expect(feed.children).toHaveLength(2);
+    expect(feed.children[1].className).toContain('log-combat');
+    expect(feed.scrollTop).toBe(feed.scrollHeight);
+
+    dock.cleanup();
+    bus.dispatch('ui:log-entry', { sequence: 3, type: 'combat', message: 'Should not append' });
+    expect(feed.children).toHaveLength(2);
   });
 });
