@@ -269,6 +269,44 @@ describe('tutorial manual', () => {
     expect(seen.at(-1)).toEqual({ screen: 'title', params: { tutorialCompleted: true } });
     offNavigate();
   });
+
+  it('renders the wide-layout tutorial as a two-page spread with an appended summary state', async () => {
+    installMatchMedia(true);
+    const seen = [];
+    const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/tutorial.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const shell = container.children[0];
+    expect(shell.classList.contains('wide-tutorial-shell')).toBe(true);
+    expect(shell.dataset.wideRoot).toBe('');
+
+    // Spread 0 is the first pair — left pane holds the primary tutorial-page.
+    expect(byTestId(container, 'tutorial-spread')).toBeTruthy();
+    expect(byTestId(container, 'tutorial-page').classList.contains('wide-tutorial-pane')).toBe(true);
+    expect(byTestId(container, 'tutorial-right-pane').classList.contains('wide-tutorial-pane')).toBe(true);
+    expect(byTestId(container, 'tutorial-page-title').textContent).toBe('Console Overview');
+
+    // 11 production pages → 6 content spreads + 1 summary; advance through them all.
+    let advanced = 0;
+    while (byTestId(container, 'tutorial-next')) {
+      await byTestId(container, 'tutorial-next').click();
+      advanced += 1;
+      if (advanced > 20) throw new Error('spread advancement did not terminate');
+    }
+    // After 6 next-clicks the summary state renders with DONE + summary marker.
+    expect(advanced).toBe(6);
+    expect(byTestId(container, 'tutorial-summary')).toBeTruthy();
+    expect(byTestId(container, 'tutorial-done')).toBeTruthy();
+
+    // Prev returns to the previous content spread and re-renders NEXT.
+    await byTestId(container, 'tutorial-prev').click();
+    expect(byTestId(container, 'tutorial-next')).toBeTruthy();
+    expect(byTestId(container, 'tutorial-summary')).toBeNull();
+
+    offNavigate();
+  });
 });
 
 describe('settings screen', () => {
