@@ -42,6 +42,21 @@ export default defineConfig({
     {
       name: 'webkit-portrait',
       use: { ...devices['Desktop Safari'], viewport: { width: 1080, height: 1920 } }
+    },
+    {
+      name: 'chromium-wide-1440',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+      testMatch: /adaptive-layout\.spec\.js/
+    },
+    {
+      name: 'chromium-wide-1080p',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } },
+      testMatch: /adaptive-layout\.spec\.js/
+    },
+    {
+      name: 'chromium-wide-square',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 1024 }, hasTouch: true },
+      testMatch: /adaptive-layout\.spec\.js/
     }
   ]
 });
