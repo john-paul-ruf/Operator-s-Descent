@@ -425,4 +425,78 @@ describe('creation screen — wide layout', () => {
     expect(card.classList.contains('active')).toBe(true);
     expect(card.children.find((c) => c.classList?.contains('name')).textContent).toBe('ghost cell');
   });
+
+  it('renders GEAR groups and TECH list with class-gate reasons', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 42 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+
+    // GEAR: 3 groups (weapon, armor, offhand), each with a NONE row + choices.
+    expect(byTestId(container, 'wide-section-gear')).not.toBeNull();
+    expect(byTestId(container, 'wide-gear-weapon')).not.toBeNull();
+    expect(byTestId(container, 'wide-gear-armor')).not.toBeNull();
+    expect(byTestId(container, 'wide-gear-offhand')).not.toBeNull();
+    expect(byTestId(container, 'wide-weapon-none')).not.toBeNull();
+
+    // Sniper is class-gated for breacher.
+    const sniper = byTestId(container, 'wide-weapon-sniper');
+    expect(sniper).not.toBeNull();
+    expect(sniper.disabled).toBe(true);
+    expect(sniper.getAttribute('aria-description')).toBe('class gate');
+
+    // Equip a valid weapon — selection + budget both update.
+    const spentBefore = Number(byTestId(container, 'remaining').children[1].textContent);
+    byTestId(container, 'wide-weapon-heavy_melee').click();
+    expect(byTestId(container, 'wide-weapon-heavy_melee').classList.contains('selected')).toBe(true);
+    const spentAfter = Number(byTestId(container, 'remaining').children[1].textContent);
+    expect(spentBefore - spentAfter).toBeGreaterThan(0);
+
+    // TECH: list is present, tier-3 disrupt is gated by tier ≤ 2 for breacher.
+    expect(byTestId(container, 'wide-section-tech')).not.toBeNull();
+    expect(byTestId(container, 'wide-tech-list')).not.toBeNull();
+    const wardOne = byTestId(container, 'wide-protocol-ward-1');
+    expect(wardOne).not.toBeNull();
+    expect(wardOne.disabled).toBe(true);
+    const disrupt3 = byTestId(container, 'wide-protocol-disrupt-3');
+    expect(disrupt3.disabled).toBe(true);
+    // Gate note references the breacher tier cap.
+    expect(byTestId(container, 'wide-tech-gate-note').textContent).toContain('TIER ≤ 2');
+
+    // Buy an in-gate protocol.
+    const beforeTech = Number(byTestId(container, 'remaining').children[1].textContent);
+    byTestId(container, 'wide-protocol-disrupt-2').click();
+    expect(byTestId(container, 'wide-protocol-disrupt-2').classList.contains('selected')).toBe(true);
+    expect(Number(byTestId(container, 'remaining').children[1].textContent)).toBeLessThan(beforeTech);
+  });
+
+  it('finalizes from the wide footer and navigates to exploration', async () => {
+    installMatchMedia(true);
+    vi.useFakeTimers();
+    globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { container } = await mountCreation({ preloadedSeed: 4242, settings: { reducedMotion: 'reduce' } });
+
+    // Build a valid breacher via wide controls: add character, pick class, pick sigil.
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    byTestId(container, 'wide-sigil-e000').click();
+
+    // Wide footer surfaces the finalize button and it becomes enabled.
+    const finalize = byTestId(container, 'finalize');
+    expect(finalize).not.toBeNull();
+    expect(finalize.parentNode.classList.contains('wide-creation-footer')).toBe(true);
+    expect(finalize.disabled).toBe(false);
+
+    finalize.click();
+    expect(byTestId(container, 'finalize').disabled).toBe(true);
+    await vi.runAllTimersAsync();
+    await Promise.resolve();
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].screen).toBe('exploration');
+    expect(seen[0].params.runState.worldSeed).toBe(4242);
+    off();
+  });
 });

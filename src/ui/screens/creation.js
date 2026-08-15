@@ -181,6 +181,8 @@ export function mount(container, params = {}) {
       editor.appendChild(renderWideClassSection(summary));
       editor.appendChild(renderWideSigilSection(summary));
       editor.appendChild(renderWideAttrsSection(summary));
+      editor.appendChild(renderWideGearSection(summary));
+      editor.appendChild(renderWideTechSection(summary));
     }
     right.appendChild(editor);
 
@@ -504,6 +506,126 @@ export function mount(container, params = {}) {
       grid.appendChild(row);
     }
     section.appendChild(grid);
+    return section;
+  }
+
+  function wideGearRow(testid, name, stat, cost, opts = {}) {
+    const row = createButton('', {
+      selected: opts.selected,
+      disabled: opts.disabled,
+      description: opts.description,
+      onClick: opts.onClick
+    });
+    row.classList.remove('btn-crt');
+    row.classList.add('gear-row');
+    if (opts.selected) row.classList.add('selected');
+    row.setAttribute('role', 'radio');
+    row.setAttribute('aria-checked', String(Boolean(opts.selected)));
+    row.dataset.testid = testid;
+    const info = document.createElement('span');
+    info.className = 'info';
+    info.append(text('span', 'name', name), text('span', 'stat', stat));
+    row.append(info, text('span', 'cost', cost));
+    if (opts.reason) row.appendChild(text('span', 'disabled-reason', opts.reason.toUpperCase()));
+    return row;
+  }
+
+  function renderWideGearSection(summary) {
+    const selected = selectedSummary(summary);
+    const className = selected?.classData?.name?.toUpperCase() || 'UNASSIGNED';
+    const section = wideSection('gear', `EQUIPMENT — ${className}`, '1 WEAPON + 1 ARMOR + 1 OFF-HAND');
+    if (!selected?.classData) {
+      section.appendChild(text('p', 'creation-warning', 'ASSIGN A CLASS BEFORE BUYING EQUIPMENT.'));
+      return section;
+    }
+    const current = selected.equipment;
+    for (const [slot, label] of [['weapon', 'WEAPONS'], ['armor', 'ARMOR'], ['offhand', 'OFF-HAND']]) {
+      const group = document.createElement('div');
+      group.className = 'gear-group';
+      group.dataset.testid = `wide-gear-${slot}`;
+      group.setAttribute('role', 'radiogroup');
+      group.setAttribute('aria-label', label);
+      group.appendChild(text('div', 'gear-group-heading', label));
+      const noneRow = wideGearRow(
+        `wide-${slot}-none`,
+        slot === 'armor' ? '◈ NO ARMOR' : '◈ NONE',
+        slot === 'armor' ? 'no armor equipped' : 'empty slot',
+        '0PT',
+        {
+          selected: current[slot] === null,
+          onClick: () => dispatch({ type: 'unequip_gear', gearSlot: slot })
+        }
+      );
+      group.appendChild(noneRow);
+      for (const { id, item } of gearChoices(data, slot)) {
+        const selectedItem = current[slot] === id;
+        const preview = validateChangedDraft(draft, { type: 'equip_gear', gearSlot: slot, itemId: id }, data);
+        const gated = !item.classGates?.includes(selected.classId);
+        const reason = selectedItem ? '' : gated ? 'class gate' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : !preview.changed ? 'slot gate' : '';
+        const stat = `${item.rangeBand ?? 'DEF'}${item.defenseBonus ? ` · DEF +${item.defenseBonus}` : ''}`;
+        group.appendChild(wideGearRow(
+          `wide-${slot}-${id}`,
+          `◈ ${item.name || id}`,
+          stat,
+          `${item.creationCost ?? 0}PT`,
+          {
+            selected: selectedItem,
+            disabled: Boolean(reason),
+            description: reason || `${item.creationCost ?? 0} creation points`,
+            onClick: () => dispatch({ type: 'equip_gear', gearSlot: slot, itemId: id }),
+            reason
+          }
+        ));
+      }
+      section.appendChild(group);
+    }
+    return section;
+  }
+
+  function renderWideTechSection(summary) {
+    const selected = selectedSummary(summary);
+    const className = selected?.classData?.name?.toUpperCase() || 'UNASSIGNED';
+    const schools = selected?.classData?.protocolGates?.schools?.map((school) => school.toUpperCase()).join(' / ') || 'NONE';
+    const maxTier = selected?.classData?.protocolGates?.maxTier ?? 0;
+    const capacity = selected?.deck?.capacity ?? 0;
+    const slotsUsed = selected?.deck?.slotsUsed ?? 0;
+    const subtitle = `${schools} · MAX TIER ${maxTier} · DECK SLOTS ${capacity} · SLOTS USED ${slotsUsed}/${capacity} · COST TIER × 2 PT`;
+    const section = wideSection('tech', `TECH PROTOCOLS — ${className}`, subtitle);
+    if (!selected?.classData) {
+      section.appendChild(text('p', 'creation-warning', 'ASSIGN A CLASS BEFORE BUYING PROTOCOLS.'));
+      return section;
+    }
+    const list = document.createElement('div');
+    list.className = 'tech-list';
+    list.dataset.testid = 'wide-tech-list';
+    for (const protocol of flattenProtocols(data)) {
+      const isSelected = selected.protocols.some((entry) => entry.school === protocol.school && entry.tier === protocol.tier);
+      const action = isSelected
+        ? { type: 'remove_protocol', school: protocol.school, tier: protocol.tier }
+        : { type: 'add_protocol', school: protocol.school, tier: protocol.tier };
+      const preview = validateChangedDraft(draft, action, data);
+      const gated = !selected.classData.protocolGates?.schools?.includes(protocol.school) || protocol.tier > selected.classData.protocolGates?.maxTier;
+      const overCapacity = !isSelected && preview.summary.characters[summary.activeSlot]?.deck?.slotsUsed > selected.deck.capacity;
+      const reason = gated ? 'class gate' : overCapacity ? 'deck capacity' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
+      const pointDelta = Math.max(0, preview.summary.pointsSpent - summary.pointsSpent);
+      list.appendChild(wideGearRow(
+        `wide-protocol-${protocol.school}-${protocol.tier}`,
+        `${protocol.entry.name} · ${protocol.schoolName.toUpperCase()} T${protocol.tier}`,
+        `${protocol.entry.chargeCost} CHG · ${deckSlotCost(protocol.tier)} DECK`,
+        `${pointDelta}PT`,
+        {
+          selected: isSelected,
+          disabled: Boolean(reason),
+          description: reason || `${pointDelta} creation points, ${protocol.entry.chargeCost} charge`,
+          onClick: () => dispatch(action),
+          reason
+        }
+      ));
+    }
+    section.appendChild(list);
+    const gateNote = text('div', 'tech-gate-note', `HIGHER TIERS NOT AVAILABLE FOR ${className} (GATE: TIER ≤ ${maxTier})`);
+    gateNote.dataset.testid = 'wide-tech-gate-note';
+    section.appendChild(gateNote);
     return section;
   }
 
