@@ -314,6 +314,95 @@ describe('creation screen — wide layout', () => {
     expect(byTestId(container, 'wide-save-slot').disabled).toBe(false);
   });
 
+  it('renders CLASS, SIGIL, and ATTR sections stacked once a character is added', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 42 });
+
+    // Empty state: only the empty placeholder in the editor.
+    expect(byTestId(container, 'wide-editor-empty')).not.toBeNull();
+    expect(byTestId(container, 'wide-section-class')).toBeNull();
+
+    byTestId(container, 'add-character').click();
+
+    // Editor now has three stacked wide-section blocks (CLASS, SIGIL, ATTR).
+    const editor = byTestId(container, 'wide-editor');
+    expect(editor).not.toBeNull();
+    expect(byTestId(container, 'wide-editor-empty')).toBeNull();
+    expect(byTestId(container, 'wide-section-class')).not.toBeNull();
+    expect(byTestId(container, 'wide-section-sigil')).not.toBeNull();
+    expect(byTestId(container, 'wide-section-attrs')).not.toBeNull();
+
+    // CLASS: 6 chassis, none selected yet.
+    const classSection = byTestId(container, 'wide-section-class');
+    const grid = classSection.children.find((c) => c.classList?.contains('class-grid'));
+    expect(grid.children).toHaveLength(6);
+    expect(byTestId(container, 'wide-class-breacher')).not.toBeNull();
+    expect(byTestId(container, 'wide-selected-stats')).toBeNull();
+
+    // Select breacher — projected stats surface + class card marks selected.
+    byTestId(container, 'wide-class-breacher').click();
+    expect(byTestId(container, 'wide-class-breacher').classList.contains('selected')).toBe(true);
+    expect(byTestId(container, 'wide-selected-stats')).not.toBeNull();
+    expect(byTestId(container, 'wide-projected-hp').children[1].textContent).toBe('28');
+    expect(byTestId(container, 'wide-projected-charge').children[1].textContent).toBe('9');
+
+    // Spent updates identically to portrait chassis pricing.
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('75');
+    expect(byTestId(container, 'credits').children[1].textContent).toBe('750');
+  });
+
+  it('pick sigil in wide mode: preview and thumbs update via same dispatch as portrait', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 42 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+
+    const preview = byTestId(container, 'wide-sigil-preview');
+    expect(preview).not.toBeNull();
+    expect(preview.textContent).toBe('?');
+    expect(byTestId(container, 'wide-sigil-caption').textContent).toContain('SELECT A GLYPH');
+
+    // 8 sigils per breacher family.
+    const sigilThumb = byTestId(container, 'wide-sigil-e000');
+    expect(sigilThumb).not.toBeNull();
+    expect(sigilThumb.classList.contains('sigil-option')).toBe(true);
+
+    sigilThumb.click();
+
+    // Selection reflected across preview + thumb.
+    expect(byTestId(container, 'wide-sigil-e000').classList.contains('selected')).toBe(true);
+    expect(byTestId(container, 'wide-sigil-preview').textContent).toBe(String.fromCodePoint(0xe000));
+    expect(byTestId(container, 'wide-sigil-caption').textContent).toBe('SIGIL-220 · e000');
+  });
+
+  it('wide attribute steppers mutate the model and readout like portrait', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 42 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+
+    const attrGrid = byTestId(container, 'wide-section-attrs').children.find((c) => c.classList?.contains('attr-grid'));
+    expect(attrGrid.children).toHaveLength(6);
+
+    // Primary attribute row for breacher = MGT.
+    const mgtRow = byTestId(container, 'wide-attribute-mgt');
+    expect(mgtRow.classList.contains('primary')).toBe(true);
+    const mgtHead = mgtRow.children.find((c) => c.classList?.contains('head'));
+    const mgtName = mgtHead.children.find((c) => c.classList?.contains('name'));
+    expect(mgtName.children[0].textContent).toBe('MIGHT');
+    expect(mgtName.children[1].textContent).toBe('MGT · PRIMARY');
+
+    // Baseline spent from chassis + primary=5 = 5+2 = 7 (breacher recipe applies).
+    const spentBefore = byTestId(container, 'remaining').children[1].textContent;
+    // FIN starts at 3, so bumping it costs 1 point.
+    byTestId(container, 'wide-attribute-fin-inc').click();
+    const spentAfter = byTestId(container, 'remaining').children[1].textContent;
+    expect(Number(spentBefore) - Number(spentAfter)).toBe(1);
+    // Refund brings it back.
+    byTestId(container, 'wide-attribute-fin-dec').click();
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe(spentBefore);
+  });
+
   it('renders saved configuration cards in the left pane sourced from party-configs.js', async () => {
     installMatchMedia(true);
     const draft = {

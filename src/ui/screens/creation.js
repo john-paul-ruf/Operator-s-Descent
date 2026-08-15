@@ -177,6 +177,10 @@ export function mount(container, params = {}) {
       const empty = text('p', 'creation-warning', 'ADD A CHARACTER TO BEGIN.');
       empty.dataset.testid = 'wide-editor-empty';
       editor.appendChild(empty);
+    } else {
+      editor.appendChild(renderWideClassSection(summary));
+      editor.appendChild(renderWideSigilSection(summary));
+      editor.appendChild(renderWideAttrsSection(summary));
     }
     right.appendChild(editor);
 
@@ -306,6 +310,200 @@ export function mount(container, params = {}) {
     list.appendChild(saveSlot);
     section.appendChild(list);
     if (notice) section.appendChild(text('p', notice.startsWith('LOADED') || notice.startsWith('SAVED') ? 'creation-note' : 'creation-error', notice));
+    return section;
+  }
+
+  function wideSection(id, headingText, subtitle) {
+    const section = document.createElement('section');
+    section.className = 'wide-section';
+    section.dataset.testid = `wide-section-${id}`;
+    const heading = document.createElement('div');
+    heading.className = 'wide-section-heading';
+    heading.appendChild(text('span', 'wide-section-title', `◈ ${headingText}`));
+    if (subtitle) heading.appendChild(text('span', 'subtitle', subtitle));
+    section.appendChild(heading);
+    return section;
+  }
+
+  function renderWideClassSection(summary) {
+    const selected = selectedSummary(summary);
+    const section = wideSection('class', 'CLASS', '6 CHASSIS · SIGNATURE DEFINES ROLE');
+    const grid = document.createElement('div');
+    grid.className = 'class-grid';
+    grid.setAttribute('role', 'radiogroup');
+    grid.setAttribute('aria-label', 'Class selection');
+    for (const cls of classList(data)) {
+      const isSelected = selected?.classId === cls.id;
+      const card = createButton('', {
+        selected: isSelected,
+        label: `Choose ${cls.name}`,
+        onClick: () => dispatch({ type: 'set_class', classId: cls.id })
+      });
+      card.classList.add('class-card');
+      if (isSelected) card.classList.add('selected');
+      card.setAttribute('role', 'radio');
+      card.setAttribute('aria-checked', String(isSelected));
+      card.dataset.testid = `wide-class-${cls.id}`;
+      const row = document.createElement('div');
+      row.className = 'row';
+      const marker = text('span', 'sigil-option', cls.name === 'Operator' ? 'Op' : cls.name.charAt(0).toUpperCase());
+      marker.style.width = '44px';
+      marker.style.height = '44px';
+      marker.style.fontSize = '16px';
+      const nameStack = document.createElement('div');
+      nameStack.append(
+        text('div', 'title', cls.name.toUpperCase()),
+        text('div', 'stats', `${ATTR_LABELS[cls.primaryAttribute] || ''} · Hit Die ${cls.hitDieBase || ''}`)
+      );
+      row.append(marker, nameStack);
+      card.append(row, text('div', 'desc', (cls.signature?.tiers?.[0] || '').split('.')[0]));
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
+    if (selected?.projectedStats) section.appendChild(renderWideProjectedStats(selected));
+    return section;
+  }
+
+  function renderWideProjectedStats(selected) {
+    const stats = selected.projectedStats;
+    const box = document.createElement('div');
+    box.className = 'projected-stats';
+    box.dataset.testid = 'wide-selected-stats';
+    box.appendChild(text('div', 'heading', `◈ PROJECTED STATS — ${selected.classData.name.toUpperCase()}`));
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    for (const [label, value, id] of [
+      ['HP', stats.hpMax, 'hp'],
+      ['CHARGE', stats.chargeMax, 'charge'],
+      ['DEF', stats.defenseBase, 'def'],
+      ['INIT', `${stats.initiativeMod >= 0 ? '+' : ''}${stats.initiativeMod}`, 'init'],
+      ['MGT', selected.attributes.mgt, 'mgt'],
+      ['FIN', selected.attributes.fin, 'fin']
+    ]) {
+      const cell = document.createElement('div');
+      cell.dataset.testid = `wide-projected-${id}`;
+      cell.append(text('span', 'label', label), text('span', 'val', String(value)));
+      grid.appendChild(cell);
+    }
+    box.appendChild(grid);
+    const sigName = selected.classData.signature?.name?.toUpperCase() || '';
+    const sigTier = selected.classData.signature?.tiers?.[0] || '';
+    box.appendChild(text('div', 'signature', `SIGNATURE: ${sigName} — ${sigTier}`));
+    return box;
+  }
+
+  function renderWideSigilSection(summary) {
+    const selected = selectedSummary(summary);
+    const familyName = selected?.classData?.name?.toUpperCase() || 'UNASSIGNED';
+    const section = wideSection('sigil', `SIGIL — ${familyName} FAMILY`, 'FREE WITH CHASSIS · NO TWO CHARACTERS MAY SHARE');
+    if (!selected?.classData) {
+      section.appendChild(text('p', 'creation-warning', 'ASSIGN A CLASS BEFORE SELECTING A SIGIL.'));
+      return section;
+    }
+    const family = data?.sigils?.playerBank?.families?.[selected.classData.sigilFamily]?.codepoints ?? [];
+    const used = new Set(summary.characters.map((character, index) => index === summary.activeSlot ? null : character.sigil).filter(Number.isInteger));
+    const picker = document.createElement('div');
+    picker.className = 'sigil-picker';
+    picker.setAttribute('role', 'radiogroup');
+    picker.setAttribute('aria-label', `${selected.classData.name} sigils`);
+
+    const previewColumn = document.createElement('div');
+    const preview = document.createElement('div');
+    preview.className = 'sigil-preview';
+    preview.dataset.testid = 'wide-sigil-preview';
+    if (Number.isInteger(selected.sigil)) preview.textContent = String.fromCodePoint(selected.sigil);
+    else preview.textContent = '?';
+    previewColumn.appendChild(preview);
+    const caption = text('div', 'sigil-preview-caption', Number.isInteger(selected.sigil) ? `SIGIL-220 · ${selected.sigil.toString(16)}` : 'SIGIL-220 · SELECT A GLYPH');
+    caption.dataset.testid = 'wide-sigil-caption';
+    previewColumn.appendChild(caption);
+    picker.appendChild(previewColumn);
+
+    const thumbs = document.createElement('div');
+    thumbs.className = 'sigil-thumbs';
+    for (const codepoint of family) {
+      const unavailable = used.has(codepoint);
+      const isSelected = selected.sigil === codepoint;
+      const thumb = createButton('', {
+        selected: isSelected,
+        disabled: unavailable,
+        description: unavailable ? 'sigil already used by another character' : 'free class-family sigil',
+        onClick: () => dispatch({ type: 'set_sigil', sigil: codepoint })
+      });
+      thumb.classList.add('sigil-option');
+      if (isSelected) thumb.classList.add('selected');
+      thumb.setAttribute('role', 'radio');
+      thumb.setAttribute('aria-checked', String(isSelected));
+      thumb.setAttribute('aria-label', `Sigil ${codepoint.toString(16)}`);
+      thumb.dataset.testid = `wide-sigil-${codepoint.toString(16)}`;
+      thumb.textContent = String.fromCodePoint(codepoint);
+      thumbs.appendChild(thumb);
+    }
+    picker.appendChild(thumbs);
+    picker.appendChild(text('div', 'sigil-note', `${family.length} SIGILS PER CLASS FAMILY · 220PX PREVIEW`));
+    section.appendChild(picker);
+    return section;
+  }
+
+  function renderWideAttrsSection(summary) {
+    const selected = selectedSummary(summary);
+    const className = selected?.classData?.name?.toUpperCase() || 'UNASSIGNED';
+    const section = wideSection('attrs', `ATTRIBUTES — ${className}`, 'START AT RANK 3 · 3→6: 1PT · 7→8: 2PT · 9→10: 3PT');
+    const grid = document.createElement('div');
+    grid.className = 'attr-grid';
+    for (const key of ATTRIBUTE_KEYS) {
+      const rank = selected.attributes[key];
+      const isPrimary = selected.classData?.primaryAttribute === key;
+      const incPreview = validateChangedDraft(draft, { type: 'buy_attribute', attribute: key }, data);
+      const decPreview = validateChangedDraft(draft, { type: 'refund_attribute', attribute: key }, data);
+      const increaseReason = rank >= 10 ? 'maximum rank' : incPreview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
+      const decreaseReason = rank <= 1 ? 'minimum rank' : !decPreview.changed ? 'minimum rank' : '';
+      const row = document.createElement('div');
+      row.className = 'attr-row' + (isPrimary ? ' primary' : '');
+      row.dataset.testid = `wide-attribute-${key}`;
+      row.setAttribute('aria-label', `${ATTR_NAMES[key]} rank ${rank}, modifier ${modifier(rank)}`);
+      const head = document.createElement('div');
+      head.className = 'head';
+      const nameGroup = document.createElement('div');
+      nameGroup.className = 'name';
+      nameGroup.append(
+        text('span', 'full', ATTR_NAMES[key]),
+        text('span', 'abbrev', `${ATTR_LABELS[key]}${isPrimary ? ' · PRIMARY' : ''}`)
+      );
+      const stepperGroup = document.createElement('div');
+      stepperGroup.className = 'stepper';
+      const dec = createButton('−', {
+        label: `Decrease ${ATTR_NAMES[key]}`,
+        disabled: Boolean(decreaseReason),
+        description: decreaseReason || 'refund one point',
+        onClick: () => dispatch({ type: 'refund_attribute', attribute: key })
+      });
+      dec.classList.add('stepper-btn');
+      dec.dataset.testid = `wide-attribute-${key}-dec`;
+      const val = text('span', 'val', String(rank));
+      const inc = createButton('+', {
+        label: `Increase ${ATTR_NAMES[key]}`,
+        disabled: Boolean(increaseReason),
+        description: increaseReason || 'buy one rank',
+        onClick: () => dispatch({ type: 'buy_attribute', attribute: key })
+      });
+      inc.classList.add('stepper-btn');
+      inc.dataset.testid = `wide-attribute-${key}-inc`;
+      stepperGroup.append(dec, val, inc);
+      head.append(nameGroup, stepperGroup);
+      row.appendChild(head);
+      const barTrack = document.createElement('div');
+      barTrack.className = 'bar-track';
+      const barFill = document.createElement('div');
+      barFill.className = 'bar-fill';
+      barFill.style.width = `${rank * 10}%`;
+      barTrack.appendChild(barFill);
+      row.appendChild(barTrack);
+      const mod = modifier(rank);
+      row.appendChild(text('div', 'desc', `MODIFIER ${mod >= 0 ? '+' : ''}${mod}`));
+      grid.appendChild(row);
+    }
+    section.appendChild(grid);
     return section;
   }
 
