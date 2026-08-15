@@ -15,9 +15,6 @@ const LAYOUT_DEFAULT_VIEWPORTS = {
   portrait: { width: 450, height: 800 },
   wide: { width: 1440, height: 900 }
 };
-const WIDE_NOT_IMPLEMENTED_NOTE =
-  'NOTE: the wide layout class is not implemented in production yet (FORGE-CONFIG Custom Rule 8 — design phase only).\n' +
-  'Capturing wide mocks only — no production capture, no side-by-side, until the implementation feature lands.';
 
 const SCREENS = {
   title:           { mockFile: 'title.html',          setup: null },
@@ -66,7 +63,20 @@ function stopServer(child) {
   child?.kill();
 }
 
-async function setupProdPage(page, screenKey) {
+async function buildParty(page, layout) {
+  await page.getByTestId('add-character').click();
+  if (layout === 'wide') {
+    await page.getByTestId('wide-class-breacher').click();
+    await page.getByTestId('wide-sigil-e000').click();
+  } else {
+    await page.getByTestId('class-breacher').click();
+    await page.getByTestId('tab-sigil').click();
+    await page.getByTestId('sigil-e000').click();
+  }
+  await page.getByTestId('finalize').click();
+}
+
+async function setupProdPage(page, screenKey, layout = 'portrait') {
   const setup = SCREENS[screenKey].setup;
   if (setup === 'skip') {
     await page.goto(SERVER_URL);
@@ -83,11 +93,7 @@ async function setupProdPage(page, screenKey) {
       await page.getByTestId('add-character').click();
       return;
     }
-    await page.getByTestId('add-character').click();
-    await page.getByTestId('class-breacher').click();
-    await page.getByTestId('tab-sigil').click();
-    await page.getByTestId('sigil-e000').click();
-    await page.getByTestId('finalize').click();
+    await buildParty(page, layout);
     if (setup === 'startRunToExploration') return;
     await page.getByTestId('exploration-canvas').waitFor({ timeout: 5000 }).catch(() => {});
     return;
@@ -96,11 +102,7 @@ async function setupProdPage(page, screenKey) {
     const tab = setup.split(':')[1];
     await page.goto(`${SERVER_URL}?seed=777#w=777`);
     await page.getByTestId('add-character').waitFor({ timeout: 10000 });
-    await page.getByTestId('add-character').click();
-    await page.getByTestId('class-breacher').click();
-    await page.getByTestId('tab-sigil').click();
-    await page.getByTestId('sigil-e000').click();
-    await page.getByTestId('finalize').click();
+    await buildParty(page, layout);
     await page.getByTestId('exploration-canvas').waitFor({ timeout: 5000 }).catch(() => {});
     await page.getByTestId(`console-tab-${tab}`).click().catch(() => {});
     return;
@@ -131,50 +133,31 @@ async function setupProdPage(page, screenKey) {
   }
 }
 
-async function captureWideMockOnly(browser, screenKey, viewport, shotsDir) {
+async function captureSideBySide(browser, screenKey, viewport, shotsDir, layout = 'portrait') {
   const mockFile = SCREENS[screenKey].mockFile;
-  const mockPath = join(WIDE_MOCKS_DIR, mockFile);
-  if (!existsSync(mockPath)) {
-    console.error(`Wide mock file not found: ${mockPath}`);
-    return { screen: screenKey, layout: 'wide', setupStatus: 'mock-missing' };
-  }
-
-  const mockPage = await browser.newPage({ viewport });
-  await mockPage.goto(`file://${mockPath}`, { waitUntil: 'domcontentloaded' });
-  await mockPage.waitForTimeout(1500);
-  const mockBuf = await mockPage.screenshot({ type: 'png' });
-  await mockPage.close();
-
-  console.log(`  ${screenKey} [wide]: mock=${mockBuf.length}B prod=skipped (wide not implemented in prod)`);
-
-  const mockOutputPath = resolve(join(shotsDir, `${screenKey}-wide-mock.png`));
-  writeFileSync(mockOutputPath, mockBuf);
-
-  return {
-    screen: screenKey,
-    layout: 'wide',
-    mockPath: mockOutputPath,
-    mockSize: { width: viewport.width, height: viewport.height },
-    prodStatus: 'wide-not-implemented-in-prod',
-    setupStatus: 'mock-only'
-  };
-}
-
-async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
-  const mockFile = SCREENS[screenKey].mockFile;
-  const mockPath = join(MOCKS_DIR, mockFile);
+  const mockDir = layout === 'wide' ? WIDE_MOCKS_DIR : MOCKS_DIR;
+  const mockPath = join(mockDir, mockFile);
   if (!existsSync(mockPath)) {
     console.error(`Mock file not found: ${mockPath}`);
-    return { screen: screenKey, setupStatus: 'mock-missing' };
+    return layout === 'wide'
+      ? { screen: screenKey, layout, setupStatus: 'mock-missing' }
+      : { screen: screenKey, setupStatus: 'mock-missing' };
   }
 
   const mockPage = await browser.newPage({ viewport });
   await mockPage.goto(`file://${mockPath}`, { waitUntil: 'domcontentloaded' });
   await mockPage.waitForTimeout(1500);
-  const mockFrame = mockPage.locator('.portrait-frame').first();
-  await mockFrame.waitFor({ state: 'visible', timeout: 5000 });
-  const mockSize = await mockFrame.boundingBox();
-  const mockBuf = await mockFrame.screenshot({ type: 'png' });
+  let mockBuf;
+  let mockSize;
+  if (layout === 'wide') {
+    mockBuf = await mockPage.screenshot({ type: 'png' });
+    mockSize = { width: viewport.width, height: viewport.height };
+  } else {
+    const mockFrame = mockPage.locator('.portrait-frame').first();
+    await mockFrame.waitFor({ state: 'visible', timeout: 5000 });
+    mockSize = await mockFrame.boundingBox();
+    mockBuf = await mockFrame.screenshot({ type: 'png' });
+  }
   await mockPage.close();
 
   const prodPage = await browser.newPage({ viewport });
@@ -190,20 +173,29 @@ async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
   });
 
   try {
-    await setupProdPage(prodPage, screenKey);
+    await setupProdPage(prodPage, screenKey, layout);
   } catch (error) {
-    console.error(`Setup failed for ${screenKey}: ${error.message}`);
+    console.error(`Setup failed for ${screenKey} [${layout}]: ${error.message}`);
     await prodPage.close();
-    return { screen: screenKey, setupStatus: `failed: ${error.message}` };
+    return layout === 'wide'
+      ? { screen: screenKey, layout, setupStatus: `failed: ${error.message}` }
+      : { screen: screenKey, setupStatus: `failed: ${error.message}` };
   }
   await prodPage.waitForTimeout(1000);
-  const prodFrame = prodPage.locator('#portrait-frame').first();
-  await prodFrame.waitFor({ state: 'visible', timeout: 5000 });
-  const prodSize = await prodFrame.boundingBox();
-  const prodBuf = await prodFrame.screenshot({ type: 'png' });
+  let prodBuf;
+  let prodSize;
+  if (layout === 'wide') {
+    prodBuf = await prodPage.screenshot({ type: 'png' });
+    prodSize = { width: viewport.width, height: viewport.height };
+  } else {
+    const prodFrame = prodPage.locator('#portrait-frame').first();
+    await prodFrame.waitFor({ state: 'visible', timeout: 5000 });
+    prodSize = await prodFrame.boundingBox();
+    prodBuf = await prodFrame.screenshot({ type: 'png' });
+  }
   await prodPage.close();
 
-  console.log(`  ${screenKey}: mock=${mockBuf.length}B prod=${prodBuf.length}B`);
+  console.log(`  ${screenKey} [${layout}]: mock=${mockBuf.length}B prod=${prodBuf.length}B`);
 
   const combinedWidth = Math.ceil(mockSize.width + prodSize.width);
   const combinedHeight = Math.ceil(Math.max(mockSize.height, prodSize.height));
@@ -219,15 +211,16 @@ async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
   const sideBySideBuf = await combinedPage.screenshot({ type: 'png' });
   await combinedPage.close();
 
-  const baseName = `${screenKey}.png`;
+  const suffix = layout === 'wide' ? '-wide' : '';
+  const baseName = `${screenKey}${suffix}.png`;
   const sideBySidePath = resolve(join(shotsDir, baseName));
-  const prodOutputPath = resolve(join(shotsDir, `${screenKey}-prod.png`));
-  const mockOutputPath = resolve(join(shotsDir, `${screenKey}-mock.png`));
+  const prodOutputPath = resolve(join(shotsDir, `${screenKey}${suffix}-prod.png`));
+  const mockOutputPath = resolve(join(shotsDir, `${screenKey}${suffix}-mock.png`));
   writeFileSync(sideBySidePath, sideBySideBuf);
   writeFileSync(prodOutputPath, prodBuf);
   writeFileSync(mockOutputPath, mockBuf);
 
-  return {
+  const entry = {
     screen: screenKey,
     mockPath: mockOutputPath,
     prodPath: prodOutputPath,
@@ -236,6 +229,8 @@ async function captureSideBySide(browser, screenKey, viewport, shotsDir) {
     prodSize: { width: Math.round(prodSize.width), height: Math.round(prodSize.height) },
     setupStatus: 'ready'
   };
+  if (layout === 'wide') entry.layout = 'wide';
+  return entry;
 }
 
 function parseArgs(argv) {
@@ -305,34 +300,13 @@ async function main() {
     process.exit(2);
   }
 
-  if (args.layout === 'wide') {
-    console.log(WIDE_NOT_IMPLEMENTED_NOTE);
-    const browser = await chromium.launch({ headless: true });
-    try {
-      const report = [];
-      for (const screenKey of targets) {
-        const entry = await captureWideMockOnly(browser, screenKey, args.viewport, args.outDir);
-        report.push(entry);
-        if (entry.mockPath) {
-          console.log(entry.mockPath);
-        } else {
-          console.log(`SKIP: ${screenKey}`);
-        }
-      }
-      writeFileSync(join(args.outDir, 'report-wide.json'), `${JSON.stringify(report)}\n`);
-    } finally {
-      await browser.close();
-    }
-    return;
-  }
-
   const server = await ensureServer();
   const browser = await chromium.launch({ headless: true });
 
   try {
     const report = [];
     for (const screenKey of targets) {
-      const entry = await captureSideBySide(browser, screenKey, args.viewport, args.outDir);
+      const entry = await captureSideBySide(browser, screenKey, args.viewport, args.outDir, args.layout);
       report.push(entry);
       if (entry.sideBySidePath) {
         console.log(entry.sideBySidePath);
@@ -340,7 +314,8 @@ async function main() {
         console.log(`SKIP: ${screenKey}`);
       }
     }
-    writeFileSync(join(args.outDir, 'report.json'), `${JSON.stringify(report)}\n`);
+    const reportName = args.layout === 'wide' ? 'report-wide.json' : 'report.json';
+    writeFileSync(join(args.outDir, reportName), `${JSON.stringify(report)}\n`);
   } finally {
     await browser.close();
     stopServer(server);
