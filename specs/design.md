@@ -70,6 +70,18 @@ Neon glow on every rendered element, intensity by layer:
 | Sigil | `0 0 12px var(--accent), 0 0 24px var(--accent)` | Sigil glyphs at all sizes |
 | Danger | `0 0 8px var(--danger)` | HP bars, death indicators |
 
+### Derived Surface Tokens
+
+Non-palette surface tokens declared in `styles/base.css :root` — dimensional and mix values that support the scroll surface. They are not colors in the Color Palette sense (no per-floor accent flow, no `#value` swatch), so they sit here rather than in that table. The design compliance scanner exempts exactly this set from the "declared in base.css but absent from spec palette" warning.
+
+| Token | Value | Purpose |
+|-------|-------|---------|
+| `--screen-body-fade` | `32px` | Edge-fade mask height at scroll container top/bottom |
+| `--scrollbar-track` | `transparent` | Custom scrollbar track surface |
+| `--scrollbar-thumb` | `color-mix(in oklab, var(--accent) 40%, transparent)` | Custom scrollbar thumb surface (accent-tinted) |
+| `--scrollbar-thumb-hover` | `color-mix(in oklab, var(--accent) 70%, transparent)` | Custom scrollbar thumb hover surface |
+| `--scrollbar-width` | `6px` | Custom scrollbar width |
+
 ### CRT / VHS Effects (Visual Texture)
 
 All effects are CSS-based in mocks; production uses canvas grain + JS timers. The visual *feel* for mocks:

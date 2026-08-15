@@ -1,6 +1,14 @@
 import { readText, parseRootTokens } from './lib.js';
 import { extractColorTokens, extractCornerRadius } from './extract-design-spec.js';
 
+const DERIVED_SURFACE_TOKENS = new Set([
+  '--screen-body-fade',
+  '--scrollbar-track',
+  '--scrollbar-thumb',
+  '--scrollbar-thumb-hover',
+  '--scrollbar-width'
+]);
+
 export function checkColorTokens() {
   const specTokens = extractColorTokens();
   const srcTokens = parseRootTokens(readText('styles/base.css'));
@@ -15,9 +23,9 @@ export function checkColorTokens() {
   }
   const specTokenNames = new Set(specTokens.map((t) => t.token));
   for (const token of Object.keys(srcTokens)) {
-    if (!specTokenNames.has(token)) {
-      findings.push({ level: 'warning', category: 'color-token', token, message: `${token} declared in styles/base.css but absent from specs/design.md color palette table` });
-    }
+    if (specTokenNames.has(token)) continue;
+    if (DERIVED_SURFACE_TOKENS.has(token)) continue;
+    findings.push({ level: 'warning', category: 'color-token', token, message: `${token} declared in styles/base.css but absent from specs/design.md color palette table` });
   }
   return findings;
 }

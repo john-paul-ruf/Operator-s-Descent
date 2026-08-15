@@ -7,6 +7,7 @@ describe('check-tokens', () => {
     expect(checkColorTokens()).toEqual([]);
   });
 
+
   it('reports no corner-radius errors against the current repo', () => {
     const findings = checkCornerRadius();
     expect(findings.filter((f) => f.level === 'error')).toEqual([]);
