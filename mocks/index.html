@@ -65,6 +65,9 @@
       justify-content: space-between; gap: 12px; text-decoration: none; }
     .btn-crt:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); color: var(--accent); }
     .mock-card { display: block; margin-bottom: 8px; }
+    .mock-card-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .mock-card-row .mock-card { flex: 1; margin-bottom: 0; }
+    .wide-chip { align-items: center; font-size: 11px; padding: 16px 14px; white-space: nowrap; }
     .mock-desc { font-size: 10px; color: var(--text-dim); text-transform: none; letter-spacing: 0; margin-top: 4px; }
     .section-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent);
       margin: 24px 0 12px 0; text-shadow: 0 0 8px var(--accent); }
@@ -95,11 +98,13 @@
     <div class="subtitle accent-text">◈ Interactive Prototype ◈</div>
     <div class="ornament">◈ ◈ ◈</div>
     <div class="text-[10px] text-center mb-6" style="color: var(--text-dim);">
-      Click any screen to open it · Navigation links are live between mocks
+      Click any screen to open it · Navigation links are live between mocks<br>
+      Each screen exists in both layout classes — the card opens the portrait mock, WIDE opens the ≥900px / aspect ≥1:1 mock
     </div>
 
     <!-- PRIMARY FLOW -->
     <div class="section-header">◈ PRIMARY FLOW — NEW RUN</div>
+    <div class="mock-card-row">
     <a href="title.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">1. Title Screen / Front Door</div>
@@ -107,7 +112,10 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/title.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
     <div class="flow-arrow">▼</div>
+    <div class="mock-card-row">
     <a href="creation.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">2. Character Creation (80-Point Buy)</div>
@@ -115,7 +123,10 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/creation.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
     <div class="flow-arrow">▼</div>
+    <div class="mock-card-row">
     <a href="exploration.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">3. Floor Exploration</div>
@@ -123,7 +134,10 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/exploration.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
     <div class="flow-arrow">▼</div>
+    <div class="mock-card-row">
     <a href="combat.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">4. Combat</div>
@@ -131,7 +145,10 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/combat.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
     <div class="flow-arrow">▼</div>
+    <div class="mock-card-row">
     <a href="scorecard.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">5. Run-End Scorecard</div>
@@ -139,10 +156,13 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/scorecard.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
 
     <!-- CONSOLE MODES -->
     <div class="section-header">◈ CONSOLE MODES (during play)</div>
     <div class="flow-note">All modes accessible from any in-play screen via console tab bar · TAP TO COLLAPSE returns to exploration</div>
+    <div class="mock-card-row">
     <a href="console-party.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Console — PARTY</div>
@@ -150,6 +170,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/console-party.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="console-gear.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Console — GEAR</div>
@@ -157,6 +180,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/console-gear.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="console-tech.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Console — TECH</div>
@@ -164,6 +190,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/console-tech.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="console-loot.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Console — LOOT</div>
@@ -171,6 +200,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/console-loot.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="console-log.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Console — LOG</div>
@@ -178,9 +210,12 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/console-log.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
 
     <!-- SECONDARY SCREENS -->
     <div class="section-header">◈ SECONDARY FLOWS</div>
+    <div class="mock-card-row">
     <a href="library.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Run Library</div>
@@ -188,6 +223,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/library.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="import.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Import Link</div>
@@ -195,6 +233,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/import.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="settings.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Settings</div>
@@ -202,6 +243,9 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/settings.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
+    <div class="mock-card-row">
     <a href="tutorial.html" class="btn-crt mock-card" target="_blank">
       <div>
         <div class="accent-text">Tutorial (Manual)</div>
@@ -209,12 +253,16 @@
       </div>
       <div style="color: var(--text-dim);">→</div>
     </a>
+    <a href="wide/tutorial.html" class="btn-crt wide-chip" target="_blank" title="Wide layout class — (min-width: 900px) and (min-aspect-ratio: 1/1)">WIDE</a>
+    </div>
 
     <div class="ornament mt-6">◈ ◈ ◈</div>
     <div class="text-[10px] text-center" style="color: var(--text-dim);">
       All mocks use Tailwind CDN · System monospace · CSS-drawn CRT effects<br>
       Sigil glyphs shown as letter placeholders (DESCENT SIGIL typeface pending delivery)<br>
-      Navigation links are live — console tabs, collapse bars, alerts, and buttons all navigate
+      Navigation links are live — console tabs, collapse bars, alerts, and buttons all navigate<br>
+      Wide layout class (≥900px, aspect ≥1:1): keystone approved at the 2026-08-14 review gate · all 14 wide mocks under <span class="accent-text">wide/</span><br>
+      Production implements portrait only — wide implementation is a follow-up feature (wide↔prod scan findings are warning-level until it lands)
     </div>
   </div>
   <script>
