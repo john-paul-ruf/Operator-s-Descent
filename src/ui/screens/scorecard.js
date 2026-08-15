@@ -2,6 +2,7 @@ import { deleteRunState, getRunKey } from '../../state/library.js';
 import { encodeSeed } from '../../state/save-encode.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel, createScreenBody, createSigilToken } from '../components.js';
+import { currentLayoutClass } from '../layout.js';
 
 const PLAYER_BANK_START = 0xE000;
 const PLAYER_BANK_END = 0xE030;
@@ -39,8 +40,44 @@ function navigate(screen, params = {}) {
   bus.dispatch('ui:navigate', { screen, params });
 }
 
+function buildRoster(party) {
+  const roster = document.createElement('div');
+  roster.className = 'scorecard-roster';
+  roster.dataset.testid = 'scorecard-roster';
+  for (const character of party) {
+    const entry = document.createElement('div');
+    entry.className = 'scorecard-roster-entry dead';
+    const sigil = createSigilToken(safePlayerSigil(character), 72, { role: 'player' });
+    sigil.classList.add('sigil-dead');
+    const label = document.createElement('span');
+    const currentHP = getNumber(character?.currentHP, character?.hp);
+    const maxHP = getNumber(character?.maxHP, character?.hpMax, character?.hp);
+    label.textContent = `${(character?.classId || 'unknown').toUpperCase()} · CAL ${getNumber(character?.calibrationCount)} · HP ${currentHP}/${maxHP}`;
+    entry.append(sigil, label);
+    roster.appendChild(entry);
+  }
+  return roster;
+}
+
+function buildMetricGrid(metrics) {
+  const grid = document.createElement('div');
+  grid.className = 'scorecard-metrics';
+  for (const [label, value] of metrics) {
+    const metric = document.createElement('div');
+    metric.className = 'scorecard-metric';
+    const labelElement = document.createElement('span');
+    labelElement.textContent = label;
+    const valueElement = document.createElement('strong');
+    valueElement.textContent = Number.isInteger(value) ? value.toLocaleString() : String(value);
+    metric.append(labelElement, valueElement);
+    grid.appendChild(metric);
+  }
+  return grid;
+}
+
 export function mount(container, params = {}) {
   const cleanups = [];
+  const isWide = currentLayoutClass() === 'wide';
   const runState = params.runState && typeof params.runState === 'object' ? params.runState : {};
   const summary = params.summary && typeof params.summary === 'object' ? params.summary : {};
   const party = Array.isArray(params.party)
@@ -67,80 +104,6 @@ export function mount(container, params = {}) {
     ['Credits remaining', getNumber(summary.creditsRemaining, runState.credits, params.credits)]
   ];
 
-  const screen = document.createElement('section');
-  screen.className = 'scorecard-screen screen-container';
-  screen.style.padding = '0';
-  screen.style.gap = '0';
-  screen.setAttribute('aria-label', 'Run scorecard');
-
-  const header = document.createElement('header');
-  header.style.textAlign = 'center';
-  header.className = 's-6';
-  const ornament = document.createElement('div');
-  ornament.className = 'micro';
-  ornament.textContent = '◈ ◈ ◈';
-  const conclusion = document.createElement('h1');
-  conclusion.className = 'heading glow-danger';
-  conclusion.textContent = 'PARTY WIPE';
-  const subtitle = document.createElement('div');
-  subtitle.className = 'micro';
-  subtitle.textContent = 'RUN CONCLUDED';
-  header.append(ornament, conclusion, subtitle);
-
-  const body = createScreenBody({ className: 's-4' });
-
-  const depthPanel = createPanel({ elevated: true });
-  depthPanel.classList.add('s-6');
-  depthPanel.style.textAlign = 'center';
-  const depthLabel = document.createElement('div');
-  depthLabel.className = 'micro';
-  depthLabel.textContent = '◈ FINAL DEPTH';
-  const depthDisplay = document.createElement('div');
-  depthDisplay.className = 'display accent-text glow-strong';
-  depthDisplay.dataset.testid = 'scorecard-depth';
-  depthDisplay.textContent = String(depth);
-  depthPanel.append(depthLabel, depthDisplay);
-
-  const deletionStatus = document.createElement('p');
-  deletionStatus.className = 'console-note';
-  deletionStatus.dataset.testid = 'scorecard-deletion';
-  deletionStatus.textContent = deletion.success ? 'MUTABLE RUN STATE DELETED' : `RUN STATE DELETE FAILED — ${deletion.error || 'storage_failed'}`;
-
-  const rosterPanel = createPanel({ title: '◈ PARTY ROSTER' });
-  rosterPanel.classList.add('s-4');
-  const roster = document.createElement('div');
-  roster.className = 'scorecard-roster';
-  roster.dataset.testid = 'scorecard-roster';
-  for (const character of party) {
-    const entry = document.createElement('div');
-    entry.className = 'scorecard-roster-entry dead';
-    const sigil = createSigilToken(safePlayerSigil(character), 72, { role: 'player' });
-    sigil.classList.add('sigil-dead');
-    const label = document.createElement('span');
-    const currentHP = getNumber(character?.currentHP, character?.hp);
-    const maxHP = getNumber(character?.maxHP, character?.hpMax, character?.hp);
-    label.textContent = `${(character?.classId || 'unknown').toUpperCase()} · CAL ${getNumber(character?.calibrationCount)} · HP ${currentHP}/${maxHP}`;
-    entry.append(sigil, label);
-    roster.appendChild(entry);
-  }
-  rosterPanel.appendChild(roster);
-
-  const causePanel = createPanel({ title: '◈ CAUSE OF DEATH' });
-  causePanel.classList.add('s-4');
-  const cod = document.createElement('p');
-  cod.className = 'scorecard-cod';
-  cod.dataset.testid = 'scorecard-cause';
-  cod.textContent = `CAUSE OF DEATH: ${causeOfDeath}`;
-  causePanel.appendChild(cod);
-
-  const seedPanel = createPanel({ title: '◈ WORLD SEED' });
-  seedPanel.classList.add('s-4');
-  const seedEl = document.createElement('p');
-  seedEl.className = 'scorecard-seed';
-  seedEl.dataset.testid = 'scorecard-seed';
-  seedEl.textContent = `WORLD SEED: ${seed}`;
-  seedPanel.appendChild(seedEl);
-
   const seedFragment = `#w=${encodeSeed(seed)}`;
   const linkDisplay = document.createElement('output');
   linkDisplay.className = 'share-link-display';
@@ -159,31 +122,6 @@ export function mount(container, params = {}) {
   copyBtn.dataset.testid = 'scorecard-copy-world';
   cleanups.push(() => copyBtn.cleanup?.());
 
-  const sharePanel = createPanel({ title: '◈ SHARE THIS WORLD', elevated: true });
-  sharePanel.classList.add('s-4');
-  const shareNote = document.createElement('p');
-  shareNote.className = 'micro';
-  shareNote.textContent = 'SEED ONLY — NO RUN STATE';
-  sharePanel.append(shareNote, linkDisplay, copyBtn);
-
-  const stats = createPanel({ title: '◈ RUN SUMMARY' });
-  stats.classList.add('scorecard-stats', 's-4');
-  const metricGrid = document.createElement('div');
-  metricGrid.className = 'scorecard-metrics';
-  for (const [label, value] of metrics) {
-    const metric = document.createElement('div');
-    metric.className = 'scorecard-metric';
-    const labelElement = document.createElement('span');
-    labelElement.textContent = label;
-    const valueElement = document.createElement('strong');
-    valueElement.textContent = Number.isInteger(value) ? value.toLocaleString() : String(value);
-    metric.append(labelElement, valueElement);
-    metricGrid.appendChild(metric);
-  }
-  stats.appendChild(metricGrid);
-
-  const actions = document.createElement('div');
-  actions.className = 'scorecard-actions';
   const restart = createButton('RESTART SAME SEED', {
     primary: true,
     onClick: () => navigate('creation', { preloadedSeed: seed })
@@ -194,20 +132,201 @@ export function mount(container, params = {}) {
     onClick: () => navigate('creation')
   });
   newRun.dataset.testid = 'scorecard-new-run';
-  const title = createButton('TITLE', {
+  const titleButton = createButton('TITLE', {
     onClick: () => navigate('title')
   });
-  title.dataset.testid = 'scorecard-title';
-  const library = createButton('LIBRARY', {
+  titleButton.dataset.testid = 'scorecard-title';
+  const libraryButton = createButton('LIBRARY', {
     onClick: () => navigate('library')
   });
-  library.dataset.testid = 'scorecard-library';
-  cleanups.push(() => restart.cleanup?.(), () => newRun.cleanup?.(), () => title.cleanup?.(), () => library.cleanup?.());
-  actions.append(restart, newRun, title, library);
+  libraryButton.dataset.testid = 'scorecard-library';
+  cleanups.push(
+    () => restart.cleanup?.(),
+    () => newRun.cleanup?.(),
+    () => titleButton.cleanup?.(),
+    () => libraryButton.cleanup?.()
+  );
 
-  body.append(depthPanel, deletionStatus, rosterPanel, causePanel, seedPanel, sharePanel, stats);
+  const screen = document.createElement('section');
+  screen.className = isWide ? 'scorecard-screen wide-scorecard-shell' : 'scorecard-screen screen-container';
+  if (isWide) screen.dataset.wideRoot = '';
+  screen.style.padding = '0';
+  screen.style.gap = '0';
+  screen.setAttribute('aria-label', 'Run scorecard');
 
-  screen.append(header, body, actions);
+  if (isWide) {
+    // ── Summary pane (left) ─────────────────────────────────────────
+    const summaryPane = document.createElement('section');
+    summaryPane.className = 'wide-scorecard-summary';
+    summaryPane.dataset.testid = 'scorecard-summary-pane';
+
+    const summaryHeader = document.createElement('header');
+    summaryHeader.className = 'wide-scorecard-header';
+    const summaryOrnament = document.createElement('div');
+    summaryOrnament.className = 'micro';
+    summaryOrnament.textContent = '◈ ◈ ◈';
+    const summaryConclusion = document.createElement('h1');
+    summaryConclusion.className = 'heading glow-danger';
+    summaryConclusion.textContent = 'PARTY WIPE';
+    const summarySubtitle = document.createElement('div');
+    summarySubtitle.className = 'micro';
+    summarySubtitle.textContent = 'RUN CONCLUDED';
+    summaryHeader.append(summaryOrnament, summaryConclusion, summarySubtitle);
+
+    const summaryBody = createScreenBody({ className: 'wide-scorecard-body' });
+
+    const depthPanel = createPanel({ elevated: true });
+    depthPanel.style.textAlign = 'center';
+    const depthLabel = document.createElement('div');
+    depthLabel.className = 'micro';
+    depthLabel.textContent = '◈ FINAL DEPTH';
+    const depthDisplay = document.createElement('div');
+    depthDisplay.className = 'display accent-text glow-strong';
+    depthDisplay.dataset.testid = 'scorecard-depth';
+    depthDisplay.textContent = String(depth);
+    depthPanel.append(depthLabel, depthDisplay);
+
+    const deletionStatus = document.createElement('p');
+    deletionStatus.className = 'console-note';
+    deletionStatus.dataset.testid = 'scorecard-deletion';
+    deletionStatus.textContent = deletion.success ? 'MUTABLE RUN STATE DELETED' : `RUN STATE DELETE FAILED — ${deletion.error || 'storage_failed'}`;
+
+    const rosterPanel = createPanel({ title: '◈ PARTY ROSTER' });
+    rosterPanel.appendChild(buildRoster(party));
+
+    const causePanel = createPanel({ title: '◈ CAUSE OF DEATH' });
+    const cod = document.createElement('p');
+    cod.className = 'scorecard-cod';
+    cod.dataset.testid = 'scorecard-cause';
+    cod.textContent = `CAUSE OF DEATH: ${causeOfDeath}`;
+    causePanel.appendChild(cod);
+
+    const seedPanel = createPanel({ title: '◈ WORLD SEED' });
+    const seedEl = document.createElement('p');
+    seedEl.className = 'scorecard-seed';
+    seedEl.dataset.testid = 'scorecard-seed';
+    seedEl.textContent = `WORLD SEED: ${seed}`;
+    seedPanel.appendChild(seedEl);
+
+    summaryBody.append(depthPanel, deletionStatus, rosterPanel, causePanel, seedPanel);
+    summaryPane.append(summaryHeader, summaryBody);
+
+    // ── Share pane (right) ──────────────────────────────────────────
+    const sharePane = document.createElement('section');
+    sharePane.className = 'wide-scorecard-share';
+    sharePane.dataset.testid = 'scorecard-share-pane';
+
+    const shareHeader = document.createElement('header');
+    shareHeader.className = 'wide-scorecard-header';
+    const shareOrnament = document.createElement('div');
+    shareOrnament.className = 'micro';
+    shareOrnament.textContent = '◈ ◈ ◈';
+    const shareHeading = document.createElement('h2');
+    shareHeading.className = 'subheading accent-text glow-strong';
+    shareHeading.textContent = 'SHARE & RESTART';
+    const shareSubtitle = document.createElement('div');
+    shareSubtitle.className = 'micro';
+    shareSubtitle.textContent = 'CARRY THE SEED FORWARD';
+    shareHeader.append(shareOrnament, shareHeading, shareSubtitle);
+
+    const shareBody = createScreenBody({ className: 'wide-scorecard-body' });
+    const sharePanel = createPanel({ title: '◈ SHARE THIS WORLD', elevated: true });
+    const shareNote = document.createElement('p');
+    shareNote.className = 'micro';
+    shareNote.textContent = 'SEED ONLY — NO RUN STATE';
+    sharePanel.append(shareNote, linkDisplay, copyBtn);
+
+    const stats = createPanel({ title: '◈ RUN SUMMARY' });
+    stats.classList.add('scorecard-stats');
+    stats.appendChild(buildMetricGrid(metrics));
+
+    shareBody.append(sharePanel, stats);
+    sharePane.appendChild(shareHeader);
+    sharePane.appendChild(shareBody);
+
+    const actions = document.createElement('div');
+    actions.className = 'wide-scorecard-actions scorecard-actions';
+    const secondaryRow = document.createElement('div');
+    secondaryRow.style.display = 'flex';
+    secondaryRow.style.gap = '8px';
+    secondaryRow.append(titleButton, libraryButton);
+    actions.append(restart, newRun, secondaryRow);
+    sharePane.appendChild(actions);
+
+    screen.append(summaryPane, sharePane);
+  } else {
+    const header = document.createElement('header');
+    header.style.textAlign = 'center';
+    header.className = 's-6';
+    const ornament = document.createElement('div');
+    ornament.className = 'micro';
+    ornament.textContent = '◈ ◈ ◈';
+    const conclusion = document.createElement('h1');
+    conclusion.className = 'heading glow-danger';
+    conclusion.textContent = 'PARTY WIPE';
+    const subtitle = document.createElement('div');
+    subtitle.className = 'micro';
+    subtitle.textContent = 'RUN CONCLUDED';
+    header.append(ornament, conclusion, subtitle);
+
+    const body = createScreenBody({ className: 's-4' });
+
+    const depthPanel = createPanel({ elevated: true });
+    depthPanel.classList.add('s-6');
+    depthPanel.style.textAlign = 'center';
+    const depthLabel = document.createElement('div');
+    depthLabel.className = 'micro';
+    depthLabel.textContent = '◈ FINAL DEPTH';
+    const depthDisplay = document.createElement('div');
+    depthDisplay.className = 'display accent-text glow-strong';
+    depthDisplay.dataset.testid = 'scorecard-depth';
+    depthDisplay.textContent = String(depth);
+    depthPanel.append(depthLabel, depthDisplay);
+
+    const deletionStatus = document.createElement('p');
+    deletionStatus.className = 'console-note';
+    deletionStatus.dataset.testid = 'scorecard-deletion';
+    deletionStatus.textContent = deletion.success ? 'MUTABLE RUN STATE DELETED' : `RUN STATE DELETE FAILED — ${deletion.error || 'storage_failed'}`;
+
+    const rosterPanel = createPanel({ title: '◈ PARTY ROSTER' });
+    rosterPanel.classList.add('s-4');
+    rosterPanel.appendChild(buildRoster(party));
+
+    const causePanel = createPanel({ title: '◈ CAUSE OF DEATH' });
+    causePanel.classList.add('s-4');
+    const cod = document.createElement('p');
+    cod.className = 'scorecard-cod';
+    cod.dataset.testid = 'scorecard-cause';
+    cod.textContent = `CAUSE OF DEATH: ${causeOfDeath}`;
+    causePanel.appendChild(cod);
+
+    const seedPanel = createPanel({ title: '◈ WORLD SEED' });
+    seedPanel.classList.add('s-4');
+    const seedEl = document.createElement('p');
+    seedEl.className = 'scorecard-seed';
+    seedEl.dataset.testid = 'scorecard-seed';
+    seedEl.textContent = `WORLD SEED: ${seed}`;
+    seedPanel.appendChild(seedEl);
+
+    const sharePanel = createPanel({ title: '◈ SHARE THIS WORLD', elevated: true });
+    sharePanel.classList.add('s-4');
+    const shareNote = document.createElement('p');
+    shareNote.className = 'micro';
+    shareNote.textContent = 'SEED ONLY — NO RUN STATE';
+    sharePanel.append(shareNote, linkDisplay, copyBtn);
+
+    const stats = createPanel({ title: '◈ RUN SUMMARY' });
+    stats.classList.add('scorecard-stats', 's-4');
+    stats.appendChild(buildMetricGrid(metrics));
+
+    const actions = document.createElement('div');
+    actions.className = 'scorecard-actions';
+    actions.append(restart, newRun, titleButton, libraryButton);
+
+    body.append(depthPanel, deletionStatus, rosterPanel, causePanel, seedPanel, sharePanel, stats);
+    screen.append(header, body, actions);
+  }
+
   container.replaceChildren(screen);
 
   return {

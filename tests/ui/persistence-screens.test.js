@@ -110,6 +110,11 @@ function installDocument() {
   });
 }
 
+function installMatchMedia(match) {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.matchMedia = () => ({ matches: Boolean(match), addEventListener() {}, removeEventListener() {} });
+}
+
 function byTestId(root, testid) {
   if (root.dataset?.testid === testid) return root;
   for (const child of root.children || []) {
@@ -241,6 +246,40 @@ describe('run library screen', () => {
     expect(byTestId(container, 'library-empty')).toBeTruthy();
     expect(allText(container)).toContain('NO LIVING RUNS');
   });
+
+  it('renders the wide-layout library as a run-card grid with explicit resume and delete buttons', async () => {
+    installMatchMedia(true);
+    const first = saveRun(makeState(111, 100, 3), { accentSwatch: '#112233', theme: 'archive' });
+    const second = saveRun(makeState(222, 200, 7), { accentSwatch: '#445566', theme: 'foundry' });
+    setEntryLastPlayed(first.key, 1000);
+    setEntryLastPlayed(second.key, 2000);
+
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/library.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const screen = container.children[0];
+    expect(screen.classList.contains('wide-library-shell')).toBe(true);
+    expect(screen.dataset.wideRoot).toBe('');
+
+    const grid = byTestId(container, 'library-grid');
+    expect(grid).toBeTruthy();
+    expect(grid.classList.contains('wide-library-grid')).toBe(true);
+    // Two run-cards + one no-limit hint card.
+    expect(grid.children).toHaveLength(3);
+    const card = byTestId(container, `run-row-${second.key}`);
+    expect(card.classList.contains('run-card')).toBe(true);
+    const resumeButton = byTestId(container, `run-resume-${second.key}`);
+    expect(resumeButton.classList.contains('primary')).toBe(true);
+    const deleteButton = byTestId(container, `run-delete-${second.key}`);
+    expect(deleteButton.classList.contains('btn-danger')).toBe(true);
+
+    await resumeButton.click();
+    expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, runState: expect.objectContaining({ worldSeed: 222, depth: 7 }) } });
+    off();
+  });
 });
 
 describe('import screen', () => {
@@ -353,6 +392,38 @@ describe('scorecard screen', () => {
     expect(seen.at(-1)).toEqual({ screen: 'title', params: {} });
     await byTestId(container, 'scorecard-library').click();
     expect(seen.at(-1)).toEqual({ screen: 'library', params: {} });
+    off();
+  });
+
+  it('renders the wide scorecard as a two-pane split with summary left and share right', async () => {
+    installMatchMedia(true);
+    const runState = makeState(777, 700, 12);
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, {
+      runState,
+      summary: { scrapRecovered: 42 },
+      causeOfDeath: 'Party Wipe'
+    });
+
+    const screen = container.children[0];
+    expect(screen.classList.contains('wide-scorecard-shell')).toBe(true);
+    expect(screen.dataset.wideRoot).toBe('');
+
+    const summaryPane = byTestId(container, 'scorecard-summary-pane');
+    const sharePane = byTestId(container, 'scorecard-share-pane');
+    expect(summaryPane.classList.contains('wide-scorecard-summary')).toBe(true);
+    expect(sharePane.classList.contains('wide-scorecard-share')).toBe(true);
+
+    // Roster + cause + seed live inside the summary pane; share link and copy live inside the share pane.
+    expect(byTestId(summaryPane, 'scorecard-roster')).toBeTruthy();
+    expect(byTestId(summaryPane, 'scorecard-cause')).toBeTruthy();
+    expect(byTestId(summaryPane, 'scorecard-seed')).toBeTruthy();
+    expect(byTestId(sharePane, 'scorecard-share-link')).toBeTruthy();
+    expect(byTestId(sharePane, 'scorecard-copy-world')).toBeTruthy();
+    expect(byTestId(sharePane, 'scorecard-restart-seed')).toBeTruthy();
     off();
   });
 });
