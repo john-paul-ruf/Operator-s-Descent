@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-15-adaptive-layouts-v1';
+const CACHE_VERSION = '2026-08-15-history-and-scroll-v1';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -46,6 +46,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/rules/progression.js',
   './src/rules/protocols.js',
   './src/rules/scaling.js',
+  './src/router.js',
   './src/runtime.js',
   './src/state/bit-codec.js',
   './src/state/bus.js',
