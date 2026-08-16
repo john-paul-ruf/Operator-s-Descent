@@ -275,69 +275,69 @@
       position: relative;
     }
 
-    /* ── Wall cells ── */
+    /* ── Wall cells (vector-lattice palette, owner directive 2026-08-15) ── */
     .cell.wall {
-      background: var(--wall-color);
-      background-image:
-        radial-gradient(circle at 30% 40%, rgba(0,0,0,0.3) 1px, transparent 1px),
-        radial-gradient(circle at 70% 60%, rgba(0,0,0,0.2) 1px, transparent 1px),
-        radial-gradient(circle at 50% 20%, rgba(255,255,255,0.02) 1px, transparent 1px);
-      background-size: 4px 4px, 5px 5px, 3px 3px;
+      background: #000000;
     }
 
-    /* ── Floor cells ── */
+    /* ── Floor cells: light-grey field with dark gridline via inset shadow ── */
     .cell.floor {
-      background: var(--floor-color);
-      background-image: radial-gradient(circle at 60% 50%, rgba(126,200,227,0.015) 1px, transparent 1px);
-      background-size: 3px 3px;
+      background: #e8e8e8;
+      box-shadow: inset 0 0 0 1px #3a3a3a;
     }
 
     /* ── Visibility states ── */
     .cell.visible { filter: brightness(1.0); }
     .cell.visible.floor {
-      background-color: var(--floor-color);
-      box-shadow: inset 0 0 2px rgba(126,200,227,0.05);
+      background-color: #e8e8e8;
+      box-shadow: inset 0 0 0 1px #3a3a3a;
     }
-    .cell.visited { filter: brightness(0.4); }
-    .cell.visited.floor { background-color: var(--floor-visited); }
+    .cell.visited { filter: brightness(0.55); }
+    .cell.visited.floor {
+      background-color: #e8e8e8;
+      box-shadow: inset 0 0 0 1px #3a3a3a, inset 0 0 0 999px rgba(0,0,0,0.55);
+    }
     .cell.unvisited {
       filter: brightness(0);
-      background-color: #040108 !important;
+      background-color: #000000 !important;
       background-image: none !important;
+      box-shadow: none !important;
     }
     .cell.unvisited::before, .cell.unvisited::after { display: none !important; }
 
-    /* ── Special cells ── */
+    /* ── Special cells (readable on the light-grey floor) ── */
     .cell.descent {
-      background-color: rgba(58,232,168,0.12) !important;
-      box-shadow: inset 0 0 6px var(--heal), 0 0 4px rgba(58,232,168,0.3);
+      background-color: #e8e8e8 !important;
+      box-shadow: inset 0 0 0 1px #3a3a3a, inset 0 0 6px rgba(58,232,168,0.35), 0 0 4px rgba(58,232,168,0.3);
     }
     .cell.container {
-      background-color: rgba(232,210,58,0.1) !important;
-      box-shadow: inset 0 0 4px #e8d23a;
+      background-color: #e8e8e8 !important;
+      box-shadow: inset 0 0 0 1px #3a3a3a, inset 0 0 4px rgba(232,210,58,0.55);
     }
     .cell.pillar {
-      background: var(--wall-color) !important;
-      background-image: radial-gradient(circle at center, var(--wall-highlight) 30%, var(--wall-color) 70%) !important;
-      box-shadow: inset 0 0 4px var(--accent-dim);
+      background: #000000 !important;
+      background-image: none !important;
+      box-shadow: none;
     }
     .cell.rubble {
-      background-color: var(--floor-color) !important;
+      background-color: #e8e8e8 !important;
       background-image:
-        radial-gradient(circle at 30% 30%, rgba(74,32,144,0.6) 2px, transparent 2px),
-        radial-gradient(circle at 70% 60%, rgba(42,16,72,0.5) 1.5px, transparent 1.5px) !important;
+        radial-gradient(circle at 30% 30%, rgba(0,0,0,0.45) 2px, transparent 2px),
+        radial-gradient(circle at 70% 60%, rgba(0,0,0,0.35) 1.5px, transparent 1.5px) !important;
       background-size: 4px 4px, 5px 5px !important;
+      box-shadow: inset 0 0 0 1px #3a3a3a;
     }
     .cell.hazard {
-      background-color: rgba(232,58,58,0.06) !important;
-      background-image: repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(232,58,58,0.08) 2px, rgba(232,58,58,0.08) 3px) !important;
+      background-color: #e8e8e8 !important;
+      background-image: repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(232,58,58,0.25) 2px, rgba(232,58,58,0.25) 3px) !important;
+      box-shadow: inset 0 0 0 1px #3a3a3a;
     }
 
-    /* ── Wall edge lines ── */
-    .wall-n { box-shadow: inset 0 1px 0 var(--accent-dim); }
-    .wall-s { box-shadow: inset 0 -1px 0 var(--accent-dim); }
-    .wall-e { box-shadow: inset -1px 0 0 var(--accent-dim); }
-    .wall-w { box-shadow: inset 1px 0 0 var(--accent-dim); }
+    /* ── Wall boundary lines: solid cyan, drawn on the traversable side (inset) ── */
+    .wall-n { box-shadow: inset 0 2px 0 #7ec8e3, inset 0 0 0 1px #3a3a3a; }
+    .wall-s { box-shadow: inset 0 -2px 0 #7ec8e3, inset 0 0 0 1px #3a3a3a; }
+    .wall-e { box-shadow: inset -2px 0 0 #7ec8e3, inset 0 0 0 1px #3a3a3a; }
+    .wall-w { box-shadow: inset 2px 0 0 #7ec8e3, inset 0 0 0 1px #3a3a3a; }
 
     /* ── Tokens & markers ── */
     .party-token {

@@ -24,6 +24,20 @@ The base is neon-on-violet, ported from Universal Operator's Tarot. A single CSS
 | `--sigil-enemy` | `#e83a3a` | Enemy sigil color (red) |
 | `--sigil-echo` | `#e83a3a` | Echo sigil (red, per spec) |
 
+#### Playfield Palette
+
+Canvas-side lattice palette; not tokenized in `:root` because the playfield renders on `<canvas>` in production, driven by exported constants in `src/ui/playfield.js` (FLOOR_COLOR, WALL_COLOR, HIDDEN_COLOR, GRID_COLOR, WALL_LINE_COLOR). Owner directive (2026-08-15) — the surface reads as a vector display: cyan boundary lines, very-light-grey walkable interior with dark gridlines, pure black everywhere else.
+
+| Surface | Value | Notes |
+|---------|-------|-------|
+| Wall boundary line | #7ec8e3 | The design-system cyan. Solid, 2px, drawn inside the traversable cell edge (inset 1px). Fixed — does NOT re-tint per floor theme; party token and UI accent still do. |
+| Traversable fill (OPEN / CONTAINER / DESCENT) | #e8e8e8 | Very light grey — the only surface that carries gridlines. |
+| Gridlines | #3a3a3a, 1px | Drawn ONLY on traversable cells — the black field carries no grid. |
+| Inaccessible surfaces (wall interior, out-of-bounds, unexplored fog) | #000000 | Exact hex per directive; unexplored and unwalkable intentionally read the same, so the cyan boundary is the only geometry signal. |
+| Seen-not-visible (fog 1) | rgba(0,0,0,0.55) overlay | Drawn after the line pass; dims grey + cyan together. |
+
+Wall lines are keyed on the traversable cell's own fog state, so unexplored geometry never leaks. In combat, neighbor lookups sample the full grid (not the camera window) so a cell at the window border whose true neighbor is floor receives no spurious cyan frame.
+
 ### Typography
 
 | Role | Family | Notes |
