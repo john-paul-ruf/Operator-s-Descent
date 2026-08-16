@@ -31,6 +31,8 @@ class FakeElement {
     this.tabIndex = -1;
     this.hidden = false;
     this.parentNode = null;
+    this._boundingRect = null;
+    this._pointerCapture = new Set();
   }
   set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
   get className() { return this._className; }
@@ -46,6 +48,17 @@ class FakeElement {
   dispatch(type, event = {}) { for (const listener of this.listeners.get(type) || []) listener({ type, target: this, repeat: false, preventDefault() { this.prevented = true; }, ...event }); }
   click() { if (!this.disabled) this.dispatch('click'); }
   focus() { this.focused = true; }
+  getBoundingClientRect() { return this._boundingRect || { width: 0, height: 0, left: 0, top: 0 }; }
+  setPointerCapture(id) { this._pointerCapture.add(id); }
+  releasePointerCapture(id) { this._pointerCapture.delete(id); }
+  contains(node) {
+    let cursor = node;
+    while (cursor) {
+      if (cursor === this) return true;
+      cursor = cursor.parentNode;
+    }
+    return false;
+  }
 }
 
 class FakeCanvas extends FakeElement {
@@ -244,6 +257,88 @@ describe('exploration screen controller', () => {
     container.dispatch('keydown', keyEvent('ArrowRight'));
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
+  it('does not pan the canvas while the drag stays inside the 6px threshold', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    const canvas = byTestId(container, 'exploration-canvas');
+    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
+    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 103, clientY: 103 });
+
+    expect(canvas.style.transform).toBe('translate3d(0px, 0px, 0)');
+  });
+
+  it('pans the canvas and clamps to the body/canvas overflow bounds', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    const canvas = byTestId(container, 'exploration-canvas');
+    playfieldBody._boundingRect = { width: 300, height: 500, left: 0, top: 0 };
+    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: -10000, clientY: -10000 });
+
+    // minX = 300 - 480 = -180, minY = 500 - 768 = -268
+    expect(canvas.style.transform).toBe('translate3d(-180px, -268px, 0)');
+    expect(playfieldBody._pointerCapture.has(1)).toBe(true);
+
+    playfieldBody.dispatch('pointerup', { pointerId: 1 });
+    expect(playfieldBody._pointerCapture.has(1)).toBe(false);
+  });
+
+  it('preventDefault on touchmove while a drag is active to stop page scroll', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
+
+    let idlePrevented = false;
+    playfieldBody.dispatch('touchmove', { preventDefault: () => { idlePrevented = true; } });
+    expect(idlePrevented).toBe(false);
+
+    playfieldBody.dispatch('pointerdown', { pointerId: 2, clientX: 50, clientY: 50 });
+    let activePrevented = false;
+    playfieldBody.dispatch('touchmove', { preventDefault: () => { activePrevented = true; } });
+    expect(activePrevented).toBe(true);
+  });
+
+  it('auto-follows the party after a successful move so it stays in view', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    const canvas = byTestId(container, 'exploration-canvas');
+    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
+    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+
+    // Party at (10,10) → pixel (252,252). Body 100×100 makes party far off-screen.
+    // Move east → party at (11,10) → pixel (276,252).
+    // From panOffset (0,0), visibleRight - marginX = 100 - 48 = 52; party.x = 276 → dx = 52 - 276 = -224.
+    // Same math for y → dy = 52 - 252 = -200. Both stay inside [minX -380, 0] / [minY -668, 0].
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+
+    expect(canvas.style.transform).toBe('translate3d(-224px, -200px, 0)');
+  });
+
+  it('manual drag suppresses auto-follow until the next successful move re-engages it', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    const canvas = byTestId(container, 'exploration-canvas');
+    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
+    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 30, clientY: 30 });
+    playfieldBody.dispatch('pointerup', { pointerId: 1 });
+    // Drag alone: dx=-70, dy=-70 from (0,0). Clamped inside [-380, 0].
+    expect(canvas.style.transform).toBe('translate3d(-70px, -70px, 0)');
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    // ensurePartyVisible re-engages. From pan (-70,-70):
+    //   visibleLeft=70, visibleRight=170. party.x=276 > 170-48=122 → dx=122-276=-154 → panOffset.x = -224
+    //   visibleTop=70, visibleBottom=170. party.y=252 > 170-48=122 → dy=122-252=-130 → panOffset.y = -200
+    expect(canvas.style.transform).toBe('translate3d(-224px, -200px, 0)');
   });
 
   it('renders the three-region wide shell with telemetry, playfield column, and dock', async () => {

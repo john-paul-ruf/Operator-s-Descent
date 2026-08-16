@@ -39,6 +39,16 @@ function normalizeMoveOptions(toggles) {
   };
 }
 
+const EXPLORATION_CELL_PX = 24;
+const AUTO_FOLLOW_MARGIN_CELLS = 2;
+const DRAG_THRESHOLD_PX = 6;
+
+function scheduleFrame(callback) {
+  const raf = typeof globalThis.requestAnimationFrame === 'function' ? globalThis.requestAnimationFrame : null;
+  if (raf) raf(callback);
+  else callback();
+}
+
 export function mount(container, params = {}) {
   const runState = params.runState;
   const floor = params.floor;
@@ -115,7 +125,111 @@ export function mount(container, params = {}) {
   canvas.height = 768;
   canvas.dataset.testid = 'exploration-canvas';
   playfieldBody.appendChild(canvas);
+  playfieldBody.style.cursor = 'grab';
   const playfield = createPlayfield(canvas);
+
+  const panOffset = { x: 0, y: 0 };
+  let suppressFollow = false;
+  let dragState = null;
+
+  function readSizes() {
+    const canvasRect = canvas.getBoundingClientRect?.() || { width: canvas.width, height: canvas.height };
+    const bodyRect = playfieldBody.getBoundingClientRect?.() || { width: canvasRect.width, height: canvasRect.height };
+    return {
+      canvasW: canvasRect.width || canvas.width,
+      canvasH: canvasRect.height || canvas.height,
+      bodyW: bodyRect.width || canvasRect.width || canvas.width,
+      bodyH: bodyRect.height || canvasRect.height || canvas.height
+    };
+  }
+
+  function clampPan() {
+    const { canvasW, canvasH, bodyW, bodyH } = readSizes();
+    const minX = Math.min(0, bodyW - canvasW);
+    const minY = Math.min(0, bodyH - canvasH);
+    panOffset.x = Math.max(minX, Math.min(0, panOffset.x));
+    panOffset.y = Math.max(minY, Math.min(0, panOffset.y));
+  }
+
+  function applyPan() {
+    canvas.style.transform = `translate3d(${panOffset.x}px, ${panOffset.y}px, 0)`;
+  }
+
+  function ensurePartyVisible() {
+    if (suppressFollow) return;
+    const partyPos = lattice.getPartyPosition();
+    if (!partyPos) return;
+    const { canvasW, canvasH, bodyW, bodyH } = readSizes();
+    const scaleX = canvas.width ? canvasW / canvas.width : 1;
+    const scaleY = canvas.height ? canvasH / canvas.height : 1;
+    const cellPxX = EXPLORATION_CELL_PX * scaleX;
+    const cellPxY = EXPLORATION_CELL_PX * scaleY;
+    const partyPxX = partyPos.x * cellPxX + cellPxX / 2;
+    const partyPxY = partyPos.y * cellPxY + cellPxY / 2;
+    const visibleLeft = -panOffset.x;
+    const visibleTop = -panOffset.y;
+    const visibleRight = visibleLeft + bodyW;
+    const visibleBottom = visibleTop + bodyH;
+    const marginX = AUTO_FOLLOW_MARGIN_CELLS * cellPxX;
+    const marginY = AUTO_FOLLOW_MARGIN_CELLS * cellPxY;
+    let dx = 0;
+    let dy = 0;
+    if (partyPxX < visibleLeft + marginX) dx = visibleLeft + marginX - partyPxX;
+    else if (partyPxX > visibleRight - marginX) dx = visibleRight - marginX - partyPxX;
+    if (partyPxY < visibleTop + marginY) dy = visibleTop + marginY - partyPxY;
+    else if (partyPxY > visibleBottom - marginY) dy = visibleBottom - marginY - partyPxY;
+    if (dx === 0 && dy === 0) return;
+    panOffset.x += dx;
+    panOffset.y += dy;
+    clampPan();
+    applyPan();
+  }
+
+  function onPointerDown(event) {
+    dragState = {
+      pointerId: event.pointerId,
+      startX: event.clientX ?? 0,
+      startY: event.clientY ?? 0,
+      startPanX: panOffset.x,
+      startPanY: panOffset.y,
+      moved: false
+    };
+    if (event.pointerId != null) playfieldBody.setPointerCapture?.(event.pointerId);
+  }
+
+  function onPointerMove(event) {
+    if (!dragState) return;
+    if (event.pointerId != null && dragState.pointerId != null && event.pointerId !== dragState.pointerId) return;
+    const dx = (event.clientX ?? 0) - dragState.startX;
+    const dy = (event.clientY ?? 0) - dragState.startY;
+    if (!dragState.moved && Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
+    dragState.moved = true;
+    suppressFollow = true;
+    playfieldBody.style.cursor = 'grabbing';
+    panOffset.x = dragState.startPanX + dx;
+    panOffset.y = dragState.startPanY + dy;
+    clampPan();
+    applyPan();
+  }
+
+  function onPointerEnd(event) {
+    if (!dragState) return;
+    if (event.pointerId != null && dragState.pointerId != null) {
+      playfieldBody.releasePointerCapture?.(event.pointerId);
+    }
+    dragState = null;
+    playfieldBody.style.cursor = 'grab';
+  }
+
+  function onTouchMove(event) {
+    if (dragState) event.preventDefault?.();
+  }
+
+  playfieldBody.addEventListener('pointerdown', onPointerDown);
+  playfieldBody.addEventListener('pointermove', onPointerMove);
+  playfieldBody.addEventListener('pointerup', onPointerEnd);
+  playfieldBody.addEventListener('pointercancel', onPointerEnd);
+  playfieldBody.addEventListener('touchmove', onTouchMove, { passive: false });
 
   const lattice = createLattice(floor, runState);
   runState.partyPosition = lattice.getPartyPosition();
@@ -162,6 +276,13 @@ export function mount(container, params = {}) {
   renderPlayfield();
   refreshLootState();
   pushAudioProximity();
+
+  scheduleFrame(() => {
+    if (unmounted) return;
+    clampPan();
+    ensurePartyVisible();
+    applyPan();
+  });
 
   const unsubscribers = [
     bus.on('state:combat-end', ({ result } = {}) => {
@@ -230,6 +351,8 @@ export function mount(container, params = {}) {
     refreshVisibility();
     refreshLootState();
     renderPlayfield();
+    suppressFollow = false;
+    ensurePartyVisible();
     runState.rngState = rngCursor.getState();
     bus.dispatch('state:danger-clock-tick', { progress: runState.dangerClockProgress });
     pushAudioProximity();
@@ -271,6 +394,11 @@ export function mount(container, params = {}) {
       if (unmounted) return;
       unmounted = true;
       for (const unsubscribe of unsubscribers) unsubscribe();
+      playfieldBody.removeEventListener('pointerdown', onPointerDown);
+      playfieldBody.removeEventListener('pointermove', onPointerMove);
+      playfieldBody.removeEventListener('pointerup', onPointerEnd);
+      playfieldBody.removeEventListener('pointercancel', onPointerEnd);
+      playfieldBody.removeEventListener('touchmove', onTouchMove);
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
       consoleController.destroy();
