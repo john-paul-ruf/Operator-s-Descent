@@ -2,7 +2,8 @@ import { createStatusBar, createTelemetryDock } from '../status-strip.js';
 import { createPlayfield } from '../playfield.js';
 import { createConsole } from '../console/console.js';
 import { createInputHandler } from '../input.js';
-import { currentLayoutClass } from '../layout.js';
+import { attachWidePanes, currentLayoutClass } from '../layout.js';
+import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
@@ -273,8 +274,10 @@ export function mount(container, params = {}) {
   };
 
   const consoleController = createConsole(viewState, { variant: isWide ? 'dock' : 'bar' });
+  let widePanesCleanup = null;
   if (isWide) {
     container.firstChild.appendChild(consoleController.render());
+    widePanesCleanup = attachWidePanes({ shell: container.firstChild, loadSettings, saveSettings });
   } else {
     container.appendChild(consoleController.render());
   }
@@ -416,6 +419,7 @@ export function mount(container, params = {}) {
       playfieldBody.removeEventListener('pointerup', onPointerEnd);
       playfieldBody.removeEventListener('pointercancel', onPointerEnd);
       playfieldBody.removeEventListener('touchmove', onTouchMove);
+      widePanesCleanup?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
       consoleController.destroy();

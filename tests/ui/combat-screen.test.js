@@ -427,9 +427,9 @@ describe('combat screen controller', () => {
     expect(shell).not.toBe(null);
     expect(shell.className).toContain('wide-shell');
     expect(shell.dataset.wideRoot).toBe('');
-    expect(shell.children.map((child) => child.className.split(/\s+/)[0])).toEqual([
-      'wide-telemetry-dock', 'wide-playfield-column', 'wide-console-dock'
-    ]);
+    expect(shell.children.map((child) => child.className.split(/\s+/)[0])).toEqual(
+      expect.arrayContaining(['wide-telemetry-dock', 'wide-playfield-column', 'wide-console-dock'])
+    );
     expect(byTestId(container, 'combat-canvas')).not.toBe(null);
     expect(byTestId(container, 'telemetry-init-block')).not.toBe(null);
     expect(byTestId(container, 'telemetry-active-actor')).not.toBe(null);
@@ -452,6 +452,31 @@ describe('combat screen controller', () => {
     expect(byClass(preview, 'target-name')).not.toBe(null);
     expect(byClass(preview, 'target-detail')).not.toBe(null);
     expect(byTestId(container, 'combat-confirm').className).toContain('btn-confirm');
+  });
+
+  it('wide mount attaches pane handles + collapse buttons and cleans them up on unmount', async () => {
+    installMatchMedia(true);
+    const { container, controller } = await mountCombat();
+
+    expect(byTestId(container, 'pane-handle-left')).not.toBe(null);
+    expect(byTestId(container, 'pane-handle-right')).not.toBe(null);
+    expect(byTestId(container, 'pane-collapse-left')).not.toBe(null);
+    expect(byTestId(container, 'pane-collapse-right')).not.toBe(null);
+
+    controller.unmount();
+
+    expect(byTestId(container, 'pane-handle-left')).toBe(null);
+    expect(byTestId(container, 'pane-handle-right')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-left')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-right')).toBe(null);
+  });
+
+  it('portrait mount does not attach pane handles or collapse buttons', async () => {
+    const { container } = await mountCombat();
+    expect(byTestId(container, 'pane-handle-left')).toBe(null);
+    expect(byTestId(container, 'pane-handle-right')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-left')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-right')).toBe(null);
   });
 
   it('routes party wipe to scorecard intent and removes input on unmount', async () => {

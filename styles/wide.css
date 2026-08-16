@@ -10,15 +10,104 @@
   }
 
   /* ═══ WIDE SHELL — three-region grid (Adaptive Layout System) ═══ */
+  /*
+   * Pane widths are driven by CSS custom properties owned by the M100 pane
+   * controller (attachWidePanes in src/ui/layout.js). --wide-left-w and
+   * --wide-right-w carry the current numeric width in px; data-pane-left /
+   * data-pane-right = "open" | "collapsed" flip the pane between resizable
+   * and rail states. The middle track keeps its portrait 9:16 proportion
+   * (Custom Rule 8) and never varies.
+   */
   .wide-shell {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(280px, 1fr) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, 1.2fr);
+    grid-template-columns:
+      minmax(200px, var(--wide-left-w, 280px))
+      minmax(320px, calc(100vh * 9 / 16))
+      minmax(280px, var(--wide-right-w, 360px));
     grid-template-rows: 100vh;
     width: 100vw;
     height: 100vh;
     z-index: 10;
   }
+  .wide-shell[data-pane-left="collapsed"] {
+    grid-template-columns:
+      48px
+      minmax(320px, calc(100vh * 9 / 16))
+      minmax(280px, var(--wide-right-w, 360px));
+  }
+  .wide-shell[data-pane-right="collapsed"] {
+    grid-template-columns:
+      minmax(200px, var(--wide-left-w, 280px))
+      minmax(320px, calc(100vh * 9 / 16))
+      96px;
+  }
+  .wide-shell[data-pane-left="collapsed"][data-pane-right="collapsed"] {
+    grid-template-columns: 48px minmax(320px, calc(100vh * 9 / 16)) 96px;
+  }
+  /* Collapsed left dock: only the collapse button (its ◀ flips to ▶ by data-attr) shows.
+     Every direct child of the telemetry dock is hidden. */
+  .wide-shell[data-pane-left="collapsed"] .wide-telemetry-dock > * { display: none; }
+  /* Collapsed right dock: hide the content pane; keep the vertical tab column usable. */
+  .wide-shell[data-pane-right="collapsed"] .wide-console-content { display: none; }
+  .wide-shell[data-pane-right="collapsed"] .wide-console-dock { grid-template-columns: 96px 0; }
+
+  /* Resize handle: 8px hit strip straddling the gap between docks and the playfield. */
+  .pane-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    z-index: 20;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.15s ease;
+    touch-action: none;
+  }
+  .pane-resize-handle:hover,
+  .pane-resize-handle:focus {
+    background: rgba(126, 200, 227, 0.18);
+    box-shadow: 0 0 8px var(--accent);
+    outline: none;
+  }
+  .pane-resize-handle.pane-resize-left { left: calc(var(--wide-left-w, 280px) - 4px); }
+  .pane-resize-handle.pane-resize-right { right: calc(var(--wide-right-w, 360px) - 4px); }
+  .wide-shell[data-pane-left="collapsed"] .pane-resize-handle.pane-resize-left { display: none; }
+  .wide-shell[data-pane-right="collapsed"] .pane-resize-handle.pane-resize-right { display: none; }
+
+  /* Collapse chevron: pointer-only affordance, 44px minimum per design.md wide input rules.
+     Positioned at the top-inside corner of each dock; opens/collapses the pane. */
+  .pane-collapse-btn {
+    position: absolute;
+    top: 8px;
+    z-index: 21;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+    background: var(--bg-panel-elevated);
+    border: 1px solid var(--border-dim);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+    transition: all 0.15s ease;
+  }
+  .pane-collapse-btn:hover,
+  .pane-collapse-btn:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    outline: none;
+  }
+  .pane-collapse-btn.pane-collapse-left { left: 8px; }
+  .pane-collapse-btn.pane-collapse-right { right: 8px; }
+  /* When collapsed, the chevron flips to point outward (expand hint). */
+  .wide-shell[data-pane-left="collapsed"] .pane-collapse-btn.pane-collapse-left::before { content: '▶'; }
+  .wide-shell[data-pane-left="collapsed"] .pane-collapse-btn.pane-collapse-left { font-size: 0; }
+  .wide-shell[data-pane-left="collapsed"] .pane-collapse-btn.pane-collapse-left::before { font-size: 14px; }
+  .wide-shell[data-pane-right="collapsed"] .pane-collapse-btn.pane-collapse-right::before { content: '◀'; }
+  .wide-shell[data-pane-right="collapsed"] .pane-collapse-btn.pane-collapse-right { font-size: 0; }
+  .wide-shell[data-pane-right="collapsed"] .pane-collapse-btn.pane-collapse-right::before { font-size: 14px; }
 
   /* Telemetry dock (left region): stacked status fields + persistent LOG feed */
   .wide-telemetry-dock {

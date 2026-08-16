@@ -2,7 +2,8 @@ import { createStatusBar, createTelemetryDock } from '../status-strip.js';
 import { createPlayfield, cellAtPoint, COMBAT_CELL_SIZE, COMBAT_GRID_W, COMBAT_GRID_H } from '../playfield.js';
 import { createConsole } from '../console/console.js';
 import { createInputHandler } from '../input.js';
-import { currentLayoutClass } from '../layout.js';
+import { attachWidePanes, currentLayoutClass } from '../layout.js';
+import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
@@ -338,8 +339,13 @@ export function mount(container, params = {}) {
     combatCanConfirm: canConfirm
   };
   const consoleController = createConsole(viewState, { variant: isWide ? 'dock' : 'bar' });
-  if (isWide) shell.appendChild(consoleController.render());
-  else container.appendChild(consoleController.render());
+  let widePanesCleanup = null;
+  if (isWide) {
+    shell.appendChild(consoleController.render());
+    widePanesCleanup = attachWidePanes({ shell, loadSettings, saveSettings });
+  } else {
+    container.appendChild(consoleController.render());
+  }
   consoleController.setMode('combat');
 
   // Pointer wiring on the playfield container (canvas itself is pointer-events: none). A press
@@ -856,6 +862,7 @@ export function mount(container, params = {}) {
     unmount() {
       if (!mounted) return;
       mounted = false;
+      widePanesCleanup?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
       consoleController.destroy();

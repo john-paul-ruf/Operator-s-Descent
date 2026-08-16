@@ -431,9 +431,9 @@ describe('exploration screen controller', () => {
     expect(shell).not.toBe(null);
     expect(shell.className).toContain('wide-shell');
     expect(shell.dataset.wideRoot).toBe('');
-    expect(shell.children.map((child) => child.className.split(/\s+/)[0])).toEqual([
-      'wide-telemetry-dock', 'wide-playfield-column', 'wide-console-dock'
-    ]);
+    expect(shell.children.map((child) => child.className.split(/\s+/)[0])).toEqual(
+      expect.arrayContaining(['wide-telemetry-dock', 'wide-playfield-column', 'wide-console-dock'])
+    );
     const alert = byTestId(container, 'alert-banner');
     expect(alert).not.toBe(null);
     expect(alert.className.split(/\s+/)).toContain('playfield-alert-banner');
@@ -442,5 +442,30 @@ describe('exploration screen controller', () => {
     expect(byTestId(container, 'console-tab-move').getAttribute('aria-selected')).toBe('true');
     expect(byTestId(container, 'console-tab-combat').disabled).toBe(true);
     expect(byClass(container, 'console-dim-layer')).toBe(null);
+  });
+
+  it('wide mount attaches pane handles + collapse buttons and cleans them up on unmount', async () => {
+    installMatchMedia(true);
+    const { container, controller } = await mountExploration();
+
+    expect(byTestId(container, 'pane-handle-left')).not.toBe(null);
+    expect(byTestId(container, 'pane-handle-right')).not.toBe(null);
+    expect(byTestId(container, 'pane-collapse-left')).not.toBe(null);
+    expect(byTestId(container, 'pane-collapse-right')).not.toBe(null);
+
+    controller.unmount();
+
+    expect(byTestId(container, 'pane-handle-left')).toBe(null);
+    expect(byTestId(container, 'pane-handle-right')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-left')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-right')).toBe(null);
+  });
+
+  it('portrait mount does not attach pane handles or collapse buttons', async () => {
+    const { container } = await mountExploration();
+    expect(byTestId(container, 'pane-handle-left')).toBe(null);
+    expect(byTestId(container, 'pane-handle-right')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-left')).toBe(null);
+    expect(byTestId(container, 'pane-collapse-right')).toBe(null);
   });
 });
