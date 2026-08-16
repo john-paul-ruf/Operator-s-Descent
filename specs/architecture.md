@@ -953,3 +953,43 @@ No HTTP API — the game is fully client-side. The only "API" surfaces are inter
 ### M82 Main Entry — public behavior delta
 
 - Unchanged. `main.js` still passes `window.location.hash` into `activateRuntime({ initialHash })` — the boot fragment interpretation now lives entirely in the runtime + router.
+
+<!-- SESSION-02 (history-and-scroll) -->
+
+### M103 Scroll Memory (new)
+
+**Path:** `src/ui/scroll-memory.js`
+**Owns:** Keyed scroll-offset store plus capture/restore helpers that preserve `scrollTop` across `replaceChildren`-style re-renders and re-mounts of the same surface.
+**Imports:** none.
+**Consumed by:** M60 `ui/console/console.js`, M69 `ui/screens/creation.js`, M72 `ui/screens/library.js`.
+
+**Public exports:**
+- `captureScroll(element, key)` → stores `element.scrollTop` under `key` (string). No-op on missing element, empty key, or a non-finite/negative scrollTop. Re-capturing an existing key refreshes recency for the LRU eviction pass.
+- `restoreScroll(element, key)` → schedules a `requestAnimationFrame(() => requestAnimationFrame(...))` (double-rAF, so layout completes between destroy and read) that clamps the stored offset to `max(0, scrollHeight - clientHeight)` and writes `element.scrollTop`. No-op when the key is unknown, the element is null, or `element.isConnected === false`. Falls through to synchronous application when `requestAnimationFrame` is unavailable (Vitest environment).
+- `preserveScroll(element, key, render)` → `captureScroll` → invoke `render()` → `restoreScroll`; returns `render()`'s return value.
+- `clearScrollMemory(prefix?)` → drop every stored offset when called without arguments; when given a string, delete only keys that start with the prefix.
+
+**Key convention:** `'<surface>:<pane>'` — the shipped call-sites use `console:${modeId}` (one entry per console mode, seven total), `creation:editor` (shared by portrait `.creation-body` and wide `.wide-editor`), and `library:list` (shared by portrait `.screen-body` and wide `.wide-library-body`).
+
+**Invariants:**
+- No DOM globals at import time (no `document` / `window` reads).
+- No bus dependency; callers hold the lifetime and choose whether to `clearScrollMemory` on shutdown.
+- Module-level `Map` capped at 64 entries; oldest insertion evicted first when the cap is exceeded — stale entries self-correct via the clamp on restore.
+- Factory-free plain functions; no third-party dependencies.
+
+### M60 Console Shell — public behavior delta
+
+- The mode-context `refresh` callback exposed to the seven mode modules is now `refreshCurrentMode` (captures `console:<currentMode>` before delegating to `renderCurrentMode`); mode modules see no signature change.
+- `renderCurrentMode` calls `restoreScroll(contentArea, 'console:<currentMode>')` after mounting the new content so re-entry to a mode reinstates its remembered scroll position.
+- `setMode(nextMode)` captures the outgoing mode's `contentArea.scrollTop` under `console:<outgoingMode>` before switching, so switching modes remembers each mode's position for the life of the console.
+- No changes to bus events, tab layout, expand/collapse behavior, or the input contract.
+
+### M69 Creation Screen — public behavior delta
+
+- The internal `render()` function captures the active scroll pane under `creation:editor` before `clear(container)` and restores it after the new subtree mounts. The tracked pane is `.wide-editor` in the wide layout and `.creation-body` (the `.screen-body`) in portrait — assigned inside `renderWide`/`renderPortrait` respectively.
+- Same key is used across both layouts so a layout-switch re-mount or a route-history re-mount lands at the previous scroll position.
+
+### M72 Library Screen — public behavior delta
+
+- The internal `render()` function captures the active list-scroll container under `library:list` before `container.replaceChildren()` and restores it after the new screen mounts. The tracked pane is the `.screen-body` returned by `createScreenBody` in both layouts (`data-testid="library-list"`); wide layout uses the `wide-library-body` variant, portrait uses the `s-3` variant — both scroll.
+- Restore-on-mount covers hashchange-driven re-mounts (SESSION-01's back/forward via M102) without any additional wiring.
