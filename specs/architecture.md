@@ -1127,3 +1127,34 @@ New public exports (render-time only — display strings are never persisted; sa
 ## CSS
 
 - M79 (`styles/components.css`) — adds `.card-desc` (small `--text-secondary` line under `.card-name`). Mock class parity is mock→prod (`scripts/design-scan/check-mock-classes.js`); a production-only class defined in production CSS cannot regress the scan and no mock edits are required.
+
+<!-- SESSION-04 (control-and-polish) -->
+
+## SESSION-04 (control-and-polish) — M93 grows: compiler grammar primitives
+
+### M93 — Typeface Tooling (`tools/font/build_font.py`, `font-src/glyphs.json`)
+
+The recipe compiler in `tools/font/build_font.py` gains four schema-additive primitives and two node kinds. The old four-primitive grammar (rings-with-gaps, radial strokes, axis-aligned bars, square/diamond nodes) drew every mark as a boxy plus-sign; the extended vocabulary lets each family carry its own construction.
+
+**Added primitives** (all optional; recipes that never mention them keep prior behavior):
+
+- **`rings[].cx`, `rings[].cy`** — full ring center offsets (default 0, 0). The interior `arc_segment` was refactored to accept explicit center coordinates so `ring()` can dispatch to any center.
+- **`arcs[]`** — offset arc segments as their own top-level list. Each entry: `{cx?, cy?, radius, width, start, sweep, steps?=6}`. Emits one arc_segment; steps default is intentionally low to keep the byte budget tight.
+- **`bars[].angle`** — optional rotation angle (degrees) for the axis-aligned bar, rotated about the bar's own center. When absent or 0, the axis-aligned `rect()` fast path is taken (unchanged output for old recipes).
+- **`traces[]`** — width-stroked open polylines. Each entry: `{points: [[x,y], …], width}`. Emitted as one rotated rectangle per segment (all rectangles share consistent winding so overlaps merge cleanly under non-zero fill). Points are relative to CENTER, matching the `bars` coordinate convention.
+- **`nodes[].kind = 'circle'`** — 8-sided regular polygon (rotated 22.5° so it never aligns with the axis-aligned bar grammar).
+- **`nodes[].kind = 'tick'`** — short bar oriented tangential to the placement angle (thickness = max(8, 0.6 × size)).
+
+**Determinism preserved.** All new primitives round all coordinates to integers at emission and use fixed `steps` counts (default 6 for offset arcs, 10 for full rings). `python3 tools/font/build_font.py --check-deterministic` builds twice and compares bytes; verified green at 6,988 bytes.
+
+**Byte discipline.** Rev-2 WOFF2 is 6,988 bytes (rev 1 was 7,916), inside the 4–8 KB acceptance range with ~1.2 KB headroom.
+
+**Recipe schema is additive.** Every existing recipe field still works with the new draw pipeline; the new fields are simply ignored when absent. All 72 recipes in `font-src/glyphs.json` were re-authored to exploit the extended grammar, keeping the frozen codepoint/family/archetype ordering from `data/sigils.json` intact.
+
+### M14 — Font Asset (`assets/descent-sigil.woff2`)
+
+Rebuilt from rev-2 recipes; deterministic; passes `python3 scripts/verify-font.py` (72 glyphs, advance 1000, fixed-pitch, hhea 850/-150/0).
+
+### M81 — Service Worker (`service-worker.js`)
+
+`CACHE_VERSION` bumped to `2026-08-16-control-and-polish-v1`. No manifest additions (font asset and all docs/font-src/tools paths remain excluded per Custom Rule 12).
