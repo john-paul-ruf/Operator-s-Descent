@@ -911,3 +911,45 @@ No HTTP API — the game is fully client-side. The only "API" surfaces are inter
 5. **Data file loading timing.** All `data/*.json` files are fetched at game start (before title screen renders). If this causes a perceptible delay, they can be loaded lazily — e.g., `themes.json` only when floor generation begins. **Recommendation:** Preload all at start since the total is ~20 KB; the title screen is static and can render while data loads in parallel. No architectural change needed.
 
 6. **Deterministic PRNG cross-contamination — RESOLVED.** The PRNG uses two independent streams: one for floor generation (`hash(worldSeed, "gen")`) and one for combat/event rolls (`hash(worldSeed, "combat")`). This prevents a regenerated floor from silently shifting all subsequent combat rolls — a subtle determinism bug that would be very difficult to diagnose. Both states serialize compactly (2 × 16 bytes = 32 bytes) in the save encoding. The `core/rng-cursor.js` module manages both streams; the save state stores both cursors. **No further decision needed.** Coder implements dual streams as specified.
+
+<!-- SESSION-01 (history-and-scroll) -->
+
+### M102 Router (new)
+
+**Path:** `src/router.js`
+**Owns:** URL fragment codec (`#a=`, `#r=`, `#w=`) and the browser-history controller that drives `hashchange`-based navigation and history sync.
+**Imports:** M43 `state/save-encode.js` (`encodeSeed`), M44 `state/save-decode.js` (`decodeSeed`).
+**Consumed by:** M86 `runtime.js`.
+
+**Public exports:**
+- `parseFragment(hash)` → discriminated union:
+  - `{ kind: 'none' }` — empty hash
+  - `{ kind: 'run', fragment }` — `#r=<base64url>`
+  - `{ kind: 'seed', seed }` — `#w=<base32>`, `seed` is the raw base32 string
+  - `{ kind: 'route', route, save, seed, from }` — `#a=<route>[&save=current][&seed=<b32>][&from=<route>]`; `seed` is a decoded `uint32` or `null`; `save` is `'current' | null`; `from` is a validated route or `null`
+  - `{ kind: 'invalid' }` — anything else (unknown route, unknown key, malformed seed, duplicate keys, unknown top-level prefix)
+- `buildFragment({ route, save, seed, from })` → `#a=…` string with parameters in the fixed order `a,save,seed,from`. Returns `''` for an invalid route.
+- `canonicalFragmentFor(screen, params)` → the canonical `#a=` fragment for the given mount:
+  - `exploration` / `combat` → `#a=exploration&save=current[&seed=…]` (combat canonicalizes to exploration)
+  - `creation` with numeric or base32 `preloadedSeed` → `#a=creation&seed=<b32>`; without → `#a=creation`
+  - `scorecard` with `seed` → `#a=scorecard&seed=<b32>`
+  - `settings` with a valid `from` → `#a=settings&from=<route>`
+  - all other routes → `#a=<route>`
+- `createHistoryController({ window, onNavigate })` → factory that returns `{ start(), stop(), sync(screen, params, { push }) }`. DI'd on `window` (no import-time DOM access). `sync` writes `pushState`/`replaceState` and suppresses the resulting hashchange; `start` attaches the single `hashchange` listener; `stop` detaches it. Feature-detects `addEventListener`/`history` so it degrades cleanly in test harnesses with stub `window` objects.
+- `ROUTES` — frozen route-name tuple mirrored in `runtime.js`.
+
+**Invariants:**
+- No DOM globals at import time — everything runs through the injected `window`.
+- No third-party dependencies; factory functions only; no wildcard exports.
+- Duplicate `#a=` keys, unknown keys, or an undecodable `seed` all classify as `invalid` — the boot resolver then falls back to `title` and rewrites the fragment.
+
+### M86 Hot Runtime — public behavior delta
+
+- `activateRuntime({ initialHash })` now parses `initialHash` through `parseFragment` and dispatches to `resolveParsedFragment`, which handles `#r=` (import), `#w=` (creation), `#a=<route>` (see M102 canonical policy), and the resume-from-library flow for `#a=exploration&save=current[&seed=…]` (uses M45 `listRuns`/`loadRun`, newest `alive`-run wins, seed-filtered when present, `title` fallback on miss).
+- The runtime installs an M102 history controller against the real `window`. Every successful `mountScreen` synchronizes the URL to the canonical fragment for the mounted screen unless the mount was itself triggered by a hashchange (in which case it echoes the URL exactly once). User-driven `ui:navigate` route changes push; combat handoff, floor transitions, party wipe, layout re-mount, and hashchange re-mounts replace. In-run fragments (`#a=exploration&save=current&seed=…`) are constant across re-mounts so the write is a no-op.
+- `shutdownRuntime` now also calls `historyController.stop()` and clears the push/history-mount flags alongside the existing `layoutControllerCleanup` teardown.
+- No changes to bus event contracts, `runtime:route` payload shape, or the autosave lifecycle.
+
+### M82 Main Entry — public behavior delta
+
+- Unchanged. `main.js` still passes `window.location.hash` into `activateRuntime({ initialHash })` — the boot fragment interpretation now lives entirely in the runtime + router.
