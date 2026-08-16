@@ -49,3 +49,35 @@
 - **Artifact**: final SESSION-34 WOFF2 is 7,916 bytes, inside the 4–8 KB acceptance target. The compiler now uses lower-resolution deterministic arc construction to reduce bytes while preserving 34px silhouettes.
 - **Contact sheet**: `./docs/sigil-contact-sheet.html` and `./docs/sigil-contact-sheet.css` provide labeled 34px and 220px monochrome plus production-glow views. Browser inspection over `http://127.0.0.1:4173/docs/sigil-contact-sheet.html` completed; screenshot proof was saved at `/tmp/session34-contact-sheet.png`.
 - **Acceptance disposition**: all 72 glyphs are nonempty, mapped from `./data/sigils.json`, visibly grouped by family/archetype, and distinguish player from bestiary construction without relying on red. No conscious limitation remains for SESSION-34.
+
+## control-and-polish SESSION-04 — Rev 2 (owner directive: "redo all the woff sigals, they are gross")
+
+- **Verdict on execution, not taxonomy**: family and archetype grammar established across SESSIONs 29–34 was preserved. What changed is the geometry: the four-primitive compiler (rings-with-gaps, radial strokes, axis-aligned bars, square/diamond nodes) drew everything as boxy plus-signs; the extended grammar adds vocabulary the recipes actually needed.
+- **Compiler grammar additions (schema-additive)**: `arcs` (per-arc `cx`/`cy` offset — asymmetric halos), `bars.angle` (rotated/chamfered rectangles about the bar's own center), `traces` (width-stroked polylines emitted as one rotated rectangle per segment — circuit branches that aren't center-radial), `rings.cx`/`rings.cy` (off-origin full rings), and two new node kinds: `circle` (8-sided regular polygon, deterministic integer coords) and `tick` (short bar oriented tangential to the placement radius). Old recipes still parse — every new field is optional with the prior default.
+- **Determinism**: preserved via low-resolution integer-friendly arc construction (`steps` default 6 for offset arcs, 10 for full rings) and rotated rectangles built from `round(cos/sin)` — `python3 tools/font/build_font.py --check-deterministic` builds twice and compares bytes.
+- **Motifs per family (rev 2 craft goals)**:
+  - **Breacher (8)** — thick closed outer ring (radius 258–286, width 50–74); bold cross/X strokes; chamfered rotated bar cores; heavy square/diamond corner locks. Reads sealed and armored.
+  - **Ghost (8)** — one thin broken outer arc (2–3 wide gaps); polyline needle traces displaced off-axis; small ticks/diamonds; wide negative space. Reads unfinished and sparse.
+  - **Compiler (8)** — sparsely broken outer ring; polyline traces forming L-branches, forks, and cascades; small circle nodes as junction dots. Reads as circuit routing, not radial.
+  - **Anchor (8)** — vertical stem stroke, heavy ground beam at y ≈ −240, bilateral bracing; optional inner nested ring or secondary rail; grounded low. Reads as a footed pillar (⊥-family), never Latin T.
+  - **Oracle (8)** — one to four offset arc halos around off-center points; sparse radial strokes; tick/circle sight nodes. Reads open and observational.
+  - **Operator (8)** — every mark carries the same five voices: broken ring fragment, polyline return, secondary branch or halo, grounded rail, and one node accent. Reads hybrid without collapsing into "generic".
+- **Motifs per bestiary archetype (rev 2 craft goals)**:
+  - **Drone (3)** — clusters of 3–5 small offset arcs (swarm cells) plus a short trace between two; asymmetric distribution.
+  - **Warden (3)** — thick broken outer ring plus heavy interrupted slabs (some rotated); dense but visibly fractured.
+  - **Stalker (3)** — long hooked polyline traces with sharp direction changes; off-axis trailing bar; broken ring on the "watched" side.
+  - **Choir (3)** — heavy central circle plus a clustered lattice of smaller circles; multiple overlapping halo arcs.
+  - **Null (3)** — heavily gapped ring plus one or two long slash bars crossing the negative center; absence-based.
+  - **Construct (3)** — over-dense rotated frame stacks and grids; misaligned rectangles; slab returns.
+  - **Phantom (3)** — two or three displaced arc halos rendered with the same radius from slightly-offset centers; echo pattern.
+  - **Apex (3)** — heavy crossing strokes/traces plus a dominant off-corner mass; compound asymmetry.
+- **Collision checks performed** (bank vs. Latin/digit/box-drawing/UI icons; cross-family at 34px):
+  - Anchor's stem-on-baseline motif inverts Latin T (bar on the *lower* side) — reads as ⊥, not T. Retained.
+  - Compiler 7's spine + two lateral branches offsets the branches vertically (y = ±90, opposite sides) rather than the symmetric H layout.
+  - Compiler 8's four-corner routes converge on a central circle rather than crossing at a bare X.
+  - Null n1's cancel-cross is contained inside a broken outer ring rather than reading as a stand-alone X.
+  - Bestiary and player Compiler both use circle nodes; bestiary bank keeps asymmetric arc distributions to remain classifiable at 34px.
+  - Ghost and Oracle stay separable via ring topology: Ghost keeps one broken outer arc; Oracle drops the outer ring in favor of multiple *offset* halos.
+- **Byte size**: WOFF2 rebuilt at 6,988 bytes (rev 1 was 7,916 bytes) — 4–8 KB acceptance range preserved with ~1.2 KB headroom for future tweaks.
+- **Contact sheet**: `./docs/sigil-contact-sheet.html` and `./docs/sigil-contact-sheet.css` render all 72 rev-2 glyphs at 34px (mono + glow) and 220px (mono + glow). A rev-2 subtitle line highlights the new primitive grammar so the reviewer can eyeball each family's identity against the motif list above. Served locally via `PORT=8081 HOST=127.0.0.1 node scripts/server.js` and inspected at `http://127.0.0.1:8081/docs/sigil-contact-sheet.html` (all four sections return 200; font cmap and glyph outlines verified deterministic before browser inspection).
+- **Known risk pairs held for owner sign-off at 34px**: Ghost 3 vs Ghost 7 (both use zigzag traces — differ in the ring's third gap and the trace's turn count); Compiler 3 vs Operator 4 (both use L-brackets — Compiler 3 owns the nested inner ring while Operator 4 pairs the bracket with the anchor-style ground rail); Phantom ph2 vs Oracle o1 (three overlapping arcs — Phantom stacks identical-radius arcs from three collinear centers, Oracle spreads unequal-radius halos in different angular ranges). Owner sign-off requested per the session prompt — glyph taste is the point.

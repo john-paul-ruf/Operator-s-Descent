@@ -22,6 +22,7 @@ body {
 }
 
 h1, h2, h3 { margin: 0 0 12px; }
+.revision { color: var(--glow); font-size: 13px; margin: 0 0 8px; letter-spacing: 0.02em; }
 section { margin: 0 0 36px; }
 .group { margin: 18px 0 28px; }
 .label { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
