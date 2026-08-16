@@ -1,6 +1,6 @@
 import { createButton, createEquipmentCard, createScrollArea } from '../components.js';
 import { deriveStats } from '../../rules/attributes.js';
-import { resolveLoadout } from '../../rules/equipment.js';
+import { describeItem, itemDisplayName, resolveLoadout } from '../../rules/equipment.js';
 import { generateLoot } from '../../rules/loot.js';
 import { INVENTORY_CAP, addItem, getInventoryCount, toggleJunkTag, junkAllTagged, getSalvageValue } from '../../rules/inventory.js';
 
@@ -79,30 +79,16 @@ function classDataFor(data, character) {
 }
 
 function itemName(item, data) {
-  if (item?.name) return item.name;
-  if (item?.category === 'weapon') return data?.equipment?.weapons?.[item.baseType]?.name || item.baseType || item.id;
-  if (item?.category === 'armor') return data?.equipment?.armor?.[item.baseType]?.name || item.baseType || item.id;
-  if (item?.category === 'consumable') return data?.consumables?.consumables?.[item.baseType]?.name || item.baseType || item.id;
-  return item?.baseType || item?.id || 'item';
+  return itemDisplayName(item, data || {}) || item?.id || 'item';
 }
 
 function displayItem(item, data) {
   const affixes = (item.affixes || []).map((affix) => typeof affix === 'string' ? { id: affix, ...(data?.affixes?.affixes?.[affix] || {}) } : affix);
-  return { ...item, name: itemName(item, data), affixes };
+  return { ...item, name: itemName(item, data), description: describeItem(item, data || {}), affixes };
 }
 
 function itemDetail(item, data) {
-  const base = item.category === 'weapon' ? data?.equipment?.weapons?.[item.baseType] : item.category === 'armor' ? data?.equipment?.armor?.[item.baseType] : data?.consumables?.consumables?.[item.baseType];
-  const stats = [
-    item.rarity ? `rarity ${String(item.rarity).toUpperCase()}` : null,
-    item.corrupt ? `CORRUPT +${Number(item.corruptionValue || 0).toFixed(2)}` : null,
-    base?.damageDie ? `damage ${base.damageDie}` : null,
-    base?.rangeBand ? `range ${base.rangeBand}` : null,
-    base?.defenseBonus ? `defense +${base.defenseBonus}` : null,
-    item.affixes?.length ? `affixes ${item.affixes.join(', ')}` : null,
-    `scrap ${getSalvageValue(item)}`
-  ];
-  return stats.filter(Boolean).join(' · ');
+  return describeItem(item, data || {});
 }
 
 function comparisonLine(item, context) {
@@ -155,6 +141,7 @@ function takeItem(context, container, itemId) {
 
 function requestJunkToggle(context, itemId) {
   const state = stateFor(context.runState);
+  const source = (context.runState.inventory || []).find((entry) => entry.id === itemId);
   const result = toggleJunkTag(context.runState.inventory || [], itemId);
   if (!result.success) {
     state.error = result.reason || 'missing_item';
@@ -162,7 +149,7 @@ function requestJunkToggle(context, itemId) {
   } else {
     context.runState.inventory = result.inventory;
     state.error = '';
-    state.notice = `${itemId} ${result.junkTagged ? 'tagged as junk' : 'untagged'}.`;
+    state.notice = `${itemName(source, context.data || {})} ${result.junkTagged ? 'tagged as junk' : 'untagged'}.`;
   }
   state.pendingJunkAll = false;
   context.refresh?.();

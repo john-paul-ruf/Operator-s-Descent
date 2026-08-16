@@ -247,6 +247,22 @@ describe('LOOT mode', () => {
     expect(runState.inventory).toEqual([]);
     expect(runState.scrapCounter).toBe(5);
   });
+
+  it('renders resolved names and descriptions on loot cards', () => {
+    const runState = run([]);
+    const tuned = item('loot-sidearm', 'sidearm', { rarity: 'tuned', affixes: ['precise'], salvageValue: 1 });
+    const lootState = { container: { id: 2, x: 1, y: 1 }, items: [tuned] };
+    const { container } = renderLootWith(runState, lootState);
+
+    const row = byTestId(container, 'loot-item-loot-sidearm');
+    expect(textOf(row)).toContain('Sidearm');
+    expect(textOf(row)).not.toContain('baseType');
+    const detail = byTestId(container, 'loot-detail-loot-sidearm');
+    expect(textOf(detail)).toContain('d6 dmg');
+    expect(textOf(detail)).toContain('adjacent range');
+    expect(textOf(detail)).toContain('Precise: +1 accuracy bonus');
+    expect(textOf(detail)).toContain('scrap 1');
+  });
 });
 
 describe('COMBAT mode', () => {

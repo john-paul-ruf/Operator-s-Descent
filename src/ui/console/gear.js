@@ -1,7 +1,7 @@
 import { createButton, createEquipmentCard, createScrollArea } from '../components.js';
 import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
-import { equipItem, unequipItem, resolveLoadout } from '../../rules/equipment.js';
+import { describeItem, equipItem, itemDisplayName, unequipItem, resolveLoadout } from '../../rules/equipment.js';
 import { INVENTORY_CAP, getInventoryCount, toggleJunkTag, junkAllTagged, getSalvageValue } from '../../rules/inventory.js';
 
 const SLOTS = ['weapon', 'armor', 'offhand'];
@@ -30,8 +30,13 @@ function classDataFor(data, character) {
   return data?.classes?.classes?.find((entry) => entry.id === character?.classId) || null;
 }
 
-function itemName(item) {
-  return item?.name || item?.baseType || item?.id || '—';
+function itemName(item, data) {
+  if (!item) return '—';
+  return itemDisplayName(item, data || {}) || '—';
+}
+
+function displayItem(item, data) {
+  return { ...item, name: itemName(item, data), description: describeItem(item, data || {}) };
 }
 
 function itemUnits(item) {
@@ -143,11 +148,11 @@ function requestEquip(context, item) {
   if (newCorrupt && state.pendingCorruptItemId !== item.id) {
     state.pendingCorruptItemId = item.id;
     state.error = '';
-    state.notice = `CORRUPT ${itemName(item)} permanently adds ${Number(item.corruptionValue || 0).toFixed(2)} corruption.`;
+    state.notice = `CORRUPT ${itemName(item, context.data)} permanently adds ${Number(item.corruptionValue || 0).toFixed(2)} corruption.`;
     context.refresh?.();
     return false;
   }
-  return transactionResult(context, equipItem(context.runState, character.id, state.slot, item.id), `Equipped ${itemName(item)} to ${SLOT_LABELS[state.slot]}.`);
+  return transactionResult(context, equipItem(context.runState, character.id, state.slot, item.id), `Equipped ${itemName(item, context.data)} to ${SLOT_LABELS[state.slot]}.`);
 }
 
 function requestUnequip(context, slot) {
@@ -168,7 +173,7 @@ function requestUnequip(context, slot) {
     context.refresh?.();
     return false;
   }
-  return transactionResult(context, unequipItem(context.runState, character.id, slot), `Unequipped ${itemName(item)}.`);
+  return transactionResult(context, unequipItem(context.runState, character.id, slot), `Unequipped ${itemName(item, context.data)}.`);
 }
 
 function requestJunkToggle(context, item) {
@@ -179,7 +184,7 @@ function requestJunkToggle(context, item) {
   } else {
     context.runState.inventory = result.inventory;
     state.error = '';
-    state.notice = `${itemName(item)} ${result.junkTagged ? 'tagged as junk' : 'untagged'}.`;
+    state.notice = `${itemName(item, context.data)} ${result.junkTagged ? 'tagged as junk' : 'untagged'}.`;
   }
   state.pendingJunkAll = false;
   context.refresh?.();
@@ -245,7 +250,7 @@ export function render(container, context = {}) {
   const slotRow = document.createElement('div');
   slotRow.className = 'gear-slot-row';
   for (const slot of SLOTS) {
-    const button = createButton(`${SLOT_LABELS[slot]} · ${itemName(character.equipment?.[slot])}`, {
+    const button = createButton(`${SLOT_LABELS[slot]} · ${itemName(character.equipment?.[slot], context.data)}`, {
       selected: ui.slot === slot,
       onClick: () => { ui.slot = slot; ui.pendingCorruptItemId = null; context.refresh?.(); }
     });
@@ -271,9 +276,9 @@ function renderEquipped(container, context, character, ui) {
     const row = document.createElement('div');
     row.className = 'equipped-row item-card equipped console-row';
     row.dataset.testid = `gear-equipped-${slot}`;
-    row.appendChild(text('equipped-slot', `${SLOT_LABELS[slot]}: ${itemName(item)}`));
+    row.appendChild(text('equipped-slot', `${SLOT_LABELS[slot]}: ${itemName(item, context.data)}`));
     if (item) {
-      row.appendChild(createEquipmentCard(item));
+      row.appendChild(createEquipmentCard(displayItem(item, context.data)));
       const disabledReason = combatSwapGate(context, character).reason || (getInventoryCount(context.runState.inventory) + itemUnits(item) > INVENTORY_CAP ? 'Inventory full.' : '');
       const button = createButton('UNEQUIP', { disabled: Boolean(disabledReason), description: disabledReason, onClick: () => requestUnequip(context, slot) });
       button.dataset.testid = `gear-unequip-${slot}`;
@@ -300,7 +305,7 @@ function renderInventory(container, context, character, ui) {
     const warning = document.createElement('div');
     warning.className = 'corrupt-warning console-row';
     warning.dataset.testid = 'gear-corrupt-warning';
-    warning.textContent = `CORRUPT WARNING: ${itemName(pending)} permanently raises run corruption/danger. Removing it never refunds the cost.`;
+    warning.textContent = `CORRUPT WARNING: ${itemName(pending, context.data)} permanently raises run corruption/danger. Removing it never refunds the cost.`;
     const confirm = createButton('CONFIRM CORRUPT EQUIP', { danger: true, onClick: () => requestEquip(context, pending) });
     confirm.dataset.testid = 'gear-confirm-corrupt';
     warning.appendChild(confirm);
@@ -327,7 +332,7 @@ function renderInventoryItem(list, context, character, ui, item) {
   const wrapper = document.createElement('div');
   wrapper.className = `inventory-row console-row${item.junkTagged ? ' junk-tagged' : ''}`;
   wrapper.dataset.testid = `gear-item-${item.id}`;
-  wrapper.appendChild(createEquipmentCard(item));
+  wrapper.appendChild(createEquipmentCard(displayItem(item, context.data)));
   const before = runStats(context.data || {}, character);
   const after = itemSlotCompatible(ui.slot, item) ? projectedStats(context.data || {}, character, ui.slot, item) : before;
   wrapper.appendChild(text('gear-comparison', statDeltaLine(before, after), `gear-compare-${item.id}`));

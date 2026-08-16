@@ -176,6 +176,24 @@ describe('GEAR mode', () => {
     expect(textOf(byTestId(container, 'gear-inventory-heading'))).toBe('◈ INVENTORY');
   });
 
+  it('renders resolved names and descriptions on equipped and inventory cards', () => {
+    const tuned = item('fresh-sidearm', 'sidearm', { rarity: 'tuned', affixes: ['precise'] });
+    const runState = run([tuned]);
+    const { container } = renderGearWith(runState);
+
+    const equippedRow = byTestId(container, 'gear-equipped-weapon');
+    expect(textOf(equippedRow)).toContain('Weapon: Sidearm');
+    expect(textOf(equippedRow)).not.toContain('breacher-1-weapon-sidearm');
+    expect(textOf(equippedRow)).not.toContain('equipped-sidearm');
+    expect(textOf(equippedRow)).toContain('d6 dmg');
+    expect(textOf(equippedRow)).toContain('scrap 1');
+
+    const inventoryRow = byTestId(container, 'gear-item-fresh-sidearm');
+    expect(textOf(inventoryRow)).toContain('Sidearm');
+    expect(textOf(inventoryRow)).toContain('Precise: +1 accuracy bonus');
+    expect(textOf(inventoryRow)).not.toContain('fresh-sidearm ');
+  });
+
   it('equips and unequips through atomic run-state transactions', () => {
     const runState = run([item('fresh-sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
     const { container } = renderGearWith(runState);

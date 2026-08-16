@@ -1064,6 +1064,16 @@ button.protocol-card[aria-selected="true"],
   letter-spacing: 0.08em;
 }
 
+.card-desc {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .card-subtitle {
   display: block;
   color: var(--text-dim);

@@ -205,6 +205,15 @@ export function createEquipmentCard(item, opts = {}) {
   name.className = 'card-name';
   name.textContent = item.name || item.id;
   card.appendChild(name);
+  const description = typeof item.description === 'string' && item.description
+    ? item.description
+    : (typeof opts.description === 'string' && opts.description ? opts.description : '');
+  if (description) {
+    const desc = document.createElement('div');
+    desc.className = 'card-desc';
+    desc.textContent = description;
+    card.appendChild(desc);
+  }
   if (item.rarity) card.appendChild(createRarityTag(item.rarity));
   if (item.affixes) for (const affix of item.affixes) card.appendChild(createAffixTag(affix, affix.category === 'major'));
   return withCleanup(card, opts.onClick ? listen(card, 'click', opts.onClick) : undefined);

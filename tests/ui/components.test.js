@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createButton, createChargeBar, createHPBar, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
+import { createButton, createChargeBar, createEquipmentCard, createHPBar, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -83,5 +83,20 @@ describe('semantic components', () => {
     expect(createSigilToken(0xE030, 220, { role: 'enemy' }).className).toContain('sigil-220');
     expect(() => createSigilToken(0xE030, 34, { role: 'player' })).toThrow(/invalid-player-bank/);
     expect(() => createSigilToken(0xE000, 35, { role: 'player' })).toThrow(/invalid-size/);
+  });
+
+  test('equipment cards render the display name and an optional description', () => {
+    const bare = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm' });
+    expect(bare.children[0].className).toBe('card-name');
+    expect(bare.children[0].textContent).toBe('Sidearm');
+    expect(bare.children.find((child) => child.className === 'card-desc')).toBeUndefined();
+
+    const described = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm', description: 'd6 dmg · adjacent range · +1 acc · scrap 1' });
+    const desc = described.children.find((child) => child.className === 'card-desc');
+    expect(desc).toBeTruthy();
+    expect(desc.textContent).toBe('d6 dmg · adjacent range · +1 acc · scrap 1');
+
+    const idOnly = createEquipmentCard({ id: 'breacher-1-weapon-sidearm' });
+    expect(idOnly.children[0].textContent).toBe('breacher-1-weapon-sidearm');
   });
 });
