@@ -1,7 +1,8 @@
 import { createButton, createHPBar, createChargeBar, createSigilToken, createConditionTag, createProtocolCard } from '../components.js';
 
+const MOVE_RANGE = 5;
 const ACTIONS = [
-  { id: 'move', label: 'Move', needs: 'move action' },
+  { id: 'move', label: 'Move', needs: `up to ${MOVE_RANGE} cells` },
   { id: 'attack', label: 'Attack', needs: '1 AP' },
   { id: 'cast', label: 'Protocol', needs: '1 AP + CHARGE' },
   { id: 'overclock', label: 'Overclock', needs: '1 AP + overclock CHARGE' },
@@ -103,22 +104,40 @@ function renderActions(container, context, legalActions) {
 
 function renderDirections(container, context) {
   const selection = context.selection || {};
-  const legal = new Set(context.combatGetDirections?.() || []);
+  const path = selection.movePath || [];
+  const stepsLeft = Math.max(0, MOVE_RANGE - path.length);
+  const legalNext = new Set(context.combatGetPathSteps?.() || []);
   const grid = document.createElement('div');
   grid.className = 'combat-direction-grid';
   grid.dataset.testid = 'combat-directions';
   for (const [direction, label] of DIRECTION_GRID) {
+    if (!direction) {
+      const center = document.createElement('div');
+      center.className = 'combat-direction console-row dpad-center';
+      center.dataset.testid = 'combat-dir-center';
+      center.textContent = `${stepsLeft} LEFT`;
+      grid.appendChild(center);
+      continue;
+    }
     const button = createButton(label, {
-      label: direction ? `Move ${direction}` : 'Center',
-      disabled: !direction || !legal.has(direction) || selection.resolving,
-      selected: selection.direction === direction,
-      onClick: () => context.combatSelectDirection?.(direction)
+      label: `Step ${direction}`,
+      disabled: !legalNext.has(direction) || selection.resolving,
+      onClick: () => context.combatStepPath?.(direction)
     });
-    button.className = selectedClass(`combat-direction console-row${direction ? '' : ' dpad-center'}`, selection.direction === direction);
-    button.dataset.testid = direction ? `combat-dir-${direction}` : 'combat-dir-center';
+    button.className = `combat-direction console-row`;
+    button.dataset.testid = `combat-dir-${direction}`;
     grid.appendChild(button);
   }
   container.appendChild(grid);
+  if (path.length > 0) {
+    const undo = createButton('UNDO', {
+      disabled: selection.resolving,
+      onClick: () => context.combatPopPath?.()
+    });
+    undo.className = 'combat-undo console-row';
+    undo.dataset.testid = 'combat-undo';
+    container.appendChild(undo);
+  }
 }
 
 function renderProtocols(container, context, active) {
@@ -257,10 +276,16 @@ export function render(container, context = {}) {
 export function handleInput(event, context = {}) {
   const action = event.action;
   if (action === 'confirm') return context.combatConfirm?.() ?? null;
-  if (action === 'cancel') return context.combatCancel?.() ?? null;
+  if (action === 'cancel') {
+    const selection = context.selection || {};
+    if (selection.actionType === 'move' && (selection.movePath?.length ?? 0) > 0) {
+      return context.combatPopPath?.() ?? null;
+    }
+    return context.combatCancel?.() ?? null;
+  }
   if (action === 'tab_next') return context.combatCycleTarget?.(1) ?? null;
   if (ACTION_TO_DIRECTION[action]) {
-    if (context.selection?.actionType === 'move') return context.combatSelectDirection?.(ACTION_TO_DIRECTION[action]) ?? null;
+    if (context.selection?.actionType === 'move') return context.combatStepPath?.(ACTION_TO_DIRECTION[action]) ?? null;
     if (['choose-target', 'confirm'].includes(context.selection?.phase)) return context.combatCycleTarget?.(action === 'move_n' || action === 'move_w' || action === 'move_nw' || action === 'move_sw' ? -1 : 1) ?? null;
   }
   return null;

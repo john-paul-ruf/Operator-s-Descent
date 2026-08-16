@@ -79,8 +79,12 @@ class FakeCanvas extends FakeElement {
     this.width = 384;
     this.height = 768;
     this.context = new FakeContext();
+    // Match the canvas element's intrinsic size so cellAtPoint math is 1:1 by default;
+    // individual tests can override to exercise CSS scaling.
+    this._rect = { left: 0, top: 0, right: this.width, bottom: this.height, width: this.width, height: this.height };
   }
   getContext() { return this.context; }
+  getBoundingClientRect() { return this._rect; }
 }
 
 class FakeContext {
@@ -281,6 +285,80 @@ describe('combat screen controller', () => {
     expect(hero.ap).toBe(2);
     expect(hero.moveAvailable).toBe(false);
     expect(byTestId(container, 'combat-action-move').disabled).toBe(true);
+  });
+
+  it('stepping three direction buttons builds a 3-cell path and confirm walks it', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    byTestId(container, 'combat-dir-s').click();
+    byTestId(container, 'combat-dir-s').click();
+    byTestId(container, 'combat-dir-e').click();
+    // Center cell reads remaining steps and the UNDO row appears after any step.
+    expect(byTestId(container, 'combat-dir-center').textContent).toBe('2 LEFT');
+    expect(byTestId(container, 'combat-undo')).not.toBe(null);
+
+    byTestId(container, 'combat-confirm').click();
+
+    const hero = combat.combatants.get('hero');
+    expect(hero.position).toEqual({ x: 2, y: 3 });
+    expect(hero.moveAvailable).toBe(false);
+    const moveLog = combat.log.find((entry) => entry.type === 'move');
+    expect(moveLog.path).toEqual(['s', 's', 'e']);
+  });
+
+  it('tapping a reachable canvas cell fills the shortest-route path and enables confirm', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    const playfield = byClass(container, 'combat-playfield');
+    // Canvas rect is 384×768 in the fake; cellSize=48; hero at (1,1) so cell (3,3) is a legal
+    // 2-step SE destination. Client coords land inside cell (3,3): 3*48+8 = 152.
+    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+
+    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+    byTestId(container, 'combat-confirm').click();
+
+    const hero = combat.combatants.get('hero');
+    expect(hero.position).toEqual({ x: 3, y: 3 });
+    expect(combat.log.find((entry) => entry.type === 'move').steps).toBe(2);
+  });
+
+  it('dragging past the 6px threshold does not fire a tap-select', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    const playfield = byClass(container, 'combat-playfield');
+    playfield.dispatch('pointerdown', { clientX: 100, clientY: 100 });
+    playfield.dispatch('pointermove', { clientX: 100, clientY: 220 }); // dy=120 → drag
+    playfield.dispatch('pointerup', { clientX: 100, clientY: 220 });
+
+    const hero = combat.combatants.get('hero');
+    // Drag never invokes selectDestination — movePath stays empty, position unchanged, no confirm rendered.
+    expect(hero.position).toEqual({ x: 1, y: 1 });
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
+    // The UNDO row only appears once a step has been added; a plain drag leaves it absent.
+    expect(byTestId(container, 'combat-undo')).toBe(null);
+  });
+
+  it('dock-mode keyboard cancel pops the last step instead of collapsing when a path is being built', async () => {
+    installMatchMedia(true);
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    byTestId(container, 'combat-dir-s').click();
+    byTestId(container, 'combat-dir-s').click();
+    expect(byTestId(container, 'combat-dir-center').textContent).toBe('3 LEFT');
+
+    container.dispatch('keydown', keyEvent('Escape'));
+    expect(byTestId(container, 'combat-dir-center').textContent).toBe('4 LEFT');
+    // Undo button is still present because at least one step remains.
+    expect(byTestId(container, 'combat-undo')).not.toBe(null);
   });
 
   it('dispatches victory completion, marks defeated enemies, and clears active combat', async () => {

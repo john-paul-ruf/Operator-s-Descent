@@ -120,6 +120,19 @@ function legalDirectionsFrom(combatState, actor) {
   });
 }
 
+// Single-step legality from an arbitrary `from` cell for `actorId` — same rules the rules engine
+// applies inside a path walk (walls, diagonal corner rule, no landing on a living occupant). The
+// UI uses this to gate incremental path-stepping without duplicating the rules internals.
+export function isLegalMoveStep(combatState, actorId, from, direction) {
+  const actor = combatState?.combatants?.get?.(actorId);
+  const delta = DIRECTIONS[direction];
+  if (!actor || !delta || !combatState.window || !from) return false;
+  if (!legalStep(combatState.window, from, delta)) return false;
+  const nx = from.x + delta.dx;
+  const ny = from.y + delta.dy;
+  return !cellOccupied(combatState.combatants, nx, ny, actor.id);
+}
+
 // BFS from actor's position over the 8 movement directions, capped at `maxSteps`. Each expansion
 // obeys `legalStep` (walls + diagonal corner rule) and rejects destinations occupied by any living
 // actor. Returns Map<'x,y', {x, y, steps, path}> — `path` is the shortest ordered direction list

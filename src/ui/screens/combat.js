@@ -1,5 +1,5 @@
 import { createStatusBar, createTelemetryDock } from '../status-strip.js';
-import { createPlayfield } from '../playfield.js';
+import { createPlayfield, cellAtPoint, COMBAT_CELL_SIZE, COMBAT_GRID_W, COMBAT_GRID_H } from '../playfield.js';
 import { createConsole } from '../console/console.js';
 import { createInputHandler } from '../input.js';
 import { currentLayoutClass } from '../layout.js';
@@ -7,7 +7,7 @@ import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
 import { createEnemy } from '../../rules/enemies.js';
-import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalActions, getCharacterDeaths, toCombatSnapshot } from '../../rules/combat.js';
+import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalActions, getCharacterDeaths, toCombatSnapshot, reachableMoveCells, isLegalMoveStep, MOVE_RANGE } from '../../rules/combat.js';
 import { createStandardEncounter, completeEncounter } from '../../rules/encounters.js';
 import { distanceCells, getEdgeCoverBonus, isFlanked } from '../../rules/combat-geometry.js';
 import { evaluateRange } from '../../rules/equipment.js';
@@ -23,6 +23,8 @@ const ACTION_PHASES = {
 };
 const DEFAULT_WINDOW = { originX: 0, originY: 0, width: 8, height: 16, cells: Array.from({ length: 16 }, () => Array(8).fill(1)) };
 const UNARMED = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 0 };
+const DIRECTION_DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+const DRAG_THRESHOLD_PX = 6;
 
 function clear(element) {
   if (typeof element.replaceChildren === 'function') element.replaceChildren();
@@ -229,6 +231,7 @@ export function mount(container, params = {}) {
   let mounted = true;
   let terminalDispatched = false;
   let logCursor = combatState.log.length;
+  let manualCamera = null;
   const selection = {
     phase: 'choose-action',
     actionType: null,
@@ -236,6 +239,7 @@ export function mount(container, params = {}) {
     targetId: null,
     targetIndex: 0,
     direction: null,
+    movePath: [],
     protocol: null,
     itemId: null,
     error: null,
@@ -317,12 +321,15 @@ export function mount(container, params = {}) {
     combatGetActiveActor: () => getActiveActor(combatState),
     combatGetLegalActions: () => legalActions(),
     combatGetTargets: () => targetsForSelection(),
-    combatGetDirections: () => legalActions().legalMoveDirections || [],
     combatGetItems: () => consumableItems(runState),
     combatGetPreview: (targetId) => previewForTarget(targetId),
+    combatGetMoveRange: () => getMoveRange(),
+    combatGetPathSteps: () => nextStepDirections(),
     combatChooseAction: chooseAction,
     combatSelectTarget: selectTarget,
-    combatSelectDirection: selectDirection,
+    combatStepPath: stepPath,
+    combatPopPath: popPath,
+    combatSelectDestination: selectDestination,
     combatSelectProtocol: selectProtocol,
     combatSelectItem: selectItem,
     combatCycleTarget: cycleTarget,
@@ -334,6 +341,15 @@ export function mount(container, params = {}) {
   if (isWide) shell.appendChild(consoleController.render());
   else container.appendChild(consoleController.render());
   consoleController.setMode('combat');
+
+  // Pointer wiring on the playfield container (canvas itself is pointer-events: none). A press
+  // that moves > DRAG_THRESHOLD_PX becomes a drag → manual camera pan (clamped to the vertical
+  // overflow when the portrait console is expanded); anything shorter is a tap → cell hit-test.
+  let pointerState = null;
+  playfieldBody.addEventListener('pointerdown', onPointerDown);
+  playfieldBody.addEventListener('pointermove', onPointerMove);
+  playfieldBody.addEventListener('pointerup', onPointerUp);
+  playfieldBody.addEventListener('pointercancel', onPointerCancel);
 
   resolveToPartyTurn();
   syncSelectionActor();
@@ -371,10 +387,12 @@ export function mount(container, params = {}) {
     selection.targetId = null;
     selection.targetIndex = 0;
     selection.direction = null;
+    selection.movePath = [];
     selection.protocol = null;
     selection.itemId = null;
     selection.error = null;
     selection.notice = actor?.side === 'enemy' ? 'ENEMY TURN RESOLVING.' : null;
+    manualCamera = null; // turn change → auto-centering resumes
   }
 
   function chooseAction(type) {
@@ -391,6 +409,7 @@ export function mount(container, params = {}) {
     selection.targetId = null;
     selection.targetIndex = 0;
     selection.direction = null;
+    selection.movePath = [];
     selection.protocol = null;
     selection.itemId = null;
     selection.error = null;
@@ -462,14 +481,80 @@ export function mount(container, params = {}) {
     return true;
   }
 
-  function selectDirection(direction) {
-    if (!isPartyTurn()) return false;
-    if (!legalActions().legalMoveDirections?.includes(direction)) {
+  function getMoveRange() {
+    const actor = getActiveActor(combatState);
+    return actor ? reachableMoveCells(combatState, actor.id, MOVE_RANGE) : new Map();
+  }
+
+  function pathEndpoint(actor) {
+    let cursor = { x: actor.position?.x ?? 0, y: actor.position?.y ?? 0 };
+    for (const dir of selection.movePath || []) {
+      const delta = DIRECTION_DELTAS[dir];
+      if (!delta) break;
+      cursor = { x: cursor.x + delta[0], y: cursor.y + delta[1] };
+    }
+    return cursor;
+  }
+
+  function nextStepDirections() {
+    const actor = getActiveActor(combatState);
+    if (!actor || selection.actionType !== 'move') return [];
+    const path = selection.movePath || [];
+    if (path.length >= MOVE_RANGE) return [];
+    const cursor = pathEndpoint(actor);
+    return Object.keys(DIRECTION_DELTAS).filter((direction) => isLegalMoveStep(combatState, actor.id, cursor, direction));
+  }
+
+  // Append one direction to the current movePath. Any legal single step from the current
+  // cursor is accepted (users may zig-zag), capped at MOVE_RANGE total. Tap-to-destination
+  // uses BFS-shortest routes; button/keyboard stepping is free-form.
+  function stepPath(direction) {
+    if (!isPartyTurn() || selection.actionType !== 'move') return false;
+    const path = selection.movePath || [];
+    if (path.length >= MOVE_RANGE) {
+      selection.error = 'PATH FULL';
+      renderAll();
+      return false;
+    }
+    const actor = getActiveActor(combatState);
+    const cursor = pathEndpoint(actor);
+    if (!isLegalMoveStep(combatState, actor.id, cursor, direction)) {
       selection.error = 'SELECT A VALID DIRECTION';
       renderAll();
       return false;
     }
-    selection.direction = direction;
+    selection.movePath = [...path, direction];
+    selection.direction = selection.movePath[0];
+    selection.phase = 'confirm';
+    selection.error = null;
+    renderAll();
+    return true;
+  }
+
+  function popPath() {
+    if (!isPartyTurn() || selection.actionType !== 'move') return false;
+    const path = selection.movePath || [];
+    if (path.length === 0) return false;
+    const nextPath = path.slice(0, -1);
+    selection.movePath = nextPath;
+    selection.direction = nextPath[0] || null;
+    if (nextPath.length === 0) selection.phase = 'choose-path';
+    selection.error = null;
+    renderAll();
+    return true;
+  }
+
+  // Tap-to-destination: replace movePath with the BFS shortest route to the tapped cell.
+  function selectDestination(cell) {
+    if (!isPartyTurn() || selection.actionType !== 'move') return false;
+    const info = getMoveRange().get(`${cell.x},${cell.y}`);
+    if (!info) {
+      selection.error = 'SELECT A VALID DIRECTION';
+      renderAll();
+      return false;
+    }
+    selection.movePath = [...info.path];
+    selection.direction = selection.movePath[0];
     selection.phase = 'confirm';
     selection.error = null;
     renderAll();
@@ -491,6 +576,7 @@ export function mount(container, params = {}) {
       selection.actionType = null;
       selection.targetId = null;
       selection.direction = null;
+      selection.movePath = [];
       selection.protocol = null;
       selection.itemId = null;
     }
@@ -500,7 +586,10 @@ export function mount(container, params = {}) {
   }
 
   function canConfirm() {
-    if (!isPartyTurn() || selection.phase !== 'confirm') return false;
+    if (!isPartyTurn()) return false;
+    // Move confirms as soon as the movePath is non-empty; other actions require the confirm phase.
+    if (selection.actionType === 'move' && (selection.movePath?.length ?? 0) > 0) return !validationError();
+    if (selection.phase !== 'confirm') return false;
     return !validationError();
   }
 
@@ -513,7 +602,13 @@ export function mount(container, params = {}) {
       const target = combatState.combatants.get(selection.targetId);
       if (!target || target.hp <= 0 || target.side !== 'enemy') return 'SELECT A LIVING HOSTILE';
     }
-    if (selection.actionType === 'move' && !legalActions().legalMoveDirections?.includes(selection.direction)) return 'SELECT A VALID DIRECTION';
+    if (selection.actionType === 'move') {
+      const path = selection.movePath || [];
+      if (path.length < 1 || path.length > MOVE_RANGE) return 'SELECT A VALID DIRECTION';
+      const reachable = getMoveRange();
+      const dest = pathEndpoint(actor);
+      if (!reachable.has(`${dest.x},${dest.y}`)) return 'SELECT A VALID DIRECTION';
+    }
     if (selection.actionType === 'cast' || selection.actionType === 'overclock') {
       if (!selection.protocol || !actor.protocols?.some((protocol) => protocol.school === selection.protocol.school && protocol.tier === selection.protocol.tier)) return 'SELECT A VALID PROTOCOL';
       const target = combatState.combatants.get(selection.targetId);
@@ -529,7 +624,7 @@ export function mount(container, params = {}) {
 
   function actionFromSelection(actor) {
     if (selection.actionType === 'end-turn') return { type: 'end-turn', actorId: actor.id };
-    if (selection.actionType === 'move') return { type: 'move', actorId: actor.id, direction: selection.direction };
+    if (selection.actionType === 'move') return { type: 'move', actorId: actor.id, path: [...(selection.movePath || [])] };
     if (selection.actionType === 'attack') return { type: 'attack', actorId: actor.id, targetId: selection.targetId };
     if (selection.actionType === 'cast' || selection.actionType === 'overclock') return { type: selection.actionType, actorId: actor.id, targetId: selection.targetId, school: selection.protocol.school, tier: selection.protocol.tier };
     if (selection.actionType === 'item') return { type: 'item', actorId: actor.id, targetId: selection.targetId, consumableId: selection.itemId };
@@ -541,7 +636,8 @@ export function mount(container, params = {}) {
     if (!mounted || selection.resolving || terminalDispatched) return false;
     if (selection.phase !== 'confirm') {
       const readyFromKeyboard = selection.phase === 'choose-target' && ['attack', 'cast', 'overclock', 'item'].includes(selection.actionType) && !validationError();
-      if (readyFromKeyboard) selection.phase = 'confirm';
+      const readyFromMovePath = selection.actionType === 'move' && (selection.movePath?.length ?? 0) > 0 && !validationError();
+      if (readyFromKeyboard || readyFromMovePath) selection.phase = 'confirm';
       else {
         selection.error = validationError() || 'CONFIRM A SELECTED OPTION';
         renderAll();
@@ -659,19 +755,86 @@ export function mount(container, params = {}) {
     const selectedKey = selected?.position ? `${selected.position.x},${selected.position.y}` : null;
     const preview = selected ? previewForTarget(selected.id) : null;
     const actor = getActiveActor(combatState);
+    const isMoveMode = selection.actionType === 'move' && (selection.phase === 'choose-path' || selection.phase === 'confirm');
     const pathCells = new Set();
-    if (selection.direction && actor?.position) {
-      const delta = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] }[selection.direction];
-      if (delta) pathCells.add(`${actor.position.x + delta[0]},${actor.position.y + delta[1]}`);
+    let rangeCells;
+    if (isMoveMode && actor?.position) {
+      const reachable = getMoveRange();
+      rangeCells = new Set(reachable.keys());
+      let cursor = { x: actor.position.x, y: actor.position.y };
+      for (const dir of selection.movePath || []) {
+        const delta = DIRECTION_DELTAS[dir];
+        if (!delta) break;
+        cursor = { x: cursor.x + delta[0], y: cursor.y + delta[1] };
+        pathCells.add(`${cursor.x},${cursor.y}`);
+      }
+    } else {
+      rangeCells = selectedKey ? new Set([selectedKey]) : new Set();
     }
     return {
       selectedTargetId: selection.targetId,
       validTargets,
-      rangeCells: selectedKey ? new Set([selectedKey]) : new Set(),
+      rangeCells,
       coverCells: selectedKey && preview?.coverBonus > 0 ? new Set([selectedKey]) : new Set(),
       pathCells,
-      consoleExpanded: consoleController.expanded
+      consoleExpanded: consoleController.expanded,
+      ...(manualCamera ? { camera: manualCamera } : {})
     };
+  }
+
+  function baseCameraForPan() {
+    if (manualCamera) return manualCamera;
+    const cam = playfield.getCamera();
+    return { x: cam.x, y: cam.y, w: cam.w || COMBAT_GRID_W, h: cam.h || COMBAT_GRID_H };
+  }
+
+  function onPointerDown(event) {
+    if (!mounted) return;
+    if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return;
+    pointerState = { startX: event.clientX, startY: event.clientY, dragging: false, startCamera: baseCameraForPan() };
+  }
+
+  function onPointerMove(event) {
+    if (!pointerState) return;
+    if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return;
+    const dx = event.clientX - pointerState.startX;
+    const dy = event.clientY - pointerState.startY;
+    if (!pointerState.dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+    pointerState.dragging = true;
+    const rect = canvas.getBoundingClientRect?.();
+    const scaleY = rect && rect.height ? canvas.height / rect.height : 1;
+    const cellsDy = (dy * scaleY) / COMBAT_CELL_SIZE;
+    const visibleRows = pointerState.startCamera.h || (consoleController.expanded ? 12 : COMBAT_GRID_H);
+    const maxY = Math.max(0, (combatState.window?.height || COMBAT_GRID_H) - visibleRows);
+    const nextY = Math.max(0, Math.min(maxY, pointerState.startCamera.y - cellsDy));
+    manualCamera = { x: pointerState.startCamera.x, y: nextY, w: pointerState.startCamera.w || COMBAT_GRID_W, h: visibleRows };
+    renderAll();
+  }
+
+  function onPointerUp(event) {
+    if (!pointerState) return;
+    const wasDragging = pointerState.dragging;
+    const startX = pointerState.startX;
+    const startY = pointerState.startY;
+    pointerState = null;
+    if (wasDragging) return;
+    const clientX = typeof event.clientX === 'number' ? event.clientX : startX;
+    const clientY = typeof event.clientY === 'number' ? event.clientY : startY;
+    const cameraForHit = manualCamera || playfield.getCamera();
+    const cell = cellAtPoint({ canvas, camera: cameraForHit, cellSize: COMBAT_CELL_SIZE }, clientX, clientY);
+    if (!cell) return;
+    if (selection.actionType === 'move' && (selection.phase === 'choose-path' || selection.phase === 'confirm')) {
+      selectDestination(cell);
+      return;
+    }
+    if (['attack', 'cast', 'overclock', 'item'].includes(selection.actionType) && ['choose-target', 'confirm'].includes(selection.phase)) {
+      const hit = targetsForSelection().find((target) => target.position && target.position.x === cell.x && target.position.y === cell.y);
+      if (hit) selectTarget(hit.id);
+    }
+  }
+
+  function onPointerCancel() {
+    pointerState = null;
   }
 
   function renderAll() {
