@@ -1076,3 +1076,30 @@ Added: `combatStepPath`, `combatPopPath`, `combatSelectDestination`, `combatGetM
 ### Overlay options
 
 `rangeCells` now doubles as the movement highlight during move mode (`selection.actionType === 'move'` in `choose-path` or `confirm`): the full `reachableMoveCells` key set. `pathCells` marks the cells along the current `movePath`. Existing target-mode semantics (single-cell `rangeCells` around the selected target, cover indicator, valid-target frames) are unchanged.
+
+<!-- SESSION-02 (control-and-polish) -->
+
+# SESSION-02 (control-and-polish) — architecture delta
+
+## M70 Exploration Screen (`src/ui/screens/exploration.js`)
+
+Two owner-directed additions extend M70 without changing its public export shape (`mount(container, params) → { unmount }`).
+
+### Drag/touch pan with party auto-follow
+
+- The rendered canvas is CSS-scaled inside `.exploration-playfield` (`overflow: hidden`); on small viewports the lower rows fall off. M70 now translates the canvas within the clipped body via `canvas.style.transform = translate3d(panX, panY, 0)` — no re-render, no camera on the render path (the canvas bitmap is still drawn at 20×32 full-lattice; fog gates visibility).
+- `panOffset` is clamped so the canvas edge never detaches from the body edge: `min = min(0, bodySize - canvasScaledSize)`, `max = 0`, per axis. Sizes are read live from `getBoundingClientRect()` (with a fall-back to intrinsic `canvas.width/height`), so the same math handles portrait and wide.
+- Pointer handlers live on `playfieldBody` (the canvas keeps `pointer-events: none` from M58 `src/ui/playfield.js:125`): `pointerdown` captures a start position, `pointermove` past a 6-pixel threshold pans and calls `setPointerCapture`, `pointerup`/`pointercancel` end. A non-passive `touchmove` listener calls `preventDefault()` while a drag is active to stop the page from scrolling under the finger. Cursor toggles inline between `grab` and `grabbing`.
+- `ensurePartyVisible()` shifts `panOffset` minimally when the party's canvas-pixel position leaves a two-cell margin inside the visible body. It runs from a `requestAnimationFrame` on mount (so `getBoundingClientRect` sees post-layout sizes) and after every successful move in `handleMoveResult`. A manual drag sets `suppressFollow = true`; the flag clears on the next successful move so the player can look around freely without being yanked back mid-look. Layout switches remount M70 already (M86 runtime `ui:layout-change` handler); the mount-time follow re-runs against the new sizes.
+
+### Arrow keys always move — focus hardening and `console:intent` fallback
+
+- After `inputHandler.bindToElement(container)` the mount now calls `container.focus({ preventScroll: true })`. On `pointerdown` inside `playfieldBody`, if `document.activeElement` is not the container and not contained by it (checked with `container.contains(active)` so a focused console button keeps its focus), M70 refocuses the container. This eliminates the macOS/Safari failure where clicking the map leaves nothing focused and subsequent keydowns never reach the input handler.
+- M70 subscribes to `bus.on('console:intent', …)` and routes `move_(n|s|w|e|nw|ne|sw|se)` actions to `onMove(direction)` when combat is not active. `console:intent` is dispatched by M60 (`src/ui/console/console.js:244`) only when the active pane's `handleInput` declined the action, so MOVE and COMBAT panes keep first refusal — GEAR/PARTY/TECH/LOOT/LOG panes no longer eat movement keys. The subscription lives in the existing `unsubscribers` array and is cleaned up on unmount; it also short-circuits when `runState.activeCombat` is truthy.
+
+### Behavior invariants preserved
+
+- No bus events added or renamed; no changes to `mount`'s parameter or return contract.
+- Movement is still routed through M32 `moveParty` — the fallback path shares `onMove` with the direct keydown path.
+- Canvas dimensions (480×768), overflow, and DOM order under `playfieldBody` are unchanged; the only new inline style is `playfieldBody.style.cursor`.
+- `unmount()` now also removes the pointer/touch listeners and the `console:intent` subscription; no leaked handlers persist across route changes or layout remounts.
