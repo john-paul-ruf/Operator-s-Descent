@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { calculateCombatCamera, createPlayfield } from '../../src/ui/playfield.js';
+import {
+  calculateCombatCamera,
+  createPlayfield,
+  FLOOR_COLOR,
+  WALL_COLOR,
+  HIDDEN_COLOR,
+  GRID_COLOR,
+  WALL_LINE_COLOR
+} from '../../src/ui/playfield.js';
 
 class FakeElement {
   constructor(tagName) {
@@ -53,6 +61,14 @@ beforeEach(() => {
 });
 
 describe('playfield rendering', () => {
+  test('exposes the vector-lattice palette constants owner directive 2026-08-15 pinned', () => {
+    expect(FLOOR_COLOR).toBe('#e8e8e8');
+    expect(WALL_COLOR).toBe('#000000');
+    expect(HIDDEN_COLOR).toBe('#000000');
+    expect(GRID_COLOR).toBe('#3a3a3a');
+    expect(WALL_LINE_COLOR).toBe('#7ec8e3');
+  });
+
   test('renders exploration fog without leaking hidden entities and keeps canvas read-only', () => {
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
@@ -70,6 +86,32 @@ describe('playfield rendering', () => {
     expect(canvas.getAttribute('role')).toBe('img');
     expect(canvas.style.pointerEvents).toBe('none');
     expect(canvas.listeners.size).toBe(0);
+  });
+
+  test('paints new palette (black walls, light-grey floors, dark gridlines) and cyan boundary lines', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    fog[6 * 20 + 6] = 0;
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    expect(fills.some((c) => c[1] === '#000000' && c[2] === 0 && c[3] === 0 && c[4] === 24 && c[5] === 24)).toBe(true);
+    expect(fills.some((c) => c[1] === '#e8e8e8' && c[2] === 24 && c[3] === 0 && c[4] === 24 && c[5] === 24)).toBe(true);
+    expect(fills.some((c) => c[1] === '#000000' && c[2] === 6 * 24 && c[3] === 6 * 24)).toBe(true);
+
+    const gridStrokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#3a3a3a');
+    expect(gridStrokes.length).toBeGreaterThan(0);
+    expect(gridStrokes.some((c) => c[2] === 0 && c[3] === 0)).toBe(false);
+
+    const cyanLines = fills.filter((c) => c[1] === '#7ec8e3');
+    expect(cyanLines.length).toBeGreaterThan(0);
+    expect(cyanLines.some((c) => c[2] === 24 + 1 && c[3] === 0 + 1)).toBe(true);
+    expect(cyanLines.some((c) => c[2] === 6 * 24 + 1 && c[3] === 6 * 24 + 1)).toBe(false);
+
+    const interiorFloorHasCyan = cyanLines.some((c) => c[2] === 10 * 24 + 1 && c[3] === 10 * 24 + 1);
+    expect(interiorFloorHasCyan).toBe(false);
   });
 
   test('renders combat overlays and selected target labels at 2x scale', () => {
@@ -93,6 +135,27 @@ describe('playfield rendering', () => {
     expect(labels).toEqual(expect.arrayContaining(['VALID', 'R', 'C', 'P', 'ACTIVE', 'TARGET']));
     expect(canvas.context.calls.some((call) => call[0] === 'fillRect' && call[4] === 48 && call[5] === 48)).toBe(true);
     expect(canvas.context.font).toMatch(/^32px/);
+  });
+
+  test('combat wall-line pass samples the full grid so camera borders do not gain spurious cyan frames', () => {
+    // Camera window whose right edge (dx=7) maps to gx=7 — an OPEN floor cell whose
+    // real neighbor at gx=8 is ALSO an open floor cell. No cyan edge should appear there.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+
+    playfield.renderCombat({ combatants: new Map(), turnOrder: [], currentTurn: 0, round: 1 }, lattice(), {
+      camera: { x: 0, y: 0, w: 8, h: 16 }
+    });
+
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    const cyan = fills.filter((c) => c[1] === '#7ec8e3');
+    // Right edge of camera-column 7 (gx=7): line would be inset at x = 7*48 + 48 - 3 = 45+7*48 = 381
+    // Neighbor gx=8 is real open floor → no line should exist at that x.
+    const spuriousRightEdge = cyan.some((c) => c[2] === 7 * 48 + 48 - 3);
+    expect(spuriousRightEdge).toBe(false);
+    // Left edge of camera-column 0 (gx=0): neighbor gx=-1 is out-of-bounds ≡ wall → line MUST exist
+    // at x = 0*48 + 1 = 1 for revealed floor rows (row 1..15; row 0's cell 0,0 is a wall).
+    expect(cyan.some((c) => c[2] === 1 && c[3] === 1 * 48 + 1)).toBe(true);
   });
 
   test('calculates bounded camera and writes accent only through CSS custom property', () => {

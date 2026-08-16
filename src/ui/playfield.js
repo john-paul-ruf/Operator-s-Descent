@@ -5,17 +5,18 @@ export const EXPLORATION_CELL_SIZE = 24;
 export const COMBAT_CELL_SIZE = EXPLORATION_CELL_SIZE * 2;
 export const COMBAT_GRID_W = 8;
 export const COMBAT_GRID_H = 16;
-const FLOOR_COLOR = '#0a0612';
-const WALL_COLOR = '#1a0e36';
+export const FLOOR_COLOR = '#e8e8e8';
+export const WALL_COLOR = '#000000';
+export const HIDDEN_COLOR = '#000000';
+export const GRID_COLOR = '#3a3a3a';
+export const WALL_LINE_COLOR = '#7ec8e3';
 const VISITED_OVERLAY = 'rgba(0,0,0,0.55)';
-const GRID_COLOR = 'rgba(126,200,227,0.1)';
 const DANGER_COLOR = '#e83a3a';
 const DESCENT_COLOR = '#3ae8a8';
 const CONTAINER_COLOR = '#e8d23a';
 const COVER_COLOR = '#e8c63a';
-const PATH_COLOR = '#ffffff';
+const PATH_COLOR = '#1a1a1a';
 const ECHO_COLOR = '#b026d4';
-const HIDDEN_COLOR = '#040108';
 
 function bounded(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -69,14 +70,34 @@ function drawCell(ctx, x, y, size, cellType, visible = true) {
     ctx.fillRect(x, y, size, size);
     return;
   }
-  ctx.fillStyle = cellType === 0 ? WALL_COLOR : FLOOR_COLOR;
+  if (cellType === CELL.WALL) {
+    ctx.fillStyle = WALL_COLOR;
+    ctx.fillRect(x, y, size, size);
+    return;
+  }
+  ctx.fillStyle = FLOOR_COLOR;
   ctx.fillRect(x, y, size, size);
-  ctx.fillStyle = cellType === 0 ? 'rgba(74,32,144,0.28)' : 'rgba(126,200,227,0.06)';
-  const textureX = x + 2 + ((x / size + y / size) % Math.max(2, size - 4));
-  const textureY = y + 2 + ((x / size * 3 + y / size * 5) % Math.max(2, size - 4));
-  ctx.fillRect(textureX, textureY, Math.max(1, size / 24), Math.max(1, size / 24));
   ctx.strokeStyle = GRID_COLOR;
+  ctx.lineWidth = 1;
   ctx.strokeRect(x, y, size, size);
+}
+
+function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, cols, rows, size }) {
+  ctx.fillStyle = WALL_LINE_COLOR;
+  for (let ry = 0; ry < rows; ry++) {
+    for (let rx = 0; rx < cols; rx++) {
+      const gx = colStart + rx;
+      const gy = rowStart + ry;
+      if (!isTraversable(gx, gy)) continue;
+      if (!isRevealed(gx, gy)) continue;
+      const px = rx * size;
+      const py = ry * size;
+      if (!isTraversable(gx, gy - 1)) ctx.fillRect(px + 1, py + 1, size - 2, 2);
+      if (!isTraversable(gx, gy + 1)) ctx.fillRect(px + 1, py + size - 3, size - 2, 2);
+      if (!isTraversable(gx - 1, gy)) ctx.fillRect(px + 1, py + 1, 2, size - 2);
+      if (!isTraversable(gx + 1, gy)) ctx.fillRect(px + size - 3, py + 1, 2, size - 2);
+    }
+  }
 }
 
 function drawToken(ctx, { x, y, radius, color, codepoint, size, renderSize, role }) {
@@ -152,20 +173,39 @@ export function createPlayfield(canvas) {
           const py = y * EXPLORATION_CELL_SIZE;
           const cellType = grid[y][x];
           drawCell(ctx, px, py, EXPLORATION_CELL_SIZE, cellType, fog !== 0);
-          if (fog === 0) continue;
-          if (cellType === CELL.DESCENT) {
+          if (fog !== 0 && cellType === CELL.DESCENT) {
             ctx.fillStyle = 'rgba(58,232,168,0.12)';
             ctx.fillRect(px + 1, py + 1, EXPLORATION_CELL_SIZE - 2, EXPLORATION_CELL_SIZE - 2);
-            ctx.fillStyle = DESCENT_COLOR;
-            ctx.font = '10px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('◈', px + EXPLORATION_CELL_SIZE / 2, py + EXPLORATION_CELL_SIZE / 2);
           }
-          if (fog === 1) {
+        }
+      }
+
+      drawWallLines(ctx, {
+        isTraversable: (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h && grid[gy][gx] !== CELL.WALL,
+        isRevealed: (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h && fogState[gy * w + gx] !== 0,
+        colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE
+      });
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (fogState[y * w + x] === 1) {
             ctx.fillStyle = VISITED_OVERLAY;
-            ctx.fillRect(px, py, EXPLORATION_CELL_SIZE, EXPLORATION_CELL_SIZE);
+            ctx.fillRect(x * EXPLORATION_CELL_SIZE, y * EXPLORATION_CELL_SIZE, EXPLORATION_CELL_SIZE, EXPLORATION_CELL_SIZE);
           }
+        }
+      }
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (fogState[y * w + x] === 0) continue;
+          if (grid[y][x] !== CELL.DESCENT) continue;
+          const px = x * EXPLORATION_CELL_SIZE;
+          const py = y * EXPLORATION_CELL_SIZE;
+          ctx.fillStyle = DESCENT_COLOR;
+          ctx.font = '10px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('◈', px + EXPLORATION_CELL_SIZE / 2, py + EXPLORATION_CELL_SIZE / 2);
         }
       }
 
@@ -224,7 +264,23 @@ export function createPlayfield(canvas) {
           const gy = camera.y + dy;
           const px = dx * COMBAT_CELL_SIZE;
           const py = dy * COMBAT_CELL_SIZE;
-          drawCell(ctx, px, py, COMBAT_CELL_SIZE, gx < 0 || gx >= width || gy < 0 || gy >= height ? 0 : grid[gy]?.[gx]);
+          const outOfBounds = gx < 0 || gx >= width || gy < 0 || gy >= height;
+          drawCell(ctx, px, py, COMBAT_CELL_SIZE, outOfBounds ? CELL.WALL : grid[gy]?.[gx]);
+        }
+      }
+
+      drawWallLines(ctx, {
+        isTraversable: (gx, gy) => gx >= 0 && gx < width && gy >= 0 && gy < height && grid[gy]?.[gx] !== CELL.WALL,
+        isRevealed: () => true,
+        colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE
+      });
+
+      for (let dy = 0; dy < camera.h; dy++) {
+        for (let dx = 0; dx < camera.w; dx++) {
+          const gx = camera.x + dx;
+          const gy = camera.y + dy;
+          const px = dx * COMBAT_CELL_SIZE;
+          const py = dy * COMBAT_CELL_SIZE;
           drawOverlay(ctx, px, py, options, gx, gy, accentColor);
         }
       }
@@ -239,7 +295,7 @@ export function createPlayfield(canvas) {
         const role = actorRole(actor);
         const isDead = actor.hp <= 0;
         const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
-        const tokenColor = isDead ? 'rgba(128,128,128,0.35)' : roleColor;
+        const tokenColor = isDead ? 'rgba(40,40,40,0.6)' : roleColor;
         if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
         if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px + 4, py + 4, DANGER_COLOR, 'TARGET');
         drawCreatureSigil(ctx, {
@@ -259,7 +315,7 @@ export function createPlayfield(canvas) {
 function drawOverlay(ctx, px, py, options, gx, gy, accentColor) {
   const key = `${gx},${gy}`;
   if (options.rangeCells?.has?.(key)) {
-    ctx.fillStyle = 'rgba(126,200,227,0.08)';
+    ctx.fillStyle = 'rgba(126,200,227,0.25)';
     ctx.fillRect(px + 1, py + 1, COMBAT_CELL_SIZE - 2, COMBAT_CELL_SIZE - 2);
     drawMark(ctx, px, py, accentColor, 'R');
   }
