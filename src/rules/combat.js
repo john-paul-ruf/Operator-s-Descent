@@ -8,6 +8,7 @@ import { getSignatureCapabilities, applySignatureModifier } from './classes.js';
 import { distanceCells, getEdgeCoverBonus, isFlanked, getOpportunityAttackers, FLANK_ATTACK_BONUS } from './combat-geometry.js';
 
 const AP_PER_TURN = 2;
+export const MOVE_RANGE = 5;
 const UNARMED_WEAPON = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 1, accuracyBonus: 0 };
 
 const DIRECTIONS = {
@@ -119,6 +120,38 @@ function legalDirectionsFrom(combatState, actor) {
   });
 }
 
+// BFS from actor's position over the 8 movement directions, capped at `maxSteps`. Each expansion
+// obeys `legalStep` (walls + diagonal corner rule) and rejects destinations occupied by any living
+// actor. Returns Map<'x,y', {x, y, steps, path}> — `path` is the shortest ordered direction list
+// from the origin. Origin cell is intentionally excluded.
+export function reachableMoveCells(combatState, actorId, maxSteps = MOVE_RANGE) {
+  const reachable = new Map();
+  const actor = combatState?.combatants?.get?.(actorId);
+  if (!actor || !actor.position || !combatState.window) return reachable;
+  const origin = { x: actor.position.x, y: actor.position.y };
+  const visited = new Set([`${origin.x},${origin.y}`]);
+  const queue = [{ x: origin.x, y: origin.y, steps: 0, path: [] }];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current.steps >= maxSteps) continue;
+    for (const name of DIRECTION_ORDER) {
+      const delta = DIRECTIONS[name];
+      if (!legalStep(combatState.window, current, delta)) continue;
+      const nx = current.x + delta.dx;
+      const ny = current.y + delta.dy;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (cellOccupied(combatState.combatants, nx, ny, actor.id)) continue;
+      visited.add(key);
+      const path = [...current.path, name];
+      const entry = { x: nx, y: ny, steps: current.steps + 1, path };
+      reachable.set(key, entry);
+      queue.push({ x: nx, y: ny, steps: current.steps + 1, path });
+    }
+  }
+  return reachable;
+}
+
 function nearestHostile(combatState, actor) {
   let nearest = null;
   let nearestDistance = Infinity;
@@ -186,11 +219,11 @@ export function getLegalActions(combatState, actorId, context = {}) {
   if (isTurn && actor.moveAvailable && !hasCondition(actor, 'immobilized')) actions.push('move');
   if (isTurn && actor.swapAvailable) actions.push('swap');
   if (isTurn) actions.push('retreat', 'wait', 'end-turn');
-  return { canAct: isTurn, actions, legalMoveDirections: isTurn ? legalDirectionsFrom(combatState, actor) : [] };
+  return { canAct: isTurn, actions, legalMoveDirections: isTurn ? legalDirectionsFrom(combatState, actor) : [], moveRange: MOVE_RANGE };
 }
 
 export function executeAction(combatState, action, rngCursor, context = {}) {
-  const { type, actorId, targetId, school, tier, consumableId, direction } = action || {};
+  const { type, actorId, targetId, school, tier, consumableId, direction, path } = action || {};
   const actor = combatState.combatants.get(actorId);
   if (!actor || actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
   if (combatState.turnOrder[combatState.currentTurn] !== actorId) {
@@ -216,7 +249,7 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
     case 'item':
       return executeItem(combatState, actor, targetId, consumableId, rngCursor, context);
     case 'move':
-      return executeMove(combatState, actor, { direction, targetId }, rngCursor, context);
+      return executeMove(combatState, actor, { direction, path, targetId }, rngCursor, context);
     case 'swap':
       return executeSwap(combatState, actor, targetId);
     case 'condition':
@@ -255,38 +288,82 @@ export function endTurn(combatState, actorId, context = {}) {
   return { success: true };
 }
 
-function executeMove(combatState, actor, { direction, targetId }, rngCursor, context) {
+// Move up to MOVE_RANGE cells along an ordered `path` of direction names. Callers may pass
+// `path` (array, length 1..MOVE_RANGE), a lone `direction` (wrapped to `[direction]`, back-compat
+// with pre-path AI), or a `targetId` fallback (`stepToward` → single step). Panicked always
+// overrides with a single fleeDirection step. The whole path is pre-validated (walls, corner
+// rule, occupancy); a single illegal step rejects the entire request without moving. On success
+// the walk executes step-by-step, resolving opportunity attacks per threatened departure; a
+// lethal OA stops the walk on the last cell actually reached.
+function executeMove(combatState, actor, { direction, path, targetId }, rngCursor, context) {
   if (!actor.moveAvailable) return { success: false, reason: 'no-move' };
   if (hasCondition(actor, 'immobilized')) return { success: false, reason: 'immobilized' };
   if (!combatState.window) return { success: false, reason: 'no-window' };
 
-  let chosenDirection = hasCondition(actor, 'panicked') ? fleeDirection(combatState, actor) : direction;
-  if (!chosenDirection && targetId) chosenDirection = stepToward(combatState, actor, targetId);
-  const delta = DIRECTIONS[chosenDirection];
-  if (!delta) return { success: false, reason: 'invalid-direction' };
-  if (!legalStep(combatState.window, actor.position, delta)) return { success: false, reason: 'illegal-cell' };
-
-  const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
-  if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) return { success: false, reason: 'illegal-cell' };
-
-  const origin = { ...actor.position };
-  const phasing = signatureEffectsFor(actor, 'move', context).some(effect => effect.parameters?.ignoreOpportunityAttacks);
-  const reactors = phasing ? [] : getOpportunityAttackers(actor, origin, dest, combatState);
-  const triggeredAttacks = [];
-  for (const reactor of reactors) {
-    if (actor.hp <= 0) break;
-    triggeredAttacks.push(performAttackRoll(combatState, reactor, actor, rngCursor, context, { allowReactions: false, trigger: 'opportunity' }).sequence);
+  let effectivePath;
+  if (hasCondition(actor, 'panicked')) {
+    const flee = fleeDirection(combatState, actor);
+    if (!flee) return { success: false, reason: 'invalid-direction' };
+    effectivePath = [flee];
+  } else if (Array.isArray(path) && path.length > 0) {
+    effectivePath = path;
+  } else if (direction) {
+    effectivePath = [direction];
+  } else if (targetId) {
+    const step = stepToward(combatState, actor, targetId);
+    if (!step) return { success: false, reason: 'invalid-direction' };
+    effectivePath = [step];
+  } else {
+    return { success: false, reason: 'invalid-direction' };
   }
 
-  if (actor.hp <= 0) {
-    pushLog(combatState, { type: 'move', actorId: actor.id, direction: chosenDirection, from: origin, to: null, cancelled: true, triggeredAttacks });
+  if (effectivePath.length > MOVE_RANGE) return { success: false, reason: 'illegal-cell' };
+
+  // Pre-validate the whole path first — a single bad step rejects with no movement or logs.
+  const origin = { ...actor.position };
+  let sim = { x: origin.x, y: origin.y };
+  for (const name of effectivePath) {
+    const delta = DIRECTIONS[name];
+    if (!delta) return { success: false, reason: 'invalid-direction' };
+    if (!legalStep(combatState.window, sim, delta)) return { success: false, reason: 'illegal-cell' };
+    const dest = { x: sim.x + delta.dx, y: sim.y + delta.dy };
+    if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) return { success: false, reason: 'illegal-cell' };
+    sim = dest;
+  }
+
+  const phasing = signatureEffectsFor(actor, 'move', context).some(effect => effect.parameters?.ignoreOpportunityAttacks);
+  const triggeredAttacks = [];
+  const walked = [];
+  let died = false;
+  for (const name of effectivePath) {
+    if (actor.hp <= 0) { died = true; break; }
+    const delta = DIRECTIONS[name];
+    const stepFrom = { ...actor.position };
+    const stepTo = { x: stepFrom.x + delta.dx, y: stepFrom.y + delta.dy };
+    const reactors = phasing ? [] : getOpportunityAttackers(actor, stepFrom, stepTo, combatState);
+    for (const reactor of reactors) {
+      if (actor.hp <= 0) break;
+      triggeredAttacks.push(performAttackRoll(combatState, reactor, actor, rngCursor, context, { allowReactions: false, trigger: 'opportunity' }).sequence);
+    }
+    if (actor.hp <= 0) { died = true; break; }
+    actor.position = stepTo;
+    walked.push(name);
+  }
+
+  if (died) {
+    pushLog(combatState, {
+      type: 'move', actorId: actor.id, direction: effectivePath[0], path: walked,
+      steps: walked.length, from: origin, to: null, cancelled: true, triggeredAttacks
+    });
     return { success: false, reason: 'dead', triggeredAttacks };
   }
 
-  actor.position = dest;
   actor.moveAvailable = false;
-  pushLog(combatState, { type: 'move', actorId: actor.id, direction: chosenDirection, from: origin, to: { ...dest }, triggeredAttacks });
-  return { success: true, position: { ...dest }, triggeredAttacks };
+  pushLog(combatState, {
+    type: 'move', actorId: actor.id, direction: effectivePath[0], path: [...effectivePath],
+    steps: effectivePath.length, from: origin, to: { ...actor.position }, triggeredAttacks
+  });
+  return { success: true, position: { ...actor.position }, triggeredAttacks };
 }
 
 function executeSwap(combatState, actor, targetId) {

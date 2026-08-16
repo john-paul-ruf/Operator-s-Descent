@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd, getCharacterDeaths, toCombatSnapshot } from '../../src/rules/combat.js';
+import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd, getCharacterDeaths, toCombatSnapshot, MOVE_RANGE, reachableMoveCells } from '../../src/rules/combat.js';
 import { createStandardEncounter, completeEncounter } from '../../src/rules/encounters.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { modifier } from '../../src/rules/attributes.js';
@@ -899,6 +899,183 @@ describe('executeAction — move', () => {
     const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
     expect(result.success).toBe(true);
     expect(result.position).toEqual({ x: 1, y: 0 });
+  });
+});
+
+describe('reachableMoveCells', () => {
+  it('exports MOVE_RANGE=5 and getLegalActions surfaces it', () => {
+    expect(MOVE_RANGE).toBe(5);
+    const party = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    expect(getLegalActions(state, 'a').moveRange).toBe(5);
+  });
+
+  it('BFS excludes origin, respects the 5-step cap, and rejects walls/occupancy', () => {
+    const window = openCombatWindow();
+    window.cells[3][5] = 0; // wall inside the reachable radius
+    const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
+    const enemy = makeEnemy({ id: 'blocker', position: { x: 3, y: 4 } });
+    const { state } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+
+    const reachable = reachableMoveCells(state, 'a');
+    expect(reachable.has('3,3')).toBe(false); // origin excluded
+    expect(reachable.has('5,3')).toBe(false); // wall
+    expect(reachable.has('3,4')).toBe(false); // enemy occupies
+    for (const entry of reachable.values()) expect(entry.steps).toBeLessThanOrEqual(MOVE_RANGE);
+    expect([...reachable.values()].some(entry => entry.steps === MOVE_RANGE)).toBe(true);
+  });
+
+  it('honors the diagonal corner rule when both orthogonal neighbors are walls', () => {
+    const window = blockedCornerWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const { state } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+
+    const reachable = reachableMoveCells(state, 'a');
+    // (1,1) is open floor but the origin's diagonal step is blocked; both orthogonals to it are
+    // walls too, so (1,1) has no legal ingress from the origin's neighborhood at all.
+    expect(reachable.has('1,0')).toBe(false); // wall
+    expect(reachable.has('0,1')).toBe(false); // wall
+    expect(reachable.has('1,1')).toBe(false); // corner rule blocks every diagonal into (1,1)
+  });
+
+  it('returns a shortest path array whose length equals the step count', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const { state } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+
+    const reachable = reachableMoveCells(state, 'a');
+    const cell = reachable.get('3,3');
+    expect(cell.steps).toBe(3);
+    expect(cell.path).toHaveLength(3);
+    // Walking the returned path reaches the target cell exactly.
+    const DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+    let cursor = { x: 0, y: 0 };
+    for (const dir of cell.path) cursor = { x: cursor.x + DELTAS[dir][0], y: cursor.y + DELTAS[dir][1] };
+    expect(cursor).toEqual({ x: 3, y: 3 });
+  });
+
+  it('missing actor or window returns an empty map without throwing', () => {
+    const { state } = startCombat([makeCharacter({ id: 'a' })], [makeEnemy()], 1, 'a');
+    expect(reachableMoveCells(state, 'ghost').size).toBe(0);
+    expect(reachableMoveCells({ combatants: new Map(), window: null }, 'x').size).toBe(0);
+  });
+});
+
+describe('executeAction — move (multi-step path)', () => {
+  it('walks a 3-step path, spends moveAvailable, and logs path/steps/direction', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+
+    const result = executeAction(state, { type: 'move', actorId: 'a', path: ['e', 'e', 'e'] }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 3, y: 0 });
+    const actor = state.combatants.get('a');
+    expect(actor.position).toEqual({ x: 3, y: 0 });
+    expect(actor.moveAvailable).toBe(false);
+    const moveLog = state.log.find(entry => entry.type === 'move');
+    expect(moveLog.path).toEqual(['e', 'e', 'e']);
+    expect(moveLog.steps).toBe(3);
+    expect(moveLog.direction).toBe('e'); // back-compat with formatLog
+    expect(moveLog.from).toEqual({ x: 0, y: 0 });
+    expect(moveLog.to).toEqual({ x: 3, y: 0 });
+  });
+
+  it('rejects the whole path when any step is illegal — no partial move, no log', () => {
+    const window = openCombatWindow();
+    window.cells[0][2] = 0; // wall at (2,0): step 2 of ['e','e','e'] from (0,0) is invalid
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+
+    const before = { ...state.combatants.get('a').position };
+    const result = executeAction(state, { type: 'move', actorId: 'a', path: ['e', 'e', 'e'] }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'illegal-cell' });
+    expect(state.combatants.get('a').position).toEqual(before);
+    expect(state.combatants.get('a').moveAvailable).toBe(true);
+    expect(state.log.find(entry => entry.type === 'move')).toBeUndefined();
+  });
+
+  it('rejects overlength paths as illegal-cell', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', path: ['e', 'e', 'e', 'e', 'e', 'e'] }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'illegal-cell' });
+  });
+
+  it('opportunity attack fires once when the walker leaves a threatened cell along the path', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 2, y: 2 }, hp: 30, hpMax: 30 })];
+    // Enemy at (1,2) threatens the origin (Chebyshev 1); after step 1 to (3,2) it no longer threatens (Chebyshev 2).
+    const enemy = makeEnemy({ id: 'guard', position: { x: 1, y: 2 }, defense: 0, hp: 100, hpMax: 100,
+      weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 0 }) });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+
+    const result = executeAction(state, { type: 'move', actorId: 'a', path: ['e', 'e', 'e'] }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 5, y: 2 });
+    const oaAttacks = state.log.filter(entry => entry.type === 'attack' && entry.trigger === 'opportunity');
+    expect(oaAttacks).toHaveLength(1);
+    expect(oaAttacks[0].actorId).toBe('guard');
+  });
+
+  it('lethal opportunity attack mid-path stops the walk on the last cell reached and logs cancelled', () => {
+    const window = openCombatWindow();
+    // Actor is fragile so a single OA hit ends the walk. Enemy has +40 accuracy and d20 damage.
+    const party = [makeCharacter({ id: 'a', position: { x: 2, y: 2 }, hp: 1, hpMax: 30 })];
+    const enemy = makeEnemy({ id: 'sentinel', position: { x: 1, y: 2 }, defense: 0, hp: 100, hpMax: 100,
+      weapon: makeWeapon({ damageDie: 'd20', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 40 }) });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+
+    const result = executeAction(state, { type: 'move', actorId: 'a', path: ['e', 'e', 'e'] }, cursor, baseContext);
+    expect(result.success).toBe(false);
+    expect(result.reason).toBe('dead');
+    const actor = state.combatants.get('a');
+    expect(actor.hp).toBeLessThanOrEqual(0);
+    // OA fires during step 1 (leaving (2,2)) — walker never advances.
+    expect(actor.position).toEqual({ x: 2, y: 2 });
+    expect(actor.moveAvailable).toBe(true); // never spent because the walk didn't complete
+    const moveLog = state.log.find(entry => entry.type === 'move');
+    expect(moveLog.cancelled).toBe(true);
+    expect(moveLog.path).toEqual([]); // partial path: nothing successfully walked
+    expect(moveLog.to).toBeNull();
+  });
+
+  it('back-compat: {direction} still moves one cell (enemy AI stepToward relies on this)', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
+    const { state, cursor } = startCombat(party, [makeEnemy({ position: { x: 7, y: 15 } })], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', direction: 'e' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 4, y: 3 });
+  });
+
+  it('panicked overrides any requested path with a single-step flee away from the nearest hostile', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
+    const enemy = makeEnemy({ id: 'threat', position: { x: 7, y: 15 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    // duration:2 so the condition survives prepareTurn's start_turn tick before executeMove reads it.
+    state.combatants.get('a').conditions = [{ id: 'panicked', duration: 2, stacks: 1 }];
+
+    const before = { x: 3, y: 3 };
+    const beforeDistance = Math.max(Math.abs(before.x - enemy.position.x), Math.abs(before.y - enemy.position.y));
+    const result = executeAction(state, { type: 'move', actorId: 'a', path: ['e', 'e', 'e'] }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    const afterDistance = Math.max(Math.abs(result.position.x - enemy.position.x), Math.abs(result.position.y - enemy.position.y));
+    expect(afterDistance).toBeGreaterThan(beforeDistance);
+    const moveLog = state.log.find(entry => entry.type === 'move');
+    expect(moveLog.path).toHaveLength(1);
   });
 });
 
