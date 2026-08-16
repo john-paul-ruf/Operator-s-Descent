@@ -54,3 +54,11 @@ Current M82 statically imports nearly the whole runtime, fetches all data, regis
 | 2026-08-11 | SESSION-44 extended M86 combat resolution routing so both victory and retreat return to exploration through `state:combat-end` and autosave; wipe remains `state:party-wipe`. |
 <!-- SESSION-01 cache-buster-auto-reload -->
 | 2026-08-14 | cache-buster-auto-reload SESSION-01 taught M86 to close the update loop that M81 already opens: on a returning visit (page had a prior controller), `registerServiceWorkerOnce` arms a one-shot `navigator.serviceWorker.oncontrollerchange` listener that dispatches the new M34 bus event `runtime:update-applied` and calls `window.location.reload()` exactly once; on any visit, it also arms a `document.visibilitychange` listener that re-runs `registration.update()` when the tab returns to `visible`, so a tab left open across a deploy still picks up the new worker and reloads. `serviceWorkerStatus` gains a `reloading` boolean; the first-visit path (no prior controller) intentionally skips the reload listener so `clients.claim()`'s initial `controllerchange` does not trigger a pointless refresh. `service-worker.js` (M81) was not modified. |
+
+<!-- adaptive-layouts-impl feature-end (Jikijitsu) -->
+
+## Adaptive layouts: runtime + offline — adaptive-layouts-impl
+
+- **Runtime (M86):** subscribes `ui:layout-change` (from M100 `initLayoutController({bus})`) and re-mounts the current route with its original params (`currentRouteParams`). RunState is canonical, so nothing user-durable is lost on a class cross.
+- **Service worker (M81):** `PRODUCTION_ASSETS` += `styles/wide.css`, `src/ui/layout.js` (S01; 94 assets, manifest↔disk↔reference verified). `CACHE_VERSION` → `2026-08-15-adaptive-layouts-v1` (S05 — one bump for the whole feature). service-worker.test.js pins both the cache-name and the 94-entry manifest length.
+- **Boot note:** `ui:layout-change` is not in bus.js `EVENT_CONTRACTS` (unknown events pass validation by design; bus.js was in no session's lease).
