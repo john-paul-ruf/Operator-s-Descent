@@ -9,6 +9,7 @@ This game has **no backend, no server-side database, and no ORM**. All persisten
 | Run Library & Settings | `localStorage` (browser key-value store) | Persistent, device-local storage for multiple runs, settings, and saved party configurations |
 | Game Content | Static JSON files (`data/*.json`) | Lookup tables loaded via `fetch()` on first load, cached by service worker. The single source of truth for all game content — classes, themes, enemies, equipment, protocols, etc. |
 | Portable Saves | URL fragment (`#r=` / `#w=`) | Compact, encoded run state (< 1500 chars) for cross-device save sharing |
+| Session Routing | URL fragment (`#a=`) | Canonical route + resume hint (`save=current`, `seed=<b32>`, `from=<route>`) written by the history controller so Back/Forward/reload land on the right screen |
 
 There are no SQL migrations. "Migrations" in this context means:
 - **Save encoding versioning**: A version byte in the URL fragment header. Old saves are decoded against their version's symbol table; incompatible versions produce a named `version_mismatch` error.
@@ -60,7 +61,43 @@ There are no SQL migrations. "Migrations" in this context means:
 │    base64url → decrypt → decompress → expand → deserialize│
 │                                                          │
 └─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│              URL Fragment (Session Routing)              │
+│                                                          │
+│  #a=<route>[&save=current][&seed=<b32>][&from=<route>]   │
+│                                                          │
+│  Router: src/router.js (M102)                            │
+│  Never written to the network — fragment stays offline.  │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
 ```
+
+### `#a=` Session Routing Schema
+
+**Purpose:** Give Back/Forward/reload a canonical target without expanding what the URL carries. All meaningful run state lives in `localStorage` — `#a=` is a pointer, not a save. The router (`src/router.js`, M102) writes `#a=` on every mount and drives navigation from `hashchange`.
+
+**Grammar:**
+```text
+#a=<route>[&save=current][&seed=<base32>][&from=<route>]
+```
+
+| Field | Values | Notes |
+|-------|--------|-------|
+| `a` | `title` \| `creation` \| `exploration` \| `library` \| `scorecard` \| `import` \| `tutorial` \| `settings` | `combat` is never written — combat canonicalizes to `exploration` and resumes via `runState.activeCombat` |
+| `save` | `current` | Only meaningful for `exploration`. On cold resolve, loads the newest `alive` library entry (optionally filtered by `seed`) |
+| `seed` | base32 world seed | Same codec as `#w=` (`encodeSeed`/`decodeSeed`). Written for `exploration`, `creation` (when a seed is preloaded), and `scorecard` |
+| `from` | any valid route | Optional return target for `settings` |
+
+**Legacy fragments (`#r=` full-state, `#w=` seed-only) remain first-class:** both are classified by `parseFragment` and consumed by the boot resolver — `#r=` mounts the import screen, `#w=` mounts creation with the preloaded seed. Share links produced by the LOG mode's copy-link action still use `#r=`.
+
+**Write policy:**
+- User-driven route change (`ui:navigate` where `screen !== currentRoute`) → `history.pushState`
+- Every other mount (combat handoff, floor transition, party wipe, layout re-mount, hashchange-triggered mount) → `history.replaceState`
+- If the canonical fragment equals the current hash (in-run `#a=exploration&save=current&seed=…` re-mounts, for example) the write is skipped entirely
+
+**Boot resolution:** the initial hash is parsed once. `#r=`/`#w=`/`#a=…` route through `resolveParsedFragment`; anything unrecognized (or `#a=exploration&save=current` with no matching alive run) falls back to `title` and `replaceState`s `#a=title` so the URL doesn't lie. A bare URL stays bare — no fragment is written until the first user navigation.
+
 
 ---
 

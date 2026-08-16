@@ -232,7 +232,7 @@ describe('router — createHistoryController', () => {
     expect(win.history.calls).toHaveLength(0);
   });
 
-  it('suppress flag: sync-triggered hashchange does not fire onNavigate', () => {
+  it('sync-triggered hash update does not re-notify onNavigate', () => {
     const win = fakeWindow();
     let count = 0;
     const controller = createHistoryController({ window: win, onNavigate: () => count++ });
@@ -240,6 +240,18 @@ describe('router — createHistoryController', () => {
     controller.sync('library', {}, { push: true });
     win.fire('hashchange');
     expect(count).toBe(0);
+  });
+
+  it('user hashchange after sync still fires onNavigate', () => {
+    const win = fakeWindow();
+    const received = [];
+    const controller = createHistoryController({ window: win, onNavigate: (parsed) => received.push(parsed) });
+    controller.start();
+    controller.sync('title', {}, { push: false });
+    win.location.hash = '#a=settings';
+    win.fire('hashchange');
+    expect(received).toHaveLength(1);
+    expect(received[0].route).toBe('settings');
   });
 
   it('user hashchange fires onNavigate with parsed fragment', () => {

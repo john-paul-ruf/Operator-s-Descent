@@ -111,7 +111,6 @@ export function createHistoryController({ window: win, onNavigate }) {
   if (!win || typeof onNavigate !== 'function') return { start() {}, stop() {}, sync() {} };
   let started = false;
   let lastSynced = null;
-  let suppress = false;
   let listener = null;
 
   function currentHash() {
@@ -119,10 +118,6 @@ export function createHistoryController({ window: win, onNavigate }) {
   }
 
   function handleHashChange() {
-    if (suppress) {
-      suppress = false;
-      return;
-    }
     const hash = currentHash();
     if (hash === lastSynced) return;
     lastSynced = hash;
@@ -144,7 +139,6 @@ export function createHistoryController({ window: win, onNavigate }) {
       if (listener && typeof win.removeEventListener === 'function') win.removeEventListener('hashchange', listener);
       listener = null;
       lastSynced = null;
-      suppress = false;
     },
     sync(screen, params, options = {}) {
       const fragment = canonicalFragmentFor(screen, params);
@@ -154,13 +148,11 @@ export function createHistoryController({ window: win, onNavigate }) {
         lastSynced = fragment;
         return;
       }
-      suppress = true;
-      const href = fragment;
-      const history = win.history;
-      if (options.push && typeof history?.pushState === 'function') history.pushState(null, '', href);
-      else if (typeof history?.replaceState === 'function') history.replaceState(null, '', href);
-      else if (win.location) win.location.hash = href;
       lastSynced = fragment;
+      const history = win.history;
+      if (options.push && typeof history?.pushState === 'function') history.pushState(null, '', fragment);
+      else if (typeof history?.replaceState === 'function') history.replaceState(null, '', fragment);
+      else if (win.location) win.location.hash = fragment;
     }
   };
 }
