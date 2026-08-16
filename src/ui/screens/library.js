@@ -2,6 +2,9 @@ import { deleteRunState, listRuns, loadRun } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel, createScreenBody, createSigilToken } from '../components.js';
 import { currentLayoutClass } from '../layout.js';
+import { captureScroll, restoreScroll } from '../scroll-memory.js';
+
+const SCROLL_KEY = 'library:list';
 
 const PLAYER_BANK_START = 0xE000;
 const PLAYER_BANK_END = 0xE030;
@@ -44,6 +47,7 @@ export function mount(container) {
   let selectedKey = null;
   let noticeText = '';
   let renderCleanups = [];
+  let scrollPane = null;
   const isWide = currentLayoutClass() === 'wide';
 
   function cleanupRender() {
@@ -338,6 +342,7 @@ export function mount(container) {
       for (const row of rows) body.appendChild(createRunRow(row));
     }
     screen.appendChild(body);
+    scrollPane = body;
 
     const actions = document.createElement('div');
     actions.className = 'library-actions';
@@ -407,6 +412,7 @@ export function mount(container) {
       body.appendChild(grid);
     }
     screen.appendChild(body);
+    scrollPane = body;
 
     const actions = document.createElement('div');
     actions.className = 'panel wide-library-footer';
@@ -428,11 +434,14 @@ export function mount(container) {
   }
 
   function render() {
+    captureScroll(scrollPane, SCROLL_KEY);
     cleanupRender();
     container.replaceChildren();
+    scrollPane = null;
     const rows = readRows();
     const screen = isWide ? renderWide(rows) : renderPortrait(rows);
     container.replaceChildren(screen);
+    restoreScroll(scrollPane, SCROLL_KEY);
   }
 
   render();

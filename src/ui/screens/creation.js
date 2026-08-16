@@ -14,6 +14,9 @@ import { decodeSeed } from '../../state/save-decode.js';
 import { playBootSequence } from '../../glitch/transitions.js';
 import { blueprintFromDraft, deleteConfig, getLastUsed, listConfigs, loadConfig, saveConfig, setLastUsed, validateConfig } from '../../state/party-configs.js';
 import { applyCreationAction, createCreationDraft, selectCreationState } from '../creation-model.js';
+import { captureScroll, restoreScroll } from '../scroll-memory.js';
+
+const SCROLL_KEY = 'creation:editor';
 
 const ATTR_LABELS = { mgt: 'MGT', fin: 'FIN', vit: 'VIT', res: 'RES', foc: 'FOC', sig: 'SIG' };
 const ATTR_NAMES = { mgt: 'MIGHT', fin: 'FINESSE', vit: 'VITALITY', res: 'RESONANCE', foc: 'FOCUS', sig: 'SIGNAL' };
@@ -113,6 +116,7 @@ export function mount(container, params = {}) {
   let notice = '';
   let finalizing = false;
   let finalized = false;
+  let scrollPane = null;
 
   const loadInitial = getLastUsed();
   if (loadInitial) {
@@ -131,10 +135,13 @@ export function mount(container, params = {}) {
   }
 
   function render() {
+    captureScroll(scrollPane, SCROLL_KEY);
     const summary = selectCreationState(draft, data);
     clear(container);
+    scrollPane = null;
     if (currentLayoutClass() === 'wide') renderWide(summary);
     else renderPortrait(summary);
+    restoreScroll(scrollPane, SCROLL_KEY);
   }
 
   function renderPortrait(summary) {
@@ -152,6 +159,7 @@ export function mount(container, params = {}) {
     root.appendChild(body);
     root.appendChild(renderFooter(summary));
     container.appendChild(root);
+    scrollPane = body;
   }
 
   function renderWide(summary) {
@@ -188,6 +196,7 @@ export function mount(container, params = {}) {
 
     shell.append(left, right, renderWideFooter(summary));
     container.appendChild(shell);
+    scrollPane = editor;
   }
 
   function renderWideReadout(summary) {

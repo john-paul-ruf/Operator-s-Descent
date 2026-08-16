@@ -124,14 +124,14 @@ describe('scroll-memory', () => {
     expect(detached.scrollTop).toBe(0);
   });
 
-  test('uses requestAnimationFrame when available', () => {
+  test('uses requestAnimationFrame when available (double-rAF for layout)', () => {
     const scheduled = [];
-    globalThis.requestAnimationFrame = (fn) => { scheduled.push(fn); return 1; };
+    globalThis.requestAnimationFrame = (fn) => { scheduled.push(fn); return scheduled.length; };
     captureScroll(makeElement({ scrollTop: 60 }), 'console:party');
     const target = makeElement({ scrollTop: 0 });
     restoreScroll(target, 'console:party');
     expect(target.scrollTop).toBe(0);
-    scheduled.forEach((fn) => fn());
+    while (scheduled.length) scheduled.shift()();
     expect(target.scrollTop).toBe(60);
   });
 });

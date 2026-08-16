@@ -2,7 +2,7 @@ const offsets = new Map();
 const CAP = 64;
 
 function schedule(fn) {
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fn);
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(fn));
   else fn();
 }
 
