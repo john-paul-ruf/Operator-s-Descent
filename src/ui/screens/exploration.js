@@ -42,6 +42,7 @@ function normalizeMoveOptions(toggles) {
 const EXPLORATION_CELL_PX = 24;
 const AUTO_FOLLOW_MARGIN_CELLS = 2;
 const DRAG_THRESHOLD_PX = 6;
+const MOVE_INTENT_PATTERN = /^move_(n|s|w|e|nw|ne|sw|se)$/;
 
 function scheduleFrame(callback) {
   const raf = typeof globalThis.requestAnimationFrame === 'function' ? globalThis.requestAnimationFrame : null;
@@ -185,7 +186,15 @@ export function mount(container, params = {}) {
     applyPan();
   }
 
+  function refocusContainer() {
+    const active = globalThis.document?.activeElement;
+    if (active === container) return;
+    if (typeof container.contains === 'function' && container.contains(active)) return;
+    container.focus?.({ preventScroll: true });
+  }
+
   function onPointerDown(event) {
+    refocusContainer();
     dragState = {
       pointerId: event.pointerId,
       startX: event.clientX ?? 0,
@@ -283,6 +292,7 @@ export function mount(container, params = {}) {
     ensurePartyVisible();
     applyPan();
   });
+  container.focus?.({ preventScroll: true });
 
   const unsubscribers = [
     bus.on('state:combat-end', ({ result } = {}) => {
@@ -294,6 +304,13 @@ export function mount(container, params = {}) {
         pushAudioProximity({ combatActive: false });
         consoleController.refresh();
       }
+    }),
+    bus.on('console:intent', (payload = {}) => {
+      if (unmounted) return;
+      const match = MOVE_INTENT_PATTERN.exec(payload.action || '');
+      if (!match) return;
+      if (runState.activeCombat) return;
+      onMove(match[1]);
     })
   ];
 

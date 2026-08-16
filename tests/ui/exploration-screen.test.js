@@ -341,6 +341,88 @@ describe('exploration screen controller', () => {
     expect(canvas.style.transform).toBe('translate3d(-224px, -200px, 0)');
   });
 
+  it('focuses the container on mount so arrow keys work without a prior click', async () => {
+    const { container } = await mountExploration();
+    expect(container.focused).toBe(true);
+  });
+
+  it('refocuses the container on pointerdown when focus has drifted elsewhere', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    const state = runState();
+    container.focused = false;
+    const other = new FakeElement('div');
+    globalThis.document.activeElement = other;
+
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 10, clientY: 10 });
+    expect(container.focused).toBe(true);
+
+    globalThis.document.activeElement = container;
+    container.focused = false;
+    playfieldBody.dispatch('pointerdown', { pointerId: 2, clientX: 20, clientY: 20 });
+    expect(container.focused).toBe(false);
+
+    delete globalThis.document.activeElement;
+    void state;
+  });
+
+  it('does not steal focus from a console child that already holds it', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    const button = byTestId(container, 'toggle-discovery');
+    globalThis.document.activeElement = button;
+    container.focused = false;
+
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 5, clientY: 5 });
+    expect(container.focused).toBe(false);
+
+    delete globalThis.document.activeElement;
+  });
+
+  it('routes console:intent move_* actions from panes that decline the input', async () => {
+    const { container, runState: state } = await mountExploration();
+    bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
+    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
+  });
+
+  it('routes each console:intent direction to the matching move', async () => {
+    const cases = [
+      ['move_n', { x: 10, y: 9 }],
+      ['move_s', { x: 10, y: 11 }],
+      ['move_w', { x: 9, y: 10 }],
+      ['move_ne', { x: 11, y: 9 }],
+      ['move_nw', { x: 9, y: 9 }],
+      ['move_se', { x: 11, y: 11 }],
+      ['move_sw', { x: 9, y: 11 }]
+    ];
+    for (const [action, expected] of cases) {
+      const { runState: state } = await mountExploration();
+      bus.dispatch('console:intent', { mode: 'gear', action, source: 'keyboard' });
+      expect(state.partyPosition).toEqual(expected);
+    }
+  });
+
+  it('ignores console:intent moves when combat is active', async () => {
+    const state = runState();
+    state.activeCombat = { round: 1 };
+    const { runState: mounted } = await mountExploration({ runState: state });
+    bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
+    expect(mounted.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
+  it('ignores non-move console:intent actions', async () => {
+    const { runState: state } = await mountExploration();
+    bus.dispatch('console:intent', { mode: 'gear', action: 'inspect', source: 'keyboard' });
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
+  it('stops routing console:intent after unmount', async () => {
+    const { controller, runState: state } = await mountExploration();
+    controller.unmount();
+    bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
   it('renders the three-region wide shell with telemetry, playfield column, and dock', async () => {
     installMatchMedia(true);
     const { container } = await mountExploration();
