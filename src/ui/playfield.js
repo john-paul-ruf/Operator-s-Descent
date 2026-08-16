@@ -125,6 +125,24 @@ function setCanvasDescription(canvas, text) {
   canvas.style.pointerEvents = 'none';
 }
 
+// Client-coord → grid-cell hit test for a canvas. Accounts for CSS scaling (canvases render at
+// their intrinsic width but display at `width: 100%`) and adds the camera offset so callers get a
+// world-space cell, not a viewport-space one. Returns null when the point is outside the canvas
+// rect or when the canvas has no measurable bounding rect.
+export function cellAtPoint({ canvas, camera, cellSize }, clientX, clientY) {
+  if (!canvas || typeof canvas.getBoundingClientRect !== 'function' || !cellSize) return null;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect || !rect.width || !rect.height) return null;
+  if (clientX < rect.left || clientY < rect.top || clientX > rect.right || clientY > rect.bottom) return null;
+  const scaleX = (canvas.width || rect.width) / rect.width;
+  const scaleY = (canvas.height || rect.height) / rect.height;
+  const canvasX = (clientX - rect.left) * scaleX;
+  const canvasY = (clientY - rect.top) * scaleY;
+  const cellX = (camera?.x ?? 0) + Math.floor(canvasX / cellSize);
+  const cellY = (camera?.y ?? 0) + Math.floor(canvasY / cellSize);
+  return { x: cellX, y: cellY };
+}
+
 export function calculateCombatCamera({ width, height, active, selected, consoleExpanded = false }) {
   const targets = [active, selected].filter(Boolean);
   const center = targets.length === 2

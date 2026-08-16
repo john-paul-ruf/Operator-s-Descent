@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import {
   calculateCombatCamera,
+  cellAtPoint,
   createPlayfield,
   FLOOR_COLOR,
   WALL_COLOR,
@@ -156,6 +157,22 @@ describe('playfield rendering', () => {
     // Left edge of camera-column 0 (gx=0): neighbor gx=-1 is out-of-bounds ≡ wall → line MUST exist
     // at x = 0*48 + 1 = 1 for revealed floor rows (row 1..15; row 0's cell 0,0 is a wall).
     expect(cyan.some((c) => c[2] === 1 && c[3] === 1 * 48 + 1)).toBe(true);
+  });
+
+  test('cellAtPoint maps client coords through CSS scale + camera offset; null outside canvas', () => {
+    const canvas = new FakeCanvas();
+    canvas.width = 384;
+    canvas.height = 768;
+    // Rect: 192x384 CSS pixels, positioned at (10, 20). Each rect pixel = 2 canvas pixels.
+    canvas.getBoundingClientRect = () => ({ left: 10, top: 20, right: 202, bottom: 404, width: 192, height: 384 });
+
+    // Point (58, 68) → rect-relative (48, 48) → canvas (96, 96) → cell (2, 2) at cellSize=48, camera (0,0)
+    expect(cellAtPoint({ canvas, camera: { x: 0, y: 0, w: 8, h: 16 }, cellSize: 48 }, 58, 68)).toEqual({ x: 2, y: 2 });
+    // Same point with camera offset shifts the world-space cell by the camera origin.
+    expect(cellAtPoint({ canvas, camera: { x: 3, y: 5, w: 8, h: 12 }, cellSize: 48 }, 58, 68)).toEqual({ x: 5, y: 7 });
+    // Outside the canvas rect returns null (both above/left and below/right).
+    expect(cellAtPoint({ canvas, camera: { x: 0, y: 0 }, cellSize: 48 }, 5, 500)).toBeNull();
+    expect(cellAtPoint({ canvas, camera: { x: 0, y: 0 }, cellSize: 48 }, 300, 30)).toBeNull();
   });
 
   test('calculates bounded camera and writes accent only through CSS custom property', () => {
