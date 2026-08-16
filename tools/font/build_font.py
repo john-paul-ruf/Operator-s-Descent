@@ -52,12 +52,10 @@ def contour(pen, points):
 def rect(pen, x0, y0, x1, y1):
     contour(pen, [(round(x0), round(y0)), (round(x1), round(y0)), (round(x1), round(y1)), (round(x0), round(y1))])
 
-def stroke(pen, angle_deg, offset, length, width):
+def rotated_rect(pen, cx, cy, length, width, angle_deg):
     a = math.radians(angle_deg)
     dx, dy = math.cos(a), math.sin(a)
     nx, ny = -dy, dx
-    cx = CENTER + nx * offset
-    cy = CENTER + ny * offset
     hx, hy = dx * length / 2, dy * length / 2
     wx, wy = nx * width / 2, ny * width / 2
     contour(pen, [
@@ -67,44 +65,88 @@ def stroke(pen, angle_deg, offset, length, width):
         (round(cx - hx + wx), round(cy - hy + wy)),
     ])
 
-def arc_segment(pen, radius, width, start_deg, sweep_deg, steps=8):
+def stroke(pen, angle_deg, offset, length, width):
+    a = math.radians(angle_deg)
+    nx, ny = -math.sin(a), math.cos(a)
+    cx = CENTER + nx * offset
+    cy = CENTER + ny * offset
+    rotated_rect(pen, cx, cy, length, width, angle_deg)
+
+def bar(pen, x, y, w, h, angle_deg=0):
+    cx = CENTER + x
+    cy = CENTER + y
+    if angle_deg == 0:
+        rect(pen, cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+    else:
+        rotated_rect(pen, cx, cy, w, h, angle_deg)
+
+def arc_segment(pen, cx, cy, radius, width, start_deg, sweep_deg, steps=8):
     outer = []
     inner = []
     for i in range(steps + 1):
         a = math.radians(start_deg + sweep_deg * i / steps)
-        outer.append((round(CENTER + math.cos(a) * (radius + width / 2)), round(CENTER + math.sin(a) * (radius + width / 2))))
+        outer.append((round(cx + math.cos(a) * (radius + width / 2)), round(cy + math.sin(a) * (radius + width / 2))))
     for i in range(steps, -1, -1):
         a = math.radians(start_deg + sweep_deg * i / steps)
-        inner.append((round(CENTER + math.cos(a) * (radius - width / 2)), round(CENTER + math.sin(a) * (radius - width / 2))))
+        inner.append((round(cx + math.cos(a) * (radius - width / 2)), round(cy + math.sin(a) * (radius - width / 2))))
     contour(pen, outer + inner)
 
-def node(pen, angle_deg, radius, size, kind):
+def ring(pen, radius, width, gaps=None, cx=CENTER, cy=CENTER):
+    gaps = gaps or []
+    if not gaps:
+        arc_segment(pen, cx, cy, radius, width, 0, 360, 10)
+        return
+    cursor = 0
+    for start, end in sorted(gaps):
+        if start > cursor:
+            arc_segment(pen, cx, cy, radius, width, cursor, start - cursor, max(3, int((start - cursor) / 36)))
+        cursor = end
+    if cursor < 360:
+        arc_segment(pen, cx, cy, radius, width, cursor, 360 - cursor, max(3, int((360 - cursor) / 36)))
+
+def trace(pen, points, width):
+    for i in range(len(points) - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        dx, dy = x1 - x0, y1 - y0
+        length = math.hypot(dx, dy)
+        if length == 0:
+            continue
+        angle_deg = math.degrees(math.atan2(dy, dx))
+        cx = CENTER + (x0 + x1) / 2
+        cy = CENTER + (y0 + y1) / 2
+        rotated_rect(pen, cx, cy, length, width, angle_deg)
+
+def node(pen, angle_deg, radius, size, kind='square'):
     a = math.radians(angle_deg)
     cx = CENTER + math.cos(a) * radius
     cy = CENTER + math.sin(a) * radius
     if kind == 'diamond':
         contour(pen, [(round(cx), round(cy + size)), (round(cx + size), round(cy)), (round(cx), round(cy - size)), (round(cx - size), round(cy))])
+    elif kind == 'circle':
+        pts = []
+        for i in range(8):
+            t = math.radians(360 * i / 8 + 22.5)
+            pts.append((round(cx + math.cos(t) * size), round(cy + math.sin(t) * size)))
+        contour(pen, pts)
+    elif kind == 'tick':
+        thickness = max(8, int(size * 0.6))
+        rotated_rect(pen, cx, cy, size * 2, thickness, angle_deg + 90)
     else:
         rect(pen, cx - size, cy - size, cx + size, cy + size)
 
 def draw_recipe(recipe):
     pen = TTGlyphPen(None)
-    for ring in recipe.get('rings', []):
-        gaps = ring.get('gaps', [])
-        if not gaps:
-            arc_segment(pen, ring['radius'], ring['width'], 0, 360, 10)
-        else:
-            cursor = 0
-            for start, end in sorted(gaps):
-                if start > cursor:
-                    arc_segment(pen, ring['radius'], ring['width'], cursor, start - cursor, max(3, int((start - cursor) / 36)))
-                cursor = end
-            if cursor < 360:
-                arc_segment(pen, ring['radius'], ring['width'], cursor, 360 - cursor, max(3, int((360 - cursor) / 36)))
+    for r in recipe.get('rings', []):
+        ring(pen, r['radius'], r['width'], r.get('gaps'), CENTER + r.get('cx', 0), CENTER + r.get('cy', 0))
+    for a in recipe.get('arcs', []):
+        arc_segment(pen, CENTER + a.get('cx', 0), CENTER + a.get('cy', 0), a['radius'], a['width'], a['start'], a['sweep'], a.get('steps', 6))
     for s in recipe.get('strokes', []):
         stroke(pen, s['angle'], s.get('offset', 0), s['length'], s['width'])
     for b in recipe.get('bars', []):
-        rect(pen, CENTER + b['x'] - b['w'] / 2, CENTER + b['y'] - b['h'] / 2, CENTER + b['x'] + b['w'] / 2, CENTER + b['y'] + b['h'] / 2)
+        bar(pen, b['x'], b['y'], b['w'], b['h'], b.get('angle', 0))
+    for t in recipe.get('traces', []):
+        trace(pen, t['points'], t['width'])
     for n in recipe.get('nodes', []):
         node(pen, n['angle'], n['radius'], n['size'], n.get('kind', 'square'))
     return pen.glyph()
