@@ -993,3 +993,86 @@ No HTTP API — the game is fully client-side. The only "API" surfaces are inter
 
 - The internal `render()` function captures the active list-scroll container under `library:list` before `container.replaceChildren()` and restores it after the new screen mounts. The tracked pane is the `.screen-body` returned by `createScreenBody` in both layouts (`data-testid="library-list"`); wide layout uses the `wide-library-body` variant, portrait uses the `s-3` variant — both scroll.
 - Restore-on-mount covers hashchange-driven re-mounts (SESSION-01's back/forward via M102) without any additional wiring.
+
+<!-- SESSION-01 (control-and-polish) -->
+
+# SESSION-01 (control-and-polish) — architecture delta
+
+## M24 Combat Rules (`src/rules/combat.js`)
+
+Bounded path movement replaces the one-cell `executeMove`. The public function signatures are unchanged; three new named exports and one action-shape extension carry the new capability.
+
+### New exports
+
+- `MOVE_RANGE = 5` — hard cap on a single MOVE action's step count.
+- `reachableMoveCells(combatState, actorId, maxSteps = MOVE_RANGE) → Map<'x,y', { x, y, steps, path }>` — BFS from the actor's position over the 8 movement directions. Each expansion honors `legalStep` (walls + diagonal corner rule) and rejects destinations occupied by any living actor. `path` is the shortest ordered direction list from the origin. The origin cell is intentionally excluded. Returns an empty map when the actor, position, or window is missing.
+- `isLegalMoveStep(combatState, actorId, from, direction) → boolean` — single-step legality (walls, corner rule, occupancy) from an arbitrary `from` cell. Exposed so the UI can gate incremental path-stepping without duplicating the rules internals.
+
+### Action-shape extension
+
+`executeAction` and `executeMove` now accept a `path` field on the move action alongside the existing `direction`/`targetId`. Precedence: `panicked` (single-step `fleeDirection` override) → `path` (array, length 1..MOVE_RANGE) → `direction` wrapped to `[direction]` (back-compat with `enemyAI` `stepToward`) → `targetId` fallback (`[stepToward(target)]`). The whole path is pre-validated (walls, corner, occupancy); a single illegal step rejects the entire request with `illegal-cell`/`invalid-direction` and moves nothing. On success the walk executes step-by-step, resolving `getOpportunityAttackers` per threatened departure; a lethal OA stops the walk on the last cell actually reached (`actor.position` reflects the last successful landing; `moveAvailable` is only cleared on a fully completed walk).
+
+Overlength paths (`path.length > MOVE_RANGE`) reject with `illegal-cell`. `phasing` (Ghost signature) exemption preserved — the whole walk skips OA resolution.
+
+### `getLegalActions` shape
+
+The returned object gains `moveRange: MOVE_RANGE`. `legalMoveDirections` is unchanged (still the 1-step legal directions from the actor's current position — used only by callers that want first-step hints).
+
+### Move log entry
+
+`{ type: 'move', actorId, direction, path, steps, from, to, triggeredAttacks[, cancelled] }`.
+- `direction` = `path[0]` — kept so `formatLog` and older pins that read `entry.direction` stay valid.
+- `path` — the direction sequence: full attempted path on success, walked partial (excludes the fatal step) on cancelled.
+- `steps` — `path.length` in the recorded entry.
+- `to: null` when cancelled (matches the pre-session single-step convention); actor's own `position` field is authoritative for where it died.
+
+`toCombatSnapshot` still serializes only `log.length`, so path arrays never enter the save budget.
+
+## M58 Playfield (`src/ui/playfield.js`)
+
+New pure export:
+
+- `cellAtPoint({ canvas, camera, cellSize }, clientX, clientY) → { x, y } | null` — client-coord → grid-cell hit test. Reads `canvas.getBoundingClientRect()` and scales by `canvas.width / rect.width` (canvases render at intrinsic width but display at `width: 100%`), then adds `camera.x/y` so callers get a world-space cell. Returns `null` when the point is outside the rect, when the canvas has no measurable rect, or when `cellSize` is falsy.
+
+Existing exports, camera math, wall-line pass, and canvas `pointer-events: none` guarantee are unchanged.
+
+## M62 Console Combat (`src/ui/console/combat.js`)
+
+Move action label: `MOVE · UP TO 5 CELLS` (was `MOVE · MOVE ACTION`).
+
+The direction grid is now a **path stepper**, not a one-shot direction pick. Same `.combat-direction-grid` / `.combat-direction` class names and `combat-dir-<direction>` testids. The center cell is a non-interactive `.dpad-center` element whose text reads `${remaining} LEFT` (`remaining = MOVE_RANGE − movePath.length`). A `.combat-undo` row-button (`combat-undo` testid) appears below the grid whenever `movePath.length > 0`.
+
+Direction-button enablement now comes from `context.combatGetPathSteps()` (legal next-step directions from the current cursor endpoint), not the pre-session `context.combatGetDirections()`. Clicks call `context.combatStepPath(direction)`; the UNDO button calls `context.combatPopPath()`.
+
+`handleInput` routing:
+- `ACTION_TO_DIRECTION[action]` → `context.combatStepPath(direction)` when the selected action is `move` (was `combatSelectDirection`).
+- `cancel` action → `context.combatPopPath()` when a move path is being built (movePath non-empty); falls through to `context.combatCancel()` otherwise. The console shell owns portrait `cancel` (collapses the tab bar) and only delegates cancel to modes in dock (wide) variant, so keyboard-undo is a wide-mode capability; the on-screen UNDO row-button covers portrait.
+
+## M71 Combat Screen (`src/ui/screens/combat.js`)
+
+Public `mount(container, params) → { unmount }` shape unchanged.
+
+### Selection state
+
+`selection.movePath: string[]` replaces `selection.direction` as the source of truth for move actions. `selection.direction` is retained as a `movePath[0]` mirror for legacy console/log consumers. `chooseAction`, `syncSelectionActor`, and the full-cancel branch of `cancelSelection` all reset `movePath` to `[]`.
+
+`actionFromSelection` for `move` now emits `{ type: 'move', actorId, path: [...movePath] }` (was `{ direction }`). `validationError` checks `movePath.length ∈ [1, MOVE_RANGE]` and that the walked endpoint is in `reachableMoveCells`. `canConfirm` / `confirmSelection` accept a move-path early-confirm (no explicit `confirm` phase transition required once at least one step is stepped).
+
+### viewState bindings (delta)
+
+Removed: `combatSelectDirection`, `combatGetDirections`.
+Added: `combatStepPath`, `combatPopPath`, `combatSelectDestination`, `combatGetMoveRange`, `combatGetPathSteps`.
+
+- `combatStepPath(direction)` — append one legal single step to `movePath` (walls/corner/occupancy via `isLegalMoveStep`), capped at MOVE_RANGE. Users may zig-zag; not restricted to BFS shortest.
+- `combatPopPath()` — remove the last step; drop back to `choose-path` phase when the path empties.
+- `combatSelectDestination(cell)` — replace `movePath` with the BFS-shortest route (`reachableMoveCells(...).get(key).path`); enter `confirm` phase.
+- `combatGetMoveRange()` — the reachable map for the active actor.
+- `combatGetPathSteps()` — legal single-step directions from the current cursor endpoint (used by `renderDirections` to enable/disable buttons).
+
+### Pointer wiring
+
+`pointerdown` / `pointermove` / `pointerup` / `pointercancel` attach to `playfieldBody` (canvas remains `pointer-events: none`, per M58). A press whose cursor travels less than `DRAG_THRESHOLD_PX = 6` is a **tap** — `cellAtPoint` resolves the world cell and dispatches to `selectDestination` (move) or `selectTarget` (attack/cast/overclock/item, matching the cell against `targetsForSelection().position`). Anything past the threshold is a **drag** — `manualCamera` shifts on the Y axis, clamped to the vertical overflow (`combat window height − visible rows`; horizontal is a no-op because window width matches camera width). `manualCamera` is threaded through `renderCombat` via `overlayOptions().camera`, so the drag preview honors the existing camera pipeline instead of introducing a second transform. `syncSelectionActor` clears `manualCamera` on turn change so auto-centering resumes.
+
+### Overlay options
+
+`rangeCells` now doubles as the movement highlight during move mode (`selection.actionType === 'move'` in `choose-path` or `confirm`): the full `reachableMoveCells` key set. `pathCells` marks the cells along the current `movePath`. Existing target-mode semantics (single-cell `rangeCells` around the selected target, cover indicator, valid-target frames) are unchanged.
