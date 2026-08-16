@@ -134,13 +134,14 @@ export function createHistoryController({ window: win, onNavigate }) {
       if (started) return;
       started = true;
       lastSynced = currentHash();
+      if (typeof win.addEventListener !== 'function') return;
       listener = handleHashChange;
       win.addEventListener('hashchange', listener);
     },
     stop() {
       if (!started) return;
       started = false;
-      if (listener) win.removeEventListener('hashchange', listener);
+      if (listener && typeof win.removeEventListener === 'function') win.removeEventListener('hashchange', listener);
       listener = null;
       lastSynced = null;
       suppress = false;
@@ -155,8 +156,10 @@ export function createHistoryController({ window: win, onNavigate }) {
       }
       suppress = true;
       const href = fragment;
-      if (options.push) win.history.pushState(null, '', href);
-      else win.history.replaceState(null, '', href);
+      const history = win.history;
+      if (options.push && typeof history?.pushState === 'function') history.pushState(null, '', href);
+      else if (typeof history?.replaceState === 'function') history.replaceState(null, '', href);
+      else if (win.location) win.location.hash = href;
       lastSynced = fragment;
     }
   };

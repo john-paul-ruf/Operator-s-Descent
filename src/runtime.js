@@ -1,7 +1,7 @@
 import { setGameDataCompatibility, getCrtOverlaysController } from './main.js';
 import { loadGameData } from './data-loader.js';
 import { bus } from './state/bus.js';
-import { loadSettings, saveRun, deleteRunState, getRunKey } from './state/library.js';
+import { loadSettings, saveRun, deleteRunState, getRunKey, listRuns, loadRun } from './state/library.js';
 import { createAudioEngine } from './audio/engine.js';
 import { createGlitchSystem, initGlitchSafePool } from './glitch/glitch.js';
 import { createGrain } from './glitch/grain.js';
@@ -11,6 +11,7 @@ import { createRNGCursorForRun } from './core/rng-cursor.js';
 import { generateFloor } from './floor/generator.js';
 import { beginFloorTransition, completeFloorTransition } from './rules/progression.js';
 import { initLayoutController } from './ui/layout.js';
+import { parseFragment, createHistoryController } from './router.js';
 
 export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
 export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'import-resume', 'explicit-exit']);
@@ -41,6 +42,9 @@ let gestureAudioContext = null;
 let busUnsubscribers = [];
 let layoutControllerCleanup = null;
 let runtimeActive = false;
+let historyController = null;
+let mountedViaHistory = false;
+let pendingPush = false;
 let serviceWorkerStarted = false;
 let serviceWorkerReloadPending = false;
 let serviceWorkerRegistration = null;
@@ -126,6 +130,11 @@ export async function mountScreen(name, params = {}) {
     return false;
   }
 
+  const shouldPush = pendingPush;
+  pendingPush = false;
+  const viaHistory = mountedViaHistory;
+  mountedViaHistory = false;
+
   const sequence = ++mountSequence;
   if (currentScreenController?.unmount) {
     currentScreenController.unmount();
@@ -165,6 +174,7 @@ export async function mountScreen(name, params = {}) {
     currentRouteParams = params;
     registerGlitchElements(container);
     bus.dispatch('runtime:route', { screen: name, params });
+    if (!viaHistory) historyController?.sync(name, params, { push: shouldPush });
     return true;
   } catch (error) {
     if (sequence === mountSequence) {
@@ -475,6 +485,7 @@ async function handleFloorChange({ runState, selections = {}, reason = 'descent-
 
 async function handleNavigation({ screen, params = {} } = {}) {
   if (!isValidRoute(screen)) return false;
+  if (screen !== currentRoute) pendingPush = true;
   if (screen === 'exploration') return routeToExploration(params);
   if (screen === 'combat' && params.runState) {
     currentRunState = params.runState;
@@ -655,14 +666,48 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
   layoutControllerCleanup = initLayoutController({ bus });
   setupBus();
 
+  historyController = createHistoryController({
+    window,
+    onNavigate: (parsed) => {
+      mountedViaHistory = true;
+      void resolveParsedFragment(parsed);
+    }
+  });
+  historyController.start();
+
   const hash = typeof initialHash === 'string' ? initialHash : '';
-  if (hash.startsWith('#r=')) {
-    await mountScreen('import', { fragment: hash.slice(3) });
-  } else if (hash.startsWith('#w=')) {
-    await mountScreen('creation', { preloadedSeed: hash.slice(3) });
-  } else {
-    await mountScreen('title');
+  await resolveParsedFragment(parseFragment(hash));
+}
+
+async function resolveParsedFragment(parsed) {
+  if (!parsed || parsed.kind === 'none') return mountScreen('title');
+  if (parsed.kind === 'run') return mountScreen('import', { fragment: parsed.fragment });
+  if (parsed.kind === 'seed') return mountScreen('creation', { preloadedSeed: parsed.seed });
+  if (parsed.kind === 'invalid') {
+    const ok = await mountScreen('title');
+    if (typeof window !== 'undefined' && typeof window.history?.replaceState === 'function') window.history.replaceState(null, '', '#a=title');
+    return ok;
   }
+  if (parsed.kind !== 'route') return mountScreen('title');
+  const { route, save, seed, from } = parsed;
+  if (route === 'exploration' && save === 'current') {
+    const entries = listRuns().filter((entry) => entry.alive && (seed == null || entry.worldSeed === (seed >>> 0)));
+    entries.sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0));
+    for (const entry of entries) {
+      const result = loadRun(entry.key);
+      if (result?.success && result.runState) {
+        return routeToExploration({ runState: result.runState, resume: true });
+      }
+    }
+    const ok = await mountScreen('title');
+    if (typeof window !== 'undefined' && typeof window.history?.replaceState === 'function') window.history.replaceState(null, '', '#a=title');
+    return ok;
+  }
+  if (route === 'creation') return mountScreen('creation', Number.isInteger(seed) ? { preloadedSeed: seed } : {});
+  if (route === 'scorecard') return mountScreen('title');
+  if (route === 'combat') return mountScreen('title');
+  if (route === 'settings') return mountScreen('settings', from ? { from } : {});
+  return mountScreen(route);
 }
 
 function mountDataFailure(error) {
@@ -718,6 +763,10 @@ export function shutdownRuntime() {
   busUnsubscribers = [];
   layoutControllerCleanup?.();
   layoutControllerCleanup = null;
+  historyController?.stop();
+  historyController = null;
+  mountedViaHistory = false;
+  pendingPush = false;
   currentScreenController?.unmount?.();
   currentScreenController = null;
   if (currentScreenContainer) {
