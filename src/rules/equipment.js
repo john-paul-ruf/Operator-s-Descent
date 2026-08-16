@@ -183,3 +183,87 @@ export function applyFloorEntryAffixes(runState, affixesData) {
 export function getSalvageValue(item) {
   return item?.salvageValue || 0;
 }
+
+function prettifyBaseType(value) {
+  return String(value).split(/[_-]/).filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+}
+
+function inferredBaseType(item) {
+  if (item?.baseType) return item.baseType;
+  if (typeof item?.id !== 'string') return null;
+  const trailing = item.id.split('-').pop();
+  return trailing || null;
+}
+
+function catalogFor(category, data) {
+  if (category === 'weapon') return data?.equipment?.weapons || null;
+  if (category === 'armor') return data?.equipment?.armor || null;
+  if (category === 'consumable') return data?.consumables?.consumables || null;
+  return null;
+}
+
+export function itemDisplayName(item, data) {
+  if (!item || typeof item !== 'object') return '';
+  if (typeof item.name === 'string' && item.name) return item.name;
+  const baseType = inferredBaseType(item);
+  const catalog = catalogFor(item.category, data);
+  const catalogName = baseType ? catalog?.[baseType]?.name : null;
+  if (catalogName) return catalogName;
+  if (baseType) return prettifyBaseType(baseType);
+  return item.id || '';
+}
+
+function formatAcc(bonus) {
+  return `${bonus >= 0 ? '+' : ''}${bonus} acc`;
+}
+
+function weaponDetails(base) {
+  const pieces = [];
+  if (base?.damageDie) pieces.push(`${base.damageDie} dmg`);
+  if (base?.rangeBand) pieces.push(`${base.rangeBand} range`);
+  if (Number.isFinite(base?.accuracyBonus)) pieces.push(formatAcc(base.accuracyBonus));
+  return pieces;
+}
+
+function armorDetails(base) {
+  const pieces = [];
+  if (Number.isFinite(base?.defenseBonus)) pieces.push(`+${base.defenseBonus} DEF`);
+  if (Number.isFinite(base?.finPenalty) && base.finPenalty !== 0) pieces.push(`FIN ${base.finPenalty}`);
+  return pieces;
+}
+
+function affixDetails(affixes, data) {
+  const pieces = [];
+  for (const affix of affixes || []) {
+    if (!affix) continue;
+    if (typeof affix === 'string') {
+      const entry = data?.affixes?.affixes?.[affix];
+      const name = entry?.name || affix;
+      pieces.push(entry?.effect ? `${name}: ${entry.effect}` : name);
+    } else {
+      const entry = affix.id ? data?.affixes?.affixes?.[affix.id] : null;
+      const name = affix.name || entry?.name || affix.id;
+      const effect = affix.effect || entry?.effect;
+      if (!name) continue;
+      pieces.push(effect ? `${name}: ${effect}` : name);
+    }
+  }
+  return pieces;
+}
+
+export function describeItem(item, data) {
+  if (!item || typeof item !== 'object') return '';
+  const baseType = inferredBaseType(item);
+  const category = item.category;
+  const catalog = catalogFor(category, data);
+  const base = baseType ? catalog?.[baseType] : null;
+  const pieces = [];
+  if (category === 'weapon') pieces.push(...weaponDetails(base));
+  else if (category === 'armor') pieces.push(...armorDetails(base));
+  else if (category === 'consumable' && base?.effect) pieces.push(base.effect);
+  pieces.push(...affixDetails(item.affixes, data));
+  if (item.corrupt) pieces.push(`CORRUPT +${Number(item.corruptionValue || 0).toFixed(2)}`);
+  const salvage = getSalvageValue(item);
+  if (salvage > 0) pieces.push(`scrap ${salvage}`);
+  return pieces.join(' · ');
+}

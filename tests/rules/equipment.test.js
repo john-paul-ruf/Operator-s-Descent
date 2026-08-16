@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyFloorEntryAffixes, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, resolveArmorStats, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
+import { applyFloorEntryAffixes, describeItem, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, itemDisplayName, resolveArmorStats, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
 import { createRunState, deserializeRunState } from '../../src/state/run-state.js';
 import { loadData } from '../helpers/data.js';
 
 const affixesData = loadData('affixes');
+const equipmentData = loadData('equipment');
+const consumablesData = loadData('consumables');
+const fullData = { equipment: equipmentData, affixes: affixesData, consumables: consumablesData };
 
 function character() {
   return {
@@ -74,5 +77,31 @@ describe('CORRUPT equipment transactions', () => {
     expect(applyFloorEntryAffixes(entered.runState, affixesData).applied).toEqual([]);
     entered.runState.advanceFloor();
     expect(applyFloorEntryAffixes(entered.runState, affixesData).applied).toHaveLength(1);
+  });
+});
+
+describe('item display resolvers', () => {
+  it('resolves explicit names, category catalog names, and prettified fallbacks', () => {
+    expect(itemDisplayName({ name: 'Named' }, fullData)).toBe('Named');
+    expect(itemDisplayName({ category: 'weapon', baseType: 'sidearm' }, fullData)).toBe('Sidearm');
+    expect(itemDisplayName({ category: 'armor', baseType: 'medium' }, fullData)).toBe('Medium Armor');
+    expect(itemDisplayName({ category: 'consumable', baseType: 'repair_patch' }, fullData)).toBe('Repair Patch');
+    expect(itemDisplayName({ id: 'breacher-1-weapon-sidearm', category: 'weapon', baseType: 'sidearm' }, fullData)).toBe('Sidearm');
+    expect(itemDisplayName({ category: 'weapon', baseType: 'heavy_melee' }, {})).toBe('Heavy Melee');
+    expect(itemDisplayName({ category: 'weapon', baseType: 'phantom_thing' }, fullData)).toBe('Phantom Thing');
+    expect(itemDisplayName({ id: 'loose-id' }, fullData)).toBe('Id');
+    expect(itemDisplayName(null)).toBe('');
+    expect(itemDisplayName({ category: 'weapon', baseType: 'sidearm' }, {})).toBe('Sidearm');
+  });
+
+  it('describes weapons, armor, consumables with affixes, corruption, and scrap', () => {
+    expect(describeItem({ category: 'weapon', baseType: 'sidearm', salvageValue: 1 }, fullData)).toBe('d6 dmg · adjacent range · +1 acc · scrap 1');
+    expect(describeItem({ category: 'armor', baseType: 'medium', salvageValue: 2 }, fullData)).toBe('+3 DEF · FIN -1 · scrap 2');
+    expect(describeItem({ category: 'consumable', baseType: 'repair_patch', salvageValue: 1 }, fullData)).toBe('Restore d6 HP to one character. · scrap 1');
+    expect(describeItem({ category: 'weapon', baseType: 'sidearm', affixes: ['reinforced'], salvageValue: 1 }, fullData)).toContain('Reinforced: +1 to core stat');
+    expect(describeItem({ category: 'weapon', baseType: 'sidearm', affixes: [{ id: 'precise', name: 'Precise', effect: '+1 accuracy bonus' }], salvageValue: 1 }, fullData)).toContain('Precise: +1 accuracy bonus');
+    expect(describeItem({ category: 'weapon', baseType: 'sidearm', corrupt: true, corruptionValue: 0.1, salvageValue: 1 }, fullData)).toContain('CORRUPT +0.10');
+    expect(describeItem({ category: 'weapon', baseType: 'sidearm' }, {})).toBe('');
+    expect(describeItem(null)).toBe('');
   });
 });
