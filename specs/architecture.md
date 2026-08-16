@@ -1103,3 +1103,27 @@ Two owner-directed additions extend M70 without changing its public export shape
 - Movement is still routed through M32 `moveParty` — the fallback path shares `onMove` with the direct keydown path.
 - Canvas dimensions (480×768), overflow, and DOM order under `playfieldBody` are unchanged; the only new inline style is `playfieldBody.style.cursor`.
 - `unmount()` now also removes the pointer/touch listeners and the `console:intent` subscription; no leaked handlers persist across route changes or layout remounts.
+
+<!-- SESSION-03 (control-and-polish) -->
+
+# SESSION-03 (control-and-polish) — architecture delta
+
+## M18 Equipment Rules (`src/rules/equipment.js`)
+
+New public exports (render-time only — display strings are never persisted; save codec at `src/state/save-codecs.js:281` round-trips a fixed item field set):
+
+- `itemDisplayName(item, data) → string` — resolves in order: explicit `item.name` → category-catalog lookup (`weapon`→`data.equipment.weapons[baseType].name`, `armor`→`data.equipment.armor[baseType].name`, `consumable`→`data.consumables.consumables[baseType].name`) → prettified `baseType` (`heavy_melee` → `Heavy Melee`) → `item.id`. When `item.baseType` is missing, the trailing segment of `item.id` (creation ids end in `-{baseType}`, `src/ui/creation-model.js:246`) is used as the lookup key. Pure, never throws, tolerates `data = {}`.
+- `describeItem(item, data) → string` — ` · `-joined summary line. Weapon → `d6 dmg · adjacent range · +1 acc`; armor → `+3 DEF · FIN -1` (FIN only when non-zero); consumable → catalog `effect` verbatim. Appends each affix as `AffixName: effect` (from `data.affixes.affixes[id]` for string affixes, or from the affix object directly), then `CORRUPT +0.10` when `item.corrupt`, then `scrap N` when `getSalvageValue(item) > 0`. Rarity is deliberately omitted — the card's rarity tag already carries it.
+
+## M56 UI Components (`src/ui/components.js`)
+
+`createEquipmentCard(item, opts)` now also renders a `.card-desc` element when `item.description` (or `opts.description`) is a non-empty string. Card remains data-free; callers pass a wrapped display item (`{ ...item, name: itemDisplayName(item, data), description: describeItem(item, data) }`) — never mutate inventory items.
+
+## Consumers
+
+- M64 Console Gear (`src/ui/console/gear.js`) — `itemName(item, data)` delegates to `itemDisplayName`; equipped-row + inventory-row cards receive the wrapped display item.
+- M66 Console Loot (`src/ui/console/loot.js`) — local `itemName`/`itemDetail` deleted; both delegate to the shared resolvers; junk-toggle notice now resolves the display name from inventory instead of leaking raw ids.
+
+## CSS
+
+- M79 (`styles/components.css`) — adds `.card-desc` (small `--text-secondary` line under `.card-name`). Mock class parity is mock→prod (`scripts/design-scan/check-mock-classes.js`); a production-only class defined in production CSS cannot regress the scan and no mock edits are required.
