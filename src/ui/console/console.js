@@ -1,4 +1,5 @@
 import { bus } from '../../state/bus.js';
+import { captureScroll, preserveScroll } from '../scroll-memory.js';
 import * as moveMode from './move.js';
 import * as combatMode from './combat.js';
 import * as partyMode from './party.js';
@@ -147,13 +148,15 @@ export function createConsole(state, options = {}) {
   }
 
   function renderCurrentMode() {
-    destroyMountedMode();
     const mode = modeById(currentMode);
-    const result = mode.module.render?.(contentArea, createModeContext());
-    mountedCleanup = typeof result === 'function' ? result : result?.cleanup || null;
-    contentArea.id = 'console-content';
-    contentArea.setAttribute('aria-labelledby', `console-tab-${mode.id}`);
-    contentArea.dataset.mode = mode.id;
+    preserveScroll(contentArea, `console:${mode.id}`, () => {
+      destroyMountedMode();
+      const result = mode.module.render?.(contentArea, createModeContext());
+      mountedCleanup = typeof result === 'function' ? result : result?.cleanup || null;
+      contentArea.id = 'console-content';
+      contentArea.setAttribute('aria-labelledby', `console-tab-${mode.id}`);
+      contentArea.dataset.mode = mode.id;
+    });
     contentArea.focus?.({ preventScroll: true });
   }
 
@@ -165,6 +168,7 @@ export function createConsole(state, options = {}) {
       return false;
     }
     if (currentMode === mode.id && rendered) return true;
+    if (rendered) captureScroll(contentArea, `console:${currentMode}`);
     currentMode = mode.id;
     setNotice('');
     updateTabs();
