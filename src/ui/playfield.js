@@ -12,6 +12,11 @@ export const HIDDEN_COLOR = '#000000';
 export const GRID_COLOR = '#3a3a3a';
 export const WALL_LINE_COLOR = '#7ec8e3';
 export const TICK_DIM_ALPHA = 0.45;
+export const WALL_PULSE_PERIOD_MS = 2400;
+export const WALL_PULSE_FPS = 30;
+export const WALL_GLOW_BLUR = [4, 12];
+export const WALL_GLOW_ALPHA = [0.7, 1];
+const WALL_STATIC_GLOW = 0.7;
 const DANGER_COLOR = '#e83a3a';
 const DESCENT_COLOR = '#3ae8a8';
 const CONTAINER_COLOR = '#e8d23a';
@@ -22,6 +27,14 @@ const ECHO_COLOR = '#b026d4';
 
 function bounded(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function lerp(range, t) {
+  return range[0] + t * (range[1] - range[0]);
+}
+
+export function wallThickness(size) {
+  return Math.max(3, Math.round(size / 8));
 }
 
 function cssColor(value) {
@@ -89,19 +102,17 @@ function drawGridTicks(ctx, { isFloor, isRevealed, isDim, colStart, rowStart, co
     for (let rx = 1; rx < cols; rx++) {
       const gx = colStart + rx;
       const gy = rowStart + ry;
-      let anyRevealedFloor = false;
-      let allDim = true;
       const neighbors = [
         [gx - 1, gy - 1], [gx, gy - 1],
         [gx - 1, gy], [gx, gy]
       ];
+      let allRevealedFloor = true;
+      let allDim = true;
       for (const [nx, ny] of neighbors) {
-        if (!isFloor(nx, ny)) continue;
-        if (!isRevealed(nx, ny)) continue;
-        anyRevealedFloor = true;
+        if (!isFloor(nx, ny) || !isRevealed(nx, ny)) { allRevealedFloor = false; break; }
         if (!isDim(nx, ny)) allDim = false;
       }
-      if (!anyRevealedFloor) continue;
+      if (!allRevealedFloor) continue;
       const px = rx * size;
       const py = ry * size;
       if (allDim) ctx.globalAlpha = TICK_DIM_ALPHA;
@@ -112,8 +123,14 @@ function drawGridTicks(ctx, { isFloor, isRevealed, isDim, colStart, rowStart, co
   }
 }
 
-function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, cols, rows, size }) {
+function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, cols, rows, size, glow = WALL_STATIC_GLOW }) {
+  const t = wallThickness(size);
+  const blur = lerp(WALL_GLOW_BLUR, glow);
+  const alpha = lerp(WALL_GLOW_ALPHA, glow);
   ctx.fillStyle = WALL_LINE_COLOR;
+  ctx.shadowColor = WALL_LINE_COLOR;
+  ctx.shadowBlur = blur;
+  ctx.globalAlpha = alpha;
   for (let ry = 0; ry < rows; ry++) {
     for (let rx = 0; rx < cols; rx++) {
       const gx = colStart + rx;
@@ -122,12 +139,23 @@ function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, col
       if (!isRevealed(gx, gy)) continue;
       const px = rx * size;
       const py = ry * size;
-      if (!isTraversable(gx, gy - 1)) ctx.fillRect(px + 1, py + 1, size - 2, 2);
-      if (!isTraversable(gx, gy + 1)) ctx.fillRect(px + 1, py + size - 3, size - 2, 2);
-      if (!isTraversable(gx - 1, gy)) ctx.fillRect(px + 1, py + 1, 2, size - 2);
-      if (!isTraversable(gx + 1, gy)) ctx.fillRect(px + size - 3, py + 1, 2, size - 2);
+      const wallN = !isTraversable(gx, gy - 1);
+      const wallS = !isTraversable(gx, gy + 1);
+      const wallW = !isTraversable(gx - 1, gy);
+      const wallE = !isTraversable(gx + 1, gy);
+      if (wallN) ctx.fillRect(px, py - t, size, t);
+      if (wallS) ctx.fillRect(px, py + size, size, t);
+      if (wallW) ctx.fillRect(px - t, py, t, size);
+      if (wallE) ctx.fillRect(px + size, py, t, size);
+      if (wallN && wallW) ctx.fillRect(px - t, py - t, t, t);
+      if (wallN && wallE) ctx.fillRect(px + size, py - t, t, t);
+      if (wallS && wallW) ctx.fillRect(px - t, py + size, t, t);
+      if (wallS && wallE) ctx.fillRect(px + size, py + size, t, t);
     }
   }
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+  ctx.globalAlpha = 1;
 }
 
 function drawToken(ctx, { x, y, radius, color, codepoint, size, renderSize, role }) {
@@ -193,6 +221,237 @@ export function createPlayfield(canvas) {
   const ctx = canvas.getContext('2d');
   let accentColor = '#7ec8e3';
   let camera = { x: 0, y: 0, w: COMBAT_GRID_W, h: COMBAT_GRID_H };
+  let pulseEnabled = false;
+  let lastRender = null;
+  let rafHandle = null;
+  let pulseOriginMs = null;
+  let lastFrameMs = 0;
+
+  function glowLevel() {
+    if (!pulseEnabled || pulseOriginMs == null) return WALL_STATIC_GLOW;
+    const elapsed = lastFrameMs - pulseOriginMs;
+    return 0.5 + 0.5 * Math.sin((2 * Math.PI * elapsed) / WALL_PULSE_PERIOD_MS);
+  }
+
+  function scheduleTick() {
+    if (!pulseEnabled || !lastRender) return;
+    if (rafHandle != null) return;
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf !== 'function') return;
+    rafHandle = raf(onFrame);
+  }
+
+  function onFrame(now) {
+    rafHandle = null;
+    if (!pulseEnabled || !lastRender) return;
+    const t = typeof now === 'number' ? now : 0;
+    if (lastFrameMs === 0 || t - lastFrameMs >= 1000 / WALL_PULSE_FPS) {
+      if (pulseOriginMs == null) pulseOriginMs = t;
+      lastFrameMs = t;
+      replayRender();
+    }
+    scheduleTick();
+  }
+
+  function replayRender() {
+    if (!lastRender) return;
+    if (lastRender.kind === 'exploration') renderExplorationImpl(...lastRender.args);
+    else if (lastRender.kind === 'combat') renderCombatImpl(...lastRender.args);
+  }
+
+  function cancelPulseFrame() {
+    const cancel = globalThis.cancelAnimationFrame;
+    if (rafHandle != null && typeof cancel === 'function') cancel(rafHandle);
+    rafHandle = null;
+    pulseOriginMs = null;
+    lastFrameMs = 0;
+  }
+
+  function renderExplorationImpl(lattice, fogState, partyPos, options = {}) {
+    const grid = lattice.getGrid();
+    const w = lattice.getWidth();
+    const h = lattice.getHeight();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setCanvasDescription(canvas, `Exploration map, ${w} by ${h}. Party at ${partyPos?.x ?? '?'},${partyPos?.y ?? '?'}.`);
+
+    const inBounds = (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h;
+    const isFloor = (gx, gy) => inBounds(gx, gy) && grid[gy][gx] !== CELL.WALL;
+    const isRevealed = (gx, gy) => inBounds(gx, gy) && fogState[gy * w + gx] !== 0;
+    const isDim = (gx, gy) => inBounds(gx, gy) && fogState[gy * w + gx] === 1;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const fog = fogState[y * w + x];
+        const px = x * EXPLORATION_CELL_SIZE;
+        const py = y * EXPLORATION_CELL_SIZE;
+        const cellType = grid[y][x];
+        drawCell(ctx, px, py, EXPLORATION_CELL_SIZE, cellType, fog !== 0, fog === 1);
+        if (fog !== 0 && cellType === CELL.DESCENT) {
+          ctx.fillStyle = 'rgba(58,232,168,0.12)';
+          ctx.fillRect(px + 1, py + 1, EXPLORATION_CELL_SIZE - 2, EXPLORATION_CELL_SIZE - 2);
+        }
+      }
+    }
+
+    drawGridTicks(ctx, {
+      isFloor, isRevealed, isDim,
+      colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE
+    });
+
+    drawWallLines(ctx, {
+      isTraversable: isFloor,
+      isRevealed,
+      colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE,
+      glow: glowLevel()
+    });
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (fogState[y * w + x] === 0) continue;
+        if (grid[y][x] !== CELL.DESCENT) continue;
+        const px = x * EXPLORATION_CELL_SIZE;
+        const py = y * EXPLORATION_CELL_SIZE;
+        ctx.fillStyle = DESCENT_COLOR;
+        ctx.font = '10px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('◈', px + EXPLORATION_CELL_SIZE / 2, py + EXPLORATION_CELL_SIZE / 2);
+      }
+    }
+
+    for (const c of lattice.getContainers?.() || []) {
+      if (fogState[c.y * w + c.x] !== 2) continue;
+      ctx.fillStyle = 'rgba(232,210,58,0.1)';
+      ctx.fillRect(c.x * EXPLORATION_CELL_SIZE + 2, c.y * EXPLORATION_CELL_SIZE + 2, EXPLORATION_CELL_SIZE - 4, EXPLORATION_CELL_SIZE - 4);
+      ctx.fillStyle = CONTAINER_COLOR;
+      ctx.font = '10px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(c.kind === 'vault' ? '◈' : '▣', c.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2, c.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2);
+    }
+    for (const e of lattice.getEnemySpawns?.() || []) {
+      if (fogState[e.y * w + e.x] !== 2) continue;
+      drawToken(ctx, {
+        codepoint: e.sigilCodepoint || codepointFromSigilId(e.sigilId) || 0xE030,
+        size: 72,
+        renderSize: 14,
+        role: 'enemy',
+        x: e.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
+        y: e.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
+        radius: EXPLORATION_CELL_SIZE * 0.35,
+        color: DANGER_COLOR
+      });
+    }
+    const stagedPath = Array.isArray(options.stagedPath) ? options.stagedPath : null;
+    if (stagedPath && stagedPath.length > 0) {
+      ctx.globalAlpha = PATH_PREVIEW_ALPHA;
+      ctx.fillStyle = PATH_COLOR;
+      for (const step of stagedPath) {
+        if (!Number.isFinite(step?.x) || !Number.isFinite(step?.y)) continue;
+        const cx = step.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2;
+        const cy = step.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2;
+        ctx.fillRect(cx - 2, cy - 2, 5, 5);
+      }
+      ctx.globalAlpha = 1;
+      const last = stagedPath[stagedPath.length - 1];
+      if (Number.isFinite(last?.x) && Number.isFinite(last?.y)) {
+        ctx.strokeStyle = PATH_COLOR;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+          last.x * EXPLORATION_CELL_SIZE + 1,
+          last.y * EXPLORATION_CELL_SIZE + 1,
+          EXPLORATION_CELL_SIZE - 2,
+          EXPLORATION_CELL_SIZE - 2
+        );
+      }
+    }
+    if (partyPos) {
+      drawToken(ctx, {
+        codepoint: 0xE000,
+        size: 108,
+        renderSize: 18,
+        role: 'player',
+        x: partyPos.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
+        y: partyPos.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
+        radius: EXPLORATION_CELL_SIZE * 0.39,
+        color: accentColor
+      });
+    }
+  }
+
+  function renderCombatImpl(combatState, lattice, options = {}) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const grid = lattice?.getGrid?.() || [];
+    const width = lattice?.getWidth?.() || grid[0]?.length || COMBAT_GRID_W;
+    const height = lattice?.getHeight?.() || grid.length || COMBAT_GRID_H;
+    const combatants = getCombatants(combatState);
+    const activeId = combatState?.turnOrder?.[combatState?.currentTurn];
+    const active = combatants.find((actor) => actor.id === activeId)?.position;
+    const selected = combatants.find((actor) => actor.id === options.selectedTargetId)?.position;
+    const requestedOrigin = options.zoomOrigin || (Number.isInteger(options.x) && Number.isInteger(options.y) ? options : null);
+    camera = options.camera || calculateCombatCamera({ width, height, active: requestedOrigin || active, selected, consoleExpanded: options.consoleExpanded });
+    setCanvasDescription(canvas, `Combat map, window ${camera.x},${camera.y} through ${camera.x + camera.w - 1},${camera.y + camera.h - 1}. Round ${combatState?.round || 1}.`);
+
+    for (let dy = 0; dy < camera.h; dy++) {
+      for (let dx = 0; dx < camera.w; dx++) {
+        const gx = camera.x + dx;
+        const gy = camera.y + dy;
+        const px = dx * COMBAT_CELL_SIZE;
+        const py = dy * COMBAT_CELL_SIZE;
+        const outOfBounds = gx < 0 || gx >= width || gy < 0 || gy >= height;
+        drawCell(ctx, px, py, COMBAT_CELL_SIZE, outOfBounds ? CELL.WALL : grid[gy]?.[gx], true, false);
+      }
+    }
+
+    const combatIsFloor = (gx, gy) => gx >= 0 && gx < width && gy >= 0 && gy < height && grid[gy]?.[gx] !== CELL.WALL;
+    drawGridTicks(ctx, {
+      isFloor: combatIsFloor,
+      isRevealed: () => true,
+      isDim: () => false,
+      colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE
+    });
+
+    drawWallLines(ctx, {
+      isTraversable: combatIsFloor,
+      isRevealed: () => true,
+      colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE,
+      glow: glowLevel()
+    });
+
+    for (let dy = 0; dy < camera.h; dy++) {
+      for (let dx = 0; dx < camera.w; dx++) {
+        const gx = camera.x + dx;
+        const gy = camera.y + dy;
+        const px = dx * COMBAT_CELL_SIZE;
+        const py = dy * COMBAT_CELL_SIZE;
+        drawOverlay(ctx, px, py, options, gx, gy, accentColor);
+      }
+    }
+
+    for (const actor of combatants) {
+      if (!actor.position) continue;
+      const dx = actor.position.x - camera.x;
+      const dy = actor.position.y - camera.y;
+      if (dx < 0 || dx >= camera.w || dy < 0 || dy >= camera.h) continue;
+      const px = dx * COMBAT_CELL_SIZE;
+      const py = dy * COMBAT_CELL_SIZE;
+      const role = actorRole(actor);
+      const isDead = actor.hp <= 0;
+      const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
+      const tokenColor = isDead ? 'rgba(40,40,40,0.6)' : roleColor;
+      if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
+      if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px + 4, py + 4, DANGER_COLOR, 'TARGET');
+      drawCreatureSigil(ctx, {
+        codepoint: actorSigil(actor),
+        size: 72,
+        renderSize: 32,
+        role,
+        x: px + COMBAT_CELL_SIZE / 2,
+        y: py + COMBAT_CELL_SIZE / 2,
+        color: tokenColor
+      });
+    }
+  }
 
   return {
     getCamera() { return { ...camera }; },
@@ -208,186 +467,29 @@ export function createPlayfield(canvas) {
       return { ...camera };
     },
     renderExploration(lattice, fogState, partyPos, options = {}) {
-      const grid = lattice.getGrid();
-      const w = lattice.getWidth();
-      const h = lattice.getHeight();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      setCanvasDescription(canvas, `Exploration map, ${w} by ${h}. Party at ${partyPos?.x ?? '?'},${partyPos?.y ?? '?'}.`);
-
-      const inBounds = (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h;
-      const isFloor = (gx, gy) => inBounds(gx, gy) && grid[gy][gx] !== CELL.WALL;
-      const isRevealed = (gx, gy) => inBounds(gx, gy) && fogState[gy * w + gx] !== 0;
-      const isDim = (gx, gy) => inBounds(gx, gy) && fogState[gy * w + gx] === 1;
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const fog = fogState[y * w + x];
-          const px = x * EXPLORATION_CELL_SIZE;
-          const py = y * EXPLORATION_CELL_SIZE;
-          const cellType = grid[y][x];
-          drawCell(ctx, px, py, EXPLORATION_CELL_SIZE, cellType, fog !== 0, fog === 1);
-          if (fog !== 0 && cellType === CELL.DESCENT) {
-            ctx.fillStyle = 'rgba(58,232,168,0.12)';
-            ctx.fillRect(px + 1, py + 1, EXPLORATION_CELL_SIZE - 2, EXPLORATION_CELL_SIZE - 2);
-          }
-        }
-      }
-
-      drawGridTicks(ctx, {
-        isFloor, isRevealed, isDim,
-        colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE
-      });
-
-      drawWallLines(ctx, {
-        isTraversable: isFloor,
-        isRevealed,
-        colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE
-      });
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          if (fogState[y * w + x] === 0) continue;
-          if (grid[y][x] !== CELL.DESCENT) continue;
-          const px = x * EXPLORATION_CELL_SIZE;
-          const py = y * EXPLORATION_CELL_SIZE;
-          ctx.fillStyle = DESCENT_COLOR;
-          ctx.font = '10px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('◈', px + EXPLORATION_CELL_SIZE / 2, py + EXPLORATION_CELL_SIZE / 2);
-        }
-      }
-
-      for (const c of lattice.getContainers?.() || []) {
-        if (fogState[c.y * w + c.x] !== 2) continue;
-        ctx.fillStyle = 'rgba(232,210,58,0.1)';
-        ctx.fillRect(c.x * EXPLORATION_CELL_SIZE + 2, c.y * EXPLORATION_CELL_SIZE + 2, EXPLORATION_CELL_SIZE - 4, EXPLORATION_CELL_SIZE - 4);
-        ctx.fillStyle = CONTAINER_COLOR;
-        ctx.font = '10px ui-monospace, SF Mono, Roboto Mono, Consolas, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(c.kind === 'vault' ? '◈' : '▣', c.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2, c.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2);
-      }
-      for (const e of lattice.getEnemySpawns?.() || []) {
-        if (fogState[e.y * w + e.x] !== 2) continue;
-        drawToken(ctx, {
-          codepoint: e.sigilCodepoint || codepointFromSigilId(e.sigilId) || 0xE030,
-          size: 72,
-          renderSize: 14,
-          role: 'enemy',
-          x: e.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
-          y: e.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
-          radius: EXPLORATION_CELL_SIZE * 0.35,
-          color: DANGER_COLOR
-        });
-      }
-      const stagedPath = Array.isArray(options.stagedPath) ? options.stagedPath : null;
-      if (stagedPath && stagedPath.length > 0) {
-        ctx.globalAlpha = PATH_PREVIEW_ALPHA;
-        ctx.fillStyle = PATH_COLOR;
-        for (const step of stagedPath) {
-          if (!Number.isFinite(step?.x) || !Number.isFinite(step?.y)) continue;
-          const cx = step.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2;
-          const cy = step.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2;
-          ctx.fillRect(cx - 2, cy - 2, 5, 5);
-        }
-        ctx.globalAlpha = 1;
-        const last = stagedPath[stagedPath.length - 1];
-        if (Number.isFinite(last?.x) && Number.isFinite(last?.y)) {
-          ctx.strokeStyle = PATH_COLOR;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(
-            last.x * EXPLORATION_CELL_SIZE + 1,
-            last.y * EXPLORATION_CELL_SIZE + 1,
-            EXPLORATION_CELL_SIZE - 2,
-            EXPLORATION_CELL_SIZE - 2
-          );
-        }
-      }
-      if (partyPos) {
-        drawToken(ctx, {
-          codepoint: 0xE000,
-          size: 108,
-          renderSize: 18,
-          role: 'player',
-          x: partyPos.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
-          y: partyPos.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
-          radius: EXPLORATION_CELL_SIZE * 0.39,
-          color: accentColor
-        });
-      }
+      lastRender = { kind: 'exploration', args: [lattice, fogState, partyPos, options] };
+      renderExplorationImpl(lattice, fogState, partyPos, options);
+      scheduleTick();
     },
     renderCombat(combatState, lattice, options = {}) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const grid = lattice?.getGrid?.() || [];
-      const width = lattice?.getWidth?.() || grid[0]?.length || COMBAT_GRID_W;
-      const height = lattice?.getHeight?.() || grid.length || COMBAT_GRID_H;
-      const combatants = getCombatants(combatState);
-      const activeId = combatState?.turnOrder?.[combatState?.currentTurn];
-      const active = combatants.find((actor) => actor.id === activeId)?.position;
-      const selected = combatants.find((actor) => actor.id === options.selectedTargetId)?.position;
-      const requestedOrigin = options.zoomOrigin || (Number.isInteger(options.x) && Number.isInteger(options.y) ? options : null);
-      camera = options.camera || calculateCombatCamera({ width, height, active: requestedOrigin || active, selected, consoleExpanded: options.consoleExpanded });
-      setCanvasDescription(canvas, `Combat map, window ${camera.x},${camera.y} through ${camera.x + camera.w - 1},${camera.y + camera.h - 1}. Round ${combatState?.round || 1}.`);
-
-      for (let dy = 0; dy < camera.h; dy++) {
-        for (let dx = 0; dx < camera.w; dx++) {
-          const gx = camera.x + dx;
-          const gy = camera.y + dy;
-          const px = dx * COMBAT_CELL_SIZE;
-          const py = dy * COMBAT_CELL_SIZE;
-          const outOfBounds = gx < 0 || gx >= width || gy < 0 || gy >= height;
-          drawCell(ctx, px, py, COMBAT_CELL_SIZE, outOfBounds ? CELL.WALL : grid[gy]?.[gx], true, false);
-        }
+      lastRender = { kind: 'combat', args: [combatState, lattice, options] };
+      renderCombatImpl(combatState, lattice, options);
+      scheduleTick();
+    },
+    setPulse(enabled) {
+      const next = Boolean(enabled);
+      if (pulseEnabled === next) return;
+      pulseEnabled = next;
+      if (!pulseEnabled) {
+        cancelPulseFrame();
+        return;
       }
-
-      const combatIsFloor = (gx, gy) => gx >= 0 && gx < width && gy >= 0 && gy < height && grid[gy]?.[gx] !== CELL.WALL;
-      drawGridTicks(ctx, {
-        isFloor: combatIsFloor,
-        isRevealed: () => true,
-        isDim: () => false,
-        colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE
-      });
-
-      drawWallLines(ctx, {
-        isTraversable: combatIsFloor,
-        isRevealed: () => true,
-        colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE
-      });
-
-      for (let dy = 0; dy < camera.h; dy++) {
-        for (let dx = 0; dx < camera.w; dx++) {
-          const gx = camera.x + dx;
-          const gy = camera.y + dy;
-          const px = dx * COMBAT_CELL_SIZE;
-          const py = dy * COMBAT_CELL_SIZE;
-          drawOverlay(ctx, px, py, options, gx, gy, accentColor);
-        }
-      }
-
-      for (const actor of combatants) {
-        if (!actor.position) continue;
-        const dx = actor.position.x - camera.x;
-        const dy = actor.position.y - camera.y;
-        if (dx < 0 || dx >= camera.w || dy < 0 || dy >= camera.h) continue;
-        const px = dx * COMBAT_CELL_SIZE;
-        const py = dy * COMBAT_CELL_SIZE;
-        const role = actorRole(actor);
-        const isDead = actor.hp <= 0;
-        const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
-        const tokenColor = isDead ? 'rgba(40,40,40,0.6)' : roleColor;
-        if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
-        if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px + 4, py + 4, DANGER_COLOR, 'TARGET');
-        drawCreatureSigil(ctx, {
-          codepoint: actorSigil(actor),
-          size: 72,
-          renderSize: 32,
-          role,
-          x: px + COMBAT_CELL_SIZE / 2,
-          y: py + COMBAT_CELL_SIZE / 2,
-          color: tokenColor
-        });
-      }
+      if (lastRender) scheduleTick();
+    },
+    destroy() {
+      pulseEnabled = false;
+      cancelPulseFrame();
+      lastRender = null;
     }
   };
 }

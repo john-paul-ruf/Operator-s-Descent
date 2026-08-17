@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import {
   calculateCombatCamera,
   cellAtPoint,
@@ -9,7 +9,10 @@ import {
   HIDDEN_COLOR,
   GRID_COLOR,
   WALL_LINE_COLOR,
-  TICK_DIM_ALPHA
+  TICK_DIM_ALPHA,
+  WALL_GLOW_ALPHA,
+  WALL_GLOW_BLUR,
+  wallThickness
 } from '../../src/ui/playfield.js';
 
 class FakeElement {
@@ -35,9 +38,18 @@ class FakeCanvas extends FakeElement {
 }
 
 class FakeContext {
-  constructor() { this.calls = []; this._globalAlpha = 1; }
+  constructor() {
+    this.calls = [];
+    this._globalAlpha = 1;
+    this._shadowBlur = 0;
+    this._shadowColor = 'transparent';
+  }
   get globalAlpha() { return this._globalAlpha; }
   set globalAlpha(value) { this._globalAlpha = value; this.calls.push(['set-alpha', value]); }
+  get shadowBlur() { return this._shadowBlur; }
+  set shadowBlur(value) { this._shadowBlur = value; this.calls.push(['set-shadow-blur', value]); }
+  get shadowColor() { return this._shadowColor; }
+  set shadowColor(value) { this._shadowColor = value; this.calls.push(['set-shadow-color', value]); }
   beginPath() { this.calls.push(['beginPath']); }
   arc(...args) { this.calls.push(['arc', ...args]); }
   fill() { this.calls.push(['fill', this.fillStyle]); }
@@ -95,7 +107,7 @@ describe('playfield rendering', () => {
     expect(canvas.listeners.size).toBe(0);
   });
 
-  test('paints near-black floors, black walls/hidden cells, corner ticks (no floor strokeRect), cyan boundary lines', () => {
+  test('paints near-black floors, black walls/hidden cells, corner ticks (no floor strokeRect), cyan boundary lines drawn OUTSIDE the traversable square', () => {
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
     const fog = new Uint8Array(20 * 32).fill(2);
@@ -115,20 +127,27 @@ describe('playfield rendering', () => {
     // Tick pass fills GRID_COLOR at interior corners as 1px strips (a horizontal 9x1 + vertical 1x9 at 24px cells, arm=4).
     const gridFills = fills.filter((c) => c[1] === '#3a3a3a');
     expect(gridFills.length).toBeGreaterThan(0);
-    // Corner between (1,1),(2,1),(1,2),(2,2) — all revealed floor — sits at pixel (2*24, 2*24)=(48,48).
+    // Corner between (1,1),(2,1),(1,2),(2,2) — all revealed traversable floor — sits at pixel (2*24, 2*24)=(48,48).
     // Horizontal bar: x=48-4=44, y=48, w=9, h=1
     expect(gridFills.some((c) => c[2] === 44 && c[3] === 48 && c[4] === 9 && c[5] === 1)).toBe(true);
     // Vertical bar: x=48, y=44, w=1, h=9
     expect(gridFills.some((c) => c[2] === 48 && c[3] === 44 && c[4] === 1 && c[5] === 9)).toBe(true);
 
-    // Cyan wall boundary lines exist. Wall at (0,0) → floor at (1,0) sees a west wall line inset.
+    // Cyan wall boundary lines exist and sit OUTSIDE the traversable cell (walls-npc-docks 2026-08-17).
+    // Floor at (1,0): west neighbor (0,0) is wall → west wall paints a t=3 strip at (24-3, 0, 3, 24).
     const cyanLines = fills.filter((c) => c[1] === '#7ec8e3');
     expect(cyanLines.length).toBeGreaterThan(0);
-    expect(cyanLines.some((c) => c[2] === 24 + 1 && c[3] === 0 + 1)).toBe(true);
-    // Hidden cell (6,6) does not emit a wall line: no cyan at that inset origin.
-    expect(cyanLines.some((c) => c[2] === 6 * 24 + 1 && c[3] === 6 * 24 + 1)).toBe(false);
-    // Interior all-floor cell has no cyan (no adjacent wall to draw a boundary against).
-    expect(cyanLines.some((c) => c[2] === 10 * 24 + 1 && c[3] === 10 * 24 + 1)).toBe(false);
+    expect(cyanLines.some((c) => c[2] === 21 && c[3] === 0 && c[4] === 3 && c[5] === 24)).toBe(true);
+    // Same cell (1,0): north neighbor (1,-1) is out-of-bounds ≡ wall → north wall at (24, -3, 24, 3).
+    expect(cyanLines.some((c) => c[2] === 24 && c[3] === -3 && c[4] === 24 && c[5] === 3)).toBe(true);
+    // Corner joint at (1,0) NW (both north & west walls) → 3x3 square at (21, -3).
+    expect(cyanLines.some((c) => c[2] === 21 && c[3] === -3 && c[4] === 3 && c[5] === 3)).toBe(true);
+    // Hidden cell (6,6) never emits a wall line (skipped when !revealed).
+    // Its would-be outside strips would sit at x/y = 6*24 ± 3; assert nothing cyan touches that column.
+    expect(cyanLines.some((c) => c[2] === 6 * 24 && c[3] === 6 * 24 - 3 && c[4] === 24 && c[5] === 3)).toBe(false);
+    // Interior all-floor cell (10,10) has no wall neighbor → no cyan attributable to it (no north/west outside strips).
+    expect(cyanLines.some((c) => c[2] === 10 * 24 && c[3] === 10 * 24 - 3)).toBe(false);
+    expect(cyanLines.some((c) => c[2] === 10 * 24 - 3 && c[3] === 10 * 24)).toBe(false);
   });
 
   test('fog=1 (seen) draws dim floor and dim-alpha ticks; VISITED_OVERLAY black-overlay pass is gone', () => {
@@ -221,7 +240,7 @@ describe('playfield rendering', () => {
     expect(canvas.context.font).toMatch(/^32px/);
   });
 
-  test('combat wall-line pass samples the full grid so camera borders do not gain spurious cyan frames', () => {
+  test('combat wall-line pass samples the full grid so camera borders do not gain spurious cyan frames (walls drawn OUTSIDE)', () => {
     // Camera window whose right edge (dx=7) maps to gx=7 — an OPEN floor cell whose
     // real neighbor at gx=8 is ALSO an open floor cell. No cyan edge should appear there.
     const canvas = new FakeCanvas();
@@ -233,13 +252,148 @@ describe('playfield rendering', () => {
 
     const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
     const cyan = fills.filter((c) => c[1] === '#7ec8e3');
-    // Right edge of camera-column 7 (gx=7): line would be inset at x = 7*48 + 48 - 3 = 45+7*48 = 381
-    // Neighbor gx=8 is real open floor → no line should exist at that x.
-    const spuriousRightEdge = cyan.some((c) => c[2] === 7 * 48 + 48 - 3);
+    // Right edge of camera-column 7 (gx=7): east outside-strip would sit at x = 7*48 + 48 = 384.
+    // Neighbor gx=8 is real open floor → no east wall strip should exist for that cell.
+    const spuriousRightEdge = cyan.some((c) => c[2] === 7 * 48 + 48 && c[4] === 6);
     expect(spuriousRightEdge).toBe(false);
-    // Left edge of camera-column 0 (gx=0): neighbor gx=-1 is out-of-bounds ≡ wall → line MUST exist
-    // at x = 0*48 + 1 = 1 for revealed floor rows (row 1..15; row 0's cell 0,0 is a wall).
-    expect(cyan.some((c) => c[2] === 1 && c[3] === 1 * 48 + 1)).toBe(true);
+    // Left edge of camera-column 0 (gx=0): neighbor gx=-1 is out-of-bounds ≡ wall → west outside-strip
+    // MUST exist for revealed floor rows (row 1..15 since (0,0) is a wall) at x = -6, w = 6, size = 48.
+    expect(cyan.some((c) => c[2] === -6 && c[3] === 1 * 48 && c[4] === 6 && c[5] === 48)).toBe(true);
+  });
+
+  test('wallThickness scales with cell size, floored at 3px', () => {
+    expect(wallThickness(24)).toBe(3);   // 3 = max(3, round(3))
+    expect(wallThickness(48)).toBe(6);   // 6 = max(3, round(6))
+    expect(wallThickness(16)).toBe(3);   // 3 = max(3, round(2))
+    expect(wallThickness(72)).toBe(9);   // 9 = max(3, round(9))
+  });
+
+  test('interior ticks require ALL 4 touching cells to be revealed traversable floor (walls-npc-docks 2026-08-17)', () => {
+    // Corner between (1,1)(2,1)(1,2)(2,2) at pixel (48,48). Make (2,2) a wall so the corner
+    // has one non-floor neighbor → NO tick fires. Corner at (96,96) touches (3,3)(4,3)(3,4)(4,4)
+    // — (4,4) is a CONTAINER (traversable, not wall) → tick still fires.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const grid = Array.from({ length: 32 }, () => Array.from({ length: 20 }, () => 1));
+    grid[0][0] = 0;
+    grid[2][2] = 0; // wall carved into an otherwise-open corner
+    grid[4][4] = 2; // container — still traversable
+    const modLattice = {
+      getGrid: () => grid,
+      getWidth: () => 20,
+      getHeight: () => 32,
+      getContainers: () => [],
+      getEnemySpawns: () => []
+    };
+    const fog = new Uint8Array(20 * 32).fill(2);
+    playfield.renderExploration(modLattice, fog, { x: 1, y: 1 });
+
+    const gridFills = canvas.context.calls.filter(([n]) => n === 'fillRect').filter((c) => c[1] === '#3a3a3a');
+    // No tick at (48,48) — (2,2) is a wall.
+    expect(gridFills.some((c) => c[2] === 44 && c[3] === 48 && c[4] === 9 && c[5] === 1)).toBe(false);
+    expect(gridFills.some((c) => c[2] === 48 && c[3] === 44 && c[4] === 1 && c[5] === 9)).toBe(false);
+    // Tick at (96,96) — all four are traversable (open + container).
+    expect(gridFills.some((c) => c[2] === 92 && c[3] === 96 && c[4] === 9 && c[5] === 1)).toBe(true);
+    expect(gridFills.some((c) => c[2] === 96 && c[3] === 92 && c[4] === 1 && c[5] === 9)).toBe(true);
+  });
+
+  test('unrevealed neighbor at a corner suppresses the tick even when all four are traversable', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    // Hide (2,2). Corner at (48,48) touches (1,1)(2,1)(1,2)(2,2); (2,2) unrevealed → no tick.
+    fog[2 * 20 + 2] = 0;
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+    const gridFills = canvas.context.calls.filter(([n]) => n === 'fillRect').filter((c) => c[1] === '#3a3a3a');
+    expect(gridFills.some((c) => c[2] === 44 && c[3] === 48 && c[4] === 9 && c[5] === 1)).toBe(false);
+  });
+
+  test('wall lines wrap in shadow-blur/alpha (WALL_GLOW_* range) and reset to defaults after the pass', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    // Static glow (pulse disabled by default) sits at g=0.7 → the middle of [WALL_GLOW_BLUR/ALPHA].
+    const g = 0.7;
+    const expectedBlur = WALL_GLOW_BLUR[0] + g * (WALL_GLOW_BLUR[1] - WALL_GLOW_BLUR[0]);
+    const expectedAlpha = WALL_GLOW_ALPHA[0] + g * (WALL_GLOW_ALPHA[1] - WALL_GLOW_ALPHA[0]);
+
+    // Walk the recorded calls; while a cyan #7ec8e3 fillRect is emitted, shadowBlur/alpha must match.
+    let currentBlur = 0;
+    let currentAlpha = 1;
+    const cyanBlurs = [];
+    const cyanAlphas = [];
+    for (const call of canvas.context.calls) {
+      if (call[0] === 'set-shadow-blur') currentBlur = call[1];
+      else if (call[0] === 'set-alpha') currentAlpha = call[1];
+      else if (call[0] === 'fillRect' && call[1] === '#7ec8e3') { cyanBlurs.push(currentBlur); cyanAlphas.push(currentAlpha); }
+    }
+    expect(cyanBlurs.length).toBeGreaterThan(0);
+    expect(cyanBlurs.every((v) => Math.abs(v - expectedBlur) < 1e-9)).toBe(true);
+    expect(cyanAlphas.every((v) => Math.abs(v - expectedAlpha) < 1e-9)).toBe(true);
+
+    // After the pass ends, the context is reset: shadow off, alpha back to 1.
+    expect(canvas.context.shadowBlur).toBe(0);
+    expect(canvas.context.globalAlpha).toBe(1);
+  });
+
+  test('setPulse(true) after a render starts an rAF loop that replays the last render; destroy() cancels and clears it', () => {
+    const raf = [];
+    const cancels = [];
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = (cb) => { raf.push(cb); return raf.length; };
+    globalThis.cancelAnimationFrame = (id) => { cancels.push(id); };
+    try {
+      const canvas = new FakeCanvas();
+      const playfield = createPlayfield(canvas);
+
+      // Pulse on without a prior render schedules nothing.
+      playfield.setPulse(true);
+      expect(raf.length).toBe(0);
+
+      const fog = new Uint8Array(20 * 32).fill(2);
+      playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+      // First render with pulse on schedules an rAF frame.
+      expect(raf.length).toBe(1);
+
+      // Firing the frame replays the render (clearRect count grows) and schedules another rAF.
+      const beforeClear = canvas.context.calls.filter((c) => c[0] === 'clearRect').length;
+      raf[0](50);
+      const afterClear = canvas.context.calls.filter((c) => c[0] === 'clearRect').length;
+      expect(afterClear).toBeGreaterThan(beforeClear);
+      expect(raf.length).toBe(2);
+
+      // destroy() cancels the pending frame and clears state — no further rAFs scheduled.
+      playfield.destroy();
+      expect(cancels.length).toBe(1);
+      raf[1](100);
+      expect(raf.length).toBe(2);
+    } finally {
+      if (originalRaf) globalThis.requestAnimationFrame = originalRaf; else delete globalThis.requestAnimationFrame;
+      if (originalCancel) globalThis.cancelAnimationFrame = originalCancel; else delete globalThis.cancelAnimationFrame;
+    }
+  });
+
+  test('reduced-motion path (setPulse never enabled) never schedules a requestAnimationFrame frame', () => {
+    const raf = [];
+    const originalRaf = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = (cb) => { raf.push(cb); return raf.length; };
+    try {
+      const canvas = new FakeCanvas();
+      const playfield = createPlayfield(canvas);
+      const fog = new Uint8Array(20 * 32).fill(2);
+      // Pulse defaults to false; simulate the reduced-motion branch by leaving setPulse false.
+      playfield.setPulse(false);
+      playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+      expect(raf.length).toBe(0);
+      // Static wall glow still lands in the fill stream (proves walls rendered).
+      const cyanFills = canvas.context.calls.filter((c) => c[0] === 'fillRect' && c[1] === '#7ec8e3');
+      expect(cyanFills.length).toBeGreaterThan(0);
+    } finally {
+      if (originalRaf) globalThis.requestAnimationFrame = originalRaf; else delete globalThis.requestAnimationFrame;
+    }
   });
 
   test('cellAtPoint maps client coords through CSS scale + camera offset; null outside canvas', () => {
