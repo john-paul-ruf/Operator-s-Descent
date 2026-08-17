@@ -339,14 +339,16 @@ design would have letterboxed away.
 | playfield | minmax(320px, calc(100vh * 9 / 16)) | Canvas playfield — stays **portrait-proportioned** (9:16 aspect anchored to viewport height); the descent premise stays vertical in every class |
 | console | minmax(360px, 1.2fr) | Console dock — always expanded, seven vertical mode tabs on the inner edge, mode content in the remainder |
 
-The grid template is `grid-template-columns: minmax(200px, var(--wide-left-w, 280px)) minmax(320px, calc(100vh * 9 / 16)) minmax(280px, var(--wide-right-w, 360px));` with `grid-template-rows: 100vh;`. At the 900px minimum breakpoint the three regions sum to their floors (800px, slightly under the breakpoint — see the collapsed rail values below for the compact-mode floor). The middle playfield track is invariant: its portrait 9:16 proportion is protected by Custom Rule 8.
+The grid template is `grid-template-columns: minmax(280px, var(--wide-left-w, 280px)) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, var(--wide-right-w, 360px));` with `grid-template-rows: 100vh;`. At the 900px minimum breakpoint the three regions sum to their floors (920px, matching the breakpoint — see the collapsed rail values below for the compact-mode floor). The middle playfield track is invariant: its portrait 9:16 proportion is protected by Custom Rule 8.
 
 **Wide dock sizing and collapse (M100).** Both docks are user-resizable and user-collapsible. The M100 pane controller (`attachWidePanes` in `src/ui/layout.js`) owns `--wide-left-w`, `--wide-right-w`, `data-pane-left`, and `data-pane-right` on the wide shell.
 
 | Pane | Bounds (open) | Default | Collapsed rail width | Persisted key |
 |------|---------------|---------|----------------------|---------------|
-| Telemetry (left) | 200–480px | 280px | 48px (chevron-only) | `settings.widePanes.left` |
-| Console (right) | 280–640px | 360px | 96px (tab column stays usable) | `settings.widePanes.right` |
+| Telemetry (left) | 280–480px | 280px | 48px (chevron-only) | `settings.widePanes.left` |
+| Console (right) | 360–640px | 360px | 96px (tab column stays usable) | `settings.widePanes.right` |
+
+The open-state minimums (280 / 360) match the outer `.wide-shell` grid floors so the CSS never renders a track narrower than the pane state can request; users widen from the default, and collapse handles the compact rail state instead.
 
 Behavior:
 

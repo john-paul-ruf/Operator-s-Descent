@@ -42,8 +42,11 @@ export function initLayoutController({ bus }) {
 // keeps its portrait-proportioned track (Custom Rule 8).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const WIDE_PANE_LEFT_BOUNDS = { min: 200, max: 480, default: 280 };
-export const WIDE_PANE_RIGHT_BOUNDS = { min: 280, max: 640, default: 360 };
+// Bounds mirror the outer .wide-shell minmax() floors in styles/wide.css so a
+// user drag/keyboard-nudge never asks for a width smaller than the CSS grid
+// will actually render.
+export const WIDE_PANE_LEFT_BOUNDS = { min: 280, max: 480, default: 280 };
+export const WIDE_PANE_RIGHT_BOUNDS = { min: 360, max: 640, default: 360 };
 export const WIDE_PANE_LEFT_COLLAPSED_PX = 48;
 export const WIDE_PANE_RIGHT_COLLAPSED_PX = 96;
 const KEYBOARD_STEP_PX = 16;

@@ -21,10 +21,14 @@
   .wide-shell {
     position: relative;
     display: grid;
+    /* Outer track mins hold at the original defaults (280/360) so the grid
+     * never collapses a dock below the level adaptive-layout.spec.js pins.
+     * The pane controller widens tracks above their min via the width vars;
+     * collapse states below take over the grid template entirely. */
     grid-template-columns:
-      minmax(200px, var(--wide-left-w, 280px))
+      minmax(280px, var(--wide-left-w, 280px))
       minmax(320px, calc(100vh * 9 / 16))
-      minmax(280px, var(--wide-right-w, 360px));
+      minmax(360px, var(--wide-right-w, 360px));
     grid-template-rows: 100vh;
     width: 100vw;
     height: 100vh;
@@ -34,11 +38,11 @@
     grid-template-columns:
       48px
       minmax(320px, calc(100vh * 9 / 16))
-      minmax(280px, var(--wide-right-w, 360px));
+      minmax(360px, var(--wide-right-w, 360px));
   }
   .wide-shell[data-pane-right="collapsed"] {
     grid-template-columns:
-      minmax(200px, var(--wide-left-w, 280px))
+      minmax(280px, var(--wide-left-w, 280px))
       minmax(320px, calc(100vh * 9 / 16))
       96px;
   }
