@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd, getCharacterDeaths, toCombatSnapshot, MOVE_RANGE, reachableMoveCells } from '../../src/rules/combat.js';
+import { initiateCombat, getLegalActions, executeAction, endTurn, resolveTurn, checkCombatEnd, getCharacterDeaths, toCombatSnapshot, MOVE_RANGE, reachableMoveCells, pathToward } from '../../src/rules/combat.js';
 import { createStandardEncounter, completeEncounter } from '../../src/rules/encounters.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { modifier } from '../../src/rules/attributes.js';
@@ -890,7 +890,7 @@ describe('executeAction — move', () => {
     expect(afterDistance).toBeGreaterThan(beforeDistance);
   });
 
-  it('targetId without an explicit direction steps toward the target', () => {
+  it('targetId without an explicit direction walks toward the target, stopping adjacent by default', () => {
     const window = openCombatWindow();
     const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
     const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 0 } });
@@ -898,7 +898,11 @@ describe('executeAction — move', () => {
     state.window = window;
     const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
     expect(result.success).toBe(true);
-    expect(result.position).toEqual({ x: 1, y: 0 });
+    // desiredRange defaults to 1 (adjacent) — walker stops one cell short of the target's cell.
+    expect(result.position).toEqual({ x: 4, y: 0 });
+    const moveLog = state.log.find(entry => entry.type === 'move');
+    expect(moveLog.steps).toBe(4);
+    expect(moveLog.path).toEqual(['e', 'e', 'e', 'e']);
   });
 });
 
@@ -1076,6 +1080,157 @@ describe('executeAction — move (multi-step path)', () => {
     expect(afterDistance).toBeGreaterThan(beforeDistance);
     const moveLog = state.log.find(entry => entry.type === 'move');
     expect(moveLog.path).toHaveLength(1);
+  });
+});
+
+describe('executeAction — move (targetId + desiredRange fallback)', () => {
+  it('open corridor: walks exactly MOVE_RANGE=5 toward a distant target when desiredRange 1 is unreachable in one action', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 7, y: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 5, y: 0 });
+    const moveLog = state.log.find(entry => entry.type === 'move');
+    expect(moveLog.steps).toBe(MOVE_RANGE);
+    expect(moveLog.path).toHaveLength(MOVE_RANGE);
+  });
+
+  it('desiredRange 1 stops adjacent and never enters the target\'s cell', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 3, y: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    // Chebyshev from (2,0) to (3,0) is 1 — stop condition — walker never lands on target.
+    expect(result.position).toEqual({ x: 2, y: 0 });
+    expect(result.position).not.toEqual(enemy.position);
+  });
+
+  it('desiredRange 3 (artillery) stops at Chebyshev 3 from the target', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 7, y: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 3 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    // 4 steps: dist 7→6→5→4→3, stops at dist===3, position (4,0).
+    expect(result.position).toEqual({ x: 4, y: 0 });
+    const finalDistance = Math.max(Math.abs(result.position.x - enemy.position.x), Math.abs(result.position.y - enemy.position.y));
+    expect(finalDistance).toBe(3);
+  });
+
+  it('partial path: greedy walk succeeds with the shorter walk when no direction reduces distance further', () => {
+    const window = openCombatWindow();
+    // Wall the entire vertical column x=2 between actor and target. Actor pinned to the top edge
+    // (y=0) so `ne`/`n` are out of bounds — only `e` and downward directions are candidates. From
+    // (1,0) all of {e, se} are blocked or don't reduce Chebyshev distance to (7,0), so the walk
+    // succeeds with 1 step.
+    for (let y = 0; y < window.height; y++) window.cells[y][2] = 0;
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 7, y: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    // First step east closes distance to 6; from (1,0) every legal step yields distance 6 or worse.
+    expect(result.position).toEqual({ x: 1, y: 0 });
+    const moveLog = state.log.find(entry => entry.type === 'move');
+    expect(moveLog.steps).toBe(1);
+    expect(moveLog.path).toEqual(['e']);
+  });
+
+  it('fully blocked from the origin: no step reduces distance → invalid-direction, no move, moveAvailable preserved', () => {
+    const window = openCombatWindow();
+    // Wall every neighbor that would close distance from (3,3) to (5,3): e, ne, se blocked.
+    window.cells[3][4] = 0;
+    window.cells[2][4] = 0;
+    window.cells[4][4] = 0;
+    const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 3 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const before = { ...state.combatants.get('a').position };
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
+    expect(result).toEqual({ success: false, reason: 'invalid-direction' });
+    expect(state.combatants.get('a').position).toEqual(before);
+    expect(state.combatants.get('a').moveAvailable).toBe(true);
+    expect(state.log.find(entry => entry.type === 'move')).toBeUndefined();
+  });
+
+  it('opportunity attacks fire on each threatened departure during a multi-step fallback walk', () => {
+    const window = openCombatWindow();
+    // Actor pinned to y=0 so DIRECTION_ORDER's diagonal-first preference stays inert
+    // (n/ne are out of bounds) and the greedy walk marches straight east.
+    //   guard_a (1,0) threatens (2,0) but NOT (3,0); actor departs (2,0) on step 1 → OA #1.
+    //   guard_b (4,1) threatens (4,0)/(5,0) but NOT (6,0); actor departs (5,0) on step 4 → OA #2.
+    // A guard at (5,1) would also threaten (6,0) (Chebyshev 1) and swallow the second OA.
+    const party = [makeCharacter({ id: 'a', position: { x: 2, y: 0 }, hp: 100, hpMax: 100 })];
+    const guardA = makeEnemy({ id: 'guard_a', position: { x: 1, y: 0 }, defense: 0, hp: 100, hpMax: 100,
+      weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 0 }) });
+    const guardB = makeEnemy({ id: 'guard_b', position: { x: 4, y: 1 }, defense: 0, hp: 100, hpMax: 100,
+      weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 0 }) });
+    const target = makeEnemy({ id: 'enemy_1', position: { x: 7, y: 0 } });
+    const { state, cursor } = startCombat(party, [guardA, guardB, target], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 6, y: 0 });
+    const oaAttacks = state.log.filter(entry => entry.type === 'attack' && entry.trigger === 'opportunity');
+    expect(oaAttacks).toHaveLength(2);
+    const attackerIds = oaAttacks.map(a => a.actorId).sort();
+    expect(attackerIds).toEqual(['guard_a', 'guard_b']);
+  });
+
+  it('pathToward consumes zero RNG (determinism preserved)', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const target = makeEnemy({ id: 'enemy_1', position: { x: 7, y: 0 } });
+    const { state, cursor } = startCombat(party, [target], 1, 'a');
+    state.window = window;
+    const combatBefore = cursor.getCursor('combat');
+    const genBefore = cursor.getCursor('gen');
+    const path = pathToward(state, state.combatants.get('a'), 'enemy_1', MOVE_RANGE, 1);
+    expect(path).toEqual(['e', 'e', 'e', 'e', 'e']);
+    expect(cursor.getCursor('combat')).toBe(combatBefore);
+    expect(cursor.getCursor('gen')).toBe(genBefore);
+  });
+
+  it('pathToward returns null when actor is already within desiredRange (no wasted move action)', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
+    const target = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 3 } });
+    const { state } = startCombat(party, [target], 1, 'a');
+    state.window = window;
+    // Chebyshev(3,3 → 5,3) = 2, already inside desiredRange 3 (artillery).
+    expect(pathToward(state, state.combatants.get('a'), 'enemy_1', MOVE_RANGE, 3)).toBeNull();
+  });
+
+  it('missing target / missing actor position returns null instead of throwing', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const { state } = startCombat(party, [makeEnemy({ id: 'enemy_1', position: { x: 5, y: 0 } })], 1, 'a');
+    state.window = window;
+    expect(pathToward(state, state.combatants.get('a'), 'ghost', MOVE_RANGE, 1)).toBeNull();
+    const noPosActor = { ...state.combatants.get('a'), position: undefined };
+    expect(pathToward(state, noPosActor, 'enemy_1', MOVE_RANGE, 1)).toBeNull();
+  });
+
+  it('non-finite desiredRange in action defaults to 1 (adjacent)', () => {
+    const window = openCombatWindow();
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 3, y: 0 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    // desiredRange omitted (undefined) → default 1 → stops at (2,0).
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.position).toEqual({ x: 2, y: 0 });
   });
 });
 

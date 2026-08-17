@@ -199,24 +199,58 @@ function fleeDirection(combatState, actor) {
   return best;
 }
 
-// AI convenience: greedily steps toward a target instead of requiring an explicit direction.
-function stepToward(combatState, actor, targetId) {
-  const target = combatState.combatants.get(targetId);
-  if (!target || !target.position || !actor.position) return null;
+// Greedy single-step chooser: from `origin` pick the legal direction that strictly reduces
+// Chebyshev distance to `targetPos`, applying the same walls / corner-rule / occupancy checks
+// as any other move step. Occupancy ignores `movingActorId` — the actor's own true current cell
+// doesn't block a simulated step through it, and greedy path building never revisits the origin
+// (each step strictly closes distance) so simulated-vacated cells never need explicit tracking.
+// Returns null when no legal step improves distance (fully blocked, or already at closest cell).
+function stepFrom(combatState, origin, targetPos, movingActorId) {
   let best = null;
-  let bestDistance = distanceCells(actor.position, target.position);
+  let bestDistance = distanceCells(origin, targetPos);
   for (const name of DIRECTION_ORDER) {
     const delta = DIRECTIONS[name];
-    if (!legalStep(combatState.window, actor.position, delta)) continue;
-    const dest = { x: actor.position.x + delta.dx, y: actor.position.y + delta.dy };
-    if (cellOccupied(combatState.combatants, dest.x, dest.y, actor.id)) continue;
-    const distance = distanceCells(dest, target.position);
+    if (!legalStep(combatState.window, origin, delta)) continue;
+    const dest = { x: origin.x + delta.dx, y: origin.y + delta.dy };
+    if (cellOccupied(combatState.combatants, dest.x, dest.y, movingActorId)) continue;
+    const distance = distanceCells(dest, targetPos);
     if (distance < bestDistance) {
       bestDistance = distance;
       best = name;
     }
   }
   return best;
+}
+
+// AI convenience: greedily steps toward a target instead of requiring an explicit direction.
+function stepToward(combatState, actor, targetId) {
+  const target = combatState.combatants.get(targetId);
+  if (!target || !target.position || !actor.position) return null;
+  return stepFrom(combatState, actor.position, target.position, actor.id);
+}
+
+// Builds a greedy geometric path of up to `maxSteps` legal steps toward `targetId`, stopping
+// early once the simulated position is within Chebyshev `desiredRange` of the target. Uses the
+// same walls / corner-rule / occupancy checks as any other move — pathing consumes no RNG, so
+// determinism is preserved. Returns null when no forward progress is possible from the origin
+// (already within range, blocked, missing target/positions), matching `stepToward`'s legacy
+// "no move" contract so the targetId fallback in `executeMove` still routes to `invalid-direction`.
+export function pathToward(combatState, actor, targetId, maxSteps, desiredRange) {
+  const target = combatState.combatants.get(targetId);
+  if (!target?.position || !actor?.position) return null;
+  const path = [];
+  const sim = { x: actor.position.x, y: actor.position.y };
+  while (path.length < maxSteps) {
+    const distance = distanceCells(sim, target.position);
+    if (distance === null || distance <= desiredRange) break;
+    const step = stepFrom(combatState, sim, target.position, actor.id);
+    if (!step) break;
+    const delta = DIRECTIONS[step];
+    sim.x += delta.dx;
+    sim.y += delta.dy;
+    path.push(step);
+  }
+  return path.length ? path : null;
 }
 
 export function getLegalActions(combatState, actorId, context = {}) {
@@ -236,7 +270,7 @@ export function getLegalActions(combatState, actorId, context = {}) {
 }
 
 export function executeAction(combatState, action, rngCursor, context = {}) {
-  const { type, actorId, targetId, school, tier, consumableId, direction, path } = action || {};
+  const { type, actorId, targetId, school, tier, consumableId, direction, path, desiredRange } = action || {};
   const actor = combatState.combatants.get(actorId);
   if (!actor || actor.hp <= 0) return { success: false, reason: 'invalid-actor' };
   if (combatState.turnOrder[combatState.currentTurn] !== actorId) {
@@ -262,7 +296,7 @@ export function executeAction(combatState, action, rngCursor, context = {}) {
     case 'item':
       return executeItem(combatState, actor, targetId, consumableId, rngCursor, context);
     case 'move':
-      return executeMove(combatState, actor, { direction, path, targetId }, rngCursor, context);
+      return executeMove(combatState, actor, { direction, path, targetId, desiredRange }, rngCursor, context);
     case 'swap':
       return executeSwap(combatState, actor, targetId);
     case 'condition':
@@ -303,12 +337,14 @@ export function endTurn(combatState, actorId, context = {}) {
 
 // Move up to MOVE_RANGE cells along an ordered `path` of direction names. Callers may pass
 // `path` (array, length 1..MOVE_RANGE), a lone `direction` (wrapped to `[direction]`, back-compat
-// with pre-path AI), or a `targetId` fallback (`stepToward` → single step). Panicked always
-// overrides with a single fleeDirection step. The whole path is pre-validated (walls, corner
-// rule, occupancy); a single illegal step rejects the entire request without moving. On success
-// the walk executes step-by-step, resolving opportunity attacks per threatened departure; a
-// lethal OA stops the walk on the last cell actually reached.
-function executeMove(combatState, actor, { direction, path, targetId }, rngCursor, context) {
+// with pre-path AI), or a `targetId` fallback (`pathToward` → greedy path up to MOVE_RANGE steps,
+// stopping when within Chebyshev `desiredRange` of the target; `desiredRange` defaults to 1 =
+// adjacent when the action doesn't declare one). Panicked always overrides with a single
+// fleeDirection step. The whole path is pre-validated (walls, corner rule, occupancy); a single
+// illegal step rejects the entire request without moving. On success the walk executes
+// step-by-step, resolving opportunity attacks per threatened departure; a lethal OA stops the
+// walk on the last cell actually reached.
+function executeMove(combatState, actor, { direction, path, targetId, desiredRange }, rngCursor, context) {
   if (!actor.moveAvailable) return { success: false, reason: 'no-move' };
   if (hasCondition(actor, 'immobilized')) return { success: false, reason: 'immobilized' };
   if (!combatState.window) return { success: false, reason: 'no-window' };
@@ -323,9 +359,10 @@ function executeMove(combatState, actor, { direction, path, targetId }, rngCurso
   } else if (direction) {
     effectivePath = [direction];
   } else if (targetId) {
-    const step = stepToward(combatState, actor, targetId);
-    if (!step) return { success: false, reason: 'invalid-direction' };
-    effectivePath = [step];
+    const range = Number.isFinite(desiredRange) && desiredRange >= 1 ? Math.floor(desiredRange) : 1;
+    const walk = pathToward(combatState, actor, targetId, MOVE_RANGE, range);
+    if (!walk) return { success: false, reason: 'invalid-direction' };
+    effectivePath = walk;
   } else {
     return { success: false, reason: 'invalid-direction' };
   }
