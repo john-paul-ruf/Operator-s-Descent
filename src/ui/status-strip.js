@@ -8,6 +8,21 @@ function actorList(combatState) {
     : Array.isArray(combatState?.combatants) ? combatState.combatants : [];
 }
 
+// Mirrors humanizeActorName in ./console/combat.js — duplicated (not imported) to
+// respect the sibling-import boundary; keep the two in sync.
+function titleCaseName(value) {
+  return String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+function humanizeActorName(actor) {
+  if (!actor) return 'Actor';
+  if (actor.name) return actor.name;
+  if (actor.classId) return titleCaseName(actor.classId);
+  if (actor.archetypeId) return titleCaseName(actor.archetypeId);
+  const match = String(actor.id ?? '').match(/^enemy_\d+_([a-z][a-z0-9]*)(?:_.+)?$/);
+  if (match) return titleCaseName(match[1]);
+  return String(actor.id ?? 'Actor');
+}
+
 function hpOf(actor) {
   return {
     current: actor.currentHP ?? actor.hp ?? 0,
@@ -69,7 +84,7 @@ function appendActorSummary(strip, actor, active = false) {
   summary.style.alignItems = 'center';
   summary.style.gap = '4px';
   const role = roleOf(actor);
-  const sigil = createSigilToken(sigilOf(actor), 34, { role, label: `${role} sigil ${actor.name || actor.id || ''}`.trim() });
+  const sigil = createSigilToken(sigilOf(actor), 34, { role, label: `${role} sigil ${humanizeActorName(actor)}` });
   sigil.classList.add(active ? 'status-active-sigil' : 'status-party-sigil');
   summary.appendChild(sigil);
   const hp = hpOf(actor);
@@ -142,7 +157,7 @@ function renderCombatStatus(strip, runState, combatState) {
     if (!actor) continue;
     const slot = document.createElement('div');
     slot.className = `init-slot${index === 0 ? ' active' : ''}${roleOf(actor) === 'enemy' ? ' enemy' : ''}`;
-    const sigil = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `${actor.name || actor.id} initiative ${index + 1}` });
+    const sigil = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `${humanizeActorName(actor)} initiative ${index + 1}` });
     sigil.classList.add('init-sigil');
     sigil.setAttribute('data-glitch', '');
     sigil.dataset.glitchIntensity = '0.05';
@@ -195,7 +210,7 @@ function renderPartySigils(runState) {
   wrap.style.alignItems = 'center';
   for (const character of runState?.party || []) {
     const role = roleOf(character);
-    const sigil = createSigilToken(sigilOf(character), 34, { role, label: `${role} sigil ${character.name || character.id || ''}`.trim() });
+    const sigil = createSigilToken(sigilOf(character), 34, { role, label: `${role} sigil ${humanizeActorName(character)}` });
     sigil.classList.add('wide-telemetry-party-sigil');
     const hp = hpOf(character);
     const bar = createHPBar(hp.current, hp.max);
@@ -222,6 +237,27 @@ function renderCombatDock(dock, runState, combatState) {
   rail.setAttribute('aria-label', 'Combat initiative rail');
   const currentTurn = combatState.currentTurn || 0;
   const turnOrder = combatState.turnOrder || [];
+  const nameByIndex = new Map();
+  const seenCounts = new Map();
+  const totals = new Map();
+  for (const id of turnOrder) {
+    const actor = actors.find((candidate) => candidate.id === id);
+    if (!actor) continue;
+    const base = humanizeActorName(actor);
+    totals.set(base, (totals.get(base) || 0) + 1);
+  }
+  for (const [index, id] of turnOrder.entries()) {
+    const actor = actors.find((candidate) => candidate.id === id);
+    if (!actor) continue;
+    const base = humanizeActorName(actor);
+    if (totals.get(base) > 1) {
+      const n = (seenCounts.get(base) || 0) + 1;
+      seenCounts.set(base, n);
+      nameByIndex.set(id, `${base} ${n}`);
+    } else {
+      nameByIndex.set(id, base);
+    }
+  }
   for (const [index, id] of turnOrder.entries()) {
     const actor = actors.find((candidate) => candidate.id === id);
     if (!actor) continue;
@@ -230,12 +266,26 @@ function renderCombatDock(dock, runState, combatState) {
     const isSpent = index < currentTurn || (actor.hp ?? actor.currentHP ?? 1) <= 0;
     slot.className = `init-slot${isActive ? ' active' : ''}${roleOf(actor) === 'enemy' ? ' enemy' : ''}${isSpent ? ' spent' : ''}`;
     slot.dataset.testid = `telemetry-init-${id}`;
-    const sigil = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `${actor.name || actor.id} initiative ${index + 1}` });
+    // Wide dock cell is 1fr in a 2-column grid; override the 34px .init-slot cap
+    // so humanized labels fit without stacking on top of each other.
+    slot.style.width = 'auto';
+    slot.style.height = 'auto';
+    slot.style.minWidth = '0';
+    slot.style.padding = '6px 8px';
+    slot.style.overflow = 'hidden';
+    slot.style.justifyContent = 'flex-start';
+    slot.style.gap = '8px';
+    const displayName = nameByIndex.get(id) || humanizeActorName(actor);
+    const sigil = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `${displayName} initiative ${index + 1}` });
     sigil.classList.add('init-sigil');
     slot.appendChild(sigil);
     const order = document.createElement('span');
     order.className = 'init-order';
-    order.textContent = `${index + 1} · ${actor.name || actor.id}`;
+    order.textContent = `${index + 1} · ${displayName}`;
+    order.style.overflow = 'hidden';
+    order.style.textOverflow = 'ellipsis';
+    order.style.whiteSpace = 'nowrap';
+    order.style.minWidth = '0';
     slot.appendChild(order);
     rail.appendChild(slot);
   }
@@ -248,10 +298,11 @@ function renderCombatDock(dock, runState, combatState) {
   activeBlock.dataset.testid = 'telemetry-active-actor';
   const header = document.createElement('div');
   header.className = 'wide-active-header';
-  header.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${active.name || active.id}` }));
+  const activeName = humanizeActorName(active);
+  header.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${activeName}` }));
   const nameEl = document.createElement('div');
   nameEl.className = 'wide-active-name';
-  nameEl.textContent = `${(active.name || active.id || 'ACTIVE').toString().toUpperCase()} · ACTIVE`;
+  nameEl.textContent = `${activeName.toUpperCase()} · ACTIVE`;
   header.appendChild(nameEl);
   const apEl = document.createElement('div');
   apEl.className = 'wide-active-ap';
