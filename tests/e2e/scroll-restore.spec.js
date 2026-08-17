@@ -105,6 +105,22 @@ async function waitTwoFrames(page) {
   await page.waitForTimeout(20);
 }
 
+async function clickAndSampleFrames(page, containerSelector, targetSelector, frames = 3) {
+  return page.evaluate(async ({ containerSel, targetSel, count }) => {
+    const container = document.querySelector(containerSel);
+    const target = document.querySelector(targetSel);
+    if (!container) throw new Error(`missing container for ${containerSel}`);
+    if (!target) throw new Error(`missing target for ${targetSel}`);
+    target.click();
+    const samples = [container.scrollTop];
+    for (let i = 0; i < count; i++) {
+      await new Promise((r) => requestAnimationFrame(r));
+      samples.push(container.scrollTop);
+    }
+    return samples;
+  }, { containerSel: containerSelector, targetSel: targetSelector, count: frames });
+}
+
 test.describe('scroll memory', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium-portrait', 'scroll-restore covered by chromium-portrait');
@@ -121,9 +137,12 @@ test.describe('scroll memory', () => {
     await setScrollTop(page, scrollSelector, 120);
     const before = await scrollTopOf(page, scrollSelector);
     expect(before).toBeGreaterThan(0);
-    await clickWithoutScroll(page, '[data-testid="gear-slot-armor"]');
-    await waitTwoFrames(page);
-    const after = await scrollTopOf(page, scrollSelector);
+    const samples = await clickAndSampleFrames(page, scrollSelector, '[data-testid="gear-slot-armor"]', 3);
+    // No sampled frame — including the one right after the click's synchronous
+    // re-render — should show a top-flash. Every sample must be at (or near)
+    // the pre-click offset.
+    for (const s of samples) expect(Math.abs(s - before)).toBeLessThanOrEqual(2);
+    const after = samples[samples.length - 1];
     expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
   });
 
