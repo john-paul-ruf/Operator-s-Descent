@@ -1269,3 +1269,68 @@ untouched. M60/M69/M72 call sites required no edits.
 ## Data flow
 
 Input surface (d-pad button / keyboard arrow / WASD / non-MOVE pane) → console dispatch → MOVE `handleInput` → exploration `stageMove` → path grows → `renderPlayfield()` redraws preview overlay → user presses `CONFIRM` (or Enter) → MOVE `handleInput` sees staged → exploration `onCommitStagedMoves()` → per-step `moveParty()` via existing `onMove()` (all runtime side-effects unchanged) → interrupt or exhaustion → buffer drained → normal notice cycle resumes.
+
+<!-- clarity-and-fit SESSION-05 -->
+
+# SESSION-05 arch delta — clarity-and-fit / equipment tells you the dice
+
+## M18 Equipment Rules (`src/rules/equipment.js`) — public surface grows
+
+- New export: `describeItemStats(item, { equipmentData, affixesData } = {})` → `string[]`.
+  Render-time resolver used by GEAR and LOOT to render dice/range/defense chips on
+  equipment cards. Runs the live inventory/equipped item through
+  `resolveWeaponStats` / `resolveArmorStats` so affix effects surface as final
+  values. Never throws; returns `[]` for consumables, malformed items, unknown
+  `baseType`, or missing catalog data.
+- Chip vocabulary is stable and mirrors `src/rules/combat.js:458-469`
+  `performAttackRoll` — the only intrinsic pieces of the attack roll on the card:
+  - **Weapon with damage die** → `['ATK d20<±acc>+<MGT|FIN>', 'DMG <die>[↑]',
+    'RANGE <min>–<max> · <BAND>[ (MIN <min>)]']`.
+    - `MGT` when `rangeBand === 'adjacent'` (matches combat.js:450 `isMelee`),
+      otherwise `FIN`.
+    - Accuracy chunk `+N` / `-N` is omitted when accuracy is 0 (e.g.
+      `ATK d20+MGT`).
+    - `↑` suffix appears iff `resolveWeaponStats.damageDie` differs from the
+      catalog base — surfaces `edged` affix upgrades.
+    - `MIN` suffix appears iff `minRange > 1` (sniper).
+    - Combat-time bonuses (marked, blinded, flank, cover) are intentionally NOT
+      on the chip; they belong to the combat log where they are already surfaced.
+  - **Weapon with no damage die but positive defenseBonus** (e.g. shield) →
+    `['DEF +<n>']` only.
+  - **Armor** → `['DEF <±n>']`, `['FIN <±n>']` when non-zero and
+    `!ignoreFinPenalty`, `['CHG <±n> MAX · <±n> REGEN']` (either part omitted
+    when zero). Whole chip omitted if both charge fields are zero.
+  - **Consumable / malformed / unknown** → `[]`.
+- Data shape convention: `equipmentData = data.equipment` (the JSON blob root),
+  `affixesData = data.affixes` (the affixes.json root). Matches the shape
+  already accepted by `resolveWeaponStats`/`resolveArmorStats`.
+
+## M56 UI Components (`src/ui/components.js`) — card contract grows
+
+- `createEquipmentCard(item, opts?)` accepts a new optional `opts.stats: string[]`.
+  When provided and non-empty, the card appends a `<div class="card-stats">`
+  child containing one `<span class="stat-chip">` per string. Chip strings are
+  set via `textContent` (no HTML). When `opts.stats` is missing, empty, or not
+  an array, no `.card-stats` node is emitted — legacy call-sites unchanged.
+- Insertion order stays: `card-name` → `card-desc` (optional) → `card-stats`
+  (optional) → rarity tag (optional) → affix tags (optional). New node slots
+  between the description and rarity tag.
+
+## M64 Console Gear (`src/ui/console/gear.js`) — wired
+
+- Every `createEquipmentCard` call on this screen (equipped weapon/armor/offhand
+  rows and inventory rows) now passes `stats: describeItemStats(item,
+  { equipmentData: data.equipment, affixesData: data.affixes })`. No signature
+  changes to `render` or `handleInput`.
+
+## M66 Console Loot (`src/ui/console/loot.js`) — wired
+
+- Container-content cards now pass the same `stats: describeItemStats(...)` bag
+  through to `createEquipmentCard`. Existing text-only `.loot-detail` and
+  `.loot-compare` rows remain — the chip row is additive.
+
+## Downstream consumers
+
+- SESSION-06 (creation screen) consumes `describeItemStats` verbatim through
+  the same `{ equipmentData, affixesData }` shape when it filters class-gated
+  equipment options.
