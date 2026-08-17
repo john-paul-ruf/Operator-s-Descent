@@ -423,6 +423,25 @@
     text-shadow: 0 0 4px var(--accent);
     box-shadow: 0 0 6px var(--accent);
   }
+  /* Derived-stat rows: the console dock is narrow (max 360px minus padding),
+     so the default 3-col grid overlaps compound rows like
+     "Melee / Ranged / Protocol" → "+2 / -2 / +0". Stack derived rows in a
+     single column in the dock; keep values on one line and let labels shrink
+     so nothing wraps mid-value. Portrait keeps the 3-col grid unchanged. */
+  .wide-console-content-body .party-derived {
+    grid-template-columns: 1fr;
+  }
+  .wide-console-content-body .party-derived .party-stat-row {
+    gap: 8px;
+    align-items: baseline;
+  }
+  .wide-console-content-body .party-derived .stat-value {
+    text-align: right;
+    white-space: nowrap;
+  }
+  .wide-console-content-body .party-derived .stat-label {
+    min-width: 0;
+  }
 
   /* ═══ LOOT-mode extras (large container glyph) ═══ */
   .container-icon-lg {
