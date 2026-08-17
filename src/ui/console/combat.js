@@ -50,8 +50,49 @@ function selectedClass(base, selected) {
   return selected ? `${base} selected` : base;
 }
 
-function actorName(actor) {
-  return actor?.name || actor?.classId || actor?.archetypeId || String(actor?.id ?? 'actor');
+const REASON_LABEL = {
+  not_a_weapon: 'no weapon equipped',
+  out_of_range: 'out of range',
+  no_line_of_sight: 'no line of sight',
+  blocked: 'blocked'
+};
+
+function titleCase(value) {
+  return String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function parseEnemyId(id) {
+  const match = String(id ?? '').match(/^enemy_\d+_([a-z][a-z0-9]*)(?:_.+)?$/);
+  return match ? match[1] : null;
+}
+
+export function humanizeActorName(actor) {
+  if (!actor) return 'Actor';
+  if (actor.name) return actor.name;
+  if (actor.classId) return titleCase(actor.classId);
+  if (actor.archetypeId) return titleCase(actor.archetypeId);
+  const parsed = parseEnemyId(actor.id);
+  if (parsed) return titleCase(parsed);
+  return String(actor.id ?? 'Actor');
+}
+
+function humanizeActorNames(actors) {
+  const bases = actors.map((actor) => humanizeActorName(actor));
+  const counts = new Map();
+  for (const name of bases) counts.set(name, (counts.get(name) || 0) + 1);
+  const running = new Map();
+  const map = new Map();
+  actors.forEach((actor, index) => {
+    const base = bases[index];
+    if (counts.get(base) > 1) {
+      const n = (running.get(base) || 0) + 1;
+      running.set(base, n);
+      map.set(actor.id, `${base} ${n}`);
+    } else {
+      map.set(actor.id, base);
+    }
+  });
+  return map;
 }
 
 function activeSummary(container, active) {
@@ -59,8 +100,8 @@ function activeSummary(container, active) {
   const panel = document.createElement('div');
   panel.className = 'combat-active-panel panel-elevated console-row';
   panel.dataset.testid = 'combat-active';
-  panel.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${actorName(active)}` }));
-  appendText(panel, 'combat-active-name', `${actorName(active)} · ${active.side?.toUpperCase() || 'ACTOR'}`);
+  panel.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${humanizeActorName(active)}` }));
+  appendText(panel, 'combat-active-name', `${humanizeActorName(active)} · ${active.side?.toUpperCase() || 'ACTOR'}`);
   panel.appendChild(createHPBar(active.hp ?? active.currentHP ?? 0, active.hpMax ?? active.maxHP ?? active.hp ?? active.currentHP ?? 0));
   panel.appendChild(createChargeBar(active.charge ?? active.currentCHARGE ?? 0, active.chargeMax ?? active.maxCHARGE ?? active.charge ?? active.currentCHARGE ?? 0));
   appendText(panel, 'combat-ap', `AP ${active.ap ?? 0} · ${active.moveAvailable ? 'MOVE READY' : 'MOVE SPENT'}`);
@@ -76,7 +117,7 @@ function initiativeRail(container, combatState) {
   for (const id of combatState.turnOrder || []) {
     const actor = actors.get(id);
     if (!actor || actor.hp <= 0) continue;
-    const token = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `Initiative ${actorName(actor)}` });
+    const token = createSigilToken(sigilOf(actor), 34, { role: roleOf(actor), label: `Initiative ${humanizeActorName(actor)}` });
     if (id === combatState.turnOrder?.[combatState.currentTurn]) token.classList.add('active');
     rail.appendChild(token);
   }
@@ -179,14 +220,21 @@ function renderItems(container, context) {
 }
 
 function previewText(preview) {
-  if (!preview) return 'range — · cover 0 · flank no';
-  const range = preview.range?.legal === false ? `illegal ${preview.range.reason || ''}`.trim() : `${preview.range?.band || 'range'} ${preview.distance ?? '—'}`;
-  return `range ${range} · cover +${preview.coverBonus || 0} · flank ${preview.flanked ? 'yes' : 'no'}`;
+  if (!preview) return 'Range —';
+  const range = preview.range?.legal === false
+    ? (REASON_LABEL[preview.range.reason] || 'illegal')
+    : `${titleCase(preview.range?.band || 'range')} ${preview.distance ?? '—'}`;
+  const parts = [`Range: ${range}`];
+  parts.push(preview.coverBonus ? `Cover: +${preview.coverBonus}` : 'Cover: none');
+  if (preview.flanked) parts.push('Flanked');
+  return parts.join(' · ');
 }
 
 function renderTargets(container, context) {
   const selection = context.selection || {};
   const targets = context.combatGetTargets?.() || [];
+  const nameMap = humanizeActorNames(targets);
+  const nameOf = (actor) => nameMap.get(actor?.id) ?? humanizeActorName(actor);
   const list = document.createElement('div');
   list.className = 'combat-target-list';
   list.dataset.testid = 'combat-targets';
@@ -198,20 +246,20 @@ function renderTargets(container, context) {
       info.dataset.testid = 'combat-selected-preview';
       const name = document.createElement('div');
       name.className = 'target-name';
-      name.textContent = `◈ TARGET: ${actorName(selected)}`;
+      name.textContent = `◈ TARGET: ${nameOf(selected)}`;
       const detail = document.createElement('div');
       detail.className = 'target-detail';
       detail.textContent = previewText(context.combatGetPreview?.(selected.id));
       info.append(name, detail);
       list.appendChild(info);
     } else {
-      appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${actorName(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
+      appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${nameOf(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
     }
   }
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);
-    const label = `${actorName(target)} · HP ${target.hp ?? 0}/${target.hpMax ?? target.hp ?? 0} · ${previewText(preview)}`;
+    const label = `${nameOf(target)} · HP ${target.hp ?? 0}/${target.hpMax ?? target.hp ?? 0} · ${previewText(preview)}`;
     const button = createButton(label, {
       selected: selection.targetId === target.id,
       onClick: () => context.combatSelectTarget?.(target.id)
