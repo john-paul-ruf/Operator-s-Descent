@@ -4,6 +4,7 @@ import { currentLayoutClass } from '../layout.js';
 import { bus } from '../../state/bus.js';
 import { gameData as compatibilityData } from '../../main.js';
 import { ATTRIBUTE_KEYS, modifier } from '../../rules/attributes.js';
+import { describeItemStats } from '../../rules/equipment.js';
 import { deckSlotCost } from '../../rules/protocols.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { generateFloor } from '../../floor/generator.js';
@@ -117,6 +118,30 @@ export function mount(container, params = {}) {
   let finalizing = false;
   let finalized = false;
   let scrollPane = null;
+  const warnedEmptyLists = new Set();
+
+  function legalGearChoices(slot, classId) {
+    return gearChoices(data, slot).filter(({ item }) => item.classGates?.includes(classId));
+  }
+
+  function gearStatChips(slot, id) {
+    return describeItemStats(
+      { category: slot === 'armor' ? 'armor' : 'weapon', baseType: id, affixes: [] },
+      { equipmentData: data.equipment, affixesData: data.affixes }
+    );
+  }
+
+  function statChipSuffix(chips) {
+    return chips.length ? ` · ${chips.slice(0, 2).join(' · ')}` : '';
+  }
+
+  function emptyListNote(key, message) {
+    if (!warnedEmptyLists.has(key)) {
+      warnedEmptyLists.add(key);
+      console.warn(`creation-screen: no class-legal options for ${key}`);
+    }
+    return text('p', 'creation-warning', message);
+  }
 
   const loadInitial = getLastUsed();
   if (loadInitial) {
@@ -566,12 +591,15 @@ export function mount(container, params = {}) {
         }
       );
       group.appendChild(noneRow);
-      for (const { id, item } of gearChoices(data, slot)) {
+      const choices = legalGearChoices(slot, selected.classId);
+      if (!choices.length) group.appendChild(emptyListNote(`wide-gear:${slot}:${selected.classId}`, 'NO CLASS-LEGAL OPTIONS FOR THIS SLOT.'));
+      for (const { id, item } of choices) {
         const selectedItem = current[slot] === id;
         const preview = validateChangedDraft(draft, { type: 'equip_gear', gearSlot: slot, itemId: id }, data);
-        const gated = !item.classGates?.includes(selected.classId);
-        const reason = selectedItem ? '' : gated ? 'class gate' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : !preview.changed ? 'slot gate' : '';
-        const stat = `${item.rangeBand ?? 'DEF'}${item.defenseBonus ? ` · DEF +${item.defenseBonus}` : ''}`;
+        const reason = selectedItem ? '' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : !preview.changed ? 'slot gate' : '';
+        const chips = gearStatChips(slot, id);
+        const baseStat = `${item.rangeBand ?? 'DEF'}${item.defenseBonus ? ` · DEF +${item.defenseBonus}` : ''}`;
+        const stat = `${baseStat}${statChipSuffix(chips)}`;
         group.appendChild(wideGearRow(
           `wide-${slot}-${id}`,
           `◈ ${item.name || id}`,
@@ -956,11 +984,12 @@ export function mount(container, params = {}) {
       none.setAttribute('aria-checked', String(current[slot] === null));
       none.dataset.testid = `${slot}-none`;
       choices.appendChild(none);
-      for (const { id, item } of gearChoices(data, slot)) {
+      const options = legalGearChoices(slot, selected.classId);
+      if (!options.length) choices.appendChild(emptyListNote(`gear:${slot}:${selected.classId}`, 'NO CLASS-LEGAL OPTIONS FOR THIS SLOT.'));
+      for (const { id, item } of options) {
         const selectedItem = current[slot] === id;
         const preview = validateChangedDraft(draft, { type: 'equip_gear', gearSlot: slot, itemId: id }, data);
-        const gated = !item.classGates?.includes(selected.classId);
-        const reason = selectedItem ? '' : gated ? 'class gate' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : !preview.changed ? 'slot gate' : '';
+        const reason = selectedItem ? '' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : !preview.changed ? 'slot gate' : '';
         const card = createButton(item.name || id, {
           selected: selectedItem,
           disabled: Boolean(reason),
@@ -971,7 +1000,9 @@ export function mount(container, params = {}) {
         card.setAttribute('role', 'radio');
         card.setAttribute('aria-checked', String(selectedItem));
         card.dataset.testid = `${slot}-${id}`;
-        card.appendChild(text('span', 'card-detail', `${item.creationCost ?? 0} PTS · ${item.rangeBand ?? 'DEF'}${item.defenseBonus ? ` · DEF +${item.defenseBonus}` : ''}`));
+        const chips = gearStatChips(slot, id);
+        const baseDetail = `${item.creationCost ?? 0} PTS · ${item.rangeBand ?? 'DEF'}${item.defenseBonus ? ` · DEF +${item.defenseBonus}` : ''}`;
+        card.appendChild(text('span', 'card-detail', `${baseDetail}${statChipSuffix(chips)}`));
         if (reason) card.appendChild(text('span', 'disabled-reason', reason.toUpperCase()));
         choices.appendChild(card);
       }

@@ -145,24 +145,58 @@ describe('creation screen workflow', () => {
     controller.unmount();
   });
 
-  it('exposes gated gear and protocols with visible disabled reasons', async () => {
+  it('hides class-gated gear and protocols while keeping legal options + resource-limited disables visible', async () => {
     const { container } = await mountCreation({ preloadedSeed: 321 });
     addBreacher(container);
     byTestId(container, 'tab-gear').click();
 
-    expect(byTestId(container, 'weapon-sniper').disabled).toBe(true);
-    expect(byTestId(container, 'weapon-sniper').getAttribute('aria-description')).toBe('class gate');
+    // Never-choosable for breacher (class gate) — absent from DOM entirely.
+    expect(byTestId(container, 'weapon-sniper')).toBeNull();
+    expect(byTestId(container, 'weapon-heavy_ranged')).toBeNull();
+    expect(byTestId(container, 'weapon-area_projector')).toBeNull();
+    expect(byTestId(container, 'offhand-shield')).not.toBeNull(); // legal offhand for breacher
+
+    // NONE rows always present.
+    expect(byTestId(container, 'weapon-none')).not.toBeNull();
+    expect(byTestId(container, 'armor-none')).not.toBeNull();
+    expect(byTestId(container, 'offhand-none')).not.toBeNull();
+
+    // Legal options present with dice/range detail chips appended.
+    const heavyMelee = byTestId(container, 'weapon-heavy_melee');
+    expect(heavyMelee).not.toBeNull();
+    const meleeDetail = heavyMelee.children.find((child) => child.classList?.contains('card-detail'));
+    expect(meleeDetail.textContent).toContain('ATK d20+MGT');
+    expect(meleeDetail.textContent).toContain('DMG d10');
+
     byTestId(container, 'weapon-heavy_melee').click();
     byTestId(container, 'armor-heavy').click();
     byTestId(container, 'offhand-shield').click();
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 13/80');
 
     byTestId(container, 'tab-tech').click();
+    // Protocol filtering lands in checkpoint 2 — for now, class-gated protocols still render disabled.
     expect(byTestId(container, 'protocol-ward-1').disabled).toBe(true);
     expect(byTestId(container, 'protocol-disrupt-3').disabled).toBe(true);
     byTestId(container, 'protocol-disrupt-2').click();
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 17/80');
     expect(byTestId(container, 'deck-summary').textContent).toContain('SLOTS USED 2 / 3');
+  });
+
+  it('re-renders legal gear/protocol lists when the class changes', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 424 });
+    addBreacher(container);
+    byTestId(container, 'tab-gear').click();
+    // Baseline: breacher-legal.
+    expect(byTestId(container, 'weapon-heavy_melee')).not.toBeNull();
+    expect(byTestId(container, 'weapon-sniper')).toBeNull();
+
+    // Switch to ghost — sniper becomes legal, heavy_melee falls out.
+    byTestId(container, 'tab-class').click();
+    byTestId(container, 'class-ghost').click();
+    byTestId(container, 'tab-gear').click();
+    expect(byTestId(container, 'weapon-sniper')).not.toBeNull();
+    expect(byTestId(container, 'weapon-heavy_melee')).toBeNull();
+    expect(byTestId(container, 'weapon-none')).not.toBeNull();
   });
 
   it('loads last-used blueprints and requires overwrite confirmation', async () => {
@@ -426,24 +460,31 @@ describe('creation screen — wide layout', () => {
     expect(card.children.find((c) => c.classList?.contains('name')).textContent).toBe('ghost cell');
   });
 
-  it('renders GEAR groups and TECH list with class-gate reasons', async () => {
+  it('hides class-gated wide gear/tech options while keeping legal ones + gate note', async () => {
     installMatchMedia(true);
     const { container } = await mountCreation({ preloadedSeed: 42 });
     byTestId(container, 'add-character').click();
     byTestId(container, 'wide-class-breacher').click();
 
-    // GEAR: 3 groups (weapon, armor, offhand), each with a NONE row + choices.
+    // GEAR: 3 groups (weapon, armor, offhand), each with a NONE row + legal choices only.
     expect(byTestId(container, 'wide-section-gear')).not.toBeNull();
     expect(byTestId(container, 'wide-gear-weapon')).not.toBeNull();
     expect(byTestId(container, 'wide-gear-armor')).not.toBeNull();
     expect(byTestId(container, 'wide-gear-offhand')).not.toBeNull();
     expect(byTestId(container, 'wide-weapon-none')).not.toBeNull();
+    expect(byTestId(container, 'wide-armor-none')).not.toBeNull();
+    expect(byTestId(container, 'wide-offhand-none')).not.toBeNull();
 
-    // Sniper is class-gated for breacher.
-    const sniper = byTestId(container, 'wide-weapon-sniper');
-    expect(sniper).not.toBeNull();
-    expect(sniper.disabled).toBe(true);
-    expect(sniper.getAttribute('aria-description')).toBe('class gate');
+    // Never-choosable for breacher — absent from DOM.
+    expect(byTestId(container, 'wide-weapon-sniper')).toBeNull();
+    expect(byTestId(container, 'wide-weapon-heavy_ranged')).toBeNull();
+    expect(byTestId(container, 'wide-weapon-area_projector')).toBeNull();
+    // Legal weapons present with chip suffix.
+    const heavyMelee = byTestId(container, 'wide-weapon-heavy_melee');
+    expect(heavyMelee).not.toBeNull();
+    const stat = heavyMelee.children.find((c) => c.classList?.contains('info')).children.find((c) => c.classList?.contains('stat'));
+    expect(stat.textContent).toContain('ATK d20+MGT');
+    expect(stat.textContent).toContain('DMG d10');
 
     // Equip a valid weapon — selection + budget both update.
     const spentBefore = Number(byTestId(container, 'remaining').children[1].textContent);
@@ -452,7 +493,7 @@ describe('creation screen — wide layout', () => {
     const spentAfter = Number(byTestId(container, 'remaining').children[1].textContent);
     expect(spentBefore - spentAfter).toBeGreaterThan(0);
 
-    // TECH: list is present, tier-3 disrupt is gated by tier ≤ 2 for breacher.
+    // TECH: list present; protocol filtering lands in checkpoint 2 — class-gated protocols still render disabled here.
     expect(byTestId(container, 'wide-section-tech')).not.toBeNull();
     expect(byTestId(container, 'wide-tech-list')).not.toBeNull();
     const wardOne = byTestId(container, 'wide-protocol-ward-1');
@@ -468,6 +509,19 @@ describe('creation screen — wide layout', () => {
     byTestId(container, 'wide-protocol-disrupt-2').click();
     expect(byTestId(container, 'wide-protocol-disrupt-2').classList.contains('selected')).toBe(true);
     expect(Number(byTestId(container, 'remaining').children[1].textContent)).toBeLessThan(beforeTech);
+  });
+
+  it('wide layout re-renders legal gear when class changes', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 909 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    expect(byTestId(container, 'wide-weapon-heavy_melee')).not.toBeNull();
+    expect(byTestId(container, 'wide-weapon-sniper')).toBeNull();
+
+    byTestId(container, 'wide-class-ghost').click();
+    expect(byTestId(container, 'wide-weapon-sniper')).not.toBeNull();
+    expect(byTestId(container, 'wide-weapon-heavy_melee')).toBeNull();
   });
 
   it('finalizes from the wide footer and navigates to exploration', async () => {
