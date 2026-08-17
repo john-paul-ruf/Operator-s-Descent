@@ -1530,3 +1530,51 @@ Contract deltas:
 - Rails stay flush at every pane combination; no `justify-content: center` on the shell.
 - Bounds guarantee: middle ≥ 320px; console dock ≥ 360px (open) or exactly 96px (collapsed);
   telemetry ≥ 280px (open) or exactly 48px (collapsed).
+
+<!-- map-pan-zoom SESSION-02 -->
+## M32 — Exploration Movement (`src/exploration/movement.js`) — new public export
+
+`findExplorationPath(lattice, fogState, from, to, options = {})` → `{ path, cells } | null`.
+
+Pure, RNG-free 8-way BFS from `from` to `to`.
+- `path` is an ordered array of direction strings (`'n'|'ne'|'e'|'se'|'s'|'sw'|'w'|'nw'`) — the same strings `moveParty` consumes.
+- `cells` is the sequence of destination cells (length equals `path.length`); it does NOT include the origin.
+- Neighbor iteration order is `n, ne, e, se, s, sw, w, nw` (`moveParty`'s `DIRECTIONS` declaration order) so the BFS is deterministic.
+- A diagonal step from `(x, y)` is allowed only when at least one of the two flanking cardinals `(x + dx, y)` and `(x, y + dy)` is walkable — the same closed-corner rule `moveParty` enforces at line 24–30.
+- A cell may be expanded only when both `lattice.isWalkable(x, y)` and `fogState[y * lattice.getWidth() + x] !== 0` — the BFS never routes through the unknown.
+- `options.maxSteps` defaults to `64`. Paths whose length would exceed the cap return `null`.
+- Returns `null` for `from === to`, an unwalkable/unrevealed/out-of-bounds `to`, or no path found within `maxSteps`.
+
+Consumer contract: callers execute the returned `path` one step at a time through `moveParty`, honouring interrupts (`isInterruptType(result)`), so the danger clock, discoveries, and auto-stop pipeline stay byte-identical to the old commit loop.
+
+## M70 — Exploration Screen (`src/ui/screens/exploration.js`) — contract change
+
+The staging system is gone. The `viewState` (context passed to the console) no longer exposes:
+- `stagedPath` (getter)
+- `stageMove`
+- `onCommitStagedMoves`
+- `onUndoStagedMove`
+- `onClearStagedMoves`
+
+`console:intent` `move_*` payloads now call `onMove(direction)` directly — party moves on the frame the intent fires (no stage/commit).
+
+Screen owns a canvas-space camera (M104 `createViewportCamera` over `worldW = 20 * 24`, `worldH = 32 * 24`) plus `attachViewportGestures` on the playfield body. First observation (or unit-test fallback) primes the camera via `fit()` + `centerOn(partyWorld)`. `renderPlayfield` passes `viewTransform: camera.viewTransform(cameraDpr)` to `playfield.renderExploration`. Auto-follow (`ensurePartyVisible`) is reimplemented on camera state — nudges via `camera.panBy(screenDx, screenDy)` when the party's world-px center leaves the visible rect minus a 2-cell margin, still gated by `suppressFollow` and reset on any successful move.
+
+New behaviour: tap on a revealed reachable cell (`onTap` from gestures) calls `findExplorationPath(lattice, fogState, party, cell, { maxSteps: 64 })`, sets `activeTrail = result.cells` (rendered via playfield's existing `stagedPath` overlay as a trail flash), then loops `onMove(step)` through the path — breaking on `!result.moved`, `isInterruptType(result)`, `runState.activeCombat`, or unmount. A `tapRunToken` invalidates any in-flight run on the next tap or on unmount. A null-path tap posts `notice = 'NO PATH.'`.
+
+Unmount tears down: gesture cleanup, capture-phase `pointerdown` refocus listener, `ResizeObserver`, wide-panes, telemetry dock, playfield, console, input handler.
+
+## M61 — Console Move (`src/ui/console/move.js`) — contract change
+
+D-pad drops UNDO/CLEAR. `stagedCount` and the staged-notice branches are removed from `noticeFor`; the notice line reflects only `context.lastMoveResult`, `context.canDescend()`, or a default hint.
+
+Center button:
+- `DESCEND` when `context.canDescend?.()` is truthy (enabled).
+- `WAIT` otherwise (disabled).
+
+`handleInput`:
+- `confirm` → `context.canDescend?.() ? context.onConfirmDescent?.() : false`. No staging fallback.
+- `move_*` (canonical or legacy `move-*` alias) → `context.onMove?.(direction, { source })`. The old `stageMove` branch is gone; passing a `stageMove` in context is now ignored.
+- `undo_stage` / `clear_stage` are no longer recognized (fall through to the null return).
+
+Wide-layout `autostop-row` block, `HOSTILE STOP LOCKED`, discovery/damage toggles all unchanged.
