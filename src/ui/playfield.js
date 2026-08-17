@@ -25,10 +25,6 @@ const PATH_COLOR = '#d8d8d8';
 const PATH_PREVIEW_ALPHA = 0.55;
 const ECHO_COLOR = '#b026d4';
 
-function bounded(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
 function lerp(range, t) {
   return range[0] + t * (range[1] - range[0]);
 }
@@ -193,11 +189,10 @@ function applyViewTransform(ctx, viewTransform) {
 }
 
 // Client-coord → grid-cell hit test for a canvas. Accounts for CSS scaling (canvases render at
-// their intrinsic width but display at `width: 100%`) and either inverts the caller's
-// `viewTransform` (canvas-space camera path) or adds the camera offset (legacy cell-window
-// camera path). Returns null when the point is outside the canvas rect or when the canvas has
-// no measurable bounding rect.
-export function cellAtPoint({ canvas, camera, cellSize, viewTransform }, clientX, clientY) {
+// their intrinsic width but display at `width: 100%`) and inverts the caller's `viewTransform`
+// to land on the correct world cell. Returns null when the point is outside the canvas rect,
+// when the canvas has no measurable bounding rect, or when no viewTransform is supplied.
+export function cellAtPoint({ canvas, cellSize, viewTransform }, clientX, clientY) {
   if (!canvas || typeof canvas.getBoundingClientRect !== 'function' || !cellSize) return null;
   const rect = canvas.getBoundingClientRect();
   if (!rect || !rect.width || !rect.height) return null;
@@ -206,36 +201,15 @@ export function cellAtPoint({ canvas, camera, cellSize, viewTransform }, clientX
   const scaleY = (canvas.height || rect.height) / rect.height;
   const canvasX = (clientX - rect.left) * scaleX;
   const canvasY = (clientY - rect.top) * scaleY;
-  if (viewTransform && viewTransform.scale) {
-    const worldX = (canvasX - viewTransform.dx) / viewTransform.scale;
-    const worldY = (canvasY - viewTransform.dy) / viewTransform.scale;
-    return { x: Math.floor(worldX / cellSize), y: Math.floor(worldY / cellSize) };
-  }
-  const cellX = (camera?.x ?? 0) + Math.floor(canvasX / cellSize);
-  const cellY = (camera?.y ?? 0) + Math.floor(canvasY / cellSize);
-  return { x: cellX, y: cellY };
-}
-
-export function calculateCombatCamera({ width, height, active, selected, consoleExpanded = false }) {
-  const targets = [active, selected].filter(Boolean);
-  const center = targets.length === 2
-    ? { x: Math.floor((targets[0].x + targets[1].x) / 2), y: Math.floor((targets[0].y + targets[1].y) / 2) }
-    : targets[0] || { x: Math.floor(width / 2), y: Math.floor(height / 2) };
-  const visibleRows = consoleExpanded ? 12 : COMBAT_GRID_H;
-  const maxX = Math.max(0, width - COMBAT_GRID_W);
-  const maxY = Math.max(0, height - visibleRows);
-  return {
-    x: bounded(center.x - Math.floor(COMBAT_GRID_W / 2), 0, maxX),
-    y: bounded(center.y - Math.floor(visibleRows / 2), 0, maxY),
-    w: COMBAT_GRID_W,
-    h: visibleRows
-  };
+  if (!viewTransform || !viewTransform.scale) return null;
+  const worldX = (canvasX - viewTransform.dx) / viewTransform.scale;
+  const worldY = (canvasY - viewTransform.dy) / viewTransform.scale;
+  return { x: Math.floor(worldX / cellSize), y: Math.floor(worldY / cellSize) };
 }
 
 export function createPlayfield(canvas) {
   const ctx = canvas.getContext('2d');
   let accentColor = '#7ec8e3';
-  let camera = { x: 0, y: 0, w: COMBAT_GRID_W, h: COMBAT_GRID_H };
   let pulseEnabled = false;
   let lastRender = null;
   let rafHandle = null;
@@ -405,32 +379,14 @@ export function createPlayfield(canvas) {
     const height = lattice?.getHeight?.() || grid.length || COMBAT_GRID_H;
     const combatants = getCombatants(combatState);
     const activeId = combatState?.turnOrder?.[combatState?.currentTurn];
-    const active = combatants.find((actor) => actor.id === activeId)?.position;
-    const selected = combatants.find((actor) => actor.id === options.selectedTargetId)?.position;
-    const useViewTransform = Boolean(options.viewTransform);
-    if (useViewTransform) {
-      applyViewTransform(ctx, options.viewTransform);
-      camera = { x: 0, y: 0, w: width, h: height };
-      setCanvasDescription(canvas, `Combat map, window ${width}x${height}, round ${combatState?.round || 1}.`);
-    } else {
-      const requestedOrigin = options.zoomOrigin || (Number.isInteger(options.x) && Number.isInteger(options.y) ? options : null);
-      camera = options.camera || calculateCombatCamera({ width, height, active: requestedOrigin || active, selected, consoleExpanded: options.consoleExpanded });
-      setCanvasDescription(canvas, `Combat map, window ${camera.x},${camera.y} through ${camera.x + camera.w - 1},${camera.y + camera.h - 1}. Round ${combatState?.round || 1}.`);
-    }
+    applyViewTransform(ctx, options.viewTransform);
+    setCanvasDescription(canvas, `Combat map, window ${width}x${height}, round ${combatState?.round || 1}.`);
 
-    const colStart = useViewTransform ? 0 : camera.x;
-    const rowStart = useViewTransform ? 0 : camera.y;
-    const cols = useViewTransform ? width : camera.w;
-    const rows = useViewTransform ? height : camera.h;
-
-    for (let dy = 0; dy < rows; dy++) {
-      for (let dx = 0; dx < cols; dx++) {
-        const gx = colStart + dx;
-        const gy = rowStart + dy;
-        const px = useViewTransform ? gx * COMBAT_CELL_SIZE : dx * COMBAT_CELL_SIZE;
-        const py = useViewTransform ? gy * COMBAT_CELL_SIZE : dy * COMBAT_CELL_SIZE;
-        const outOfBounds = gx < 0 || gx >= width || gy < 0 || gy >= height;
-        drawCell(ctx, px, py, COMBAT_CELL_SIZE, outOfBounds ? CELL.WALL : grid[gy]?.[gx], true, false);
+    for (let gy = 0; gy < height; gy++) {
+      for (let gx = 0; gx < width; gx++) {
+        const px = gx * COMBAT_CELL_SIZE;
+        const py = gy * COMBAT_CELL_SIZE;
+        drawCell(ctx, px, py, COMBAT_CELL_SIZE, grid[gy]?.[gx], true, false);
       }
     }
 
@@ -439,40 +395,28 @@ export function createPlayfield(canvas) {
       isFloor: combatIsFloor,
       isRevealed: () => true,
       isDim: () => false,
-      colStart, rowStart, cols, rows, size: COMBAT_CELL_SIZE
+      colStart: 0, rowStart: 0, cols: width, rows: height, size: COMBAT_CELL_SIZE
     });
 
     drawWallLines(ctx, {
       isTraversable: combatIsFloor,
       isRevealed: () => true,
-      colStart, rowStart, cols, rows, size: COMBAT_CELL_SIZE,
+      colStart: 0, rowStart: 0, cols: width, rows: height, size: COMBAT_CELL_SIZE,
       glow: glowLevel()
     });
 
-    for (let dy = 0; dy < rows; dy++) {
-      for (let dx = 0; dx < cols; dx++) {
-        const gx = colStart + dx;
-        const gy = rowStart + dy;
-        const px = useViewTransform ? gx * COMBAT_CELL_SIZE : dx * COMBAT_CELL_SIZE;
-        const py = useViewTransform ? gy * COMBAT_CELL_SIZE : dy * COMBAT_CELL_SIZE;
+    for (let gy = 0; gy < height; gy++) {
+      for (let gx = 0; gx < width; gx++) {
+        const px = gx * COMBAT_CELL_SIZE;
+        const py = gy * COMBAT_CELL_SIZE;
         drawOverlay(ctx, px, py, options, gx, gy, accentColor);
       }
     }
 
     for (const actor of combatants) {
       if (!actor.position) continue;
-      let px;
-      let py;
-      if (useViewTransform) {
-        px = actor.position.x * COMBAT_CELL_SIZE;
-        py = actor.position.y * COMBAT_CELL_SIZE;
-      } else {
-        const dx = actor.position.x - camera.x;
-        const dy = actor.position.y - camera.y;
-        if (dx < 0 || dx >= camera.w || dy < 0 || dy >= camera.h) continue;
-        px = dx * COMBAT_CELL_SIZE;
-        py = dy * COMBAT_CELL_SIZE;
-      }
+      const px = actor.position.x * COMBAT_CELL_SIZE;
+      const py = actor.position.y * COMBAT_CELL_SIZE;
       const role = actorRole(actor);
       const isDead = actor.hp <= 0;
       const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
@@ -493,17 +437,12 @@ export function createPlayfield(canvas) {
   }
 
   return {
-    getCamera() { return { ...camera }; },
     setAccent(themeOrColor) {
       const nextAccent = themeAccent(themeOrColor);
       if (!nextAccent) return false;
       accentColor = nextAccent;
       document.documentElement?.style?.setProperty?.('--accent', nextAccent);
       return true;
-    },
-    autoPan(bounds) {
-      camera = calculateCombatCamera(bounds);
-      return { ...camera };
     },
     renderExploration(lattice, fogState, partyPos, options = {}) {
       lastRender = { kind: 'exploration', args: [lattice, fogState, partyPos, options] };

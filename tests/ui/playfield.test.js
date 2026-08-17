@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import {
-  calculateCombatCamera,
   cellAtPoint,
   createPlayfield,
   FLOOR_COLOR,
@@ -218,7 +217,7 @@ describe('playfield rendering', () => {
     expect(canvas.context.calls.some((c) => c[0] === 'strokeRect' && c[1] === '#d8d8d8')).toBe(false);
   });
 
-  test('renders combat overlays and selected target labels at 2x scale', () => {
+  test('renders combat overlays and selected target labels at world-cell coords (2x scale, no camera window)', () => {
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
     const combatants = new Map([
@@ -226,8 +225,8 @@ describe('playfield rendering', () => {
       ['e1', { id: 'e1', side: 'enemy', position: { x: 4, y: 4 }, sigilCodepoint: 0xE030 }]
     ]);
 
+    // No viewTransform → identity transform, full-window world render.
     playfield.renderCombat({ combatants, turnOrder: ['p1'], currentTurn: 0, round: 2 }, lattice(), {
-      camera: { x: 0, y: 0, w: 8, h: 16 },
       selectedTargetId: 'e1',
       validTargets: new Set(['4,4']),
       rangeCells: new Set(['2,2']),
@@ -237,28 +236,26 @@ describe('playfield rendering', () => {
 
     const labels = canvas.context.calls.filter(([name]) => name === 'fillText').map((call) => call[2]);
     expect(labels).toEqual(expect.arrayContaining(['VALID', 'R', 'C', 'P', 'ACTIVE', 'TARGET']));
+    // A 48×48 floor tile fills somewhere on the canvas — proves world-cell rendering happened.
     expect(canvas.context.calls.some((call) => call[0] === 'fillRect' && call[4] === 48 && call[5] === 48)).toBe(true);
     expect(canvas.context.font).toMatch(/^32px/);
   });
 
-  test('combat wall-line pass samples the full grid so camera borders do not gain spurious cyan frames (walls drawn OUTSIDE)', () => {
-    // Camera window whose right edge (dx=7) maps to gx=7 — an OPEN floor cell whose
-    // real neighbor at gx=8 is ALSO an open floor cell. No cyan edge should appear there.
+  test('combat wall-line pass samples the full grid so world borders do not gain spurious cyan frames (walls drawn OUTSIDE)', () => {
+    // The full-window path renders every cell (0..19, 0..31). At gx=7 the neighbor at gx=8 is
+    // ALSO an open floor cell → no cyan east strip at x = 7*48 + 48 = 384.
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
 
-    playfield.renderCombat({ combatants: new Map(), turnOrder: [], currentTurn: 0, round: 1 }, lattice(), {
-      camera: { x: 0, y: 0, w: 8, h: 16 }
-    });
+    playfield.renderCombat({ combatants: new Map(), turnOrder: [], currentTurn: 0, round: 1 }, lattice(), {});
 
     const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
     const cyan = fills.filter((c) => c[1] === '#7ec8e3');
-    // Right edge of camera-column 7 (gx=7): east outside-strip would sit at x = 7*48 + 48 = 384.
-    // Neighbor gx=8 is real open floor → no east wall strip should exist for that cell.
+    // Column 7 east neighbor (gx=8) is open floor → no east wall strip should exist for that cell.
     const spuriousRightEdge = cyan.some((c) => c[2] === 7 * 48 + 48 && c[4] === 6);
     expect(spuriousRightEdge).toBe(false);
-    // Left edge of camera-column 0 (gx=0): neighbor gx=-1 is out-of-bounds ≡ wall → west outside-strip
-    // MUST exist for revealed floor rows (row 1..15 since (0,0) is a wall) at x = -6, w = 6, size = 48.
+    // Column 0 west neighbor (gx=-1) is out-of-bounds ≡ wall → west outside-strip MUST exist for
+    // revealed floor rows (row 1..31 since (0,0) is a wall) at x = -6, w = 6, size = 48.
     expect(cyan.some((c) => c[2] === -6 && c[3] === 1 * 48 && c[4] === 6 && c[5] === 48)).toBe(true);
   });
 
@@ -397,28 +394,31 @@ describe('playfield rendering', () => {
     }
   });
 
-  test('cellAtPoint maps client coords through CSS scale + camera offset; null outside canvas', () => {
+  test('cellAtPoint returns null when no viewTransform is supplied (camera-window path retired)', () => {
     const canvas = new FakeCanvas();
     canvas.width = 384;
     canvas.height = 768;
-    // Rect: 192x384 CSS pixels, positioned at (10, 20). Each rect pixel = 2 canvas pixels.
     canvas.getBoundingClientRect = () => ({ left: 10, top: 20, right: 202, bottom: 404, width: 192, height: 384 });
 
-    // Point (58, 68) → rect-relative (48, 48) → canvas (96, 96) → cell (2, 2) at cellSize=48, camera (0,0)
-    expect(cellAtPoint({ canvas, camera: { x: 0, y: 0, w: 8, h: 16 }, cellSize: 48 }, 58, 68)).toEqual({ x: 2, y: 2 });
-    // Same point with camera offset shifts the world-space cell by the camera origin.
-    expect(cellAtPoint({ canvas, camera: { x: 3, y: 5, w: 8, h: 12 }, cellSize: 48 }, 58, 68)).toEqual({ x: 5, y: 7 });
-    // Outside the canvas rect returns null (both above/left and below/right).
-    expect(cellAtPoint({ canvas, camera: { x: 0, y: 0 }, cellSize: 48 }, 5, 500)).toBeNull();
-    expect(cellAtPoint({ canvas, camera: { x: 0, y: 0 }, cellSize: 48 }, 300, 30)).toBeNull();
+    // No viewTransform → null. Legacy `camera` option is ignored (signature is
+    // {canvas, cellSize, viewTransform}); callers must always supply viewTransform.
+    expect(cellAtPoint({ canvas, cellSize: 48 }, 58, 68)).toBeNull();
+    expect(cellAtPoint({ canvas, cellSize: 48, viewTransform: { scale: 0, dx: 0, dy: 0 } }, 58, 68)).toBeNull();
+    // Outside the canvas rect returns null even when a viewTransform is provided.
+    expect(cellAtPoint({ canvas, cellSize: 48, viewTransform: { scale: 1, dx: 0, dy: 0 } }, 5, 500)).toBeNull();
+    expect(cellAtPoint({ canvas, cellSize: 48, viewTransform: { scale: 1, dx: 0, dy: 0 } }, 300, 30)).toBeNull();
   });
 
-  test('calculates bounded camera and writes accent only through CSS custom property', () => {
+  test('writes accent only through CSS custom property; retired camera exports are gone', async () => {
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
 
-    expect(calculateCombatCamera({ width: 20, height: 32, active: { x: 19, y: 31 } })).toEqual({ x: 12, y: 16, w: 8, h: 16 });
-    expect(playfield.autoPan({ width: 20, height: 32, active: { x: 10, y: 20 }, selected: { x: 10, y: 28 }, consoleExpanded: true })).toEqual({ x: 6, y: 18, w: 8, h: 12 });
+    // Legacy `calculateCombatCamera` and `autoPan` exports were retired with the cell-window camera.
+    const module = await import('../../src/ui/playfield.js');
+    expect(module.calculateCombatCamera).toBeUndefined();
+    expect(playfield.autoPan).toBeUndefined();
+    expect(playfield.getCamera).toBeUndefined();
+
     expect(playfield.setAccent({ accent: '#123abc' })).toBe(true);
     expect(document.documentElement.style.properties['--accent']).toBe('#123abc');
     expect(playfield.setAccent('not-a-color')).toBe(false);
