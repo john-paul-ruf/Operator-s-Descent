@@ -1334,3 +1334,28 @@ Input surface (d-pad button / keyboard arrow / WASD / non-MOVE pane) → console
 - SESSION-06 (creation screen) consumes `describeItemStats` verbatim through
   the same `{ equipmentData, affixesData }` shape when it filters class-gated
   equipment options.
+
+<!-- clarity-and-fit SESSION-04 -->
+
+### M101 (Wide CSS) — grid-track contract shift
+
+The wide-shell three-region grid template changes so the console-dock column absorbs surplus viewport width instead of pinning to a fixed width. New base template:
+
+```
+grid-template-columns:
+  minmax(280px, var(--wide-left-w, 280px))
+  minmax(320px, calc(100vh * 9 / 16))
+  minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
+```
+
+`justify-content: center` on `.wide-shell` centers the track group symmetrically when no track is `1fr` (i.e. any `data-pane-right="collapsed"` variant); with `1fr` in play the grid always fills the viewport-right edge (no dead gutter). The `data-pane-left="collapsed"` variant keeps `1fr` on the third column; the `data-pane-right="collapsed"` and both-collapsed variants use fixed 96px rails and rely on `justify-content: center`.
+
+Playfield middle track stays aspect-locked at `calc(100vh * 9 / 16)` (Custom Rule 8 — descent premise is vertical).
+
+### M100 (Layout Controller) — CSS-variable semantics shift (JS unchanged)
+
+`--wide-left-w` unchanged: fixed telemetry-column width (280–480 px, default 280).
+
+`--wide-right-w` — semantics widen from "console-column fixed width" to "console-column **user-chosen minimum share**" (still 360–640 px, default 360). The console column always grows past this floor to fill surplus width; the var only guarantees the dock cannot render narrower than the drag/keyboard state records. `attachWidePanes` continues to write both vars unchanged (drag, keyboard, double-click reset, persistence, and bounds pins all preserved) — no JS change was required, only the CSS grid template it feeds.
+
+Helper var introduced in `.wide-shell`: `--wide-middle-w` computes the actual rendered middle-track width `min(calc(100vh * 9 / 16), max(320px, calc(100vw - <effective-left> - max(360px, --wide-right-w))))`. The right resize handle repositions to `right: calc(100vw - --wide-left-effective - --wide-middle-w - 4px)` so it tracks the actual playfield/console-dock boundary, which is no longer `--wide-right-w` from the viewport-right.
