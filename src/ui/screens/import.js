@@ -116,10 +116,23 @@ export function mount(container, params = {}) {
 
   const guide = createPanel({ title: '◈ HOW IT WORKS' });
   guide.classList.add('s-3');
-  const guideText = document.createElement('p');
-  guideText.className = 'micro';
-  guideText.textContent = 'FULL STATE · CHECKSUM VERIFIED · VERSION CHECKED · BIT-FOR-BIT RESTORE';
-  guide.appendChild(guideText);
+  const guideList = document.createElement('ul');
+  guideList.className = 'caption';
+  guideList.dataset.testid = 'import-how-it-works';
+  guideList.style.margin = '0';
+  guideList.style.paddingLeft = '18px';
+  const guidePoints = [
+    'Full state: party, HP, CHARGE, inventory, position, depth, flags, corruption, Echo queue, RNG cursor',
+    'Includes a checksum for integrity validation',
+    'Includes a version identifier for compatibility',
+    'Reconstructs bit-for-bit on any machine'
+  ];
+  for (const point of guidePoints) {
+    const item = document.createElement('li');
+    item.textContent = point;
+    guideList.appendChild(item);
+  }
+  guide.appendChild(guideList);
 
   function track(element) {
     cleanups.push(() => element.cleanup?.());
