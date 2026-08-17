@@ -12,6 +12,7 @@ import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalAct
 import { createStandardEncounter, completeEncounter } from '../../rules/encounters.js';
 import { distanceCells, getEdgeCoverBonus, isFlanked } from '../../rules/combat-geometry.js';
 import { evaluateRange } from '../../rules/equipment.js';
+import { createViewportCamera, attachViewportGestures, sizeCanvasToContainer } from '../viewport.js';
 
 const ACTION_PHASES = {
   attack: 'choose-target',
@@ -25,7 +26,6 @@ const ACTION_PHASES = {
 const DEFAULT_WINDOW = { originX: 0, originY: 0, width: 8, height: 16, cells: Array.from({ length: 16 }, () => Array(8).fill(1)) };
 const UNARMED = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 0 };
 const DIRECTION_DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
-const DRAG_THRESHOLD_PX = 6;
 
 function clear(element) {
   if (typeof element.replaceChildren === 'function') element.replaceChildren();
@@ -232,7 +232,8 @@ export function mount(container, params = {}) {
   let mounted = true;
   let terminalDispatched = false;
   let logCursor = combatState.log.length;
-  let manualCamera = null;
+  let userAdjusted = false;
+  let currentDpr = 1;
   const selection = {
     phase: 'choose-action',
     actionType: null,
@@ -304,6 +305,8 @@ export function mount(container, params = {}) {
   canvas.className = 'playfield-canvas combat-grid-canvas';
   canvas.width = 384;
   canvas.height = 768;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
   canvas.dataset.testid = 'combat-canvas';
 
   playfieldBody.appendChild(canvas);
@@ -354,19 +357,45 @@ export function mount(container, params = {}) {
   }
   consoleController.setMode('combat');
 
-  // Pointer wiring on the playfield container (canvas itself is pointer-events: none). A press
-  // that moves > DRAG_THRESHOLD_PX becomes a drag → manual camera pan (clamped to the vertical
-  // overflow when the portrait console is expanded); anything shorter is a tap → cell hit-test.
-  let pointerState = null;
-  playfieldBody.addEventListener('pointerdown', onPointerDown);
-  playfieldBody.addEventListener('pointermove', onPointerMove);
-  playfieldBody.addEventListener('pointerup', onPointerUp);
-  playfieldBody.addEventListener('pointercancel', onPointerCancel);
+  // Canvas-space camera (M104) owns pan/zoom and hit-tests. The gesture controller emits
+  // drag-pans (>= DRAG_THRESHOLD_PX) that set `userAdjusted` so the turn-change auto-center
+  // won't fight the user; a release inside the threshold fires `onCanvasTap`.
+  const worldW = (combatState.window?.width || COMBAT_GRID_W) * COMBAT_CELL_SIZE;
+  const worldH = (combatState.window?.height || COMBAT_GRID_H) * COMBAT_CELL_SIZE;
+  const camera = createViewportCamera({ worldW, worldH });
+  currentDpr = syncCameraViewport();
+  camera.fit();
+
+  const gestureCleanup = attachViewportGestures(playfieldBody, camera, {
+    onChange: () => { userAdjusted = true; renderAll(); },
+    onTap: onCanvasTap
+  });
+
+  let resizeObserverInstance = null;
+  if (typeof globalThis.ResizeObserver === 'function') {
+    resizeObserverInstance = new globalThis.ResizeObserver(() => {
+      currentDpr = syncCameraViewport();
+      renderAll();
+    });
+    resizeObserverInstance.observe(playfieldBody);
+  }
 
   resolveToPartyTurn();
   syncSelectionActor();
   renderAll();
   dispatchTerminal();
+
+  function syncCameraViewport() {
+    const rect = playfieldBody.getBoundingClientRect?.();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      const size = sizeCanvasToContainer(canvas, playfieldBody);
+      camera.setViewport(size.w, size.h);
+      return size.dpr;
+    }
+    // Fallback (test envs without layout): keep the initial backing store, treat it as CSS px.
+    camera.setViewport(canvas.width, canvas.height);
+    return 1;
+  }
 
   function legalActions() {
     const actor = getActiveActor(combatState);
@@ -404,7 +433,11 @@ export function mount(container, params = {}) {
     selection.itemId = null;
     selection.error = null;
     selection.notice = actor?.side === 'enemy' ? 'ENEMY TURN RESOLVING.' : null;
-    manualCamera = null; // turn change → auto-centering resumes
+    // Turn change → auto-centering resumes: forget any within-turn user pan and re-center.
+    userAdjusted = false;
+    if (actor?.position) {
+      camera.centerOn((actor.position.x + 0.5) * COMBAT_CELL_SIZE, (actor.position.y + 0.5) * COMBAT_CELL_SIZE);
+    }
   }
 
   function chooseAction(type) {
@@ -788,70 +821,56 @@ export function mount(container, params = {}) {
       validTargets,
       rangeCells,
       coverCells: selectedKey && preview?.coverBonus > 0 ? new Set([selectedKey]) : new Set(),
-      pathCells,
-      consoleExpanded: consoleController.expanded,
-      ...(manualCamera ? { camera: manualCamera } : {})
+      pathCells
     };
   }
 
-  function baseCameraForPan() {
-    if (manualCamera) return manualCamera;
-    const cam = playfield.getCamera();
-    return { x: cam.x, y: cam.y, w: cam.w || COMBAT_GRID_W, h: cam.h || COMBAT_GRID_H };
+  function pathEndpointKey() {
+    const actor = getActiveActor(combatState);
+    if (!actor || !(selection.movePath?.length)) return null;
+    const end = pathEndpoint(actor);
+    return `${end.x},${end.y}`;
   }
 
-  function onPointerDown(event) {
+  function onCanvasTap({ clientX, clientY }) {
     if (!mounted) return;
-    if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return;
-    pointerState = { startX: event.clientX, startY: event.clientY, dragging: false, startCamera: baseCameraForPan() };
-  }
-
-  function onPointerMove(event) {
-    if (!pointerState) return;
-    if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return;
-    const dx = event.clientX - pointerState.startX;
-    const dy = event.clientY - pointerState.startY;
-    if (!pointerState.dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-    pointerState.dragging = true;
-    const rect = canvas.getBoundingClientRect?.();
-    const scaleY = rect && rect.height ? canvas.height / rect.height : 1;
-    const cellsDy = (dy * scaleY) / COMBAT_CELL_SIZE;
-    const visibleRows = pointerState.startCamera.h || (consoleController.expanded ? 12 : COMBAT_GRID_H);
-    const maxY = Math.max(0, (combatState.window?.height || COMBAT_GRID_H) - visibleRows);
-    const nextY = Math.max(0, Math.min(maxY, pointerState.startCamera.y - cellsDy));
-    manualCamera = { x: pointerState.startCamera.x, y: nextY, w: pointerState.startCamera.w || COMBAT_GRID_W, h: visibleRows };
-    renderAll();
-  }
-
-  function onPointerUp(event) {
-    if (!pointerState) return;
-    const wasDragging = pointerState.dragging;
-    const startX = pointerState.startX;
-    const startY = pointerState.startY;
-    pointerState = null;
-    if (wasDragging) return;
-    const clientX = typeof event.clientX === 'number' ? event.clientX : startX;
-    const clientY = typeof event.clientY === 'number' ? event.clientY : startY;
-    const cameraForHit = manualCamera || playfield.getCamera();
-    const cell = cellAtPoint({ canvas, camera: cameraForHit, cellSize: COMBAT_CELL_SIZE }, clientX, clientY);
+    const cell = cellAtPoint({ canvas, cellSize: COMBAT_CELL_SIZE, viewTransform: camera.viewTransform(currentDpr) }, clientX, clientY);
     if (!cell) return;
-    if (selection.actionType === 'move' && (selection.phase === 'choose-path' || selection.phase === 'confirm')) {
-      selectDestination(cell);
-      return;
-    }
     if (['attack', 'cast', 'overclock', 'item'].includes(selection.actionType) && ['choose-target', 'confirm'].includes(selection.phase)) {
       const hit = targetsForSelection().find((target) => target.position && target.position.x === cell.x && target.position.y === cell.y);
       if (hit) selectTarget(hit.id);
+      return;
     }
-  }
-
-  function onPointerCancel() {
-    pointerState = null;
+    if (selection.actionType === 'move' && (selection.phase === 'choose-path' || selection.phase === 'confirm')) {
+      const endpointKey = pathEndpointKey();
+      const tappedKey = `${cell.x},${cell.y}`;
+      if (endpointKey && tappedKey === endpointKey && canConfirm()) {
+        confirmSelection();
+        return;
+      }
+      if (getMoveRange().has(tappedKey) && selectDestination(cell)) {
+        selection.notice = 'TAP DESTINATION AGAIN TO CONFIRM.';
+        renderAll();
+      }
+      return;
+    }
+    if (selection.phase === 'choose-action') {
+      const legal = legalActions().actions || [];
+      if (!legal.includes('move')) return;
+      if (!getMoveRange().has(`${cell.x},${cell.y}`)) return;
+      if (chooseAction('move') && selectDestination(cell)) {
+        selection.notice = 'TAP DESTINATION AGAIN TO CONFIRM.';
+        renderAll();
+      }
+    }
   }
 
   function renderAll() {
     if (!mounted) return;
-    playfield.renderCombat(combatState, combatLattice, overlayOptions());
+    playfield.renderCombat(combatState, combatLattice, {
+      ...overlayOptions(),
+      viewTransform: camera.viewTransform(currentDpr)
+    });
     if (!isWide) {
       const nextStatusBar = createStatusBar(runState, combatState);
       nextStatusBar.classList.add('panel', 'combat-status', 'in-run-status');
@@ -868,6 +887,8 @@ export function mount(container, params = {}) {
     unmount() {
       if (!mounted) return;
       mounted = false;
+      gestureCleanup?.();
+      resizeObserverInstance?.disconnect?.();
       widePanesCleanup?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
