@@ -14,13 +14,18 @@ const PAGES = [
   },
   {
     title: 'MOVE Mode',
-    body: 'MOVE owns exploration input. Use the directional controls or movement keys for eight-way steps. Hostiles always stop movement; container, descent, and damage stops are shown as console decisions.',
+    body: 'MOVE owns exploration input. Use the directional controls or movement keys for eight-way steps — or tap the map to walk to a revealed cell. Hostiles always stop movement; container, descent, and damage stops are shown as console decisions.',
     tokens: ['NW', 'N', 'NE', 'W', 'WAIT', 'E', 'SW', 'S', 'SE'],
     illustration: 'dpad'
   },
   {
+    title: 'The Map',
+    body: 'The map is live. Drag to pan; pinch or scroll to zoom (fit the whole floor out to a 4x close-up). In exploration, tap a revealed, walkable cell to walk there — auto-stops (hostile, container, descent, damage) still fire. In combat, tap a cell to preview the route, tap it again to commit. The console still owns every action — attack, cast, item, descend, wait.',
+    tokens: ['DRAG', 'PINCH', 'TAP']
+  },
+  {
     title: 'COMBAT Mode',
-    body: 'COMBAT presents one actor turn at a time: choose an action, choose a target or path, then confirm. Turns follow initiative, AP, movement, reactions, and d20 outcomes.',
+    body: 'COMBAT presents one actor turn at a time: choose an action, choose a target or path, then confirm. Cycle targets with Tab or arrows and press Enter; on the map, tap-to-route then tap the same cell to commit. Turns follow initiative, AP, movement, reactions, and d20 outcomes.',
     tokens: ['ACTION', 'TARGET', 'CONFIRM', 'ROLL', 'END'],
     illustration: 'grid'
   },
