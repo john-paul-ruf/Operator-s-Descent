@@ -1500,3 +1500,33 @@ if `worldSize * scale <= viewSize` the axis letterboxes and centers
   `./src/ui/status-strip.js`).
 - `CACHE_VERSION = '2026-08-17-map-pan-zoom-v1'` — single bump covers the whole
   wave (SESSION-02/03/04 ship in the same release).
+
+<!-- map-pan-zoom SESSION-04 -->
+### M101 — Wide CSS: middle track absorbs surplus (map-pan-zoom SESSION-04)
+
+Wide-shell grid template rewritten in `styles/wide.css` per the Custom Rule 8 amendment
+(FORGE-CONFIG, 2026-08-17). The map docks and fills the entire middle; the descent premise
+now lives in the CONTENT (the 20×32 world behind the M104 pan/zoom viewport camera), not in
+column geometry.
+
+Grid templates (each of the four pane-state combinations):
+
+- default (both open): `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) max(360px, var(--wide-right-w, 360px))`
+- `[data-pane-left="collapsed"]`: `48px minmax(320px, 1fr) max(360px, var(--wide-right-w, 360px))`
+- `[data-pane-right="collapsed"]`: `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) 96px`
+- both collapsed: `48px minmax(320px, 1fr) 96px`
+
+Contract deltas:
+
+- Middle (playfield) track carries 1fr in every state and absorbs surplus viewport width.
+- Console-dock column is fixed at `max(360px, --wide-right-w)`; `--wide-right-w` is again
+  the dock's user-chosen width (not a floor). Layout controller drag semantics unchanged
+  (bounds 360–640).
+- `--wide-middle-w` and `--wide-left-effective` custom properties are retired.
+- Right resize handle re-anchored: `right: calc(max(360px, var(--wide-right-w, 360px)) - 4px)`.
+- `.wide-playfield-inner` uncapped: `width: 100%; flex: 1; overflow: hidden` (the
+  `max-width: calc(100vh * 9 / 16)` and `align-self: center` were removed). In every layout
+  class the canvas fills its playfield container.
+- Rails stay flush at every pane combination; no `justify-content: center` on the shell.
+- Bounds guarantee: middle ≥ 320px; console dock ≥ 360px (open) or exactly 96px (collapsed);
+  telemetry ≥ 280px (open) or exactly 48px (collapsed).
