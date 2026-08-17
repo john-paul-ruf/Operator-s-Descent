@@ -197,7 +197,16 @@ def create_font():
         signatures.add(sig)
         glyphs[glyph_name(recipe['codepoint'])] = glyph
     fb.setupGlyf(glyphs)
-    fb.setupHorizontalMetrics({name: (ADVANCE, 0) for name in glyph_order})
+    metrics = {}
+    for name in glyph_order:
+        g = glyphs[name]
+        coords = getattr(g, 'coordinates', None)
+        if coords and len(coords) > 0:
+            x_min = min(p[0] for p in coords)
+        else:
+            x_min = 0
+        metrics[name] = (ADVANCE, x_min)
+    fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=ASCENT, descent=DESCENT)
     fb.setupOS2(sTypoAscender=ASCENT, sTypoDescender=DESCENT, usWinAscent=ASCENT, usWinDescent=abs(DESCENT), achVendID='GFWK')
     fb.setupNameTable({
