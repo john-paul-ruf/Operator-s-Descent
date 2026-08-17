@@ -1578,3 +1578,51 @@ Center button:
 - `undo_stage` / `clear_stage` are no longer recognized (fall through to the null return).
 
 Wide-layout `autostop-row` block, `HOSTILE STOP LOCKED`, discovery/damage toggles all unchanged.
+
+<!-- map-pan-zoom SESSION-03 -->
+## M71 `src/ui/screens/combat.js`
+
+Rewired combat pan/zoom + hit-test on the M104 viewport engine and added tap-to-confirm movement. Public mount signature unchanged.
+
+**Camera & gestures:**
+- Owns a `createViewportCamera({ worldW, worldH })` (world = window.width×COMBAT_CELL_SIZE by window.height×COMBAT_CELL_SIZE) and wires `attachViewportGestures(playfieldBody, camera, { onChange, onTap })`.
+- `ResizeObserver` on the playfield body drives `sizeCanvasToContainer(canvas, playfieldBody)` → `camera.setViewport`. First mount also runs the sizing pass once; if the body has no measurable rect (unit-test path with no layout), the initial 384×768 backing store is treated as CSS px so the camera has a viewport for its first `.fit()` + `.centerOn(...)` call.
+- Deleted legacy pointer state (`pointerState`, `manualCamera`, `baseCameraForPan`, `onPointerDown/Move/Up/Cancel`, `DRAG_THRESHOLD_PX` constant).
+- Auto-center: `syncSelectionActor` clears `userAdjusted` and calls `camera.centerOn((pos.x+.5)*COMBAT_CELL_SIZE, (pos.y+.5)*COMBAT_CELL_SIZE)` when the active actor changes. Any `onChange` from the gesture controller sets `userAdjusted = true` so a within-turn user pan is not fought.
+- Tap hit-test: `cellAtPoint({ canvas, cellSize: COMBAT_CELL_SIZE, viewTransform: camera.viewTransform(currentDpr) }, clientX, clientY)`.
+
+**Two-tap confirm (`onCanvasTap`):**
+| Phase | Tap | Behavior |
+|-------|-----|----------|
+| `attack` / `cast` / `overclock` / `item` in `choose-target`/`confirm` | on a valid target's cell | `selectTarget(hit.id)` |
+| `move` in `choose-path`/`confirm`, tap = current `pathEndpointKey()` and `canConfirm()` | second tap on endpoint | `confirmSelection()` (executes the routed path) |
+| `move` in `choose-path`/`confirm`, tap in `getMoveRange()` | different reachable cell | `selectDestination(cell)` + notice `'TAP DESTINATION AGAIN TO CONFIRM.'` |
+| `choose-action`, `move` legal, tap in `getMoveRange()` | any reachable cell | `chooseAction('move')` → `selectDestination(cell)` → same confirm-hint notice |
+| any other tap | — | no-op |
+
+New helper: `pathEndpointKey()` (returns `null` if no path staged). `canConfirm()` was widened: while `actionType === 'move'`, a non-empty `movePath` is enough to confirm — the transition through `phase === 'confirm'` is no longer required, so `confirmSelection` also self-promotes when called from the second tap while still in `choose-path`.
+
+## M58 `src/ui/playfield.js`
+
+Legacy cell-window combat camera retired. The playfield now renders the full combat world in world-pixels through a caller-supplied `viewTransform`; hit-testing inverts that transform.
+
+**Removed (public surface delta vs pre-session):**
+- Named export `calculateCombatCamera(...)`
+- Factory-returned `autoPan(bounds)`
+- Factory-returned `getCamera()`
+- Module-level `camera` state var
+- `renderCombat` options: `camera`, `zoomOrigin`, `consoleExpanded`, and the `x`/`y` fallback that promoted a raw `{x,y}` options object into a zoom origin
+- `cellAtPoint`'s legacy `camera` parameter (signature is now `{ canvas, cellSize, viewTransform }` — returns `null` when `viewTransform` is absent)
+- Internal helper `bounded()` (only referenced by the retired camera math)
+
+**Added (present since ckpt 2):**
+- `renderCombat` option `confirmCell` — cell-key `'x,y'` at which `drawOverlay` paints `drawFrame(ctx, px, py, PATH_COLOR, 'GO', 4)`. Consumed by combat.js when a routed move path is staged.
+
+**Behavioral changes:**
+- `renderCombatImpl` always draws every cell in `[0..width) × [0..height)` at world-pixel coordinates. When `options.viewTransform` is present the ctx is set to `(scale, 0, 0, scale, dx, dy)` before drawing; otherwise the identity transform is used (still full-world coverage, no camera subtraction).
+- Actor rendering no longer culls actors outside a camera window — every combatant with a position is drawn at absolute world coords; the camera decides visibility.
+- Canvas aria-label unified: `Combat map, window WxH, round R.` (previously two variants, one per code path).
+
+## Overlay contract (M58 → combat.js)
+
+Combat screen's `overlayOptions()` now returns `confirmCell = ${pathEndpoint(actor).x},${pathEndpoint(actor).y}` whenever `actionType === 'move'` and the path is non-empty (`null` otherwise). Renders the GO frame at the routed destination during move preview + confirm.
