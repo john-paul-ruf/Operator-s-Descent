@@ -13,6 +13,73 @@ const DIRECTIONS = {
 
 const DEFAULT_LOS_RADIUS = 8;
 
+const DIRECTION_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+const DEFAULT_PATH_MAX_STEPS = 64;
+
+export function findExplorationPath(lattice, fogState, from, to, options = {}) {
+  if (!lattice || !fogState || !from || !to) return null;
+  if (from.x === to.x && from.y === to.y) return null;
+  const w = lattice.getWidth();
+  const h = lattice.getHeight();
+  if (to.x < 0 || to.y < 0 || to.x >= w || to.y >= h) return null;
+  if (!lattice.isWalkable(to.x, to.y)) return null;
+  if (fogState[to.y * w + to.x] === 0) return null;
+  const maxSteps = Number.isFinite(options.maxSteps) && options.maxSteps > 0
+    ? Math.floor(options.maxSteps)
+    : DEFAULT_PATH_MAX_STEPS;
+
+  const startKey = `${from.x},${from.y}`;
+  const targetKey = `${to.x},${to.y}`;
+  const parent = new Map();
+  parent.set(startKey, null);
+  const distance = new Map();
+  distance.set(startKey, 0);
+  const queue = [{ x: from.x, y: from.y }];
+  let head = 0;
+  let found = false;
+
+  while (head < queue.length) {
+    const current = queue[head++];
+    if (current.x === to.x && current.y === to.y) { found = true; break; }
+    const dist = distance.get(`${current.x},${current.y}`);
+    if (dist >= maxSteps) continue;
+    for (const direction of DIRECTION_ORDER) {
+      const delta = DIRECTIONS[direction];
+      const nx = current.x + delta.dx;
+      const ny = current.y + delta.dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      if (!lattice.isWalkable(nx, ny)) continue;
+      if (fogState[ny * w + nx] === 0) continue;
+      if (delta.dx !== 0 && delta.dy !== 0) {
+        const hOpen = lattice.isWalkable(current.x + delta.dx, current.y);
+        const vOpen = lattice.isWalkable(current.x, current.y + delta.dy);
+        if (!hOpen && !vOpen) continue;
+      }
+      const nextKey = `${nx},${ny}`;
+      if (parent.has(nextKey)) continue;
+      parent.set(nextKey, { key: `${current.x},${current.y}`, direction });
+      distance.set(nextKey, dist + 1);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  if (!found) return null;
+  const path = [];
+  const cells = [];
+  let cursor = targetKey;
+  while (cursor && cursor !== startKey) {
+    const entry = parent.get(cursor);
+    if (!entry) return null;
+    path.unshift(entry.direction);
+    const [cx, cy] = cursor.split(',').map(Number);
+    cells.unshift({ x: cx, y: cy });
+    cursor = entry.key;
+  }
+  if (path.length === 0) return null;
+  if (path.length > maxSteps) return null;
+  return { path, cells };
+}
+
 export function moveParty(lattice, fogState, direction, rngCursor, runState, options = {}) {
   const pos = lattice.getPartyPosition();
   const dir = DIRECTIONS[direction];

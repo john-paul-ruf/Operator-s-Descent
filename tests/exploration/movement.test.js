@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveParty, tickDangerClock, resetDangerClock, signalMovementDamage } from '../../src/exploration/movement.js';
+import { findExplorationPath, moveParty, tickDangerClock, resetDangerClock, signalMovementDamage } from '../../src/exploration/movement.js';
 import { createLattice } from '../../src/exploration/lattice.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
@@ -584,6 +584,94 @@ describe('moveParty — combatActive option', () => {
     const result = moveParty(lat, fog, 'e', cursor, rs, { combatActive: true });
     expect(result.danger.pendingHunt).toBe(true);
     expect(result.interruptType).not.toBe('hunt');
+  });
+});
+
+describe('findExplorationPath', () => {
+  const DIRECTION_SET = new Set(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']);
+  function revealedFog(w = 20, h = 32) {
+    return new Uint8Array(w * h).fill(2);
+  }
+
+  it('straight run east returns a shortest path (Chebyshev-length 5) ending at the target', () => {
+    const floor = makeFloor();
+    const lat = createLattice(floor);
+    const fog = revealedFog();
+    const result = findExplorationPath(lat, fog, { x: 10, y: 15 }, { x: 15, y: 15 });
+    expect(result).not.toBeNull();
+    expect(result.path).toHaveLength(5);
+    expect(result.cells).toHaveLength(5);
+    expect(result.cells.at(-1)).toEqual({ x: 15, y: 15 });
+    for (const dir of result.path) expect(DIRECTION_SET.has(dir)).toBe(true);
+  });
+
+  it('routes around a wall column between origin and target', () => {
+    // Wall spans x=12 for y=0..27, leaving the only crossing at y ≥ 28.
+    const grid = makeGrid(20, 32, 1);
+    for (let y = 0; y < 28; y++) grid[y][12] = 0;
+    const lat = createLattice({ cells: grid });
+    const fog = revealedFog();
+    const result = findExplorationPath(lat, fog, { x: 10, y: 15 }, { x: 15, y: 15 });
+    expect(result).not.toBeNull();
+    expect(result.cells.at(-1)).toEqual({ x: 15, y: 15 });
+    // BFS must go around the barrier, so path length ≫ Chebyshev distance (5).
+    expect(result.path.length).toBeGreaterThan(5);
+    // No path cell may be inside the walled column region.
+    for (const cell of result.cells) {
+      const inWall = cell.x === 12 && cell.y < 28;
+      expect(inWall).toBe(false);
+    }
+    // The detour must dip below the wall (y >= 28).
+    expect(result.cells.some((cell) => cell.y >= 28)).toBe(true);
+  });
+
+  it('closed-corner diagonal detours instead of stepping directly', () => {
+    const grid = makeGrid(10, 10, 1);
+    grid[5][6] = 0;
+    grid[4][5] = 0;
+    const lat = createLattice({ cells: grid });
+    const fog = new Uint8Array(100).fill(2);
+    const result = findExplorationPath(lat, fog, { x: 5, y: 5 }, { x: 6, y: 4 });
+    expect(result).not.toBeNull();
+    // The direct NE step (5,5)→(6,4) is forbidden — the first move must land somewhere else.
+    expect(result.cells[0]).not.toEqual({ x: 6, y: 4 });
+    expect(result.cells.at(-1)).toEqual({ x: 6, y: 4 });
+    expect(result.path.length).toBeGreaterThan(1);
+  });
+
+  it('target on an unrevealed cell → null', () => {
+    const floor = makeFloor();
+    const lat = createLattice(floor);
+    const fog = new Uint8Array(640);
+    fog[15 * 20 + 10] = 2;
+    fog[15 * 20 + 11] = 2;
+    const result = findExplorationPath(lat, fog, { x: 10, y: 15 }, { x: 15, y: 15 });
+    expect(result).toBeNull();
+  });
+
+  it('target on a wall → null', () => {
+    const grid = makeGrid(20, 32, 1);
+    grid[15][11] = 0;
+    const lat = createLattice({ cells: grid });
+    const fog = revealedFog();
+    const result = findExplorationPath(lat, fog, { x: 10, y: 15 }, { x: 11, y: 15 });
+    expect(result).toBeNull();
+  });
+
+  it('target beyond maxSteps → null', () => {
+    const floor = makeFloor();
+    const lat = createLattice(floor);
+    const fog = revealedFog();
+    const result = findExplorationPath(lat, fog, { x: 1, y: 1 }, { x: 18, y: 30 }, { maxSteps: 3 });
+    expect(result).toBeNull();
+  });
+
+  it('from === to → null', () => {
+    const floor = makeFloor();
+    const lat = createLattice(floor);
+    const fog = revealedFog();
+    const result = findExplorationPath(lat, fog, { x: 10, y: 15 }, { x: 10, y: 15 });
+    expect(result).toBeNull();
   });
 });
 
