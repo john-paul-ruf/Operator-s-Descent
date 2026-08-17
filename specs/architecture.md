@@ -1211,3 +1211,28 @@ No new errors introduced (0 errors / 7 warnings / 2 info — baseline unchanged)
 - `tests/e2e/wide-panes.spec.js` — 3 acceptance tests in the `chromium-portrait` project with a per-test widened viewport (1440×900): drag-and-persist, collapse-and-persist, keyboard-does-not-move-party. Other projects skip.
 
 No `service-worker.js` manifest change (M100 lives in an existing file). No new M-ID.
+
+<!-- clarity-and-fit SESSION-02 -->
+
+### M103 Scroll Memory — restore timing contract (clarity-and-fit SESSION-02)
+
+`restoreScroll(element, key)` now applies the stored offset **synchronously**
+in the same task as the call. The prior double-`requestAnimationFrame` schedule
+painted one–two frames at `scrollTop = 0` after every pane re-render, which
+manifested as a top-flash on every console mode click. Because
+`renderCurrentMode()` (M60) mounts children before invoking `restoreScroll`,
+the element is connected and its `scrollHeight`/`clientHeight` are measurable
+in the same task — setting `scrollTop` immediately means no frame ever paints
+at the top.
+
+For content whose height settles late (async layout, image reflow, deferred
+child rendering), `restoreScroll` schedules **one** `requestAnimationFrame`
+retry — but only when the synchronous clamp produced an actual value less than
+the stored offset (`element.scrollTop < stored`), i.e. the extent was too
+short at call time. The retry re-runs the same clamp with the updated
+`scrollHeight`. Detached elements still bail from both the sync apply and the
+retry.
+
+Public API is unchanged: `captureScroll`, `restoreScroll`, `preserveScroll`,
+`clearScrollMemory` keep their exact signatures; the 64-entry LRU is
+untouched. M60/M69/M72 call sites required no edits.
