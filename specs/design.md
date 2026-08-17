@@ -26,15 +26,16 @@ The base is neon-on-violet, ported from Universal Operator's Tarot. A single CSS
 
 #### Playfield Palette
 
-Canvas-side lattice palette; not tokenized in `:root` because the playfield renders on `<canvas>` in production, driven by exported constants in `src/ui/playfield.js` (FLOOR_COLOR, FLOOR_DIM_COLOR, WALL_COLOR, HIDDEN_COLOR, GRID_COLOR, WALL_LINE_COLOR, TICK_DIM_ALPHA). Owner directive (clarity-and-fit 2026-08-16) — the surface reads as a near-black vector display: cyan boundary lines, near-black walkable interior with light-grey `-|-` corner ticks at cell intersections, pure black everywhere else.
+Canvas-side lattice palette; not tokenized in `:root` because the playfield renders on `<canvas>` in production, driven by exported constants in `src/ui/playfield.js` (FLOOR_COLOR, FLOOR_DIM_COLOR, WALL_COLOR, HIDDEN_COLOR, GRID_COLOR, WALL_LINE_COLOR, TICK_DIM_ALPHA, WALL_PULSE_PERIOD_MS, WALL_PULSE_FPS, WALL_GLOW_BLUR, WALL_GLOW_ALPHA, `wallThickness(size)`). Owner directive (clarity-and-fit 2026-08-16, amended by walls-npc-docks 2026-08-17) — the surface reads as a near-black vector display: thick pulsing cyan walls painted on the wall side of the traversable edge, near-black walkable interior with light-grey `-|-` corner ticks strictly inside walkable space, pure black everywhere else.
 
 | Surface | Value | Notes |
 |---------|-------|-------|
-| Wall boundary line | #7ec8e3 | The design-system cyan. Solid, 2px, drawn inside the traversable cell edge (inset 1px). Fixed — does NOT re-tint per floor theme; party token and UI accent still do. |
+| Wall boundary line | #7ec8e3 | The design-system cyan. Thickness = `max(3, round(size/8))`px (3px @ 24px exploration, 6px @ 48px combat), drawn OUTSIDE the traversable square along the wall side of each shared edge, with 4×`t`×`t` corner joints so adjacent walls read as continuous runs. Pulses via a 2.4s sine on `shadowBlur` [4→12] and `globalAlpha` [0.7→1] (WALL_PULSE_PERIOD_MS / WALL_GLOW_BLUR / WALL_GLOW_ALPHA), driven by a cached-args rAF loop in `createPlayfield` throttled to ~30 fps (WALL_PULSE_FPS). Fixed hue — does NOT re-tint per floor theme; party token and UI accent still do. Owner directive (walls-npc-docks 2026-08-17). |
+| Reduced-motion wall glow | static `g = 0.7` (blur ≈ 9.6, alpha ≈ 0.91) | When `loadSettings().reducedMotion === 'reduce'` — or `'system'` with `prefers-reduced-motion: reduce` — screens call `playfield.setPulse(false)` and the rAF loop never schedules; walls hold at the midpoint glow. Owner directive (walls-npc-docks 2026-08-17). |
 | Traversable fill (OPEN / CONTAINER / DESCENT), currently visible (fog 2) | #101010 | Near-black — the walkable field. Owner directive: "almost black gray". |
 | Traversable fill, seen-not-visible (fog 1) | #0a0a0a | Slightly darker than #101010 so fog-of-war reads without a superimposed overlay pass. |
-| Intersection ticks (`-|-`) | #3a3a3a, arm ≈ ⌈size/6⌉px, 1px stroke | Drawn ONLY at interior cell corners touched by ≥1 revealed traversable cell. No full-cell gridlines. |
-| Intersection ticks (dim) | #3a3a3a at 45% globalAlpha (TICK_DIM_ALPHA) | Ticks whose 4 touching cells are all fog-1 dim; keeps the intersection legible without stealing focus from currently-visible geometry. |
+| Intersection ticks (`-|-`) | #3a3a3a, arm ≈ ⌈size/6⌉px, 1px stroke | Drawn ONLY at interior corners whose ALL FOUR touching cells are revealed traversable floor — ticks never poke past a wall boundary. No full-cell gridlines. Owner directive (walls-npc-docks 2026-08-17). |
+| Intersection ticks (dim) | #3a3a3a at 45% globalAlpha (TICK_DIM_ALPHA) | Ticks whose all four touching cells are fog-1 dim; keeps the intersection legible without stealing focus from currently-visible geometry. |
 | Inaccessible surfaces (wall interior, out-of-bounds, unexplored fog) | #000000 | Exact hex per directive; unexplored and unwalkable intentionally read the same, so the cyan boundary is the only geometry signal. |
 | Staged-path preview marker | #d8d8d8 at 55% globalAlpha | 5×5 square centered in each staged cell; the final staged cell adds a 1px inset outline at full opacity (PATH_COLOR). |
 
