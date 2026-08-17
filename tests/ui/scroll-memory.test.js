@@ -124,14 +124,44 @@ describe('scroll-memory', () => {
     expect(detached.scrollTop).toBe(0);
   });
 
-  test('uses requestAnimationFrame when available (double-rAF for layout)', () => {
+  test('applies scrollTop synchronously (no rAF wait needed) when extent is ready', () => {
     const scheduled = [];
     globalThis.requestAnimationFrame = (fn) => { scheduled.push(fn); return scheduled.length; };
     captureScroll(makeElement({ scrollTop: 60 }), 'console:party');
     const target = makeElement({ scrollTop: 0 });
     restoreScroll(target, 'console:party');
-    expect(target.scrollTop).toBe(0);
-    while (scheduled.length) scheduled.shift()();
     expect(target.scrollTop).toBe(60);
+    expect(scheduled.length).toBe(0);
+  });
+
+  test('single-rAF retry re-clamps upward when scrollHeight grows after call', () => {
+    const scheduled = [];
+    globalThis.requestAnimationFrame = (fn) => { scheduled.push(fn); return scheduled.length; };
+    captureScroll(makeElement({ scrollTop: 400 }), 'console:log');
+    // Element reports too-short extent at call time (max = 200 - 100 = 100),
+    // so sync apply clamps to 100 which is < stored 400 → schedules one retry.
+    const target = { scrollTop: 0, scrollHeight: 200, clientHeight: 100, isConnected: true };
+    restoreScroll(target, 'console:log');
+    expect(target.scrollTop).toBe(100);
+    expect(scheduled.length).toBe(1);
+    // Content settles taller before the frame fires.
+    target.scrollHeight = 1200;
+    target.clientHeight = 400;
+    scheduled.shift()();
+    expect(target.scrollTop).toBe(400);
+    expect(scheduled.length).toBe(0);
+  });
+
+  test('single-rAF retry bails when element has detached before the frame fires', () => {
+    const scheduled = [];
+    globalThis.requestAnimationFrame = (fn) => { scheduled.push(fn); return scheduled.length; };
+    captureScroll(makeElement({ scrollTop: 400 }), 'console:log');
+    const target = { scrollTop: 0, scrollHeight: 200, clientHeight: 100, isConnected: true };
+    restoreScroll(target, 'console:log');
+    expect(scheduled.length).toBe(1);
+    target.isConnected = false;
+    const preRetryScrollTop = target.scrollTop;
+    scheduled.shift()();
+    expect(target.scrollTop).toBe(preRetryScrollTop);
   });
 });

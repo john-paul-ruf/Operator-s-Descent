@@ -2,7 +2,7 @@ const offsets = new Map();
 const CAP = 64;
 
 function schedule(fn) {
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(fn));
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fn);
   else fn();
 }
 
@@ -29,12 +29,14 @@ export function restoreScroll(element, key) {
   if (!storeKey || !element) return;
   if (!offsets.has(storeKey)) return;
   const stored = offsets.get(storeKey);
-  schedule(() => {
+  const apply = () => {
     if (!element || element.isConnected === false) return;
     const max = Math.max(0, Number(element.scrollHeight || 0) - Number(element.clientHeight || 0));
     const target = Math.min(stored, Number.isFinite(max) ? max : stored);
     element.scrollTop = target < 0 ? 0 : target;
-  });
+  };
+  apply();
+  if (Number(element.scrollTop) < stored) schedule(apply);
 }
 
 export function preserveScroll(element, key, render) {
