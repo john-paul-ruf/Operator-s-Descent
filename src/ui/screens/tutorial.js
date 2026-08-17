@@ -8,7 +8,7 @@ const TUTORIAL_FLAG = 'tutorialDeclined';
 const PAGES = [
   {
     title: 'Console Overview',
-    body: 'Every meaningful action routes through the single bottom console. Tabs 1-7 select modes; the panel expands for detail and collapses to keep the playfield visible.',
+    body: 'Every meaningful action routes through the single bottom console; the map itself handles pan, zoom, and tap-to-move (see "The Map"). Tabs 1-7 select modes; the panel expands for detail and collapses to keep the playfield visible.',
     tokens: ['MOVE', 'COMBAT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG'],
     illustration: 'tabs'
   },
