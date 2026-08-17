@@ -13,32 +13,53 @@
   /*
    * Pane widths are driven by CSS custom properties owned by the M100 pane
    * controller (attachWidePanes in src/ui/layout.js). --wide-left-w and
-   * --wide-right-w carry the current numeric width in px; data-pane-left /
+   * --wide-right-w carry the user-chosen *minimum share* of their dock in
+   * px (shift landed by clarity-and-fit SESSION-04); data-pane-left /
    * data-pane-right = "open" | "collapsed" flip the pane between resizable
-   * and rail states. The middle track keeps its portrait 9:16 proportion
-   * (Custom Rule 8) and never varies.
+   * and rail states. The middle (playfield) track keeps its portrait 9:16
+   * proportion (Custom Rule 8) and never varies with surplus width — the
+   * console-dock column absorbs it instead via 1fr in the third track. When
+   * a dock collapses to a rail (no 1fr in play), the shell centers under
+   * justify-content: center rather than hugging the left edge.
    */
   .wide-shell {
     position: relative;
     display: grid;
+    justify-content: center;
+    /* Effective left-track width: the fixed rail when telemetry is
+     * collapsed, the user-chosen open width otherwise. Read by
+     * --wide-middle-w below and by the right handle's position calc. */
+    --wide-left-effective: var(--wide-left-w, 280px);
+    /* Middle track resolves to min(intrinsic max, remaining space) —
+     * pre-computed so the right resize handle stays at the actual
+     * playfield/console-dock boundary even though the dock's rendered
+     * width no longer equals --wide-right-w (which is now only the
+     * dock's floor, not its actual width). */
+    --wide-middle-w: min(
+      calc(100vh * 9 / 16),
+      max(320px, calc(100vw - var(--wide-left-effective) - max(360px, var(--wide-right-w, 360px))))
+    );
     /* Outer track mins hold at the original defaults (280/360) so the grid
      * never collapses a dock below the level adaptive-layout.spec.js pins.
-     * The pane controller widens tracks above their min via the width vars;
-     * collapse states below take over the grid template entirely. */
+     * Telemetry stays fixed at its var-driven width (unbounded growth adds
+     * nothing to a stacked readout); the console-dock column absorbs all
+     * surplus width via 1fr, with `max(360px, --wide-right-w)` as the
+     * user-controlled floor (a drag to 500px keeps the dock ≥ 500px). */
     grid-template-columns:
       minmax(280px, var(--wide-left-w, 280px))
       minmax(320px, calc(100vh * 9 / 16))
-      minmax(360px, var(--wide-right-w, 360px));
+      minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
     grid-template-rows: 100vh;
     width: 100vw;
     height: 100vh;
     z-index: 10;
   }
   .wide-shell[data-pane-left="collapsed"] {
+    --wide-left-effective: 48px;
     grid-template-columns:
       48px
       minmax(320px, calc(100vh * 9 / 16))
-      minmax(360px, var(--wide-right-w, 360px));
+      minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
   }
   .wide-shell[data-pane-right="collapsed"] {
     grid-template-columns:
@@ -75,7 +96,13 @@
     outline: none;
   }
   .pane-resize-handle.pane-resize-left { left: calc(var(--wide-left-w, 280px) - 4px); }
-  .pane-resize-handle.pane-resize-right { right: calc(var(--wide-right-w, 360px) - 4px); }
+  /* Right handle straddles the playfield/console-dock boundary. The dock
+   * absorbs surplus width via 1fr, so its rendered left edge is
+   * (left + middle) — not (100vw - --wide-right-w). Position from the
+   * viewport-right by the actual dock width. */
+  .pane-resize-handle.pane-resize-right {
+    right: calc(100vw - var(--wide-left-effective) - var(--wide-middle-w) - 4px);
+  }
   .wide-shell[data-pane-left="collapsed"] .pane-resize-handle.pane-resize-left { display: none; }
   .wide-shell[data-pane-right="collapsed"] .pane-resize-handle.pane-resize-right { display: none; }
 

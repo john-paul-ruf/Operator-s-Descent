@@ -273,10 +273,19 @@
     .log-move { color: var(--text-secondary); }
 
     /* ═══ WIDE SHELL — three-region grid (Adaptive Layout System) ═══ */
+    /* Playfield column stays portrait-proportioned (Custom Rule 8); the
+       console-dock column absorbs surplus width via 1fr with
+       max(360px, --wide-right-w) as the user-controlled floor. When a dock
+       collapses (no 1fr in play) the shell centers under
+       justify-content: center. Mirrors styles/wide.css exactly. */
     .wide-shell {
       position: relative;
       display: grid;
-      grid-template-columns: minmax(280px, 1fr) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, 1.2fr);
+      justify-content: center;
+      grid-template-columns:
+        minmax(280px, var(--wide-left-w, 280px))
+        minmax(320px, calc(100vh * 9 / 16))
+        minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
       grid-template-rows: 100vh;
       width: 100vw;
       height: 100vh;
@@ -618,7 +627,7 @@
     .pane-collapse-btn.pane-collapse-left { left: 8px; }
     .pane-collapse-btn.pane-collapse-right { right: 8px; }
     /* Collapsed telemetry dock: 48px rail, chevron flipped to expand hint. */
-    .wide-shell[data-pane-left="collapsed"] { grid-template-columns: 48px minmax(320px, calc(100vh * 9 / 16)) minmax(280px, 360px); }
+    .wide-shell[data-pane-left="collapsed"] { grid-template-columns: 48px minmax(320px, calc(100vh * 9 / 16)) minmax(max(360px, var(--wide-right-w, 360px)), 1fr); }
     .wide-shell[data-pane-left="collapsed"] .wide-telemetry-dock > * { display: none; }
   </style>
 </head>
