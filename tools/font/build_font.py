@@ -16,9 +16,12 @@ EM = 1000
 ADVANCE = 1000
 ASCENT = 850
 DESCENT = -150
-SAFE_MIN = 120
-SAFE_MAX = 880
-CENTER = 500
+CENTER_X = 500
+CENTER_Y = 401
+SAFE_X_MIN = 120
+SAFE_X_MAX = 880
+SAFE_Y_MIN = 100
+SAFE_Y_MAX = 900
 
 
 def load_json(path):
@@ -68,13 +71,13 @@ def rotated_rect(pen, cx, cy, length, width, angle_deg):
 def stroke(pen, angle_deg, offset, length, width):
     a = math.radians(angle_deg)
     nx, ny = -math.sin(a), math.cos(a)
-    cx = CENTER + nx * offset
-    cy = CENTER + ny * offset
+    cx = CENTER_X + nx * offset
+    cy = CENTER_Y + ny * offset
     rotated_rect(pen, cx, cy, length, width, angle_deg)
 
 def bar(pen, x, y, w, h, angle_deg=0):
-    cx = CENTER + x
-    cy = CENTER + y
+    cx = CENTER_X + x
+    cy = CENTER_Y + y
     if angle_deg == 0:
         rect(pen, cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
     else:
@@ -91,7 +94,11 @@ def arc_segment(pen, cx, cy, radius, width, start_deg, sweep_deg, steps=8):
         inner.append((round(cx + math.cos(a) * (radius - width / 2)), round(cy + math.sin(a) * (radius - width / 2))))
     contour(pen, outer + inner)
 
-def ring(pen, radius, width, gaps=None, cx=CENTER, cy=CENTER):
+def ring(pen, radius, width, gaps=None, cx=None, cy=None):
+    if cx is None:
+        cx = CENTER_X
+    if cy is None:
+        cy = CENTER_Y
     gaps = gaps or []
     if not gaps:
         arc_segment(pen, cx, cy, radius, width, 0, 360, 10)
@@ -113,14 +120,14 @@ def trace(pen, points, width):
         if length == 0:
             continue
         angle_deg = math.degrees(math.atan2(dy, dx))
-        cx = CENTER + (x0 + x1) / 2
-        cy = CENTER + (y0 + y1) / 2
+        cx = CENTER_X + (x0 + x1) / 2
+        cy = CENTER_Y + (y0 + y1) / 2
         rotated_rect(pen, cx, cy, length, width, angle_deg)
 
 def node(pen, angle_deg, radius, size, kind='square'):
     a = math.radians(angle_deg)
-    cx = CENTER + math.cos(a) * radius
-    cy = CENTER + math.sin(a) * radius
+    cx = CENTER_X + math.cos(a) * radius
+    cy = CENTER_Y + math.sin(a) * radius
     if kind == 'diamond':
         contour(pen, [(round(cx), round(cy + size)), (round(cx + size), round(cy)), (round(cx), round(cy - size)), (round(cx - size), round(cy))])
     elif kind == 'circle':
@@ -138,9 +145,9 @@ def node(pen, angle_deg, radius, size, kind='square'):
 def draw_recipe(recipe):
     pen = TTGlyphPen(None)
     for r in recipe.get('rings', []):
-        ring(pen, r['radius'], r['width'], r.get('gaps'), CENTER + r.get('cx', 0), CENTER + r.get('cy', 0))
+        ring(pen, r['radius'], r['width'], r.get('gaps'), CENTER_X + r.get('cx', 0), CENTER_Y + r.get('cy', 0))
     for a in recipe.get('arcs', []):
-        arc_segment(pen, CENTER + a.get('cx', 0), CENTER + a.get('cy', 0), a['radius'], a['width'], a['start'], a['sweep'], a.get('steps', 6))
+        arc_segment(pen, CENTER_X + a.get('cx', 0), CENTER_Y + a.get('cy', 0), a['radius'], a['width'], a['start'], a['sweep'], a.get('steps', 6))
     for s in recipe.get('strokes', []):
         stroke(pen, s['angle'], s.get('offset', 0), s['length'], s['width'])
     for b in recipe.get('bars', []):
@@ -168,10 +175,12 @@ def create_font():
     fb.setupGlyphOrder(glyph_order)
     fb.setupCharacterMap({cp: glyph_name(cp) for cp in expected})
     notdef = TTGlyphPen(None)
-    rect(notdef, 180, 180, 820, 220)
-    rect(notdef, 180, 780, 820, 820)
-    rect(notdef, 180, 180, 220, 820)
-    rect(notdef, 780, 180, 820, 820)
+    notdef_bot = CENTER_Y - 300
+    notdef_top = CENTER_Y + 300
+    rect(notdef, 180, notdef_bot, 820, notdef_bot + 40)
+    rect(notdef, 180, notdef_top - 40, 820, notdef_top)
+    rect(notdef, 180, notdef_bot, 220, notdef_top)
+    rect(notdef, 780, notdef_bot, 820, notdef_top)
     glyphs = {'.notdef': notdef.glyph()}
     signatures = set()
     for recipe in recipes:
@@ -180,7 +189,7 @@ def create_font():
             raise SystemExit(f"empty outline for {recipe['id']}")
         xs = [p[0] for p in glyph.coordinates]
         ys = [p[1] for p in glyph.coordinates]
-        if min(xs) < SAFE_MIN or max(xs) > SAFE_MAX or min(ys) < SAFE_MIN or max(ys) > SAFE_MAX:
+        if min(xs) < SAFE_X_MIN or max(xs) > SAFE_X_MAX or min(ys) < SAFE_Y_MIN or max(ys) > SAFE_Y_MAX:
             raise SystemExit(f"outline outside safe bounds for {recipe['id']}")
         sig = tuple((p[0], p[1]) for p in glyph.coordinates)
         if sig in signatures:
