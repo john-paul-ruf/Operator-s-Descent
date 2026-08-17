@@ -579,6 +579,8 @@
     .r-corrupt { border-color: var(--warning); color: var(--warning); background: rgba(232,99,42,0.1); }
     .affix-tag { display: inline-block; padding: 1px 6px; font-size: 9px; border: 1px solid var(--border-dim); color: var(--text-secondary); margin-right: 3px; margin-top: 3px; }
     .affix-major { border-color: var(--accent); color: var(--accent); }
+    .card-stats { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .stat-chip { display: inline-block; padding: 1px 6px; font-size: 10px; border: 1px solid var(--border-dim); color: var(--text-secondary); }
     .member-pill { cursor: pointer; padding: 8px 12px; border: 1px solid var(--border-dim); font-size: 11px; transition: all 0.15s ease; display: flex; align-items: center; gap: 6px; }
     .member-pill.active { border-color: var(--accent); background: rgba(126,200,227,0.1); color: var(--accent); box-shadow: 0 0 6px var(--accent); }
     .btn-crt { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); color: var(--text-primary); padding: 10px 16px; font-family: inherit; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s ease; min-height: 48px; }
@@ -703,6 +705,11 @@
               <div>Range: <span class="accent-text">adjacent</span></div>
               <div>Acc: <span class="accent-text">+0</span></div>
               <div>Cost: <span style="color: var(--text-dim);">2pt</span></div>
+            </div>
+            <div class="card-stats">
+              <span class="stat-chip">ATK d20+MGT</span>
+              <span class="stat-chip">DMG d12↑</span>
+              <span class="stat-chip">RANGE 1–1 · ADJACENT</span>
             </div>
             <div style="margin-top: 6px;">
               <span class="affix-tag affix-major">◈ Edged (d10→d12)</span>
