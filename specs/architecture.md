@@ -1406,3 +1406,21 @@ and holds walls at the static midpoint `g = 0.7`. Screens (M70/M71) resolve
 `loadSettings().reducedMotion` via runtime.js semantics (`'reduce'` OR `'system'`
 + `prefers-reduced-motion: reduce`) into `setPulse(!reduce)` after
 `createPlayfield`, and call `playfield.destroy()` in their unmount cleanup.
+
+<!-- walls-npc-docks SESSION-02 -->
+### M24 Combat Rules — public helper `pathToward` (SESSION-02, walls-npc-docks)
+
+`pathToward(combatState, actor, targetId, maxSteps, desiredRange)` — greedy geometric
+path builder used by `executeMove`'s `targetId` fallback and available to any external
+caller that needs a legal step sequence toward a combatant. Consumes no RNG (determinism
+preserved). Returns an ordered array of direction names (length 1..maxSteps) or `null`
+when no forward progress is possible from the origin (already within `desiredRange`,
+blocked, or missing target/actor position).
+
+### M23 Enemies Rules — `enemyAI` move action carries `desiredRange`
+
+Every move action returned by `enemyAI` now includes `desiredRange: OPTIMAL_RANGE[behavior]`
+(fallback 1). Combined with `MOVE_RANGE = 5` in M24, NPCs — including echoes, hunts, and
+threshold elites, which all route through the same `resolveTurn` → `enemyAI` → `executeAction`
+fallback — traverse up to 5 legal cells per move action instead of a single step. Panicked
+flee stays single-step. Display semantics ("1 MV" = one move ACTION) are unchanged.
