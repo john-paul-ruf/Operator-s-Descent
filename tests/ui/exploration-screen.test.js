@@ -181,39 +181,45 @@ describe('exploration screen controller', () => {
     expect(canvas.classList.contains('lattice-canvas')).toBe(true);
   });
 
-  it('routes keyboard movement through MOVE and pushes visible proximity audio', async () => {
+  it('routes keyboard movement through MOVE: arrow stages, Enter commits (party moves + audio update)', async () => {
     const audio = [];
     const off = bus.on('audio:update-state', (payload) => audio.push(payload));
     const { container, runState: state } = await mountExploration();
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    // Stage-only: party has not moved yet, notice reflects the staged step.
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
 
+    container.dispatch('keydown', keyEvent('Enter'));
     expect(state.partyPosition).toEqual({ x: 11, y: 10 });
     expect(byTestId(container, 'move-notice').textContent).toContain('MOVED');
     expect(audio.at(-1).proximity).toEqual({ hostile: null, container: null });
     off();
   });
 
-  it('requests combat on hostile discovery without mutating runtime route state directly', async () => {
+  it('requests combat on hostile discovery when the staged commit lands next to a hostile', async () => {
     const combat = [];
     const off = bus.on('state:combat-start', (payload) => combat.push(payload));
     const hostileFloor = floor({ enemySpawns: [{ id: 0, x: 12, y: 10, archetypeId: 'drone' }] });
     const { container, runState: state } = await mountExploration({ floor: hostileFloor });
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(combat).toHaveLength(1);
     expect(combat[0]).toMatchObject({ runState: state, floor: hostileFloor, reason: 'hostile', encounter: expect.objectContaining({ kind: 'standard' }), moveResult: expect.objectContaining({ interruptType: 'hostile' }) });
     off();
   });
 
-  it('enables LOOT only for an unopened adjacent container and emits open handoff', async () => {
+  it('enables LOOT only for an unopened adjacent container discovered by the committed staged step', async () => {
     const opens = [];
     const off = bus.on('loot:open-request', (payload) => opens.push(payload));
     const lootFloor = floor({ containers: [{ id: 0, x: 12, y: 10 }] });
     const { container } = await mountExploration({ floor: lootFloor });
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(byTestId(container, 'console-tab-loot').getAttribute('aria-selected')).toBe('true');
     expect(textOf(byTestId(container, 'loot-container'))).toContain('CONTAINER 0');
@@ -223,19 +229,20 @@ describe('exploration screen controller', () => {
     off();
   });
 
-  it('honors discovery auto-stop toggle while preserving movement', async () => {
+  it('honors discovery auto-stop toggle while preserving movement (stage → commit)', async () => {
     const farContainerFloor = floor({ containers: [{ id: 0, x: 13, y: 10 }] });
     const { container, runState: state } = await mountExploration({ floor: farContainerFloor });
 
     byTestId(container, 'toggle-discovery').click();
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(state.partyPosition).toEqual({ x: 11, y: 10 });
     expect(byTestId(container, 'console-tab-loot').disabled).toBe(true);
     expect(textOf(container)).not.toContain('CONTAINER DISCOVERED');
   });
 
-  it('requests floor transition only from confirm on the descent cell', async () => {
+  it('requests floor transition only from confirm on the descent cell (stage → commit → confirm descend)', async () => {
     const changes = [];
     const off = bus.on('state:floor-change', (payload) => changes.push(payload));
     const descentFloor = floor({ descentPoint: { x: 11, y: 10 } });
@@ -244,8 +251,12 @@ describe('exploration screen controller', () => {
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
     expect(changes).toHaveLength(0);
+    // First confirm: commit the staged step (party moves onto descent).
     byTestId(container, 'move-confirm').click();
-
+    expect(changes).toHaveLength(0);
+    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
+    // Second confirm: nothing staged + standing on descent → onConfirmDescent.
+    byTestId(container, 'move-confirm').click();
     expect(changes).toEqual([expect.objectContaining({ runState: state, floor: descentFloor, reason: 'descent-confirmed' })]);
     off();
   });
@@ -255,6 +266,7 @@ describe('exploration screen controller', () => {
     controller.unmount();
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
   });
@@ -305,7 +317,7 @@ describe('exploration screen controller', () => {
     expect(activePrevented).toBe(true);
   });
 
-  it('auto-follows the party after a successful move so it stays in view', async () => {
+  it('auto-follows the party after a committed staged step so it stays in view', async () => {
     const { container } = await mountExploration();
     const playfieldBody = byClass(container, 'exploration-playfield');
     const canvas = byTestId(container, 'exploration-canvas');
@@ -313,15 +325,16 @@ describe('exploration screen controller', () => {
     canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
 
     // Party at (10,10) → pixel (252,252). Body 100×100 makes party far off-screen.
-    // Move east → party at (11,10) → pixel (276,252).
+    // Stage east → still at (10,10). Enter (commit) → party at (11,10) → pixel (276,252).
     // From panOffset (0,0), visibleRight - marginX = 100 - 48 = 52; party.x = 276 → dx = 52 - 276 = -224.
     // Same math for y → dy = 52 - 252 = -200. Both stay inside [minX -380, 0] / [minY -668, 0].
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(canvas.style.transform).toBe('translate3d(-224px, -200px, 0)');
   });
 
-  it('manual drag suppresses auto-follow until the next successful move re-engages it', async () => {
+  it('manual drag suppresses auto-follow until the next committed staged step re-engages it', async () => {
     const { container } = await mountExploration();
     const playfieldBody = byClass(container, 'exploration-playfield');
     const canvas = byTestId(container, 'exploration-canvas');
@@ -335,6 +348,7 @@ describe('exploration screen controller', () => {
     expect(canvas.style.transform).toBe('translate3d(-70px, -70px, 0)');
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
     // ensurePartyVisible re-engages. From pan (-70,-70):
     //   visibleLeft=70, visibleRight=170. party.x=276 > 170-48=122 → dx=122-276=-154 → panOffset.x = -224
     //   visibleTop=70, visibleBottom=170. party.y=252 > 170-48=122 → dy=122-252=-130 → panOffset.y = -200
@@ -379,35 +393,32 @@ describe('exploration screen controller', () => {
     delete globalThis.document.activeElement;
   });
 
-  it('routes console:intent move_* actions from panes that decline the input', async () => {
+  it('routes console:intent move_* actions from panes that decline the input into the staged path', async () => {
     const { container, runState: state } = await mountExploration();
     bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
-    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
+    // Party has not moved — the action has staged instead.
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
   });
 
-  it('routes each console:intent direction to the matching move', async () => {
-    const cases = [
-      ['move_n', { x: 10, y: 9 }],
-      ['move_s', { x: 10, y: 11 }],
-      ['move_w', { x: 9, y: 10 }],
-      ['move_ne', { x: 11, y: 9 }],
-      ['move_nw', { x: 9, y: 9 }],
-      ['move_se', { x: 11, y: 11 }],
-      ['move_sw', { x: 9, y: 11 }]
-    ];
-    for (const [action, expected] of cases) {
-      const { runState: state } = await mountExploration();
+  it('routes each console:intent direction into staging (party position unchanged until commit)', async () => {
+    const directions = ['move_n', 'move_s', 'move_w', 'move_ne', 'move_nw', 'move_se', 'move_sw'];
+    for (const action of directions) {
+      const { container, runState: state } = await mountExploration();
       bus.dispatch('console:intent', { mode: 'gear', action, source: 'keyboard' });
-      expect(state.partyPosition).toEqual(expected);
+      expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+      expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
     }
   });
 
   it('ignores console:intent moves when combat is active', async () => {
     const state = runState();
     state.activeCombat = { round: 1 };
-    const { runState: mounted } = await mountExploration({ runState: state });
+    const { container, runState: mounted } = await mountExploration({ runState: state });
     bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
     expect(mounted.partyPosition).toEqual({ x: 10, y: 10 });
+    // Nothing staged either — stageMove refuses while combat is active.
+    expect(byTestId(container, 'move-notice')?.textContent || '').not.toContain('STAGED');
   });
 
   it('ignores non-move console:intent actions', async () => {
@@ -417,10 +428,12 @@ describe('exploration screen controller', () => {
   });
 
   it('stops routing console:intent after unmount', async () => {
-    const { controller, runState: state } = await mountExploration();
+    const { container, controller, runState: state } = await mountExploration();
     controller.unmount();
     bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    // The container has been torn down, so no console notice reflects new staging either.
+    expect(byTestId(container, 'move-notice')).toBe(null);
   });
 
   it('renders the three-region wide shell with telemetry, playfield column, and dock', async () => {
@@ -467,5 +480,120 @@ describe('exploration screen controller', () => {
     expect(byTestId(container, 'pane-handle-right')).toBe(null);
     expect(byTestId(container, 'pane-collapse-left')).toBe(null);
     expect(byTestId(container, 'pane-collapse-right')).toBe(null);
+  });
+
+  it('staging rejects walls: press against a wall records a CANNOT STAGE notice and does not extend the path', async () => {
+    // Party at (10,10). Put a wall at (11,10) so ArrowRight is blocked.
+    const walledFloor = floor();
+    walledFloor.cells[10][11] = 0;
+    const { container, runState: state } = await mountExploration({ floor: walledFloor });
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toBe('CANNOT STAGE — wall or closed corner.');
+  });
+
+  it('staging rejects a diagonal into a closed corner (both cardinal neighbors are walls)', async () => {
+    // Party at (10,10). NE diagonal to (11,9). Wall both (11,10) and (10,9) → closed corner.
+    const cornerFloor = floor();
+    cornerFloor.cells[10][11] = 0;
+    cornerFloor.cells[9][10] = 0;
+    const { container, runState: state } = await mountExploration({ floor: cornerFloor });
+
+    container.dispatch('keydown', { code: 'KeyE', key: 'e', repeat: false, preventDefault() { this.prevented = true; } });
+
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toBe('CANNOT STAGE — wall or closed corner.');
+  });
+
+  it('commit loop executes n moveParty steps in order and lands the party on the final cell', async () => {
+    const { container, runState: state } = await mountExploration();
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 3 STEPS');
+
+    container.dispatch('keydown', keyEvent('Enter'));
+    expect(state.partyPosition).toEqual({ x: 13, y: 10 });
+    // Staged path drained after commit.
+    expect(byTestId(container, 'move-notice').textContent).not.toContain('STAGED');
+  });
+
+  it('hostile interrupt during commit truncates the remaining staged steps and clears the buffer', async () => {
+    const hostileFloor = floor({ enemySpawns: [{ id: 0, x: 12, y: 10, archetypeId: 'drone' }] });
+    const combat = [];
+    const off = bus.on('state:combat-start', (payload) => combat.push(payload));
+    const { container, runState: state } = await mountExploration({ floor: hostileFloor });
+
+    // Stage 3 east steps. First commit lands (11,10) which reveals hostile at (12,10) → interrupt.
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('Enter'));
+
+    expect(combat).toHaveLength(1);
+    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
+    // Staged buffer flushed regardless of interrupt.
+    container.dispatch('keydown', keyEvent('Enter'));
+    expect(combat).toHaveLength(1);
+    off();
+  });
+
+  it('Escape clears the staged path and posts a cleared notice', async () => {
+    const { container, runState: state } = await mountExploration();
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 2 STEPS');
+
+    container.dispatch('keydown', keyEvent('Escape'));
+    expect(byTestId(container, 'move-notice').textContent).toBe('STAGED PATH CLEARED.');
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+
+    container.dispatch('keydown', keyEvent('Enter'));
+    // Nothing to commit, party still at origin, no descent underfoot → NO DESCENT POINT UNDERFOOT.
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
+  it('UNDO button pops the last staged step', async () => {
+    const { container } = await mountExploration();
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 2 STEPS');
+
+    byTestId(container, 'move-undo').click();
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
+
+    byTestId(container, 'move-undo').click();
+    // Buffer drained, but the notice reverts to a default MOVE hint (no STAGED prefix).
+    expect(byTestId(container, 'move-notice').textContent).not.toContain('STAGED');
+  });
+
+  it('CLEAR button drains any staged steps immediately', async () => {
+    const { container } = await mountExploration();
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    byTestId(container, 'move-clear').click();
+
+    expect(byTestId(container, 'move-notice').textContent).toBe('STAGED PATH CLEARED.');
+  });
+
+  it('staging caps at 24 steps and shows a STAGING FULL notice on further attempts', async () => {
+    // Grid is 20×32; start party high enough that 24 south steps stay in-bounds.
+    const state = runState();
+    state.partyPosition = { x: 10, y: 2 };
+    const tallFloor = floor({ entryPoint: { x: 10, y: 2 } });
+    const { container } = await mountExploration({ runState: state, floor: tallFloor });
+
+    for (let i = 0; i < 24; i++) container.dispatch('keydown', keyEvent('ArrowDown'));
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 24 STEPS');
+
+    container.dispatch('keydown', keyEvent('ArrowDown'));
+    expect(byTestId(container, 'move-notice').textContent).toContain('STAGING FULL');
   });
 });

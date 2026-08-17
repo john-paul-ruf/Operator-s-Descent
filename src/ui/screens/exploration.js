@@ -44,6 +44,16 @@ const EXPLORATION_CELL_PX = 24;
 const AUTO_FOLLOW_MARGIN_CELLS = 2;
 const DRAG_THRESHOLD_PX = 6;
 const MOVE_INTENT_PATTERN = /^move_(n|s|w|e|nw|ne|sw|se)$/;
+const STAGE_MAX_STEPS = 24;
+const DIR_DELTAS = {
+  n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0],
+  nw: [-1, -1], ne: [1, -1], sw: [-1, 1], se: [1, 1]
+};
+
+function isInterruptType(result) {
+  if (!result || !result.interruptType) return false;
+  return result.interruptType !== 'invalid-direction' && result.interruptType !== 'blocked';
+}
 
 function scheduleFrame(callback) {
   const raf = typeof globalThis.requestAnimationFrame === 'function' ? globalThis.requestAnimationFrame : null;
@@ -251,6 +261,7 @@ export function mount(container, params = {}) {
 
   const rngCursor = createRNGCursorForRun(runState.worldSeed, runState.rngState);
   const autoStopToggles = { discovery: true, damage: true };
+  const stagedPath = [];
   const viewState = {
     runState,
     floor,
@@ -262,10 +273,15 @@ export function mount(container, params = {}) {
     lastMoveResult: null,
     lootState: null,
     get notice() { return notice; },
+    get stagedPath() { return stagedPath.slice(); },
     canLoot: () => Boolean(findEligibleLootContainer(lattice, runState)),
     canDescend: () => sameCell(lattice.getPartyPosition(), lattice.getDescentPoint()),
     onMove,
     onConfirmDescent,
+    stageMove,
+    onCommitStagedMoves,
+    onUndoStagedMove,
+    onClearStagedMoves,
     setAutoStopToggle(name, value) {
       autoStopToggles[name] = Boolean(value);
       notice = `${name.toUpperCase()} AUTO-STOP ${autoStopToggles[name] ? 'ON' : 'OFF'}`;
@@ -313,9 +329,18 @@ export function mount(container, params = {}) {
       const match = MOVE_INTENT_PATTERN.exec(payload.action || '');
       if (!match) return;
       if (runState.activeCombat) return;
-      onMove(match[1]);
+      stageMove(match[1]);
     })
   ];
+
+  function onKeyDownEscape(event) {
+    const key = event.key || event.code;
+    if (key !== 'Escape') return;
+    if (stagedPath.length === 0) return;
+    onClearStagedMoves();
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+  }
+  container.addEventListener('keydown', onKeyDownEscape);
 
   function refreshVisibility() {
     const position = lattice.getPartyPosition();
@@ -325,7 +350,7 @@ export function mount(container, params = {}) {
   }
 
   function renderPlayfield() {
-    playfield.renderExploration(lattice, fogState, lattice.getPartyPosition());
+    playfield.renderExploration(lattice, fogState, lattice.getPartyPosition(), { stagedPath: stagedPath.slice() });
   }
 
   function refreshLootState() {
@@ -409,11 +434,85 @@ export function mount(container, params = {}) {
     return true;
   }
 
+  function stageOrigin() {
+    if (stagedPath.length === 0) return lattice.getPartyPosition();
+    const tail = stagedPath[stagedPath.length - 1];
+    return { x: tail.x, y: tail.y };
+  }
+
+  function stageMove(direction) {
+    if (unmounted || runState.activeCombat) return false;
+    const delta = DIR_DELTAS[direction];
+    if (!delta) return false;
+    if (stagedPath.length >= STAGE_MAX_STEPS) {
+      notice = `STAGING FULL (${STAGE_MAX_STEPS}) — CONFIRM or CLEAR to continue.`;
+      consoleController.refresh();
+      return false;
+    }
+    const origin = stageOrigin();
+    const nx = origin.x + delta[0];
+    const ny = origin.y + delta[1];
+    if (!lattice.isWalkable(nx, ny)) {
+      notice = 'CANNOT STAGE — wall or closed corner.';
+      consoleController.refresh();
+      return false;
+    }
+    if (delta[0] !== 0 && delta[1] !== 0) {
+      const hWalk = lattice.isWalkable(origin.x + delta[0], origin.y);
+      const vWalk = lattice.isWalkable(origin.x, origin.y + delta[1]);
+      if (!hWalk && !vWalk) {
+        notice = 'CANNOT STAGE — wall or closed corner.';
+        consoleController.refresh();
+        return false;
+      }
+    }
+    stagedPath.push({ direction, x: nx, y: ny });
+    notice = '';
+    renderPlayfield();
+    consoleController.refresh();
+    return true;
+  }
+
+  function onUndoStagedMove() {
+    if (stagedPath.length === 0) return false;
+    stagedPath.pop();
+    notice = '';
+    renderPlayfield();
+    consoleController.refresh();
+    return true;
+  }
+
+  function onClearStagedMoves() {
+    if (stagedPath.length === 0) return false;
+    stagedPath.length = 0;
+    notice = 'STAGED PATH CLEARED.';
+    renderPlayfield();
+    consoleController.refresh();
+    return true;
+  }
+
+  function onCommitStagedMoves() {
+    if (stagedPath.length === 0) return false;
+    const queue = stagedPath.slice();
+    stagedPath.length = 0;
+    let lastResult = null;
+    for (const step of queue) {
+      if (unmounted) break;
+      if (runState.activeCombat) break;
+      lastResult = onMove(step.direction);
+      if (!lastResult || !lastResult.moved) break;
+      if (isInterruptType(lastResult)) break;
+    }
+    if (!unmounted) renderPlayfield();
+    return lastResult;
+  }
+
   return {
     unmount() {
       if (unmounted) return;
       unmounted = true;
       for (const unsubscribe of unsubscribers) unsubscribe();
+      container.removeEventListener('keydown', onKeyDownEscape);
       playfieldBody.removeEventListener('pointerdown', onPointerDown);
       playfieldBody.removeEventListener('pointermove', onPointerMove);
       playfieldBody.removeEventListener('pointerup', onPointerEnd);
