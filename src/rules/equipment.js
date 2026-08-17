@@ -267,3 +267,74 @@ export function describeItem(item, data) {
   if (salvage > 0) pieces.push(`scrap ${salvage}`);
   return pieces.join(' · ');
 }
+
+function signed(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return '';
+  return n > 0 ? `+${n}` : String(n);
+}
+
+// The ATK chip mirrors src/rules/combat.js:458-469 performAttackRoll:
+//   total = (d20+1) + modifier(attributes[mgt|fin]) + range.accuracyModifier + combat-only bonuses
+// isMelee follows combat.js:450 — `weapon.rangeBand === 'adjacent'` → MGT, else FIN.
+// The chip surfaces only the item-intrinsic pieces (die + accuracy + attribute); combat-only
+// bonuses (marked, blinded, flank, cover) are situational and belong in the combat log.
+function weaponStatChips(stats, base) {
+  const chips = [];
+  if (stats.damageDie) {
+    const attribute = stats.rangeBand === 'adjacent' ? 'MGT' : 'FIN';
+    chips.push(`ATK d20${signed(stats.accuracyBonus)}+${attribute}`);
+    const upgraded = base?.damageDie && stats.damageDie !== base.damageDie ? '↑' : '';
+    chips.push(`DMG ${stats.damageDie}${upgraded}`);
+    if (stats.rangeBand && Number.isFinite(stats.maxRange) && stats.maxRange >= 1) {
+      const band = String(stats.rangeBand).toUpperCase();
+      const minRange = stats.minRange || 1;
+      chips.push(minRange > 1
+        ? `RANGE ${minRange}–${stats.maxRange} · ${band} (MIN ${minRange})`
+        : `RANGE ${minRange}–${stats.maxRange} · ${band}`);
+    }
+  } else if ((stats.defenseBonus ?? 0) > 0) {
+    chips.push(`DEF +${stats.defenseBonus}`);
+  }
+  return chips;
+}
+
+function armorStatChips(stats) {
+  const chips = [];
+  const defense = Number(stats.defenseBonus) || 0;
+  if (defense !== 0) chips.push(`DEF ${signed(defense)}`);
+  if (!stats.ignoreFinPenalty && Number(stats.finPenalty) !== 0) {
+    chips.push(`FIN ${signed(stats.finPenalty)}`);
+  }
+  const maxBonus = Number(stats.chargeBonus) || 0;
+  const regenBonus = Number(stats.chargeRegenBonus) || 0;
+  if (maxBonus !== 0 || regenBonus !== 0) {
+    const parts = [];
+    if (maxBonus !== 0) parts.push(`${signed(maxBonus)} MAX`);
+    if (regenBonus !== 0) parts.push(`${signed(regenBonus)} REGEN`);
+    chips.push(`CHG ${parts.join(' · ')}`);
+  }
+  return chips;
+}
+
+// Render-time resolver: takes a live inventory/equipped item and returns short display chips
+// (['ATK d20+1+MGT', 'DMG d8↑', 'RANGE 1–1 · ADJACENT']) for the equipment/loot cards. Runs
+// through resolveWeaponStats/resolveArmorStats so affix effects surface as final values, marks
+// die upgrades with ↑, and hides zero-value chips. Returns [] for anything it cannot resolve
+// (consumables, malformed items, unknown baseType) — never throws.
+export function describeItemStats(item, { equipmentData, affixesData } = {}) {
+  if (!item || typeof item !== 'object') return [];
+  const category = item.category;
+  const baseType = inferredBaseType(item);
+  if (category === 'weapon') {
+    const base = baseType ? equipmentData?.weapons?.[baseType] : null;
+    if (!base) return [];
+    return weaponStatChips(resolveWeaponStats(base, item.affixes ?? [], affixesData), base);
+  }
+  if (category === 'armor') {
+    const base = baseType ? equipmentData?.armor?.[baseType] : null;
+    if (!base) return [];
+    return armorStatChips(resolveArmorStats(base, item.affixes ?? [], affixesData));
+  }
+  return [];
+}

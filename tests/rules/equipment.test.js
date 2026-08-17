@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyFloorEntryAffixes, describeItem, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, itemDisplayName, resolveArmorStats, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
+import { applyFloorEntryAffixes, describeItem, describeItemStats, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, itemDisplayName, resolveArmorStats, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
 import { createRunState, deserializeRunState } from '../../src/state/run-state.js';
 import { loadData } from '../helpers/data.js';
 
@@ -103,5 +103,89 @@ describe('item display resolvers', () => {
     expect(describeItem({ category: 'weapon', baseType: 'sidearm', corrupt: true, corruptionValue: 0.1, salvageValue: 1 }, fullData)).toContain('CORRUPT +0.10');
     expect(describeItem({ category: 'weapon', baseType: 'sidearm' }, {})).toBe('');
     expect(describeItem(null)).toBe('');
+  });
+});
+
+describe('describeItemStats — render-time dice/stat chip resolver', () => {
+  const ctx = { equipmentData, affixesData };
+
+  it('resolves melee weapons with MGT attribute and no ↑ on a stock die', () => {
+    expect(describeItemStats({ category: 'weapon', baseType: 'sidearm' }, ctx)).toEqual([
+      'ATK d20+1+MGT',
+      'DMG d6',
+      'RANGE 1–1 · ADJACENT'
+    ]);
+    expect(describeItemStats({ category: 'weapon', baseType: 'heavy_melee' }, ctx)).toEqual([
+      'ATK d20+MGT',
+      'DMG d10',
+      'RANGE 1–1 · ADJACENT'
+    ]);
+  });
+
+  it('resolves ranged weapons with FIN attribute', () => {
+    expect(describeItemStats({ category: 'weapon', baseType: 'light_ranged' }, ctx)).toEqual([
+      'ATK d20+1+FIN',
+      'DMG d6',
+      'RANGE 1–4 · SHORT'
+    ]);
+    expect(describeItemStats({ category: 'weapon', baseType: 'heavy_ranged' }, ctx)).toEqual([
+      'ATK d20+FIN',
+      'DMG d10',
+      'RANGE 1–8 · MEDIUM'
+    ]);
+  });
+
+  it('marks affix die-upgrade with ↑ and shows the upgraded die', () => {
+    const chips = describeItemStats({ category: 'weapon', baseType: 'sidearm', affixes: ['edged'] }, ctx);
+    expect(chips).toContain('DMG d8↑');
+    // Edged is die-upgrade only; accuracy chip stays unchanged.
+    expect(chips[0]).toBe('ATK d20+1+MGT');
+  });
+
+  it('folds affix accuracy and extended range into the same chips', () => {
+    const chips = describeItemStats({ category: 'weapon', baseType: 'light_ranged', affixes: ['precise', 'extended'] }, ctx);
+    expect(chips).toEqual([
+      'ATK d20+2+FIN',
+      'DMG d6',
+      'RANGE 1–6 · SHORT'
+    ]);
+  });
+
+  it('renders sniper minimum-range phrasing with MIN suffix and negative accuracy', () => {
+    expect(describeItemStats({ category: 'weapon', baseType: 'sniper' }, ctx)).toEqual([
+      'ATK d20-1+FIN',
+      'DMG d8',
+      'RANGE 3–16 · LONG (MIN 3)'
+    ]);
+  });
+
+  it('resolves armor DEF, FIN penalty, and CHG bonuses', () => {
+    expect(describeItemStats({ category: 'armor', baseType: 'medium' }, ctx)).toEqual([
+      'DEF +3',
+      'FIN -1'
+    ]);
+    expect(describeItemStats({ category: 'armor', baseType: 'heavy', affixes: ['overcharged', 'resonant'] }, ctx)).toEqual([
+      'DEF +5',
+      'FIN -2',
+      'CHG +2 MAX · +1 REGEN'
+    ]);
+  });
+
+  it('omits the FIN chip when the phasing affix ignores the penalty', () => {
+    const chips = describeItemStats({ category: 'armor', baseType: 'heavy', affixes: ['phasing'] }, ctx);
+    expect(chips).toContain('DEF +5');
+    expect(chips.some((chip) => chip.startsWith('FIN'))).toBe(false);
+  });
+
+  it('renders shields (weapons with no die but defense bonus) as DEF-only', () => {
+    expect(describeItemStats({ category: 'weapon', baseType: 'shield' }, ctx)).toEqual(['DEF +2']);
+  });
+
+  it('returns [] for consumables, missing catalog entries, and malformed items', () => {
+    expect(describeItemStats({ category: 'consumable', baseType: 'repair_patch' }, ctx)).toEqual([]);
+    expect(describeItemStats({ category: 'weapon', baseType: 'phantom_thing' }, ctx)).toEqual([]);
+    expect(describeItemStats({ category: 'weapon' }, ctx)).toEqual([]);
+    expect(describeItemStats(null, ctx)).toEqual([]);
+    expect(describeItemStats({ category: 'weapon', baseType: 'sidearm' }, {})).toEqual([]);
   });
 });
