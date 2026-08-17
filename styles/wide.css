@@ -12,64 +12,43 @@
   /* ═══ WIDE SHELL — three-region grid (Adaptive Layout System) ═══ */
   /*
    * Pane widths are driven by CSS custom properties owned by the M100 pane
-   * controller (attachWidePanes in src/ui/layout.js). --wide-left-w and
-   * --wide-right-w carry the user-chosen *minimum share* of their dock in
-   * px (shift landed by clarity-and-fit SESSION-04); data-pane-left /
-   * data-pane-right = "open" | "collapsed" flip the pane between resizable
-   * and rail states. Every state assigns 1fr to the track responsible for
-   * absorbing surplus width so the tracks always sum to 100vw and the
-   * collapsed rails (48px left / 96px right) pin flush to the viewport
-   * edges — repaired by walls-npc-docks SESSION-03 after clarity-and-fit
-   * SESSION-04's justify-content:center left rails floating mid-viewport
-   * whenever no 1fr was in play (both dock-open combos already had the
-   * console-dock's 1fr; the right-collapsed combos did not).
-   *   both open       → third (dock) track holds 1fr; middle stays 9:16.
-   *   left  collapsed → third (dock) track holds 1fr; middle stays 9:16.
-   *   right collapsed → middle (playfield) track holds 1fr; .wide-playfield-inner
-   *                     stays 9:16 via max-width + align-self:center (Custom
-   *                     Rule 8: the CANVAS keeps its portrait ratio; the
-   *                     column may grow around it against --bg-base).
-   *   both  collapsed → same as right-collapsed.
+   * controller (attachWidePanes in src/ui/layout.js). --wide-left-w carries
+   * the user-chosen telemetry width; --wide-right-w carries the user-chosen
+   * console-dock width (fixed again — amended by map-pan-zoom SESSION-04
+   * per Custom Rule 8's 2026-08-17 amendment). data-pane-left /
+   * data-pane-right = "open" | "collapsed" flip each pane between resizable
+   * and rail states.
+   *
+   * The middle (playfield) track always holds 1fr and absorbs ALL surplus
+   * viewport width in every state — the map docks and fills the entire
+   * center. The vertical descent premise now lives in the CONTENT (the
+   * 20×32 world behind the M104 pan/zoom viewport camera), not in column
+   * geometry. Tracks always sum to 100vw so the rails (48px left / 96px
+   * right when collapsed; the user-chosen dock widths when open) stay
+   * flush to their viewport edges.
    */
   .wide-shell {
     position: relative;
     display: grid;
-    /* Effective left-track width: the fixed rail when telemetry is
-     * collapsed, the user-chosen open width otherwise. Read by
-     * --wide-middle-w below and by the right handle's position calc. */
-    --wide-left-effective: var(--wide-left-w, 280px);
-    /* Middle track resolves to min(intrinsic max, remaining space) —
-     * pre-computed so the right resize handle stays at the actual
-     * playfield/console-dock boundary even though the dock's rendered
-     * width no longer equals --wide-right-w (which is now only the
-     * dock's floor, not its actual width). Only read when the right
-     * handle is visible (both-docks-open / left-collapsed states); the
-     * right handle is display:none once the right dock collapses. */
-    --wide-middle-w: min(
-      calc(100vh * 9 / 16),
-      max(320px, calc(100vw - var(--wide-left-effective) - max(360px, var(--wide-right-w, 360px))))
-    );
     /* Outer track mins hold at the original defaults (280/360) so the grid
-     * never collapses a dock below the level adaptive-layout.spec.js pins.
-     * Telemetry stays fixed at its var-driven width (unbounded growth adds
-     * nothing to a stacked readout); the console-dock column absorbs all
-     * surplus width via 1fr, with `max(360px, --wide-right-w)` as the
-     * user-controlled floor (a drag to 500px keeps the dock ≥ 500px). */
+     * never renders a track narrower than the pane state can request. The
+     * middle playfield track absorbs surplus via 1fr; the console dock is
+     * a fixed user-chosen width (max(360px, --wide-right-w)) so its left
+     * edge is measurable from the viewport-right by the dock width alone. */
     grid-template-columns:
       minmax(280px, var(--wide-left-w, 280px))
-      minmax(320px, calc(100vh * 9 / 16))
-      minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
+      minmax(320px, 1fr)
+      max(360px, var(--wide-right-w, 360px));
     grid-template-rows: 100vh;
     width: 100vw;
     height: 100vh;
     z-index: 10;
   }
   .wide-shell[data-pane-left="collapsed"] {
-    --wide-left-effective: 48px;
     grid-template-columns:
       48px
-      minmax(320px, calc(100vh * 9 / 16))
-      minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
+      minmax(320px, 1fr)
+      max(360px, var(--wide-right-w, 360px));
   }
   .wide-shell[data-pane-right="collapsed"] {
     grid-template-columns:
@@ -107,11 +86,10 @@
   }
   .pane-resize-handle.pane-resize-left { left: calc(var(--wide-left-w, 280px) - 4px); }
   /* Right handle straddles the playfield/console-dock boundary. The dock
-   * absorbs surplus width via 1fr, so its rendered left edge is
-   * (left + middle) — not (100vw - --wide-right-w). Position from the
-   * viewport-right by the actual dock width. */
+   * is fixed at max(360px, --wide-right-w), so the boundary sits exactly
+   * that far from the viewport-right in every open-state combo. */
   .pane-resize-handle.pane-resize-right {
-    right: calc(100vw - var(--wide-left-effective) - var(--wide-middle-w) - 4px);
+    right: calc(max(360px, var(--wide-right-w, 360px)) - 4px);
   }
   .wide-shell[data-pane-left="collapsed"] .pane-resize-handle.pane-resize-left { display: none; }
   .wide-shell[data-pane-right="collapsed"] .pane-resize-handle.pane-resize-right { display: none; }
@@ -263,7 +241,10 @@
     flex-wrap: wrap;
   }
 
-  /* Playfield column (center region): portrait-proportioned 9:16 */
+  /* Playfield column (center region): the map docks and fills the middle
+   * (Custom Rule 8 amendment, map-pan-zoom 2026-08-17). The vertical
+   * descent premise lives in the CONTENT — the 20×32 world seen through
+   * the M104 pan/zoom viewport camera — not in column geometry. */
   .wide-playfield-column {
     position: relative;
     display: flex;
@@ -278,16 +259,7 @@
     flex-direction: column;
     position: relative;
     overflow: hidden;
-    /* Custom Rule 8: the CANVAS keeps its portrait 9:16 proportion even
-     * when its parent column absorbs surplus width (right-collapsed and
-     * both-collapsed shell states). max-width caps to the 9:16 pair of
-     * 100vh; align-self:center rides the cross-axis center of the flex
-     * column, so any surplus flanks the canvas against --bg-base. In
-     * default and left-collapsed states the column itself is already the
-     * 9:16 track, so this cap is inert. */
     width: 100%;
-    max-width: calc(100vh * 9 / 16);
-    align-self: center;
   }
   .playfield-alert-banner {
     padding: 10px 14px;
