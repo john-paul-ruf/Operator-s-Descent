@@ -1158,3 +1158,56 @@ Rebuilt from rev-2 recipes; deterministic; passes `python3 scripts/verify-font.p
 ### M81 — Service Worker (`service-worker.js`)
 
 `CACHE_VERSION` bumped to `2026-08-16-control-and-polish-v1`. No manifest additions (font asset and all docs/font-src/tools paths remain excluded per Custom Rule 12).
+
+<!-- SESSION-05 -->
+### SESSION-05 (control-and-polish) — wide-layout dock resize + collapse (2026-08-16)
+
+**M100 — Layout Controller: new export `attachWidePanes({ shell, saveSettings, loadSettings })`**
+
+Owns pane state on the wide 3-region shell. Idempotent per-mount: returns a `cleanup()` that removes injected DOM, drops the CSS variables (`--wide-left-w`, `--wide-right-w`), and clears `data-pane-left`/`data-pane-right`. Portrait mounts do not invoke it; screens gate on `isWide`.
+
+Injected DOM (children of `shell`, absolutely positioned over the grid gaps):
+- `button.pane-collapse-btn.pane-collapse-{left,right}` — `data-testid="pane-collapse-{side}"`; click toggles collapse.
+- `div.pane-resize-handle.pane-resize-{left,right}` — `role="separator"`, `aria-orientation="vertical"`, `aria-valuemin/max/now`, `tabIndex=0`, `data-testid="pane-handle-{side}"`.
+
+Bounds (px; mirror the outer `.wide-shell` grid floors so a request never asks for a track narrower than CSS renders):
+- Left (telemetry): min 280, max 480, default 280, collapsed rail 48.
+- Right (console): min 360, max 640, default 360, collapsed rail 96.
+
+Persistence (rides `src/state/library.js` settings passthrough — no schema change):
+- `settings.widePanes = { left: <px number | 'collapsed'>, right: <px number | 'collapsed'> }`.
+- Read via injected `loadSettings()`, written via injected `saveSettings({ widePanes })`. Defensive: non-object/NaN/out-of-range values fall back to defaults on read; clamped on write.
+
+Interactions:
+- Drag on a handle: `pointerdown` seeds `startX + startWidth`, uses `setPointerCapture`; `pointermove` updates the width var; `pointerup`/`pointercancel` releases and persists.
+- Double-click on a handle: resets to default and persists.
+- Keyboard on a focused handle: `ArrowLeft`/`ArrowRight` resize by 16px, direction inverted per side (left+Right widens; right+Right narrows). `preventDefault + stopPropagation` so the enclosing screen's move-input never sees them.
+- Collapse button: toggles between `default` and `'collapsed'`; persists.
+- Tab column click (right side only): `.wide-console-tabs` inside the shell auto-expands the right pane if collapsed.
+
+**M101 — Wide CSS: var-driven grid + collapsed-rail templates**
+
+`.wide-shell` grid-template-columns now `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, var(--wide-right-w, 360px))`. Playfield middle track invariant (Rule 8: 9:16 portrait proportion).
+- `.wide-shell[data-pane-left="collapsed"]` swaps the left track to `48px`.
+- `.wide-shell[data-pane-right="collapsed"]` swaps the right track to `96px` — tab column (`.wide-console-tabs`) stays visible; `.wide-console-content` is hidden.
+- Handle hit-area 8px with accent hover glow; collapse buttons meet the 44px touch-target minimum per design.md.
+
+**M70/M71 — Screen integration (unchanged shell assembly, new post-mount hookup)**
+
+Both `src/ui/screens/exploration.js` and `src/ui/screens/combat.js` call `attachWidePanes({ shell, saveSettings, loadSettings })` in the `isWide` branch after the shell + telemetry dock + console dock are assembled. The returned `cleanup()` is added to the unmount teardown path; `ui:layout-change` remount re-runs it. Portrait mounts do not create pane controls.
+
+**Accepted mock drift**
+
+The two in-run wide mocks (`mocks/wide/exploration.html`, `mocks/wide/combat.html`) carry the handles + collapse chevrons in lockstep with production (Rule 8 error-level parity). The console-mode wide mocks (`mocks/wide/console-*.html`) remain uncollapsed — matches the playfield-palette precedent for standalone console mocks; no scan finding.
+
+**Design-scan surface**
+
+No new errors introduced (0 errors / 7 warnings / 2 info — baseline unchanged). Production-only classes `.pane-resize-handle`, `.pane-collapse-btn`, `.pane-resize-{left,right}`, `.pane-collapse-{left,right}` are safe under `check-mock-classes.js` (mock→prod scan direction: production-only classes never fail). The scan-relevant classes on the two wide mocks all exist in production CSS.
+
+**Test surface**
+
+- `tests/ui/layout.test.js` — pane controller unit pins (default apply, defensive clamp on bogus persisted values, drag persists, collapse persists, keyboard resize persists, cleanup removes injected DOM).
+- `tests/ui/exploration-screen.test.js` / `tests/ui/combat-screen.test.js` — integration pins (handles + collapse buttons present in wide mount, absent in portrait mount, absent after unmount).
+- `tests/e2e/wide-panes.spec.js` — 3 acceptance tests in the `chromium-portrait` project with a per-test widened viewport (1440×900): drag-and-persist, collapse-and-persist, keyboard-does-not-move-party. Other projects skip.
+
+No `service-worker.js` manifest change (M100 lives in an existing file). No new M-ID.
