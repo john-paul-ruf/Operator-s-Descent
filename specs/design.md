@@ -26,17 +26,23 @@ The base is neon-on-violet, ported from Universal Operator's Tarot. A single CSS
 
 #### Playfield Palette
 
-Canvas-side lattice palette; not tokenized in `:root` because the playfield renders on `<canvas>` in production, driven by exported constants in `src/ui/playfield.js` (FLOOR_COLOR, WALL_COLOR, HIDDEN_COLOR, GRID_COLOR, WALL_LINE_COLOR). Owner directive (2026-08-15) — the surface reads as a vector display: cyan boundary lines, very-light-grey walkable interior with dark gridlines, pure black everywhere else.
+Canvas-side lattice palette; not tokenized in `:root` because the playfield renders on `<canvas>` in production, driven by exported constants in `src/ui/playfield.js` (FLOOR_COLOR, FLOOR_DIM_COLOR, WALL_COLOR, HIDDEN_COLOR, GRID_COLOR, WALL_LINE_COLOR, TICK_DIM_ALPHA). Owner directive (clarity-and-fit 2026-08-16) — the surface reads as a near-black vector display: cyan boundary lines, near-black walkable interior with light-grey `-|-` corner ticks at cell intersections, pure black everywhere else.
 
 | Surface | Value | Notes |
 |---------|-------|-------|
 | Wall boundary line | #7ec8e3 | The design-system cyan. Solid, 2px, drawn inside the traversable cell edge (inset 1px). Fixed — does NOT re-tint per floor theme; party token and UI accent still do. |
-| Traversable fill (OPEN / CONTAINER / DESCENT) | #e8e8e8 | Very light grey — the only surface that carries gridlines. |
-| Gridlines | #3a3a3a, 1px | Drawn ONLY on traversable cells — the black field carries no grid. |
+| Traversable fill (OPEN / CONTAINER / DESCENT), currently visible (fog 2) | #101010 | Near-black — the walkable field. Owner directive: "almost black gray". |
+| Traversable fill, seen-not-visible (fog 1) | #0a0a0a | Slightly darker than #101010 so fog-of-war reads without a superimposed overlay pass. |
+| Intersection ticks (`-|-`) | #3a3a3a, arm ≈ ⌈size/6⌉px, 1px stroke | Drawn ONLY at interior cell corners touched by ≥1 revealed traversable cell. No full-cell gridlines. |
+| Intersection ticks (dim) | #3a3a3a at 45% globalAlpha (TICK_DIM_ALPHA) | Ticks whose 4 touching cells are all fog-1 dim; keeps the intersection legible without stealing focus from currently-visible geometry. |
 | Inaccessible surfaces (wall interior, out-of-bounds, unexplored fog) | #000000 | Exact hex per directive; unexplored and unwalkable intentionally read the same, so the cyan boundary is the only geometry signal. |
-| Seen-not-visible (fog 1) | rgba(0,0,0,0.55) overlay | Drawn after the line pass; dims grey + cyan together. |
+| Staged-path preview marker | #d8d8d8 at 55% globalAlpha | 5×5 square centered in each staged cell; the final staged cell adds a 1px inset outline at full opacity (PATH_COLOR). |
 
-Wall lines are keyed on the traversable cell's own fog state, so unexplored geometry never leaks. In combat, neighbor lookups sample the full grid (not the camera window) so a cell at the window border whose true neighbor is floor receives no spurious cyan frame.
+Wall lines are keyed on the traversable cell's own fog state, so unexplored geometry never leaks. In combat, neighbor lookups sample the full grid (not the camera window) so a cell at the window border whose true neighbor is floor receives no spurious cyan frame. The old rgba(0,0,0,0.55) visited-overlay pass has been removed — fog-1 is expressed by the dim floor + dim ticks, both of which sit above the near-black base without needing a superimposed layer.
+
+#### Staged Movement Interaction
+
+Every movement input (d-pad, keyboard arrows/WASD/numpad, non-MOVE console panes that decline the input) **stages** rather than executes. The staged path renders as a `#d8d8d8`/55%-alpha preview marker per cell with a 1px inset outline on the tail cell. The center D-pad button relabels to `CONFIRM (n)` while at least one step is staged (overriding `DESCEND`/`WAIT`) and executes the whole buffer in order via the existing `moveParty` semantics on press. UNDO and CLEAR appear in the toggle row (enabled iff `n > 0`); Escape also clears. Interrupts (`hostile`, `hunt`, `container`, `descent`, `damage`) truncate the remaining steps and drain the buffer. Map-tap-to-stage is deferred (BFS pathing is out of scope). The staged-path model lives on the exploration screen; combat is unaffected.
 
 ### Typography
 
