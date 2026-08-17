@@ -248,6 +248,69 @@ describe('enemyAI — move toward optimal range then attack once in range', () =
   });
 });
 
+describe('enemyAI — move action carries desiredRange from behavior', () => {
+  // OPTIMAL_RANGE in enemies.js is the source of truth. Each behavior below must produce the
+  // matching desiredRange on move actions so the executor's greedy walk stops at the right band.
+  const OPTIMAL_RANGE_BY_BEHAVIOR = {
+    aggressive: 1,
+    defensive: 1,
+    flanking: 2,
+    artillery: 3,
+    controller: 2,
+    phasing: 2,
+    'multi-action': 1,
+  };
+
+  for (const [behavior, expected] of Object.entries(OPTIMAL_RANGE_BY_BEHAVIOR)) {
+    it(`behavior ${behavior} → desiredRange ${expected}`, () => {
+      const cursor = createRNGCursorForRun(1);
+      // Synthesized enemy — createEnemy would route choir/null through their special-case
+      // branches and never emit a move action. This isolates the move branch under test.
+      const enemy = {
+        id: `mover_${behavior}`,
+        side: 'enemy',
+        hp: 30,
+        hpMax: 30,
+        behavior,
+        attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+        position: { x: 0, y: 0 },
+        retreats: false,
+      };
+      const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
+      const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
+      expect(action.type).toBe('move');
+      expect(action.desiredRange).toBe(expected);
+      expect(action.targetId).toBe('p1');
+      expect(action.actorId).toBe(enemy.id);
+    });
+  }
+
+  it('unknown behavior falls back to desiredRange 1', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = {
+      id: 'mystery', side: 'enemy', hp: 30, hpMax: 30, behavior: 'unknown-behavior-key',
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+      position: { x: 0, y: 0 }, retreats: false,
+    };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
+    const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
+    expect(action).toMatchObject({ type: 'move', desiredRange: 1 });
+  });
+
+  it('pathing consumes no RNG — cursor unchanged across an AI call that emits a move action', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('drone', 1, cursor, enemiesData);
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
+    const combatBefore = cursor.getCursor('combat');
+    const genBefore = cursor.getCursor('gen');
+    const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
+    expect(action.type).toBe('move');
+    expect(cursor.getCursor('combat')).toBe(combatBefore);
+    expect(cursor.getCursor('gen')).toBe(genBefore);
+  });
+});
+
 describe('enemyAI — Choir casts the highest affordable tier of DISRUPT, else melee', () => {
   it('charge 6 → tier 3', () => {
     const cursor = createRNGCursorForRun(1);

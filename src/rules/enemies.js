@@ -178,7 +178,11 @@ export function enemyAI(enemy, combatState, rngCursor, context = {}) {
   const optimalRange = OPTIMAL_RANGE[enemy.behavior] ?? 1;
   const rangeToTarget = chebyshev(enemy, target);
   if (rangeToTarget !== null && rangeToTarget > optimalRange) {
-    return { type: 'move', actorId: enemy.id, targetId: target.id };
+    // desiredRange tells the executor how close to greedily walk. Combined with the shared
+    // MOVE_RANGE=5 cap in combat.js, this is what lets NPCs traverse up to 5 cells per move
+    // action toward their behavior's optimal band — drones/multi-action to adjacent, artillery
+    // to Chebyshev 3, etc. Echoes/hunts/elites route through this same fallback in resolveTurn.
+    return { type: 'move', actorId: enemy.id, targetId: target.id, desiredRange: optimalRange };
   }
   return { type: 'attack', actorId: enemy.id, targetId: target.id };
 }
