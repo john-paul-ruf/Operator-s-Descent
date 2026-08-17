@@ -37,13 +37,34 @@ Canvas-side lattice palette; not tokenized in `:root` because the playfield rend
 | Intersection ticks (`-|-`) | #3a3a3a, arm ≈ ⌈size/6⌉px, 1px stroke | Drawn ONLY at interior corners whose ALL FOUR touching cells are revealed traversable floor — ticks never poke past a wall boundary. No full-cell gridlines. Owner directive (walls-npc-docks 2026-08-17). |
 | Intersection ticks (dim) | #3a3a3a at 45% globalAlpha (TICK_DIM_ALPHA) | Ticks whose all four touching cells are fog-1 dim; keeps the intersection legible without stealing focus from currently-visible geometry. |
 | Inaccessible surfaces (wall interior, out-of-bounds, unexplored fog) | #000000 | Exact hex per directive; unexplored and unwalkable intentionally read the same, so the cyan boundary is the only geometry signal. |
-| Staged-path preview marker | #d8d8d8 at 55% globalAlpha | 5×5 square centered in each staged cell; the final staged cell adds a 1px inset outline at full opacity (PATH_COLOR). |
+| Tap-to-move route trail marker | #d8d8d8 at 55% globalAlpha | 5×5 square centered in each cell along the previewed route; the destination cell adds a 1px inset outline at full opacity (PATH_COLOR). Rendered during the brief route-flash on exploration tap-to-move (owner directive, map-pan-zoom 2026-08-17) and during combat's tap-to-route preview before the confirm tap. |
 
 Wall lines are keyed on the traversable cell's own fog state, so unexplored geometry never leaks. In combat, neighbor lookups sample the full grid (not the camera window) so a cell at the window border whose true neighbor is floor receives no spurious cyan frame. The old rgba(0,0,0,0.55) visited-overlay pass has been removed — fog-1 is expressed by the dim floor + dim ticks, both of which sit above the near-black base without needing a superimposed layer.
 
-#### Staged Movement Interaction
+#### Movement Interaction (AMENDED 2026-08-17 via map-pan-zoom)
 
-Every movement input (d-pad, keyboard arrows/WASD/numpad, non-MOVE console panes that decline the input) **stages** rather than executes. The staged path renders as a `#d8d8d8`/55%-alpha preview marker per cell with a 1px inset outline on the tail cell. The center D-pad button relabels to `CONFIRM (n)` while at least one step is staged (overriding `DESCEND`/`WAIT`) and executes the whole buffer in order via the existing `moveParty` semantics on press. UNDO and CLEAR appear in the toggle row (enabled iff `n > 0`); Escape also clears. Interrupts (`hostile`, `hunt`, `container`, `descent`, `damage`) truncate the remaining steps and drain the buffer. Map-tap-to-stage is deferred (BFS pathing is out of scope). The staged-path model lives on the exploration screen; combat is unaffected.
+Owner directive (2026-08-17): the map pans and zooms on mobile and desktop on both surfaces
+(exploration and combat) via the M104 viewport camera (`src/ui/viewport.js`); the previous
+stage → CONFIRM buffer is retired.
+
+- **Exploration (overworld) — instant execution.** Every d-pad press, keyboard arrow/WASD/
+  numpad step, and map tap moves the party immediately. The center D-pad button reverts to
+  `DESCEND`/`WAIT` and never relabels to `CONFIRM`. Tap-to-move over a revealed, walkable
+  cell runs a pure BFS path (`findExplorationPath` in `src/exploration/movement.js`) through
+  `moveParty` step-by-step, so the existing auto-stop interrupts (`hostile`, `hunt`,
+  `container`, `descent`, `damage`) and the danger-clock tick pipeline behave identically to
+  keyboard walking. A brief route-flash renders the tap-to-move-path preview marker
+  (`#d8d8d8`/55%) as the steps execute.
+- **Combat — tap-to-route, tap-again-to-confirm.** The first tap on a reachable cell shows
+  the route preview (BFS via `selectDestination`, same marker as exploration); tapping the
+  same destination cell again executes the move. The COMBAT console retains its `CONFIRM`
+  affordance so the keyboard flow (Tab/arrow to cycle → Enter to confirm) is unchanged and
+  a `GO` frame highlights the endpoint cell.
+- **Pan and zoom (both surfaces).** Drag pans the camera; pinch (touch) and mouse wheel
+  zoom. The camera clamps between fit-entire-world (floor) and 4× fit (ceiling). Tap and
+  drag are separated by a 6px movement threshold — releases within 6px of the press count
+  as taps and route via the movement pipelines above; releases past the threshold pan the
+  camera without moving the party or routing combat.
 
 ### Typography
 
@@ -278,18 +299,25 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 ## Interaction Notes
 
 ### Console Interaction Model
-- The console is the **single input surface**. No map-tapping, no context menus, no floating panels.
+- The console is the **primary input surface** for mode-scoped actions (attack, cast, item,
+  descend, wait). The map itself accepts pan/zoom gestures and movement taps directly via
+  the M104 viewport camera (AMENDED 2026-08-17 via map-pan-zoom) — see **Movement
+  Interaction**. No context menus, no floating panels.
 - Seven mutually exclusive modes selected via a tab bar.
 - **Collapsed state:** Shows only the tab bar + minimal info (~48px tall). Maximizes playfield.
-- **Expanded state:** Fixed height per mode. Dims playfield behind it. Auto-pans playfield to keep active actor visible.
+- **Expanded state:** Fixed height per mode. Dims playfield behind it. The M104 viewport
+  camera keeps the active actor in view via user pan/zoom in every class (the console no
+  longer auto-pans the playfield).
 - **Mode switching:** Tap/click tab, or keyboard shortcut (1–7 keys mapped to modes).
 - **Keyboard parity:** Arrow keys / numpad / WASD for MOVE. Tab to cycle modes. Enter to confirm. Escape to collapse.
-- **Touch parity:** 96px minimum row height. Tap-to-select + confirm step for combat targeting.
+- **Touch parity:** 96px minimum row height. Tap-to-select + confirm step for combat targeting; map surfaces accept tap-to-move (overworld) and tap-to-route + tap-again-to-confirm (combat) per **Movement Interaction**.
 
 ### Combat Targeting
 - COMBAT mode lists available actions (Attack, Cast, Item, Retreat).
 - Selecting "Attack" enters **targeting sub-mode**: playfield shows valid targets highlighted, range overlay visible.
-- **Touch:** tap a target → confirm button appears → tap confirm to execute.
+- **Touch:** tap a target → confirm button appears → tap confirm to execute. Movement in
+  combat uses the same tap-to-route + tap-again-to-confirm pattern on the map per
+  **Movement Interaction** (map-pan-zoom 2026-08-17).
 - **Keyboard:** Tab/arrow to cycle targets → Enter to confirm.
 - Range band and cover status displayed for current target.
 
@@ -333,9 +361,11 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 
 ### Adaptive Layout System
 
-Owner directive (2026-08-14, superseding the earlier "no responsive reflow" premise): the UI
-targets **two layout classes**, each optimal at its resolution and fluid within its class.
-Selection is by a single media-query rule; there is no per-screen or per-component breakpoint.
+Owner directive (2026-08-14, superseding the earlier "no responsive reflow" premise; AMENDED
+2026-08-17 via map-pan-zoom — the map docks and fills the entire middle; the vertical descent
+premise now lives in the content, not in column geometry): the UI targets **two layout
+classes**, each optimal at its resolution and fluid within its class. Selection is by a single
+media-query rule; there is no per-screen or per-component breakpoint.
 
 **Layout classes and selection**
 
@@ -367,12 +397,12 @@ design would have letterboxed away.
 | Grid area | CSS grid-template-columns value | Contents |
 |-----------|--------------------------------|----------|
 | telemetry | minmax(280px, var(--wide-left-w, 280px)) | Status-strip fields (depth, seed, party HP sigils, danger clock, corruption; round/initiative/AP in combat) stacked vertically at the top; persistent live LOG feed occupies the remainder |
-| playfield | minmax(320px, calc(100vh * 9 / 16)) | Canvas playfield — stays **portrait-proportioned** (9:16 aspect anchored to viewport height); the descent premise stays vertical in every class |
-| console | minmax(max(360px, var(--wide-right-w, 360px)), 1fr) | Console dock — always expanded, seven vertical mode tabs on the inner edge, mode content in the remainder; **absorbs all surplus viewport width** via the trailing 1fr |
+| playfield | minmax(320px, 1fr) | Canvas playfield fills the middle (AMENDED 2026-08-17 via map-pan-zoom); the descent premise stays vertical in the **content** — the 20×32 world seen through the M104 pan/zoom viewport camera — not in column geometry |
+| console | max(360px, var(--wide-right-w, 360px)) | Console dock — always expanded, seven vertical mode tabs on the inner edge, mode content in the remainder; **fixed user-chosen width** |
 
-The grid template is `grid-template-columns: minmax(280px, var(--wide-left-w, 280px)) minmax(320px, calc(100vh * 9 / 16)) minmax(max(360px, var(--wide-right-w, 360px)), 1fr);` with `grid-template-rows: 100vh;` and `justify-content: center;` on the shell. At the 900px minimum breakpoint the three regions sum to their floors (920px, matching the breakpoint — see the collapsed rail values below for the compact-mode floor). The middle playfield track is invariant: its portrait 9:16 proportion is protected by Custom Rule 8.
+The grid template is `grid-template-columns: minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) max(360px, var(--wide-right-w, 360px));` with `grid-template-rows: 100vh;` on the shell. At the 900px minimum breakpoint the three regions sum to their floors (960px, matching the breakpoint — see the collapsed rail values below for the compact-mode floor). The middle playfield track always holds 1fr and absorbs surplus width; the docks are fixed at their user-chosen widths.
 
-**Surplus-width distribution.** The playfield column stays aspect-locked at `100vh * 9 / 16` (Custom Rule 8 — the descent premise is vertical in every class), and the telemetry column stays at its user-chosen width (unbounded growth adds nothing to a stacked readout). All viewport width beyond `--wide-left-w + 100vh*9/16 + max(360px, --wide-right-w)` is absorbed by the console-dock column via the trailing 1fr, so the shell always reaches the viewport-right edge — no dead gutter at any width. Consequently `--wide-right-w` becomes the console dock's **user-chosen minimum share** (a drag to 500px keeps the dock ≥ 500px), not its fixed width. When either dock collapses to a rail (48px / 96px, no 1fr in play) the shell centers under `justify-content: center` instead of hugging the left edge. The right resize handle is repositioned via a `--wide-middle-w` helper var so it tracks the actual playfield/dock boundary (which is now `left + middle` from the viewport-left, no longer `--wide-right-w` from the right).
+**Surplus-width distribution (AMENDED 2026-08-17 via map-pan-zoom).** The playfield column absorbs ALL surplus viewport width in every pane state via the middle track's 1fr — the map docks and fills the entire center. The telemetry column stays at its user-chosen width (unbounded growth adds nothing to a stacked readout), and the console dock is fixed at `max(360px, --wide-right-w)` — `--wide-right-w` is again the dock's fixed user-chosen width (not a floor), so a drag to 500px sets the dock at exactly 500px. Tracks always sum to 100vw so both rails stay flush to their viewport edges at every pane combination — collapsed (48px / 96px) or open. The `--wide-middle-w` helper var is retired; the right resize handle is re-anchored from the viewport-right by the dock's own fixed width (`max(360px, --wide-right-w) - 4px`).
 
 **Wide dock sizing and collapse (M100).** Both docks are user-resizable and user-collapsible. The M100 pane controller (`attachWidePanes` in `src/ui/layout.js`) owns `--wide-left-w`, `--wide-right-w`, `data-pane-left`, and `data-pane-right` on the wide shell.
 
@@ -389,7 +419,7 @@ Behavior:
 - **Reset.** Double-click a handle to restore the default (280 / 360).
 - **Collapse.** Click a `.pane-collapse-btn` chevron. Collapsed telemetry hides its content behind a 48px rail; the chevron flips to point outward and re-expands on click. Collapsed console hides `.wide-console-content`; the 96px `.wide-console-tabs` column stays visible and interactive, so clicking any tab re-expands the content pane to the persisted (or default) width.
 - **Persistence.** Persisted through the existing settings passthrough (`saveSettings({ widePanes: { left, right } })`, values are numeric px or the string `'collapsed'`); read defensively via `loadSettings()` — non-finite values fall back to the default, out-of-range values clamp to bounds.
-- **Bounds guarantee.** Custom Rule 8 (portrait 9:16 playfield column) is preserved at every valid pane combination; the middle track never scales with the pane widths.
+- **Bounds guarantee (AMENDED 2026-08-17 via map-pan-zoom).** At every valid pane combination the middle playfield track stays ≥ 320px, the console dock stays ≥ 360px (open) or exactly 96px (collapsed), the telemetry stays ≥ 280px (open) or exactly 48px (collapsed), and both rails sit flush against their viewport edges. The 9:16 invariant on the playfield column is retired — the descent premise now lives in the content behind the M104 viewport camera.
 
 **Wide flow-screen layouts.** Non-game screens each use the width purposefully. Full per-screen
 matrix in **Screen Layouts by Class** below; summary:
@@ -468,7 +498,7 @@ levels, CRT/glitch timing constants, and bus event names are likewise class-inde
 |---|-----------|-----------------|-------------|------------------------|
 | 1 | `mocks/title.html` | Full-viewport CRT background; centered vertical stack — machine header, ◈ ornament + title lockup + tagline, START control, branch list (revealed post-START), footer legalia. Frame fills viewport width up to the class boundary. | Centered vertical stack retained; ornament field widens with the viewport; branch list narrows to ~40% viewport width or a fixed max centered under the lockup. No dock; the CRT effects fill the whole viewport. | Title lockup content, tagline, START WebAudio-gesture role, branch labels, tutorial-offer flag, ◈ ornament, palette, type scale, CRT constants |
 | 2 | `mocks/creation.html` | Full-viewport CRT background; single-column tabbed editor (CLASS → SIGIL → ATTR → GEAR → TECH tabs), live readout header (points remaining, credits, AP/round), character slot bar, blueprint / saved-configs row, action footer. | Two-pane split: **left pane** = roster + saved-configs + readout (fixed ~40% viewport width, minmax(360px, 40%)); **right pane** = editor for the selected slot (all creation subsections stacked, no tab switching needed at ≥900px). Action footer spans both panes. | 80-point buy math, class definitions, sigil bank rules, gate/cost tables, live readout format, saved-config CRUD, finalize action |
-| 3 | `mocks/exploration.html` | Full-viewport CRT frame; top status strip, 20×32 lattice fills the middle, bottom-pinned expanded console with 7-tab horizontal bar and MOVE mode content. | **Three-region shell** per **Wide game-screen shell** above: telemetry dock (status fields stacked + live LOG feed) \| portrait-proportioned playfield column (20×32 lattice, 9:16 aspect) \| console dock (7 vertical tabs, MOVE expanded, no collapse). Full-viewport CRT covers all three regions. | 20×32 lattice, shadowcast LOS, fog-of-war states, auto-stop rules, MOVE keyboard/touch mapping, danger-clock display |
+| 3 | `mocks/exploration.html` | Full-viewport CRT frame; top status strip, 20×32 lattice fills the middle, bottom-pinned expanded console with 7-tab horizontal bar and MOVE mode content. | **Three-region shell** per **Wide game-screen shell** above: telemetry dock (status fields stacked + live LOG feed) \| playfield column that fills the middle (20×32 lattice viewed through the M104 pan/zoom viewport camera) \| console dock (7 vertical tabs, MOVE expanded, no collapse). Full-viewport CRT covers all three regions. | 20×32 lattice, shadowcast LOS, fog-of-war states, auto-stop rules, MOVE keyboard/touch mapping, danger-clock display |
 | 4 | `mocks/combat.html` | Full-viewport CRT frame; top status strip (depth + round + initiative rail + active HP/CHARGE), 8×16 combat grid at 2× zoom fills the middle, bottom-pinned expanded console with COMBAT mode (actions, targeting sub-mode). | Three-region shell: telemetry dock (status fields stacked, initiative rail vertical or wrapped, active-actor readout, live LOG feed) \| portrait-proportioned combat grid column (8×16, 9:16 aspect) \| console dock (7 vertical tabs, COMBAT active, targeting sub-mode inside the dock). | 8×16 grid geometry, initiative order, AP costs, targeting flow, range bands, cover, condition tags, deployment separation rules |
 | 5 | `mocks/console-party.html` | Bottom-anchored expanded console overlaying dimmed playfield; PARTY mode content (member list, selected member detail, attributes, HP/CHARGE/conditions, corruption contribution). | Console dock at the right of the three-region shell hosts the same PARTY mode content in its native layout. Playfield is NOT dimmed in wide (the dock does not overlap it); telemetry dock keeps status + LOG feed visible. | Member data model, attribute display formulas, condition tag classes, HP/CHARGE/AP indicators, corruption tally |
 | 6 | `mocks/console-gear.html` | Bottom-anchored expanded console overlaying dimmed playfield; GEAR mode content (character selector, equipped slots, inventory list, junk toggle, CORRUPT warning, scrap counter). | Console dock hosts GEAR content in its native layout; playfield not dimmed. | Equipment slot model, inventory 100-cap enforcement, junk/scrap system, CORRUPT warning styling, salvage math |
