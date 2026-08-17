@@ -1626,3 +1626,8 @@ Legacy cell-window combat camera retired. The playfield now renders the full com
 ## Overlay contract (M58 → combat.js)
 
 Combat screen's `overlayOptions()` now returns `confirmCell = ${pathEndpoint(actor).x},${pathEndpoint(actor).y}` whenever `actionType === 'move'` and the path is non-empty (`null` otherwise). Renders the GO frame at the routed destination during move preview + confirm.
+
+<!-- ui-clarity-pass UC-01 -->
+### M104 Viewport — zoomToCells default-zoom API (ui-clarity-pass UC-01)
+
+**`camera.zoomToCells(worldCellPx, targetScreenPx)`** — sets an absolute default zoom so one world cell renders at ≈`targetScreenPx` on screen, clamped to `[fitScale, fitScale × MAX_ZOOM_SCALE]` (`[fit, 4×fit]`). Preserves the current view center; caller re-centers. No-op if either argument is zero/undefined. Introduced for exploration's "maximize on entry" default — M70 `primeCamera` now primes at 40 px/cell (≈1.6× fit on a world-sized viewport) instead of `fit()`, then centers on the party. Unchanged: `fit()`, `fitScale()`, `clampScale`, `MAX_ZOOM_SCALE` — combat retains fit-to-grid via `fit()`.
