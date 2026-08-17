@@ -58,6 +58,7 @@ class FakeContext {
   fillRect(...args) { this.calls.push(['fillRect', this.fillStyle, ...args]); }
   strokeRect(...args) { this.calls.push(['strokeRect', this.strokeStyle, ...args]); }
   fillText(...args) { this.calls.push(['fillText', this.fillStyle, ...args]); }
+  setTransform(...args) { this.calls.push(['setTransform', ...args]); }
 }
 
 function lattice() {
@@ -421,5 +422,105 @@ describe('playfield rendering', () => {
     expect(playfield.setAccent({ accent: '#123abc' })).toBe(true);
     expect(document.documentElement.style.properties['--accent']).toBe('#123abc');
     expect(playfield.setAccent('not-a-color')).toBe(false);
+  });
+
+  test('renderExploration with viewTransform applies setTransform(matrix) after clear and resets to identity at the end', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    const viewTransform = { scale: 2, dx: -48, dy: -96 };
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 }, { viewTransform });
+
+    const transforms = canvas.context.calls.filter(([n]) => n === 'setTransform');
+    // First: identity for clear. Second: view transform. Last: identity reset.
+    expect(transforms.length).toBeGreaterThanOrEqual(3);
+    expect(transforms[0].slice(1)).toEqual([1, 0, 0, 1, 0, 0]);
+    expect(transforms[1].slice(1)).toEqual([2, 0, 0, 2, -48, -96]);
+    expect(transforms.at(-1).slice(1)).toEqual([1, 0, 0, 1, 0, 0]);
+
+    // The view transform is applied AFTER clearRect (clear runs at identity so it wipes the full canvas).
+    // setTransform args are [a=scale, b=0, c=0, d=scale, e=dx, f=dy] → destructured index 5 = dx.
+    const clearIdx = canvas.context.calls.findIndex(([n]) => n === 'clearRect');
+    const viewIdx = canvas.context.calls.findIndex(([n, s, , , , dx]) => n === 'setTransform' && s === 2 && dx === -48);
+    expect(clearIdx).toBeGreaterThanOrEqual(0);
+    expect(viewIdx).toBeGreaterThan(clearIdx);
+  });
+
+  test('combat + viewTransform draws the FULL window in world px: no camera window subtraction, no cull, aria uses WxH', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', position: { x: 3, y: 3 }, sigilCodepoint: 0xE000 }],
+      // (18, 30) is outside the default 8×16 camera window — with viewTransform, it must still render.
+      ['e1', { id: 'e1', side: 'enemy', position: { x: 18, y: 30 }, sigilCodepoint: 0xE030 }]
+    ]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+
+    playfield.renderCombat({ combatants, turnOrder: ['p1'], currentTurn: 0, round: 4 }, lattice(), {
+      viewTransform,
+      selectedTargetId: 'e1'
+    });
+
+    // The world is 20×32 cells at COMBAT_CELL_SIZE=48 → floor tiles reach x=(19)*48=912, y=(31)*48=1488.
+    // The legacy camera-window path could NOT paint any tile beyond (8*48, 16*48) — proof that the
+    // full window renders through the view transform.
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    expect(fills.some((c) => c[2] === 19 * 48 && c[3] === 31 * 48)).toBe(true);
+
+    // Aria description reflects world dimensions, not window window-corner coords.
+    expect(canvas.getAttribute('aria-label')).toBe('Combat map, window 20x32, round 4.');
+
+    // Selected enemy at (18, 30) is drawn at absolute world coords — no camera.x/y subtraction.
+    // TARGET frame passes px+4/py+4, then drawFrame adds inset=2 → strokeRect at (18*48+6, 30*48+6).
+    // In the legacy windowed path this actor sits outside the 8×16 window and would be culled entirely.
+    const strokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#e83a3a');
+    expect(strokes.some((c) => c[2] === 18 * 48 + 6 && c[3] === 30 * 48 + 6)).toBe(true);
+  });
+
+  test('cellAtPoint inverts a viewTransform under CSS scaling + dpr ≠ 1', () => {
+    const canvas = new FakeCanvas();
+    // Canvas backed by DPR=2: 40×40 CSS px displays as 80×80 device px.
+    canvas.width = 80;
+    canvas.height = 80;
+    canvas.getBoundingClientRect = () => ({ left: 10, top: 20, right: 50, bottom: 60, width: 40, height: 40 });
+    // View transform scale bakes dpr in already: worldScale=1, dpr=2 → viewTransform.scale=2, dx/dy in device px.
+    // Panned so world (0,0) sits at device (-96, -96) (i.e. two 48-cell columns/rows scrolled out of view).
+    const viewTransform = { scale: 2, dx: -96, dy: -96 };
+
+    // Point at CSS (30, 40) → rect-relative (20, 20) → device (40, 40).
+    // World px = (40 - -96) / 2 = 68 (both axes). At cellSize 48 → cell floor(68/48) = 1.
+    expect(cellAtPoint({ canvas, cellSize: 48, viewTransform }, 30, 40)).toEqual({ x: 1, y: 1 });
+
+    // Outside the rect still returns null in the viewTransform branch.
+    expect(cellAtPoint({ canvas, cellSize: 48, viewTransform }, 5, 40)).toBeNull();
+  });
+
+  test('pulse replay preserves the viewTransform args across an rAF-triggered redraw', () => {
+    const raf = [];
+    const originalRaf = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = (cb) => { raf.push(cb); return raf.length; };
+    try {
+      const canvas = new FakeCanvas();
+      const playfield = createPlayfield(canvas);
+      playfield.setPulse(true);
+      const fog = new Uint8Array(20 * 32).fill(2);
+      const viewTransform = { scale: 3, dx: -12, dy: -24 };
+
+      playfield.renderExploration(lattice(), fog, { x: 1, y: 1 }, { viewTransform });
+      expect(raf.length).toBe(1);
+
+      // Frame replay must reapply the same view transform (not fall back to identity).
+      // setTransform args are [a=scale, b=0, c=0, d=scale, e=dx, f=dy] → destructured index 5 = dx.
+      const matchView = ([n, s, , , , dx]) => n === 'setTransform' && s === 3 && dx === -12;
+      const beforeCount = canvas.context.calls.filter(matchView).length;
+      raf[0](50);
+      const afterCount = canvas.context.calls.filter(matchView).length;
+      expect(beforeCount).toBeGreaterThan(0);
+      expect(afterCount).toBeGreaterThan(beforeCount);
+      playfield.destroy();
+    } finally {
+      if (originalRaf) globalThis.requestAnimationFrame = originalRaf; else delete globalThis.requestAnimationFrame;
+    }
   });
 });
