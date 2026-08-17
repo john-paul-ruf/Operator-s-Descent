@@ -1385,3 +1385,24 @@ Helper var introduced in `.wide-shell`: `--wide-middle-w` computes the actual re
 
 **Design contract addition (specs/design.md, new subsection under "Shadow / Glow System" and before "Derived Surface Tokens")**
 - "### Interaction Affordance" — grammar table (rest/hover/focus/active/disabled rules), factory list, `--interactive-border` scoping rationale. Rule: **interactive ⇔ `.is-interactive`**; factories own application, screens must never per-style hovers.
+
+<!-- walls-npc-docks SESSION-01 -->
+### M58 Playfield — thick outside walls, interior-only ticks, pulse loop (SESSION-01, walls-npc-docks)
+
+Public API grew by `setPulse(enabled)`, `destroy()`, and helper `wallThickness(size)`
+plus the pulse-timing constants `WALL_PULSE_PERIOD_MS = 2400`, `WALL_PULSE_FPS = 30`,
+`WALL_GLOW_BLUR = [4, 12]`, `WALL_GLOW_ALPHA = [0.7, 1]` (all exported from
+`src/ui/playfield.js`). `wallThickness = max(3, round(size/8))` → 3px @ 24px
+exploration cells, 6px @ 48px combat cells. Wall lines now paint OUTSIDE the
+traversable square along the wall side of each shared edge with 4×`t`×`t` corner
+joints so adjacent walls read as a continuous run; `-|-` intersection ticks fire
+only when ALL FOUR touching cells are revealed traversable floor (never poke
+across a wall boundary). `createPlayfield` retains its cached last-render
+(`{kind, args}`) and runs a `requestAnimationFrame` loop throttled to ~30 fps
+while `enabled && lastRender`, replaying the cached render with a fresh glow
+level (`0.5 + 0.5 * sin(2π t / PERIOD)` for blur/alpha lerp between the two
+range constants); `setPulse(false)` — or `destroy()` — cancels the pending frame
+and holds walls at the static midpoint `g = 0.7`. Screens (M70/M71) resolve
+`loadSettings().reducedMotion` via runtime.js semantics (`'reduce'` OR `'system'`
++ `prefers-reduced-motion: reduce`) into `setPulse(!reduce)` after
+`createPlayfield`, and call `playfield.destroy()` in their unmount cleanup.
