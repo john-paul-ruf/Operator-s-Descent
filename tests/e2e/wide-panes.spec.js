@@ -136,10 +136,11 @@ test('wide-panes: keyboard resize on focused handle does not move the party', as
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SESSION-04 — surplus width distribution (no dead right gutter, centered when
-// docks collapse). The console-dock column absorbs viewport width beyond the
-// left + playfield tracks via a trailing 1fr; --wide-right-w becomes the
-// user-chosen minimum share, not a fixed width.
+// SESSION-04 (originally clarity-and-fit; assertions AMENDED 2026-08-17 by
+// map-pan-zoom SESSION-04). The middle (playfield) track holds 1fr and
+// absorbs surplus viewport width in every pane state — the map docks and
+// fills the entire middle. The console dock is fixed at
+// max(360px, --wide-right-w). Rails stay flush at every combination.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function dockBounds(page, selector) {
@@ -157,9 +158,18 @@ test('wide-panes: at 1600x900, expanded console dock reaches the viewport-right 
 
   const dock = await dockBounds(page, '.wide-console-dock');
   expect(dock).not.toBeNull();
-  // Trailing 1fr in the console-dock column consumes all surplus width; the
-  // dock's right edge must reach the viewport-right within a 24px tolerance.
+  // Dock is fixed at max(360px, --wide-right-w); with tracks summing to
+  // 100vw and the middle 1fr consuming surplus, the dock's right edge
+  // reaches the viewport-right within a 24px tolerance.
   expect(dock.right).toBeGreaterThanOrEqual(1600 - 24);
+
+  // .wide-playfield-inner fills its column exactly — no centered letterbox
+  // (the 9:16 cap was retired 2026-08-17 by map-pan-zoom).
+  const column = await dockBounds(page, '.wide-playfield-column');
+  const inner = await dockBounds(page, '.wide-playfield-inner');
+  expect(column).not.toBeNull();
+  expect(inner).not.toBeNull();
+  expect(Math.abs(inner.width - column.width)).toBeLessThanOrEqual(1);
 });
 
 test('wide-panes: dragging the right handle wider, reload persists dragged floor and dock still reaches the edge', async ({ page }) => {
@@ -184,18 +194,19 @@ test('wide-panes: dragging the right handle wider, reload persists dragged floor
     .toBeGreaterThan(beforeRight + 80);
   const afterRight = await widthAt(page, 'right');
 
-  // Reload — persisted floor restored.
+  // Reload — persisted width restored.
   await page.reload();
   await expect(page.getByTestId('exploration-canvas')).toBeVisible();
   const restoredRight = await widthAt(page, 'right');
   expect(Math.round(restoredRight)).toBe(Math.round(afterRight));
 
-  // Dock still reaches the viewport-right edge, and its rendered width is at
-  // least the user-chosen floor (1fr expands beyond the floor when surplus
-  // remains).
+  // Dock is fixed at exactly max(360, dragged) wide (map-pan-zoom
+  // 2026-08-17 — 1fr on the middle absorbs surplus, no longer on the dock)
+  // and stays flush against the viewport-right edge. The playfield column
+  // shrinks by the same amount to keep tracks summing to 100vw.
   const dock = await dockBounds(page, '.wide-console-dock');
-  expect(dock.right).toBeGreaterThanOrEqual(1600 - 24);
-  expect(dock.width).toBeGreaterThanOrEqual(restoredRight - 1);
+  expect(dock.right).toBeGreaterThanOrEqual(1600 - 2);
+  expect(Math.abs(dock.width - Math.max(360, restoredRight))).toBeLessThanOrEqual(1);
 });
 
 test('wide-panes: collapsing the right dock pins both rails flush to their viewport edges (no dead gutters, chevrons stay adjacent, expand restores content)', async ({ page }) => {
@@ -209,10 +220,8 @@ test('wide-panes: collapsing the right dock pins both rails flush to their viewp
     .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
     .toBe('collapsed');
 
-  // walls-npc-docks SESSION-03: the middle (playfield) track absorbs surplus
-  // width once the console dock collapses, so both rails hug the viewport
-  // edges. The clarity-and-fit SESSION-04 "symmetric gutters" expectation
-  // was declared bug-tolerant under Custom Rule 11 and is retired here.
+  // Middle (playfield) track absorbs surplus width in every pane state
+  // (map-pan-zoom 2026-08-17); both rails hug the viewport edges.
   const telemetry = await dockBounds(page, '.wide-telemetry-dock');
   const dock = await dockBounds(page, '.wide-console-dock');
   expect(telemetry).not.toBeNull();
@@ -230,19 +239,19 @@ test('wide-panes: collapsing the right dock pins both rails flush to their viewp
   expect(cLeft.left).toBeLessThanOrEqual(16);
   expect(1600 - cRight.right).toBeLessThanOrEqual(16);
 
-  // Middle track absorbs surplus, the canvas keeps its 9:16 proportion via
-  // .wide-playfield-inner max-width + align-self:center (Custom Rule 8).
+  // Playfield column fills the middle; .wide-playfield-inner fills the
+  // column exactly — no centered letterbox (the 9:16 cap was retired
+  // 2026-08-17 by map-pan-zoom, per the Custom Rule 8 amendment).
   const column = await dockBounds(page, '.wide-playfield-column');
   const inner = await dockBounds(page, '.wide-playfield-inner');
-  expect(column.width).toBeGreaterThan(inner.width + 100);
-  const cap = (900 * 9) / 16;
-  expect(inner.width).toBeLessThanOrEqual(cap + 1);
-  // Inner centered horizontally within the column.
-  const leftPad = inner.left - column.left;
-  const rightPad = column.right - inner.right;
-  expect(Math.abs(leftPad - rightPad)).toBeLessThanOrEqual(2);
+  expect(Math.abs(inner.width - column.width)).toBeLessThanOrEqual(1);
+  // Column stretches to fill viewport minus both docks (±1px tolerance).
+  const expectedMid = 1600 - telemetry.width - dock.width;
+  expect(Math.abs(column.width - expectedMid)).toBeLessThanOrEqual(1);
+  // Column ≥ 320px (the minmax() floor).
+  expect(column.width).toBeGreaterThanOrEqual(320);
 
-  // Re-expand: the content pane must come back and the dock's floor
+  // Re-expand: the content pane must come back and the dock's width
   // becomes at least the WIDE_PANE_RIGHT_BOUNDS default (360px).
   await collapseRight.click();
   await expect

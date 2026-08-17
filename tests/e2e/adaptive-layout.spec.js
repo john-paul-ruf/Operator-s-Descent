@@ -82,15 +82,18 @@ test('exploration wide shell: three regions with canonical grid columns', async 
   await expect(page.locator('.wide-playfield-column')).toBeVisible();
   await expect(page.locator('.wide-console-dock')).toBeVisible();
 
-  // Canonical grid columns from styles/wide.css line 16 (values resolved as "Npx Npx Npx").
+  // Canonical grid columns from styles/wide.css (values resolved as "Npx Npx Npx").
   const cols = await shell.evaluate((el) => getComputedStyle(el).gridTemplateColumns);
   const parts = cols.trim().split(/\s+/);
   expect(parts).toHaveLength(3);
   const [left, mid, right] = parts.map(parseFloat);
   const vh = await page.evaluate(() => window.innerHeight);
-  // Middle column resolves to `calc(100vh * 9 / 16)` at minimum 320px.
-  expect(mid).toBeGreaterThanOrEqual(Math.min(320, Math.round(vh * 9 / 16)) - 1);
-  // Left ≥ 280, right ≥ 360 per the minmax() floors.
+  const vw = await page.evaluate(() => window.innerWidth);
+  // Middle track absorbs surplus (map-pan-zoom 2026-08-17): mid ≈ vw − left − right (±1px)
+  // and mid ≥ 320 per the minmax() floor.
+  expect(mid).toBeGreaterThanOrEqual(320);
+  expect(Math.abs(mid - (vw - left - right))).toBeLessThanOrEqual(1);
+  // Left ≥ 280, right ≥ 360 per the minmax() / max() floors.
   expect(left).toBeGreaterThanOrEqual(279);
   expect(right).toBeGreaterThanOrEqual(359);
 
