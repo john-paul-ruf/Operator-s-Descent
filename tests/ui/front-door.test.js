@@ -386,13 +386,11 @@ describe('runtime update surfacing', () => {
     globalThis.window = globalThis.window || {};
     globalThis.window.location = { reload: () => { reloadCalls += 1; } };
 
-    // Importing main.js registers the bus subscription (side effect on load).
-    // With no <div id="crt-overlays"> in the fake document, the CRT-overlays
-    // import path stays quiescent; the in-run boot gate only fires when
-    // window.location is well-formed and __odSkipBoot is unset — set the
-    // sentinel so the runtime dynamic import stays out of this test.
+    // Importing runtime.js registers the update-toast bus subscription at
+    // module load. Setting __odSkipBoot keeps main.js from firing its runtime
+    // dynamic-import boot path when it loads as a transitive dependency.
     globalThis.__odSkipBoot = true;
-    await import('../../src/main.js');
+    await import('../../src/runtime.js');
 
     bus.dispatch('runtime:update-ready', {});
     bus.dispatch('runtime:update-ready', {});

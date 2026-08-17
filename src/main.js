@@ -1,6 +1,3 @@
-import { bus } from './state/bus.js';
-import { createUpdateToast } from './ui/components.js';
-
 let activeGameData = null;
 
 export const gameData = new Proxy({}, {
@@ -22,21 +19,6 @@ let crtOverlaysController = null;
 export function getCrtOverlaysController() {
   return crtOverlaysController;
 }
-
-const parentsWithUpdateToast = new WeakSet();
-bus.on('runtime:update-ready', () => {
-  const parent = document.getElementById('portrait-frame') || document.body;
-  if (!parent || parentsWithUpdateToast.has(parent)) return;
-  const toast = createUpdateToast({
-    onReload: () => {
-      if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-        window.location.reload();
-      }
-    }
-  });
-  parent.appendChild(toast);
-  parentsWithUpdateToast.add(parent);
-});
 
 const overlaysContainer = document.getElementById('crt-overlays');
 if (overlaysContainer) {

@@ -12,6 +12,27 @@ import { generateFloor } from './floor/generator.js';
 import { beginFloorTransition, completeFloorTransition } from './rules/progression.js';
 import { initLayoutController } from './ui/layout.js';
 import { parseFragment, createHistoryController } from './router.js';
+import { createUpdateToast } from './ui/components.js';
+
+// Runtime-scoped update surfacing (walls-npc-docking SESSION-03). Mounts
+// exactly one CRT toast per hosting document — the WeakSet is keyed on the
+// portrait-frame node so a fresh test document naturally resets tracking.
+const parentsWithUpdateToast = new WeakSet();
+bus.on('runtime:update-ready', () => {
+  if (typeof document === 'undefined') return;
+  const parent = document.getElementById?.('portrait-frame') || document.body;
+  if (!parent || parentsWithUpdateToast.has(parent)) return;
+  const toast = createUpdateToast({
+    onReload: () => {
+      if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+        window.location.reload();
+      }
+    }
+  });
+  if (typeof parent.appendChild !== 'function') return;
+  parent.appendChild(toast);
+  parentsWithUpdateToast.add(parent);
+});
 
 export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
 export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'import-resume', 'explicit-exit']);
