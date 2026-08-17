@@ -17,6 +17,21 @@ const MOTION_OPTIONS = [
   ['full', 'ALLOW', 'Allow full motion even when the system asks to reduce.']
 ];
 
+const INFO_ROWS = [
+  ['Version', '1.0'],
+  ['Build', 'OFFLINE'],
+  ['Cache', 'Service Worker'],
+  ['Transfer', '< 500 KB']
+];
+
+function appendCaption(parent, text) {
+  const caption = document.createElement('small');
+  caption.className = 'caption';
+  caption.textContent = text;
+  parent.appendChild(caption);
+  return caption;
+}
+
 function dispatchChange(key, value) {
   bus.dispatch('state:settings-change', { key, value });
 }
@@ -96,6 +111,11 @@ export function mount(container, params = {}) {
   mute.dataset.testid = 'settings-master-mute';
   cleanups.push(() => mute.cleanup?.());
   audioPanel.appendChild(mute);
+  appendCaption(audioPanel, 'Silence all audio');
+
+  const perLayerCaption = appendCaption(audioPanel, 'PER-LAYER VOLUME');
+  perLayerCaption.classList.add('micro');
+  perLayerCaption.dataset.testid = 'settings-per-layer-caption';
 
   for (const [layer, label] of LAYERS) {
     const slider = createSlider(label, settings.layerVolumes[layer] ?? 75, (value) => {
@@ -126,6 +146,7 @@ export function mount(container, params = {}) {
   glitch.dataset.testid = 'settings-glitch';
   cleanups.push(() => glitch.cleanup?.());
   visualPanel.appendChild(glitch);
+  appendCaption(visualPanel, 'Char substitution, VHS, jitter, bars, flash');
 
   const motionGroup = document.createElement('div');
   motionGroup.className = 'motion-options';
@@ -137,6 +158,7 @@ export function mount(container, params = {}) {
   motionTitle.className = 'panel-title';
   motionTitle.textContent = 'REDUCED MOTION';
   motionGroup.appendChild(motionTitle);
+  appendCaption(motionGroup, 'Manual override · disables glitch + transitions');
 
   for (const [value, label, description] of MOTION_OPTIONS) {
     const option = createButton(label, {
@@ -166,6 +188,29 @@ export function mount(container, params = {}) {
   texture.dataset.testid = 'settings-scanline-grain';
   cleanups.push(() => texture.cleanup?.());
   visualPanel.appendChild(texture);
+  appendCaption(visualPanel, 'CRT frame texture (independent of glitch)');
+
+  const infoTitle = document.createElement('div');
+  infoTitle.className = 'section-header glow';
+  infoTitle.textContent = '◈ INFO';
+  const infoPanel = createPanel();
+  infoPanel.classList.add('s-3');
+  infoPanel.dataset.testid = 'settings-info-panel';
+  for (const [label, value] of INFO_ROWS) {
+    const row = document.createElement('div');
+    row.className = 'info-row';
+    row.style.display = 'flex';
+    row.style.justifyContent = 'space-between';
+    row.style.gap = '8px';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'micro';
+    labelEl.textContent = label;
+    const valueEl = document.createElement('span');
+    valueEl.className = 'micro accent-text';
+    valueEl.textContent = value;
+    row.append(labelEl, valueEl);
+    infoPanel.appendChild(row);
+  }
 
   const back = createButton('BACK', {
     onClick: () => bus.dispatch('ui:navigate', { screen: params.from || 'title', params: {} })
@@ -185,10 +230,10 @@ export function mount(container, params = {}) {
     const visualColumn = document.createElement('div');
     visualColumn.className = 'wide-settings-column';
     visualColumn.dataset.testid = 'settings-visual-column';
-    visualColumn.append(visualTitle, visualPanel);
+    visualColumn.append(visualTitle, visualPanel, infoTitle, infoPanel);
     body.append(audioColumn, visualColumn);
   } else {
-    body.append(status, audioTitle, audioPanel, visualTitle, visualPanel);
+    body.append(status, audioTitle, audioPanel, visualTitle, visualPanel, infoTitle, infoPanel);
   }
 
   screen.append(header, body, footer);
