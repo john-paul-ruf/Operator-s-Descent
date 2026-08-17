@@ -79,6 +79,19 @@ export function createViewportCamera({ worldW, worldH } = {}) {
     clampAll();
   }
 
+  function zoomToCells(worldCellPx, targetScreenPx) {
+    // Scale so one world cell ≈ targetScreenPx on screen, clamped to [fit, 4×fit].
+    // Preserves the current center; caller re-centers on the party after.
+    if (!worldCellPx || !targetScreenPx) return;
+    const center = state.viewW && state.viewH ? currentCenter() : null;
+    state.scale = clampScale(targetScreenPx / worldCellPx);
+    if (center) {
+      state.x = center.x - state.viewW / (2 * state.scale);
+      state.y = center.y - state.viewH / (2 * state.scale);
+    }
+    clampAll();
+  }
+
   function getState() {
     return {
       x: state.x,
@@ -133,6 +146,7 @@ export function createViewportCamera({ worldW, worldH } = {}) {
     setViewport,
     fitScale,
     fit,
+    zoomToCells,
     getState,
     centerOn,
     panBy,
