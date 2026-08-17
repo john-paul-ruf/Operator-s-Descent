@@ -345,6 +345,99 @@ describe('combat screen controller', () => {
     expect(byTestId(container, 'combat-undo')).toBe(null);
   });
 
+  it('tapping the canvas during choose-action enters move with a BFS path and confirm-hint notice', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    const playfield = byClass(container, 'combat-playfield');
+    // No prior action click — the tap must promote choose-action → move → routed path.
+    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+
+    const hero = combat.combatants.get('hero');
+    // First tap only routes; hero has not moved.
+    expect(hero.position).toEqual({ x: 1, y: 1 });
+    // BFS path enters confirm phase and the tap-again hint appears in the console notice slot.
+    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+    expect(byTestId(container, 'combat-notice').textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
+  });
+
+  it('a second tap on the routed destination executes the move via the canvas', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    const playfield = byClass(container, 'combat-playfield');
+    // Tap 1: route BFS path to (3,3) — 2 SE steps.
+    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+    expect(byTestId(container, 'combat-notice').textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
+
+    // Tap 2: same cell → confirm inline, no separate CONFIRM click.
+    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+
+    const hero = combat.combatants.get('hero');
+    expect(hero.position).toEqual({ x: 3, y: 3 });
+    expect(hero.moveAvailable).toBe(false);
+    expect(combat.log.find((entry) => entry.type === 'move').steps).toBe(2);
+  });
+
+  it('tapping a different reachable cell re-routes instead of confirming', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    const playfield = byClass(container, 'combat-playfield');
+    // Tap 1: cell (2,2) — 1 SE step.
+    playfield.dispatch('pointerdown', { clientX: 104, clientY: 104 });
+    playfield.dispatch('pointerup', { clientX: 104, clientY: 104 });
+    // Tap 2: a DIFFERENT reachable cell (3,3) — re-routes (2 SE), does not confirm the (2,2) path.
+    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+
+    const hero = combat.combatants.get('hero');
+    // Hero has not moved — no confirmation happened.
+    expect(hero.position).toEqual({ x: 1, y: 1 });
+    // Confirm is still enabled: a valid routed path exists (to the new destination).
+    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+    // Confirming through the console now executes the re-routed 2-step path.
+    byTestId(container, 'combat-confirm').click();
+    expect(hero.position).toEqual({ x: 3, y: 3 });
+  });
+
+  it('tapping an enemy cell during choose-target selects that target unchanged', async () => {
+    const combat = combatState([
+      partyActor(),
+      enemyActor({ id: 0, hp: 10, position: { x: 2, y: 1 } }),
+      enemyActor({ id: 1, hp: 10, position: { x: 3, y: 3 } })
+    ], ['hero', 0, 1]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    const playfield = byClass(container, 'combat-playfield');
+    // Tap the second enemy (id=1) at (3,3) — canvas coords land inside cell (3,3).
+    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+
+    expect(byTestId(container, 'combat-target-1').getAttribute('aria-selected')).toBe('true');
+    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+  });
+
+  it('wheel events on the playfield never fire a tap-select', async () => {
+    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+    const { container } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-move').click();
+    const playfield = byClass(container, 'combat-playfield');
+    playfield.dispatch('wheel', { clientX: 152, clientY: 152, deltaY: -120 });
+
+    const hero = combat.combatants.get('hero');
+    // No path staged, no confirm rendered — wheel is a camera event only.
+    expect(hero.position).toEqual({ x: 1, y: 1 });
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
+  });
+
   it('dock-mode keyboard cancel pops the last step instead of collapsing when a path is being built', async () => {
     installMatchMedia(true);
     const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);

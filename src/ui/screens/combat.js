@@ -821,7 +821,10 @@ export function mount(container, params = {}) {
       validTargets,
       rangeCells,
       coverCells: selectedKey && preview?.coverBonus > 0 ? new Set([selectedKey]) : new Set(),
-      pathCells
+      pathCells,
+      confirmCell: isMoveMode && (selection.movePath?.length ?? 0) > 0 && actor?.position
+        ? `${pathEndpoint(actor).x},${pathEndpoint(actor).y}`
+        : null
     };
   }
 

@@ -547,6 +547,7 @@ function drawOverlay(ctx, px, py, options, gx, gy, accentColor) {
   }
   if (options.pathCells?.has?.(key)) drawMark(ctx, px, py, PATH_COLOR, 'P');
   if (options.validTargets?.has?.(key)) drawFrame(ctx, px, py, DANGER_COLOR, 'VALID', 7);
+  if (options.confirmCell === key) drawFrame(ctx, px, py, PATH_COLOR, 'GO', 4);
 }
 
 function drawFrame(ctx, px, py, color, label, inset = 2) {
