@@ -174,9 +174,17 @@ describe('creation screen workflow', () => {
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 13/80');
 
     byTestId(container, 'tab-tech').click();
-    // Protocol filtering lands in checkpoint 2 — for now, class-gated protocols still render disabled.
-    expect(byTestId(container, 'protocol-ward-1').disabled).toBe(true);
-    expect(byTestId(container, 'protocol-disrupt-3').disabled).toBe(true);
+    // Never-choosable for breacher (out-of-school or above maxTier) — absent from DOM.
+    expect(byTestId(container, 'protocol-ward-1')).toBeNull();
+    expect(byTestId(container, 'protocol-scry-1')).toBeNull();
+    expect(byTestId(container, 'protocol-rewrite-1')).toBeNull();
+    expect(byTestId(container, 'protocol-disrupt-3')).toBeNull();
+    expect(byTestId(container, 'protocol-disrupt-5')).toBeNull();
+    // In-gate protocols present.
+    expect(byTestId(container, 'protocol-disrupt-1')).not.toBeNull();
+    expect(byTestId(container, 'protocol-disrupt-2')).not.toBeNull();
+    // Gate summary line still rendered.
+    expect(allText(byTestId(container, 'panel-tech')).join(' ')).toContain('DISRUPT · MAX TIER 2');
     byTestId(container, 'protocol-disrupt-2').click();
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 17/80');
     expect(byTestId(container, 'deck-summary').textContent).toContain('SLOTS USED 2 / 3');
@@ -189,6 +197,11 @@ describe('creation screen workflow', () => {
     // Baseline: breacher-legal.
     expect(byTestId(container, 'weapon-heavy_melee')).not.toBeNull();
     expect(byTestId(container, 'weapon-sniper')).toBeNull();
+    // Baseline protocols: only disrupt tiers 1–2 for breacher.
+    byTestId(container, 'tab-tech').click();
+    expect(byTestId(container, 'protocol-disrupt-2')).not.toBeNull();
+    expect(byTestId(container, 'protocol-disrupt-3')).toBeNull();
+    expect(byTestId(container, 'protocol-scry-1')).toBeNull();
 
     // Switch to ghost — sniper becomes legal, heavy_melee falls out.
     byTestId(container, 'tab-class').click();
@@ -197,6 +210,13 @@ describe('creation screen workflow', () => {
     expect(byTestId(container, 'weapon-sniper')).not.toBeNull();
     expect(byTestId(container, 'weapon-heavy_melee')).toBeNull();
     expect(byTestId(container, 'weapon-none')).not.toBeNull();
+    // Ghost protocol gates: schools scry+disrupt, maxTier 5. Ward/rewrite still absent.
+    byTestId(container, 'tab-tech').click();
+    expect(byTestId(container, 'protocol-scry-1')).not.toBeNull();
+    expect(byTestId(container, 'protocol-disrupt-5')).not.toBeNull();
+    expect(byTestId(container, 'protocol-ward-1')).toBeNull();
+    expect(byTestId(container, 'protocol-rewrite-1')).toBeNull();
+    expect(allText(byTestId(container, 'panel-tech')).join(' ')).toContain('MAX TIER 5');
   });
 
   it('loads last-used blueprints and requires overwrite confirmation', async () => {
@@ -493,16 +513,21 @@ describe('creation screen — wide layout', () => {
     const spentAfter = Number(byTestId(container, 'remaining').children[1].textContent);
     expect(spentBefore - spentAfter).toBeGreaterThan(0);
 
-    // TECH: list present; protocol filtering lands in checkpoint 2 — class-gated protocols still render disabled here.
+    // TECH: never-choosable for breacher (out-of-school or above maxTier) — absent from DOM.
     expect(byTestId(container, 'wide-section-tech')).not.toBeNull();
     expect(byTestId(container, 'wide-tech-list')).not.toBeNull();
-    const wardOne = byTestId(container, 'wide-protocol-ward-1');
-    expect(wardOne).not.toBeNull();
-    expect(wardOne.disabled).toBe(true);
-    const disrupt3 = byTestId(container, 'wide-protocol-disrupt-3');
-    expect(disrupt3.disabled).toBe(true);
+    expect(byTestId(container, 'wide-protocol-ward-1')).toBeNull();
+    expect(byTestId(container, 'wide-protocol-scry-1')).toBeNull();
+    expect(byTestId(container, 'wide-protocol-rewrite-1')).toBeNull();
+    expect(byTestId(container, 'wide-protocol-disrupt-3')).toBeNull();
+    expect(byTestId(container, 'wide-protocol-disrupt-5')).toBeNull();
+    // In-gate protocols present.
+    expect(byTestId(container, 'wide-protocol-disrupt-1')).not.toBeNull();
+    expect(byTestId(container, 'wide-protocol-disrupt-2')).not.toBeNull();
     // Gate note references the breacher tier cap.
     expect(byTestId(container, 'wide-tech-gate-note').textContent).toContain('TIER ≤ 2');
+    // Wide subtitle still surfaces the schools + max tier.
+    expect(allText(byTestId(container, 'wide-section-tech')).join(' ')).toContain('DISRUPT · MAX TIER 2');
 
     // Buy an in-gate protocol.
     const beforeTech = Number(byTestId(container, 'remaining').children[1].textContent);
@@ -518,10 +543,20 @@ describe('creation screen — wide layout', () => {
     byTestId(container, 'wide-class-breacher').click();
     expect(byTestId(container, 'wide-weapon-heavy_melee')).not.toBeNull();
     expect(byTestId(container, 'wide-weapon-sniper')).toBeNull();
+    // Breacher protocol baseline in wide: only disrupt tiers 1–2.
+    expect(byTestId(container, 'wide-protocol-disrupt-2')).not.toBeNull();
+    expect(byTestId(container, 'wide-protocol-disrupt-3')).toBeNull();
+    expect(byTestId(container, 'wide-protocol-scry-1')).toBeNull();
 
     byTestId(container, 'wide-class-ghost').click();
     expect(byTestId(container, 'wide-weapon-sniper')).not.toBeNull();
     expect(byTestId(container, 'wide-weapon-heavy_melee')).toBeNull();
+    // Ghost protocol gates surface in wide too.
+    expect(byTestId(container, 'wide-protocol-scry-1')).not.toBeNull();
+    expect(byTestId(container, 'wide-protocol-disrupt-5')).not.toBeNull();
+    expect(byTestId(container, 'wide-protocol-ward-1')).toBeNull();
+    expect(byTestId(container, 'wide-protocol-rewrite-1')).toBeNull();
+    expect(byTestId(container, 'wide-tech-gate-note').textContent).toContain('TIER ≤ 5');
   });
 
   it('finalizes from the wide footer and navigates to exploration', async () => {

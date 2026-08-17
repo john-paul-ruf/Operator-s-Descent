@@ -124,6 +124,11 @@ export function mount(container, params = {}) {
     return gearChoices(data, slot).filter(({ item }) => item.classGates?.includes(classId));
   }
 
+  function legalProtocolChoices(classData) {
+    const gate = classData?.protocolGates;
+    return flattenProtocols(data).filter((protocol) => gate?.schools?.includes(protocol.school) && protocol.tier <= (gate?.maxTier ?? 0));
+  }
+
   function gearStatChips(slot, id) {
     return describeItemStats(
       { category: slot === 'armor' ? 'armor' : 'weapon', baseType: id, affixes: [] },
@@ -635,15 +640,16 @@ export function mount(container, params = {}) {
     const list = document.createElement('div');
     list.className = 'tech-list';
     list.dataset.testid = 'wide-tech-list';
-    for (const protocol of flattenProtocols(data)) {
+    const wideProtocols = legalProtocolChoices(selected.classData);
+    if (!wideProtocols.length) list.appendChild(emptyListNote(`wide-tech:${selected.classId}`, 'NO CLASS-LEGAL PROTOCOLS FOR THIS CLASS.'));
+    for (const protocol of wideProtocols) {
       const isSelected = selected.protocols.some((entry) => entry.school === protocol.school && entry.tier === protocol.tier);
       const action = isSelected
         ? { type: 'remove_protocol', school: protocol.school, tier: protocol.tier }
         : { type: 'add_protocol', school: protocol.school, tier: protocol.tier };
       const preview = validateChangedDraft(draft, action, data);
-      const gated = !selected.classData.protocolGates?.schools?.includes(protocol.school) || protocol.tier > selected.classData.protocolGates?.maxTier;
       const overCapacity = !isSelected && preview.summary.characters[summary.activeSlot]?.deck?.slotsUsed > selected.deck.capacity;
-      const reason = gated ? 'class gate' : overCapacity ? 'deck capacity' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
+      const reason = overCapacity ? 'deck capacity' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
       const pointDelta = Math.max(0, preview.summary.pointsSpent - summary.pointsSpent);
       list.appendChild(wideGearRow(
         `wide-protocol-${protocol.school}-${protocol.tier}`,
@@ -1026,15 +1032,16 @@ export function mount(container, params = {}) {
     const grid = document.createElement('div');
     grid.className = 'creation-choice-grid';
     grid.style.gridTemplateColumns = '1fr';
-    for (const protocol of flattenProtocols(data)) {
+    const protocols = legalProtocolChoices(selected.classData);
+    if (!protocols.length) grid.appendChild(emptyListNote(`tech:${selected.classId}`, 'NO CLASS-LEGAL PROTOCOLS FOR THIS CLASS.'));
+    for (const protocol of protocols) {
       const isSelected = selected.protocols.some((entry) => entry.school === protocol.school && entry.tier === protocol.tier);
       const action = isSelected
         ? { type: 'remove_protocol', school: protocol.school, tier: protocol.tier }
         : { type: 'add_protocol', school: protocol.school, tier: protocol.tier };
       const preview = validateChangedDraft(draft, action, data);
-      const gated = !selected.classData.protocolGates?.schools?.includes(protocol.school) || protocol.tier > selected.classData.protocolGates?.maxTier;
       const capacity = !isSelected && preview.summary.characters[summary.activeSlot]?.deck?.slotsUsed > selected.deck.capacity;
-      const reason = gated ? 'class gate' : capacity ? 'deck capacity' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
+      const reason = capacity ? 'deck capacity' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
       const pointDelta = Math.max(0, preview.summary.pointsSpent - summary.pointsSpent);
       const card = createButton(`${protocol.entry.name}`, {
         selected: isSelected,
