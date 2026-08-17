@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createButton, createChargeBar, createEquipmentCard, createHPBar, createProtocolCard, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
+import { createButton, createChargeBar, createEquipmentCard, createHPBar, createProtocolCard, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -142,6 +142,41 @@ describe('semantic components', () => {
     const staticProtocol = createProtocolCard({ id: 'purge', name: 'PURGE' });
     expect(staticProtocol.tagName).toBe('ARTICLE');
     expect(staticProtocol.classList.values.has('is-interactive')).toBe(false);
+  });
+
+  test('createUpdateToast renders a testid-marked reload button that fires onReload once and cleans up', () => {
+    let reloaded = 0;
+    const toast = createUpdateToast({ onReload: () => { reloaded += 1; } });
+
+    expect(toast.tagName).toBe('DIV');
+    expect(toast.className).toBe('update-toast');
+    expect(toast.getAttribute('role')).toBe('status');
+    expect(toast.dataset.testid).toBe('update-toast');
+
+    const label = toast.children.find((child) => child.className === 'update-toast-label');
+    expect(label).toBeTruthy();
+    expect(label.textContent).toBe('NEW BUILD CACHED');
+
+    const button = toast.children.find((child) => child.dataset?.testid === 'update-toast-reload');
+    expect(button).toBeTruthy();
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.type).toBe('button');
+    expect(button.textContent).toBe('RELOAD');
+    expect(button.getAttribute('aria-label')).toBe('Reload to apply the new build');
+
+    button.dispatch('click');
+    expect(reloaded).toBe(1);
+
+    toast.cleanup();
+    button.dispatch('click');
+    expect(reloaded).toBe(1);
+  });
+
+  test('createUpdateToast without an onReload handler still renders and no-ops on click', () => {
+    const toast = createUpdateToast();
+    const button = toast.children.find((child) => child.dataset?.testid === 'update-toast-reload');
+    expect(() => button.dispatch('click')).not.toThrow();
+    expect(() => toast.cleanup?.()).not.toThrow();
   });
 
   test('disabled controls carry aria-disabled and .is-interactive simultaneously', () => {

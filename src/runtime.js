@@ -18,6 +18,7 @@ export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-r
 
 const ROUTE_SET = new Set(ROUTES);
 const AUTOSAVE_SET = new Set(AUTOSAVE_CHECKPOINTS);
+const IN_RUN_SURFACES = new Set(['creation', 'exploration', 'combat']);
 const DEFAULT_COMBAT_WINDOW = { originX: 0, originY: 0, width: 8, height: 16 };
 const DEFAULT_ENEMY_WEAPON = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 0 };
 const DEFAULT_ATTRIBUTES = { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 };
@@ -47,9 +48,14 @@ let mountedViaHistory = false;
 let pendingPush = false;
 let serviceWorkerStarted = false;
 let serviceWorkerReloadPending = false;
+let serviceWorkerUpdateReadyDispatched = false;
 let serviceWorkerRegistration = null;
 let lastAutosaveResult = null;
-let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, reloading: false, scope: null, error: null };
+let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, reloading: false, updateReady: false, scope: null, error: null };
+
+function isInRunSurface() {
+  return IN_RUN_SURFACES.has(currentRoute);
+}
 
 let gameData = null;
 
@@ -585,13 +591,20 @@ function setupBus() {
 
 function registerServiceWorkerOnce() {
   if (serviceWorkerStarted) return null;
-  serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, reloading: false, scope: null, error: null };
+  serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, reloading: false, updateReady: false, scope: null, error: null };
   if (!serviceWorkerStatus.supported) return null;
   serviceWorkerStarted = true;
   const hadController = Boolean(navigator.serviceWorker.controller);
   if (hadController) {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (serviceWorkerReloadPending) return;
+      if (isInRunSurface()) {
+        if (serviceWorkerUpdateReadyDispatched) return;
+        serviceWorkerUpdateReadyDispatched = true;
+        serviceWorkerStatus = { ...serviceWorkerStatus, updateReady: true };
+        bus.dispatch('runtime:update-ready', {});
+        return;
+      }
       serviceWorkerReloadPending = true;
       serviceWorkerStatus = { ...serviceWorkerStatus, reloading: true };
       bus.dispatch('runtime:update-applied', {});

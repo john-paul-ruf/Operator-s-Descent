@@ -322,3 +322,32 @@ export const createScreenBody = ({ scroll = true, className = '' } = {}) => {
     .join(' ');
   return el;
 };
+
+/**
+ * createUpdateToast — persistent CRT-styled "new build cached" notice with a
+ * RELOAD action. Mounted in response to `runtime:update-ready` while the user
+ * is on an in-run surface (creation/exploration/combat) so a fresh service
+ * worker never yanks the page mid-turn.
+ *
+ * @param {{onReload: () => void}} opts
+ * @returns {HTMLDivElement}
+ */
+export function createUpdateToast({ onReload } = {}) {
+  const toast = document.createElement('div');
+  toast.className = 'update-toast';
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
+  toast.dataset.testid = 'update-toast';
+  const label = document.createElement('span');
+  label.className = 'update-toast-label';
+  label.textContent = 'NEW BUILD CACHED';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn-crt update-toast-reload is-interactive';
+  button.textContent = 'RELOAD';
+  button.dataset.testid = 'update-toast-reload';
+  button.setAttribute('aria-label', 'Reload to apply the new build');
+  const cleanup = typeof onReload === 'function' ? listen(button, 'click', onReload) : undefined;
+  toast.append(label, button);
+  return withCleanup(toast, cleanup);
+}

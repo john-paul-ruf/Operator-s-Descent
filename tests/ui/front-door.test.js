@@ -252,6 +252,7 @@ describe('tutorial manual', () => {
     expect(titles).toEqual([
       'Console Overview',
       'MOVE Mode',
+      'The Map',
       'COMBAT Mode',
       'PARTY Mode',
       'GEAR Mode',
@@ -262,7 +263,7 @@ describe('tutorial manual', () => {
       'Settings',
       'Seed & Share Links'
     ]);
-    expect(byTestId(container, 'tutorial-page-index').textContent).toBe('11/11');
+    expect(byTestId(container, 'tutorial-page-index').textContent).toBe('12/12');
 
     await byTestId(container, 'tutorial-done').click();
     expect(getFlag('tutorialDeclined')).toBe(true);
@@ -376,5 +377,38 @@ describe('settings screen', () => {
     expect(byTestId(container, 'settings-visual-column').classList.contains('wide-settings-column')).toBe(true);
     expect(byTestId(container, 'settings-master-mute').parentNode.classList.contains('panel')).toBe(true);
     expect(byTestId(container, 'settings-glitch').parentNode.classList.contains('panel')).toBe(true);
+  });
+});
+
+describe('runtime update surfacing', () => {
+  it('dispatching runtime:update-ready mounts exactly one toast whose RELOAD button calls window.location.reload', async () => {
+    let reloadCalls = 0;
+    globalThis.window = globalThis.window || {};
+    globalThis.window.location = { reload: () => { reloadCalls += 1; } };
+
+    // Importing main.js registers the bus subscription (side effect on load).
+    // With no <div id="crt-overlays"> in the fake document, the CRT-overlays
+    // import path stays quiescent; the in-run boot gate only fires when
+    // window.location is well-formed and __odSkipBoot is unset — set the
+    // sentinel so the runtime dynamic import stays out of this test.
+    globalThis.__odSkipBoot = true;
+    await import('../../src/main.js');
+
+    bus.dispatch('runtime:update-ready', {});
+    bus.dispatch('runtime:update-ready', {});
+
+    const portraitFrame = document.getElementById('portrait-frame');
+    const toasts = collect(portraitFrame, (el) => el.dataset?.testid === 'update-toast');
+    expect(toasts).toHaveLength(1);
+
+    const button = byTestId(toasts[0], 'update-toast-reload');
+    expect(button).toBeTruthy();
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.textContent).toBe('RELOAD');
+
+    await button.dispatch('click');
+    expect(reloadCalls).toBe(1);
+
+    delete globalThis.__odSkipBoot;
   });
 });

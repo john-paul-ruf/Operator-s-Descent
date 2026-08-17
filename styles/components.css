@@ -1636,3 +1636,35 @@ button.protocol-card[aria-selected="true"],
 
 .error-screen { display: none; }
 .error-screen.active { display: flex; }
+
+/* Update toast — surfaced on runtime:update-ready while on an in-run surface.
+   Fixed above the console dock so it never overlaps the tab bar; the RELOAD
+   button keeps a ≥44px hit target per Custom Rule 5 touch targets. */
+.update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  z-index: 60;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px var(--accent);
+  pointer-events: auto;
+}
+.update-toast-label { white-space: nowrap; }
+.update-toast-reload {
+  min-height: 44px;
+  min-width: 88px;
+  padding: 10px 20px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+}
