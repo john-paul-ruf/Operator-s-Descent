@@ -5,17 +5,19 @@ export const EXPLORATION_CELL_SIZE = 24;
 export const COMBAT_CELL_SIZE = EXPLORATION_CELL_SIZE * 2;
 export const COMBAT_GRID_W = 8;
 export const COMBAT_GRID_H = 16;
-export const FLOOR_COLOR = '#e8e8e8';
+export const FLOOR_COLOR = '#101010';
+export const FLOOR_DIM_COLOR = '#0a0a0a';
 export const WALL_COLOR = '#000000';
 export const HIDDEN_COLOR = '#000000';
 export const GRID_COLOR = '#3a3a3a';
 export const WALL_LINE_COLOR = '#7ec8e3';
-const VISITED_OVERLAY = 'rgba(0,0,0,0.55)';
+export const TICK_DIM_ALPHA = 0.45;
 const DANGER_COLOR = '#e83a3a';
 const DESCENT_COLOR = '#3ae8a8';
 const CONTAINER_COLOR = '#e8d23a';
 const COVER_COLOR = '#e8c63a';
-const PATH_COLOR = '#1a1a1a';
+const PATH_COLOR = '#d8d8d8';
+const PATH_PREVIEW_ALPHA = 0.55;
 const ECHO_COLOR = '#b026d4';
 
 function bounded(value, min, max) {
@@ -64,7 +66,7 @@ function drawCreatureSigil(ctx, { codepoint, size, renderSize = size, role, x, y
   return true;
 }
 
-function drawCell(ctx, x, y, size, cellType, visible = true) {
+function drawCell(ctx, x, y, size, cellType, visible = true, dim = false) {
   if (!visible) {
     ctx.fillStyle = HIDDEN_COLOR;
     ctx.fillRect(x, y, size, size);
@@ -75,11 +77,39 @@ function drawCell(ctx, x, y, size, cellType, visible = true) {
     ctx.fillRect(x, y, size, size);
     return;
   }
-  ctx.fillStyle = FLOOR_COLOR;
+  ctx.fillStyle = dim ? FLOOR_DIM_COLOR : FLOOR_COLOR;
   ctx.fillRect(x, y, size, size);
-  ctx.strokeStyle = GRID_COLOR;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, size, size);
+}
+
+function drawGridTicks(ctx, { isFloor, isRevealed, isDim, colStart, rowStart, cols, rows, size }) {
+  const arm = Math.round(size / 6);
+  const span = arm * 2 + 1;
+  ctx.fillStyle = GRID_COLOR;
+  for (let ry = 1; ry < rows; ry++) {
+    for (let rx = 1; rx < cols; rx++) {
+      const gx = colStart + rx;
+      const gy = rowStart + ry;
+      let anyRevealedFloor = false;
+      let allDim = true;
+      const neighbors = [
+        [gx - 1, gy - 1], [gx, gy - 1],
+        [gx - 1, gy], [gx, gy]
+      ];
+      for (const [nx, ny] of neighbors) {
+        if (!isFloor(nx, ny)) continue;
+        if (!isRevealed(nx, ny)) continue;
+        anyRevealedFloor = true;
+        if (!isDim(nx, ny)) allDim = false;
+      }
+      if (!anyRevealedFloor) continue;
+      const px = rx * size;
+      const py = ry * size;
+      if (allDim) ctx.globalAlpha = TICK_DIM_ALPHA;
+      ctx.fillRect(px - arm, py, span, 1);
+      ctx.fillRect(px, py - arm, 1, span);
+      if (allDim) ctx.globalAlpha = 1;
+    }
+  }
 }
 
 function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, cols, rows, size }) {
@@ -177,12 +207,17 @@ export function createPlayfield(canvas) {
       camera = calculateCombatCamera(bounds);
       return { ...camera };
     },
-    renderExploration(lattice, fogState, partyPos) {
+    renderExploration(lattice, fogState, partyPos, options = {}) {
       const grid = lattice.getGrid();
       const w = lattice.getWidth();
       const h = lattice.getHeight();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       setCanvasDescription(canvas, `Exploration map, ${w} by ${h}. Party at ${partyPos?.x ?? '?'},${partyPos?.y ?? '?'}.`);
+
+      const inBounds = (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h;
+      const isFloor = (gx, gy) => inBounds(gx, gy) && grid[gy][gx] !== CELL.WALL;
+      const isRevealed = (gx, gy) => inBounds(gx, gy) && fogState[gy * w + gx] !== 0;
+      const isDim = (gx, gy) => inBounds(gx, gy) && fogState[gy * w + gx] === 1;
 
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -190,7 +225,7 @@ export function createPlayfield(canvas) {
           const px = x * EXPLORATION_CELL_SIZE;
           const py = y * EXPLORATION_CELL_SIZE;
           const cellType = grid[y][x];
-          drawCell(ctx, px, py, EXPLORATION_CELL_SIZE, cellType, fog !== 0);
+          drawCell(ctx, px, py, EXPLORATION_CELL_SIZE, cellType, fog !== 0, fog === 1);
           if (fog !== 0 && cellType === CELL.DESCENT) {
             ctx.fillStyle = 'rgba(58,232,168,0.12)';
             ctx.fillRect(px + 1, py + 1, EXPLORATION_CELL_SIZE - 2, EXPLORATION_CELL_SIZE - 2);
@@ -198,20 +233,16 @@ export function createPlayfield(canvas) {
         }
       }
 
-      drawWallLines(ctx, {
-        isTraversable: (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h && grid[gy][gx] !== CELL.WALL,
-        isRevealed: (gx, gy) => gx >= 0 && gx < w && gy >= 0 && gy < h && fogState[gy * w + gx] !== 0,
+      drawGridTicks(ctx, {
+        isFloor, isRevealed, isDim,
         colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE
       });
 
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          if (fogState[y * w + x] === 1) {
-            ctx.fillStyle = VISITED_OVERLAY;
-            ctx.fillRect(x * EXPLORATION_CELL_SIZE, y * EXPLORATION_CELL_SIZE, EXPLORATION_CELL_SIZE, EXPLORATION_CELL_SIZE);
-          }
-        }
-      }
+      drawWallLines(ctx, {
+        isTraversable: isFloor,
+        isRevealed,
+        colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE
+      });
 
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -250,6 +281,29 @@ export function createPlayfield(canvas) {
           color: DANGER_COLOR
         });
       }
+      const stagedPath = Array.isArray(options.stagedPath) ? options.stagedPath : null;
+      if (stagedPath && stagedPath.length > 0) {
+        ctx.globalAlpha = PATH_PREVIEW_ALPHA;
+        ctx.fillStyle = PATH_COLOR;
+        for (const step of stagedPath) {
+          if (!Number.isFinite(step?.x) || !Number.isFinite(step?.y)) continue;
+          const cx = step.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2;
+          const cy = step.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2;
+          ctx.fillRect(cx - 2, cy - 2, 5, 5);
+        }
+        ctx.globalAlpha = 1;
+        const last = stagedPath[stagedPath.length - 1];
+        if (Number.isFinite(last?.x) && Number.isFinite(last?.y)) {
+          ctx.strokeStyle = PATH_COLOR;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(
+            last.x * EXPLORATION_CELL_SIZE + 1,
+            last.y * EXPLORATION_CELL_SIZE + 1,
+            EXPLORATION_CELL_SIZE - 2,
+            EXPLORATION_CELL_SIZE - 2
+          );
+        }
+      }
       if (partyPos) {
         drawToken(ctx, {
           codepoint: 0xE000,
@@ -283,12 +337,20 @@ export function createPlayfield(canvas) {
           const px = dx * COMBAT_CELL_SIZE;
           const py = dy * COMBAT_CELL_SIZE;
           const outOfBounds = gx < 0 || gx >= width || gy < 0 || gy >= height;
-          drawCell(ctx, px, py, COMBAT_CELL_SIZE, outOfBounds ? CELL.WALL : grid[gy]?.[gx]);
+          drawCell(ctx, px, py, COMBAT_CELL_SIZE, outOfBounds ? CELL.WALL : grid[gy]?.[gx], true, false);
         }
       }
 
+      const combatIsFloor = (gx, gy) => gx >= 0 && gx < width && gy >= 0 && gy < height && grid[gy]?.[gx] !== CELL.WALL;
+      drawGridTicks(ctx, {
+        isFloor: combatIsFloor,
+        isRevealed: () => true,
+        isDim: () => false,
+        colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE
+      });
+
       drawWallLines(ctx, {
-        isTraversable: (gx, gy) => gx >= 0 && gx < width && gy >= 0 && gy < height && grid[gy]?.[gx] !== CELL.WALL,
+        isTraversable: combatIsFloor,
         isRevealed: () => true,
         colStart: camera.x, rowStart: camera.y, cols: camera.w, rows: camera.h, size: COMBAT_CELL_SIZE
       });

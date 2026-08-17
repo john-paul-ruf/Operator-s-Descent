@@ -4,10 +4,12 @@ import {
   cellAtPoint,
   createPlayfield,
   FLOOR_COLOR,
+  FLOOR_DIM_COLOR,
   WALL_COLOR,
   HIDDEN_COLOR,
   GRID_COLOR,
-  WALL_LINE_COLOR
+  WALL_LINE_COLOR,
+  TICK_DIM_ALPHA
 } from '../../src/ui/playfield.js';
 
 class FakeElement {
@@ -33,7 +35,9 @@ class FakeCanvas extends FakeElement {
 }
 
 class FakeContext {
-  constructor() { this.calls = []; }
+  constructor() { this.calls = []; this._globalAlpha = 1; }
+  get globalAlpha() { return this._globalAlpha; }
+  set globalAlpha(value) { this._globalAlpha = value; this.calls.push(['set-alpha', value]); }
   beginPath() { this.calls.push(['beginPath']); }
   arc(...args) { this.calls.push(['arc', ...args]); }
   fill() { this.calls.push(['fill', this.fillStyle]); }
@@ -62,12 +66,14 @@ beforeEach(() => {
 });
 
 describe('playfield rendering', () => {
-  test('exposes the vector-lattice palette constants owner directive 2026-08-15 pinned', () => {
-    expect(FLOOR_COLOR).toBe('#e8e8e8');
+  test('exposes the near-black lattice palette constants (clarity-and-fit 2026-08-16)', () => {
+    expect(FLOOR_COLOR).toBe('#101010');
+    expect(FLOOR_DIM_COLOR).toBe('#0a0a0a');
     expect(WALL_COLOR).toBe('#000000');
     expect(HIDDEN_COLOR).toBe('#000000');
     expect(GRID_COLOR).toBe('#3a3a3a');
     expect(WALL_LINE_COLOR).toBe('#7ec8e3');
+    expect(TICK_DIM_ALPHA).toBe(0.45);
   });
 
   test('renders exploration fog without leaking hidden entities and keeps canvas read-only', () => {
@@ -89,7 +95,7 @@ describe('playfield rendering', () => {
     expect(canvas.listeners.size).toBe(0);
   });
 
-  test('paints new palette (black walls, light-grey floors, dark gridlines) and cyan boundary lines', () => {
+  test('paints near-black floors, black walls/hidden cells, corner ticks (no floor strokeRect), cyan boundary lines', () => {
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
     const fog = new Uint8Array(20 * 32).fill(2);
@@ -98,21 +104,98 @@ describe('playfield rendering', () => {
     playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
 
     const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    // Wall at (0,0) draws #000000; floor at (1,0) draws #101010; hidden (6,6) draws #000000.
     expect(fills.some((c) => c[1] === '#000000' && c[2] === 0 && c[3] === 0 && c[4] === 24 && c[5] === 24)).toBe(true);
-    expect(fills.some((c) => c[1] === '#e8e8e8' && c[2] === 24 && c[3] === 0 && c[4] === 24 && c[5] === 24)).toBe(true);
+    expect(fills.some((c) => c[1] === '#101010' && c[2] === 24 && c[3] === 0 && c[4] === 24 && c[5] === 24)).toBe(true);
     expect(fills.some((c) => c[1] === '#000000' && c[2] === 6 * 24 && c[3] === 6 * 24)).toBe(true);
 
-    const gridStrokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#3a3a3a');
-    expect(gridStrokes.length).toBeGreaterThan(0);
-    expect(gridStrokes.some((c) => c[2] === 0 && c[3] === 0)).toBe(false);
+    // No strokeRect gridlines on floor cells anywhere.
+    expect(canvas.context.calls.some(([n, style]) => n === 'strokeRect' && style === '#3a3a3a')).toBe(false);
 
+    // Tick pass fills GRID_COLOR at interior corners as 1px strips (a horizontal 9x1 + vertical 1x9 at 24px cells, arm=4).
+    const gridFills = fills.filter((c) => c[1] === '#3a3a3a');
+    expect(gridFills.length).toBeGreaterThan(0);
+    // Corner between (1,1),(2,1),(1,2),(2,2) — all revealed floor — sits at pixel (2*24, 2*24)=(48,48).
+    // Horizontal bar: x=48-4=44, y=48, w=9, h=1
+    expect(gridFills.some((c) => c[2] === 44 && c[3] === 48 && c[4] === 9 && c[5] === 1)).toBe(true);
+    // Vertical bar: x=48, y=44, w=1, h=9
+    expect(gridFills.some((c) => c[2] === 48 && c[3] === 44 && c[4] === 1 && c[5] === 9)).toBe(true);
+
+    // Cyan wall boundary lines exist. Wall at (0,0) → floor at (1,0) sees a west wall line inset.
     const cyanLines = fills.filter((c) => c[1] === '#7ec8e3');
     expect(cyanLines.length).toBeGreaterThan(0);
     expect(cyanLines.some((c) => c[2] === 24 + 1 && c[3] === 0 + 1)).toBe(true);
+    // Hidden cell (6,6) does not emit a wall line: no cyan at that inset origin.
     expect(cyanLines.some((c) => c[2] === 6 * 24 + 1 && c[3] === 6 * 24 + 1)).toBe(false);
+    // Interior all-floor cell has no cyan (no adjacent wall to draw a boundary against).
+    expect(cyanLines.some((c) => c[2] === 10 * 24 + 1 && c[3] === 10 * 24 + 1)).toBe(false);
+  });
 
-    const interiorFloorHasCyan = cyanLines.some((c) => c[2] === 10 * 24 + 1 && c[3] === 10 * 24 + 1);
-    expect(interiorFloorHasCyan).toBe(false);
+  test('fog=1 (seen) draws dim floor and dim-alpha ticks; VISITED_OVERLAY black-overlay pass is gone', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    // All cells fog=1 (seen, not visible). Ensures every revealed floor is dim.
+    const fog = new Uint8Array(20 * 32).fill(1);
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    // Floors render with FLOOR_DIM_COLOR when fog === 1.
+    expect(fills.some((c) => c[1] === '#0a0a0a' && c[4] === 24 && c[5] === 24)).toBe(true);
+    // No black rgba(0,0,0,0.55) overlay pass (the removed VISITED_OVERLAY).
+    expect(fills.some((c) => c[1] === 'rgba(0,0,0,0.55)')).toBe(false);
+
+    // Every tick-color fill draw occurs while globalAlpha === TICK_DIM_ALPHA.
+    let currentAlpha = 1;
+    const tickAlphas = [];
+    for (const call of canvas.context.calls) {
+      if (call[0] === 'set-alpha') currentAlpha = call[1];
+      else if (call[0] === 'fillRect' && call[1] === '#3a3a3a') tickAlphas.push(currentAlpha);
+    }
+    expect(tickAlphas.length).toBeGreaterThan(0);
+    expect(tickAlphas.every((a) => a === TICK_DIM_ALPHA)).toBe(true);
+  });
+
+  test('renderExploration stagedPath overlay draws PATH_COLOR previews (55% alpha) and inset outline on the final step', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    const stagedPath = [
+      { direction: 'e', x: 2, y: 1 },
+      { direction: 'e', x: 3, y: 1 },
+      { direction: 's', x: 3, y: 2 }
+    ];
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 }, { stagedPath });
+
+    let alpha = 1;
+    const previewFills = [];
+    for (const call of canvas.context.calls) {
+      if (call[0] === 'set-alpha') alpha = call[1];
+      else if (call[0] === 'fillRect' && call[1] === '#d8d8d8') previewFills.push({ alpha, args: call.slice(2) });
+    }
+    expect(previewFills).toHaveLength(3);
+    // Each preview is a 5x5 square centered on the cell — cell (2,1) center (60,36) → rect (58,34,5,5).
+    expect(previewFills[0]).toEqual({ alpha: 0.55, args: [58, 34, 5, 5] });
+    expect(previewFills[1]).toEqual({ alpha: 0.55, args: [82, 34, 5, 5] });
+    expect(previewFills[2]).toEqual({ alpha: 0.55, args: [82, 58, 5, 5] });
+
+    // Final step gets a full-alpha PATH_COLOR strokeRect inset by 1px.
+    const strokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#d8d8d8');
+    expect(strokes).toHaveLength(1);
+    expect(strokes[0].slice(2)).toEqual([3 * 24 + 1, 2 * 24 + 1, 22, 22]);
+  });
+
+  test('renderExploration without stagedPath (or empty stagedPath) emits no PATH_COLOR preview marks', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 }, { stagedPath: [] });
+
+    expect(canvas.context.calls.some((c) => c[0] === 'fillRect' && c[1] === '#d8d8d8')).toBe(false);
+    expect(canvas.context.calls.some((c) => c[0] === 'strokeRect' && c[1] === '#d8d8d8')).toBe(false);
   });
 
   test('renders combat overlays and selected target labels at 2x scale', () => {
