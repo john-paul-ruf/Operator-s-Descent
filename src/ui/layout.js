@@ -124,6 +124,14 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
     left: normalizePaneWidth(persisted.left, WIDE_PANE_LEFT_BOUNDS),
     right: normalizePaneWidth(persisted.right, WIDE_PANE_RIGHT_BOUNDS)
   };
+  const resolveLastOpen = (raw, bounds) => {
+    const normalized = normalizePaneWidth(raw, bounds);
+    return normalized === 'collapsed' ? bounds.default : normalized;
+  };
+  const lastOpen = {
+    left: resolveLastOpen(persisted.leftOpen ?? persisted.left, WIDE_PANE_LEFT_BOUNDS),
+    right: resolveLastOpen(persisted.rightOpen ?? persisted.right, WIDE_PANE_RIGHT_BOUNDS)
+  };
 
   applyPaneState(shell, 'left', state);
   applyPaneState(shell, 'right', state);
@@ -142,7 +150,9 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
     if (typeof saveSettings !== 'function') return;
     const widePanes = {
       left: state.left === 'collapsed' ? 'collapsed' : state.left,
-      right: state.right === 'collapsed' ? 'collapsed' : state.right
+      right: state.right === 'collapsed' ? 'collapsed' : state.right,
+      leftOpen: lastOpen.left,
+      rightOpen: lastOpen.right
     };
     try { saveSettings({ widePanes }); } catch { /* defensive */ }
   }
@@ -150,23 +160,26 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
   function setWidth(side, width) {
     const bounds = side === 'left' ? WIDE_PANE_LEFT_BOUNDS : WIDE_PANE_RIGHT_BOUNDS;
     state[side] = clamp(Math.round(width), bounds);
+    lastOpen[side] = state[side];
     applyPaneState(shell, side, state);
     const handle = side === 'left' ? leftHandle : rightHandle;
     handle.setAttribute?.('aria-valuenow', String(state[side]));
   }
 
   function toggleCollapse(side) {
-    const bounds = side === 'left' ? WIDE_PANE_LEFT_BOUNDS : WIDE_PANE_RIGHT_BOUNDS;
-    if (state[side] === 'collapsed') state[side] = bounds.default;
-    else state[side] = 'collapsed';
+    if (state[side] === 'collapsed') {
+      state[side] = lastOpen[side];
+    } else {
+      if (typeof state[side] === 'number') lastOpen[side] = state[side];
+      state[side] = 'collapsed';
+    }
     applyPaneState(shell, side, state);
     persist();
   }
 
   function expandFromCollapse(side) {
     if (state[side] !== 'collapsed') return;
-    const bounds = side === 'left' ? WIDE_PANE_LEFT_BOUNDS : WIDE_PANE_RIGHT_BOUNDS;
-    state[side] = bounds.default;
+    state[side] = lastOpen[side];
     applyPaneState(shell, side, state);
     persist();
   }
@@ -201,6 +214,7 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
     }
     function onDoubleClick() {
       state[side] = bounds.default;
+      lastOpen[side] = bounds.default;
       applyPaneState(shell, side, state);
       persist();
     }

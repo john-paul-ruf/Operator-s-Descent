@@ -269,7 +269,7 @@ describe('attachWidePanes', () => {
     expect(saved).toEqual([]);
 
     handle.dispatch('pointerup', { pointerId: 1 });
-    expect(saved).toEqual([{ widePanes: { left: 350, right: 360 } }]);
+    expect(saved).toEqual([{ widePanes: { left: 350, right: 360, leftOpen: 350, rightOpen: 360 } }]);
     expect(handle._captured.has(1)).toBe(false);
 
     cleanup();
@@ -290,7 +290,7 @@ describe('attachWidePanes', () => {
     handle.dispatch('pointermove', { pointerId: 2, clientX: -10000 });
     expect(shell.style._props['--wide-right-w']).toBe(`${WIDE_PANE_RIGHT_BOUNDS.max}px`);
     handle.dispatch('pointerup', { pointerId: 2 });
-    expect(saved).toEqual([{ widePanes: { left: 280, right: WIDE_PANE_RIGHT_BOUNDS.max } }]);
+    expect(saved).toEqual([{ widePanes: { left: 280, right: WIDE_PANE_RIGHT_BOUNDS.max, leftOpen: 280, rightOpen: WIDE_PANE_RIGHT_BOUNDS.max } }]);
 
     cleanup();
   });
@@ -307,11 +307,21 @@ describe('attachWidePanes', () => {
     const collapseLeft = findChildByTestId(shell, 'pane-collapse-left');
     collapseLeft.dispatch('click');
     expect(shell.dataset.paneLeft).toBe('collapsed');
-    expect(saved.at(-1)).toEqual({ widePanes: { left: 'collapsed', right: WIDE_PANE_RIGHT_BOUNDS.default } });
+    expect(saved.at(-1)).toEqual({ widePanes: {
+      left: 'collapsed',
+      right: WIDE_PANE_RIGHT_BOUNDS.default,
+      leftOpen: WIDE_PANE_LEFT_BOUNDS.default,
+      rightOpen: WIDE_PANE_RIGHT_BOUNDS.default
+    } });
 
     collapseLeft.dispatch('click');
     expect(shell.dataset.paneLeft).toBe('open');
-    expect(saved.at(-1)).toEqual({ widePanes: { left: WIDE_PANE_LEFT_BOUNDS.default, right: WIDE_PANE_RIGHT_BOUNDS.default } });
+    expect(saved.at(-1)).toEqual({ widePanes: {
+      left: WIDE_PANE_LEFT_BOUNDS.default,
+      right: WIDE_PANE_RIGHT_BOUNDS.default,
+      leftOpen: WIDE_PANE_LEFT_BOUNDS.default,
+      rightOpen: WIDE_PANE_RIGHT_BOUNDS.default
+    } });
 
     cleanup();
   });
@@ -330,7 +340,7 @@ describe('attachWidePanes', () => {
     expect(evt.prevented).toBe(true);
     expect(evt.stopped).toBe(true);
     expect(shell.style._props['--wide-left-w']).toBe('296px');
-    expect(saved.at(-1)).toEqual({ widePanes: { left: 296, right: 360 } });
+    expect(saved.at(-1)).toEqual({ widePanes: { left: 296, right: 360, leftOpen: 296, rightOpen: 360 } });
 
     handle.dispatch('keydown', { code: 'ArrowLeft' });
     expect(shell.style._props['--wide-left-w']).toBe('280px');
@@ -349,7 +359,12 @@ describe('attachWidePanes', () => {
     const handle = findChildByTestId(shell, 'pane-handle-left');
     handle.dispatch('dblclick');
     expect(shell.style._props['--wide-left-w']).toBe(`${WIDE_PANE_LEFT_BOUNDS.default}px`);
-    expect(saved.at(-1)).toEqual({ widePanes: { left: WIDE_PANE_LEFT_BOUNDS.default, right: 360 } });
+    expect(saved.at(-1)).toEqual({ widePanes: {
+      left: WIDE_PANE_LEFT_BOUNDS.default,
+      right: 360,
+      leftOpen: WIDE_PANE_LEFT_BOUNDS.default,
+      rightOpen: 360
+    } });
     cleanup();
   });
 
@@ -366,7 +381,106 @@ describe('attachWidePanes', () => {
     const tabs = shell.children[0].children[0]; // dock > tabs
     tabs.dispatch('click');
     expect(shell.dataset.paneRight).toBe('open');
-    expect(saved.at(-1)).toEqual({ widePanes: { left: 280, right: WIDE_PANE_RIGHT_BOUNDS.default } });
+    expect(saved.at(-1)).toEqual({ widePanes: {
+      left: 280,
+      right: WIDE_PANE_RIGHT_BOUNDS.default,
+      leftOpen: 280,
+      rightOpen: WIDE_PANE_RIGHT_BOUNDS.default
+    } });
+
+    cleanup();
+  });
+
+  test('collapse via chevron then expand restores the last dragged width on the left dock', () => {
+    const shell = makeShell();
+    const saved = [];
+    const cleanup = attachWidePanes({
+      shell,
+      loadSettings: () => ({ widePanes: { left: 300, right: 360 } }),
+      saveSettings: (payload) => { saved.push(payload); }
+    });
+
+    const handle = findChildByTestId(shell, 'pane-handle-left');
+    handle.dispatch('pointerdown', { pointerId: 3, clientX: 100 });
+    handle.dispatch('pointermove', { pointerId: 3, clientX: 140 });
+    handle.dispatch('pointerup', { pointerId: 3 });
+    expect(shell.style._props['--wide-left-w']).toBe('340px');
+
+    const collapse = findChildByTestId(shell, 'pane-collapse-left');
+    collapse.dispatch('click');
+    expect(shell.dataset.paneLeft).toBe('collapsed');
+    expect(saved.at(-1).widePanes.leftOpen).toBe(340);
+
+    collapse.dispatch('click');
+    expect(shell.dataset.paneLeft).toBe('open');
+    expect(shell.style._props['--wide-left-w']).toBe('340px');
+    expect(saved.at(-1)).toEqual({ widePanes: { left: 340, right: 360, leftOpen: 340, rightOpen: 360 } });
+
+    cleanup();
+  });
+
+  test('collapse then tab-auto-expand restores the last dragged width on the right dock', () => {
+    const shell = makeShell({ withTabs: true });
+    const saved = [];
+    const cleanup = attachWidePanes({
+      shell,
+      loadSettings: () => ({ widePanes: { left: 280, right: 360 } }),
+      saveSettings: (payload) => { saved.push(payload); }
+    });
+
+    const handle = findChildByTestId(shell, 'pane-handle-right');
+    handle.dispatch('pointerdown', { pointerId: 4, clientX: 500 });
+    handle.dispatch('pointermove', { pointerId: 4, clientX: 440 });
+    handle.dispatch('pointerup', { pointerId: 4 });
+    expect(shell.style._props['--wide-right-w']).toBe('420px');
+
+    const collapse = findChildByTestId(shell, 'pane-collapse-right');
+    collapse.dispatch('click');
+    expect(shell.dataset.paneRight).toBe('collapsed');
+    expect(saved.at(-1).widePanes.rightOpen).toBe(420);
+
+    const tabs = shell.children[0].children[0];
+    tabs.dispatch('click');
+    expect(shell.dataset.paneRight).toBe('open');
+    expect(shell.style._props['--wide-right-w']).toBe('420px');
+    expect(saved.at(-1)).toEqual({ widePanes: { left: 280, right: 420, leftOpen: 280, rightOpen: 420 } });
+
+    cleanup();
+  });
+
+  test('persisted { left: "collapsed", leftOpen: 340 } mounts collapsed and expands to 340', () => {
+    const shell = makeShell();
+    const saved = [];
+    const cleanup = attachWidePanes({
+      shell,
+      loadSettings: () => ({ widePanes: { left: 'collapsed', leftOpen: 340, right: 360 } }),
+      saveSettings: (payload) => { saved.push(payload); }
+    });
+
+    expect(shell.dataset.paneLeft).toBe('collapsed');
+    const collapse = findChildByTestId(shell, 'pane-collapse-left');
+    collapse.dispatch('click');
+    expect(shell.dataset.paneLeft).toBe('open');
+    expect(shell.style._props['--wide-left-w']).toBe('340px');
+    expect(saved.at(-1).widePanes.left).toBe(340);
+    expect(saved.at(-1).widePanes.leftOpen).toBe(340);
+
+    cleanup();
+  });
+
+  test('malformed leftOpen falls back to bounds.default on expand', () => {
+    const shell = makeShell();
+    const saved = [];
+    const cleanup = attachWidePanes({
+      shell,
+      loadSettings: () => ({ widePanes: { left: 'collapsed', leftOpen: 'garbage', right: 360 } }),
+      saveSettings: (payload) => { saved.push(payload); }
+    });
+
+    const collapse = findChildByTestId(shell, 'pane-collapse-left');
+    collapse.dispatch('click');
+    expect(shell.style._props['--wide-left-w']).toBe(`${WIDE_PANE_LEFT_BOUNDS.default}px`);
+    expect(saved.at(-1).widePanes.leftOpen).toBe(WIDE_PANE_LEFT_BOUNDS.default);
 
     cleanup();
   });
