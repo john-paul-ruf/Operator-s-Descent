@@ -18,6 +18,10 @@ const LEGACY_TO_ACTION = {
   'move-northeast': 'move_ne', 'move-northwest': 'move_nw', 'move-southeast': 'move_se', 'move-southwest': 'move_sw'
 };
 
+function stagedCount(context) {
+  return Array.isArray(context?.stagedPath) ? context.stagedPath.length : 0;
+}
+
 function clear(container) {
   if (typeof container.replaceChildren === 'function') container.replaceChildren();
   else while (container.firstChild) container.removeChild(container.firstChild);
@@ -30,7 +34,12 @@ function text(className, value) {
   return element;
 }
 
-function noticeFor(result, canDescend) {
+function noticeFor(result, canDescend, context) {
+  const staged = stagedCount(context);
+  if (staged > 0) {
+    const last = context.stagedPath[staged - 1];
+    return `STAGED ${staged} STEP${staged === 1 ? '' : 'S'} → ${last?.x ?? '?'}:${last?.y ?? '?'} — CONFIRM to execute.`;
+  }
   if (canDescend) return 'DESCENT POINT — press CONFIRM to request descent.';
   if (!result) return 'MOVE with arrows, numpad, WASD/QEZC, or the console pad.';
   if (!result.moved) return result.interruptType === 'invalid-direction' ? 'INVALID DIRECTION.' : 'BLOCKED — wall or closed corner.';
@@ -59,14 +68,20 @@ export function render(container, context = {}) {
   const dpad = document.createElement('div');
   dpad.className = 'dpad move-dpad';
   dpad.setAttribute('aria-label', 'Eight-way movement pad');
+  const staged = stagedCount(context);
+  const canDescend = Boolean(context.canDescend?.());
+  const confirmLabel = staged > 0 ? `CONFIRM (${staged})` : (canDescend ? 'DESCEND' : 'WAIT');
+  const confirmAria = staged > 0
+    ? `Execute ${staged} staged step${staged === 1 ? '' : 's'}`
+    : (canDescend ? 'Confirm descent' : 'Wait; no descent point underfoot');
   for (const entry of DIRECTIONS) {
-    const canDescend = Boolean(context.canDescend?.());
-    const label = entry.action === 'confirm' ? (canDescend ? 'DESCEND' : 'WAIT') : entry.label;
+    const isConfirm = entry.action === 'confirm';
+    const label = isConfirm ? confirmLabel : entry.label;
     const button = createButton(label, {
-      label: entry.action === 'confirm' ? (canDescend ? 'Confirm descent' : 'Wait; no descent point underfoot') : entry.name,
-      disabled: entry.action === 'confirm' && !canDescend
+      label: isConfirm ? confirmAria : entry.name,
+      disabled: isConfirm && staged === 0 && !canDescend
     });
-    button.className = entry.action === 'confirm' ? 'dpad-center console-row' : 'dpad-btn console-row';
+    button.className = isConfirm ? 'dpad-center console-row' : 'dpad-btn console-row';
     button.dataset.testid = entry.direction ? `move-${entry.direction}` : 'move-confirm';
     dpad.appendChild(button);
     if (context.inputHandler?.bindActionControl) cleanups.push(context.inputHandler.bindActionControl(button, entry.action));
@@ -90,6 +105,20 @@ export function render(container, context = {}) {
   });
   damageToggle.dataset.testid = 'toggle-damage';
   toggleRow.appendChild(damageToggle);
+  const undoButton = createButton('UNDO', {
+    label: 'Undo last staged step',
+    disabled: staged === 0,
+    onClick: () => handleInput({ action: 'undo_stage' }, context)
+  });
+  undoButton.dataset.testid = 'move-undo';
+  toggleRow.appendChild(undoButton);
+  const clearButton = createButton('CLEAR', {
+    label: 'Clear all staged steps',
+    disabled: staged === 0,
+    onClick: () => handleInput({ action: 'clear_stage' }, context)
+  });
+  clearButton.dataset.testid = 'move-clear';
+  toggleRow.appendChild(clearButton);
   root.appendChild(toggleRow);
 
   if (context.layout === 'wide') {
@@ -98,7 +127,7 @@ export function render(container, context = {}) {
     root.appendChild(autoStopRow('Auto-Stop on damage taken', toggles.damage !== false, false, 'autostop-damage'));
   }
 
-  const notice = text('console-notice', context.notice || noticeFor(context.lastMoveResult, context.canDescend?.()));
+  const notice = text('console-notice', context.notice || noticeFor(context.lastMoveResult, context.canDescend?.(), context));
   notice.dataset.testid = 'move-notice';
   root.appendChild(notice);
 
@@ -122,8 +151,14 @@ function autoStopRow(label, on, locked, testid) {
 
 export function handleInput(event, context = {}) {
   const action = LEGACY_TO_ACTION[event.action] || event.action;
-  if (action === 'confirm') return context.canDescend?.() ? context.onConfirmDescent?.() : false;
+  if (action === 'confirm') {
+    if (stagedCount(context) > 0) return context.onCommitStagedMoves?.() ?? false;
+    return context.canDescend?.() ? context.onConfirmDescent?.() : false;
+  }
+  if (action === 'undo_stage') return context.onUndoStagedMove?.() ?? false;
+  if (action === 'clear_stage') return context.onClearStagedMoves?.() ?? false;
   const direction = ACTION_TO_DIRECTION[action];
   if (!direction) return null;
+  if (typeof context.stageMove === 'function') return context.stageMove(direction, { source: event.source || 'console' });
   return context.onMove?.(direction, { source: event.source || 'console' });
 }

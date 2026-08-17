@@ -77,11 +77,10 @@ describe('MOVE mode', () => {
       const container = new FakeElement('div');
       renderMove(container, {});
 
-      const dpadButtons = collect(container, (el) => el.tagName === 'BUTTON' && el.dataset?.testid?.startsWith('move-'));
+      const DPAD_IDS = new Set(['move-confirm', 'move-e', 'move-n', 'move-ne', 'move-nw', 'move-s', 'move-se', 'move-sw', 'move-w']);
+      const dpadButtons = collect(container, (el) => el.tagName === 'BUTTON' && DPAD_IDS.has(el.dataset?.testid));
       expect(dpadButtons).toHaveLength(9);
-      expect(dpadButtons.map((button) => button.dataset.testid).sort()).toEqual(
-        ['move-confirm', 'move-e', 'move-n', 'move-ne', 'move-nw', 'move-s', 'move-se', 'move-sw', 'move-w'].sort()
-      );
+      expect(dpadButtons.map((button) => button.dataset.testid).sort()).toEqual([...DPAD_IDS].sort());
     });
 
     it('renders the center button as DESCEND and enabled when canDescend is true', () => {
@@ -158,6 +157,75 @@ describe('MOVE mode', () => {
       expect(collect(container, (el) => el.className?.split?.(/\s+/).includes('autostop-row'))).toHaveLength(0);
     });
 
+    it('shows UNDO and CLEAR buttons disabled when nothing is staged', () => {
+      const container = new FakeElement('div');
+      renderMove(container, {});
+
+      const undo = byTestId(container, 'move-undo');
+      const clear = byTestId(container, 'move-clear');
+      expect(undo).toBeTruthy();
+      expect(clear).toBeTruthy();
+      expect(undo.disabled).toBe(true);
+      expect(clear.disabled).toBe(true);
+    });
+
+    it('renders the center button as CONFIRM (n) and enables UNDO/CLEAR when steps are staged', () => {
+      const container = new FakeElement('div');
+      renderMove(container, {
+        stagedPath: [
+          { direction: 'e', x: 11, y: 10 },
+          { direction: 'e', x: 12, y: 10 }
+        ]
+      });
+
+      const confirm = byTestId(container, 'move-confirm');
+      expect(confirm.textContent).toBe('CONFIRM (2)');
+      expect(confirm.disabled).toBe(false);
+      expect(byTestId(container, 'move-undo').disabled).toBe(false);
+      expect(byTestId(container, 'move-clear').disabled).toBe(false);
+    });
+
+    it('CONFIRM (n) label overrides DESCEND when a descent is also underfoot but steps are staged', () => {
+      const container = new FakeElement('div');
+      renderMove(container, {
+        canDescend: () => true,
+        stagedPath: [{ direction: 'n', x: 10, y: 9 }]
+      });
+
+      const confirm = byTestId(container, 'move-confirm');
+      expect(confirm.textContent).toBe('CONFIRM (1)');
+    });
+
+    it('staged path drives the notice line with the last staged cell coordinates', () => {
+      const container = new FakeElement('div');
+      renderMove(container, {
+        stagedPath: [
+          { direction: 'e', x: 11, y: 10 },
+          { direction: 'e', x: 12, y: 10 },
+          { direction: 'se', x: 13, y: 11 }
+        ]
+      });
+
+      expect(textOf(byTestId(container, 'move-notice'))).toBe('STAGED 3 STEPS → 13:11 — CONFIRM to execute.');
+    });
+
+    it('UNDO button click routes to onUndoStagedMove; CLEAR routes to onClearStagedMoves', () => {
+      const onUndoStagedMove = vi.fn();
+      const onClearStagedMoves = vi.fn();
+      const container = new FakeElement('div');
+      renderMove(container, {
+        stagedPath: [{ direction: 'e', x: 11, y: 10 }],
+        onUndoStagedMove,
+        onClearStagedMoves
+      });
+
+      byTestId(container, 'move-undo').click();
+      byTestId(container, 'move-clear').click();
+
+      expect(onUndoStagedMove).toHaveBeenCalledTimes(1);
+      expect(onClearStagedMoves).toHaveBeenCalledTimes(1);
+    });
+
     it('wide layout appends three autostop-row entries with the correct pill state', () => {
       const container = new FakeElement('div');
       renderMove(container, { layout: 'wide', autoStopToggles: { discovery: false, damage: true } });
@@ -207,6 +275,36 @@ describe('MOVE mode', () => {
       const onMove = vi.fn();
       handleInput({ action: legacyAction }, { onMove });
       expect(onMove).toHaveBeenCalledWith(direction, { source: 'console' });
+    });
+
+    it('directions route to context.stageMove when it is provided', () => {
+      const stageMove = vi.fn();
+      const onMove = vi.fn();
+      handleInput({ action: 'move_e' }, { stageMove, onMove });
+      expect(stageMove).toHaveBeenCalledWith('e', { source: 'console' });
+      expect(onMove).not.toHaveBeenCalled();
+    });
+
+    it('confirm calls onCommitStagedMoves when at least one step is staged (even when canDescend is true)', () => {
+      const onCommitStagedMoves = vi.fn();
+      const onConfirmDescent = vi.fn();
+      handleInput({ action: 'confirm' }, {
+        stagedPath: [{ direction: 'e', x: 11, y: 10 }],
+        canDescend: () => true,
+        onCommitStagedMoves,
+        onConfirmDescent
+      });
+      expect(onCommitStagedMoves).toHaveBeenCalledTimes(1);
+      expect(onConfirmDescent).not.toHaveBeenCalled();
+    });
+
+    it('undo_stage calls onUndoStagedMove; clear_stage calls onClearStagedMoves', () => {
+      const onUndoStagedMove = vi.fn();
+      const onClearStagedMoves = vi.fn();
+      handleInput({ action: 'undo_stage' }, { onUndoStagedMove });
+      handleInput({ action: 'clear_stage' }, { onClearStagedMoves });
+      expect(onUndoStagedMove).toHaveBeenCalledTimes(1);
+      expect(onClearStagedMoves).toHaveBeenCalledTimes(1);
     });
 
     it('confirm calls onConfirmDescent when canDescend() is true', () => {
