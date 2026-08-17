@@ -90,6 +90,30 @@ Neon glow on every rendered element, intensity by layer:
 | Sigil | `0 0 12px var(--accent), 0 0 24px var(--accent)` | Sigil glyphs at all sizes |
 | Danger | `0 0 8px var(--danger)` | HP bars, death indicators |
 
+### Interaction Affordance
+
+One affordance grammar for every interactive control (clarity-and-fit 2026-08-16). Owner directive: users must be able to tell which elements are clickable at a glance, without hovering. The grammar is a single CSS class `.is-interactive` applied by the factories in `src/ui/components.js` (never per-screen). Interactive ⇔ `.is-interactive`.
+
+| Layer | Rule | Purpose |
+|-------|------|---------|
+| Rest | `border: 1px solid var(--interactive-border)` + `cursor: pointer` | Baseline "you can click this" affordance — findable by border alone |
+| Hover (non-disabled) | `border-color: var(--accent)` + `box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 35%, transparent)` | Signals pointer engagement |
+| Focus-visible | `outline: 2px solid var(--accent)` + `outline-offset: 2px` | Keyboard-navigation anchor |
+| Active (non-disabled) | `transform: translateY(1px)` | Press feedback |
+| Disabled (`[disabled]` or `[aria-disabled="true"]`) | `opacity: 0.45` + `cursor: not-allowed` + `border-style: dashed` | Uniform "can't click this right now" |
+
+The custom property `--interactive-border: #5a89a0` is scoped inside `.is-interactive` in `styles/components.css` (not in the Color Palette table, not in `styles/base.css :root`) so it inherits through the affordance grammar without appearing in the tokens-palette scanner surface. Contrast: `#5a89a0` on `--bg-panel #13092a` measures 5.02:1 (target ≥3:1 for non-text; controls must be findable by border alone).
+
+Factories that add `.is-interactive`:
+
+- `createButton` — every button
+- `createSlider` — the `input[type="range"]`
+- `createToggle` — the visual `.toggle` span (also mirrors `aria-disabled` from the input)
+- `createEquipmentCard` — only when `opts.onClick` is provided (static article variants omit it)
+- `createProtocolCard` — same rule as equipment cards
+
+Disabled controls set `disabled` (for native form controls) AND `aria-disabled="true"` simultaneously so the grammar's disabled styling applies uniformly to both native and non-native elements. Ad-hoc `:hover` rules the grammar supersedes were removed from `.item-card` and `.action-btn`; component-specific active-state styling (`.active`, `.selected`, `.mode-tab.active`, `.item-card.equipped`, `.item-card.corrupt`) stays.
+
 ### Derived Surface Tokens
 
 Non-palette surface tokens declared in `styles/base.css :root` — dimensional and mix values that support the scroll surface. They are not colors in the Color Palette sense (no per-floor accent flow, no `#value` swatch), so they sit here rather than in that table. The design compliance scanner exempts exactly this set from the "declared in base.css but absent from spec palette" warning.

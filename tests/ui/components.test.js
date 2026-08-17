@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createButton, createChargeBar, createEquipmentCard, createHPBar, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
+import { createButton, createChargeBar, createEquipmentCard, createHPBar, createProtocolCard, createSigilToken, createSlider, createTextInput, createToggle } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -59,7 +59,7 @@ describe('semantic components', () => {
   });
 
   test('primary buttons and meters expose mock-compatible classes', () => {
-    expect(createButton('Confirm', { primary: true }).className).toBe('btn-crt btn-primary primary');
+    expect(createButton('Confirm', { primary: true }).className).toBe('btn-crt btn-primary primary is-interactive');
     expect(createHPBar(3, 10).children[1].children[0].className).toContain('bar-fill-danger');
     expect(createChargeBar(3, 10).children[1].children[0].className).toContain('bar-fill-charge');
   });
@@ -115,5 +115,50 @@ describe('semantic components', () => {
 
     const emptyStats = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm' }, { stats: [] });
     expect(emptyStats.children.find((child) => child.className === 'card-stats')).toBeUndefined();
+  });
+
+  test('interactive factories tag their output with the .is-interactive affordance class', () => {
+    const button = createButton('Start', { onClick: () => {} });
+    expect(button.classList.values.has('is-interactive')).toBe(true);
+
+    const slider = createSlider('Volume', 50, () => {});
+    expect(slider.children[1].classList.values.has('is-interactive')).toBe(true);
+
+    const toggle = createToggle('Glitch', false, () => {});
+    expect(toggle.children[2].classList.values.has('is-interactive')).toBe(true);
+
+    const clickableCard = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm' }, { onClick: () => {} });
+    expect(clickableCard.classList.values.has('is-interactive')).toBe(true);
+
+    const clickableProtocol = createProtocolCard({ id: 'purge', name: 'PURGE' }, { onClick: () => {} });
+    expect(clickableProtocol.classList.values.has('is-interactive')).toBe(true);
+  });
+
+  test('static factory variants (article cards, no onClick) omit the .is-interactive class', () => {
+    const staticCard = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm' });
+    expect(staticCard.tagName).toBe('ARTICLE');
+    expect(staticCard.classList.values.has('is-interactive')).toBe(false);
+
+    const staticProtocol = createProtocolCard({ id: 'purge', name: 'PURGE' });
+    expect(staticProtocol.tagName).toBe('ARTICLE');
+    expect(staticProtocol.classList.values.has('is-interactive')).toBe(false);
+  });
+
+  test('disabled controls carry aria-disabled and .is-interactive simultaneously', () => {
+    const disabledButton = createButton('Locked', { onClick: () => {}, disabled: true });
+    expect(disabledButton.classList.values.has('is-interactive')).toBe(true);
+    expect(disabledButton.disabled).toBe(true);
+    expect(disabledButton.getAttribute('aria-disabled')).toBe('true');
+
+    const disabledSlider = createSlider('Muted', 0, () => {}, { disabled: true });
+    const rangeInput = disabledSlider.children[1];
+    expect(rangeInput.classList.values.has('is-interactive')).toBe(true);
+    expect(rangeInput.disabled).toBe(true);
+    expect(rangeInput.getAttribute('aria-disabled')).toBe('true');
+
+    const disabledToggle = createToggle('Off', false, () => {}, { disabled: true });
+    const visual = disabledToggle.children[2];
+    expect(visual.classList.values.has('is-interactive')).toBe(true);
+    expect(visual.getAttribute('aria-disabled')).toBe('true');
   });
 });

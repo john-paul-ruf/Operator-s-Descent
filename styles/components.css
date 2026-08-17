@@ -1,3 +1,31 @@
+/* Interaction Affordance Grammar — one grammar for every interactive control.
+   Applied by factories in src/ui/components.js (clarity-and-fit SESSION-07).
+   `--interactive-border` is scoped here rather than in styles/base.css :root so
+   it stays out of the design-tokens palette scanner while remaining reachable by
+   every `.is-interactive` element via CSS custom-property inheritance. */
+.is-interactive {
+  --interactive-border: #5a89a0;
+  border: 1px solid var(--interactive-border);
+  cursor: pointer;
+}
+.is-interactive:hover:not([disabled]):not([aria-disabled="true"]) {
+  border-color: var(--accent);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.is-interactive:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.is-interactive:active:not([disabled]):not([aria-disabled="true"]) {
+  transform: translateY(1px);
+}
+.is-interactive[disabled],
+.is-interactive[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 /* Console Shell */
 .console-bar {
   background: var(--bg-panel);
@@ -253,17 +281,13 @@
   text-shadow: 0 0 12px var(--danger), 0 0 24px var(--danger);
 }
 
-/* Item Cards */
+/* Item Cards — hover/cursor come from `.is-interactive` when the card is
+   clickable (createEquipmentCard with opts.onClick). Static article variants
+   stay border-dim with no hover affordance. */
 .item-card {
   border: 1px solid var(--border-dim);
   background: var(--bg-panel);
   transition: all 0.15s ease;
-  cursor: pointer;
-}
-
-.item-card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
 }
 
 .item-card.equipped {
@@ -337,7 +361,9 @@
   color: var(--text-secondary);
 }
 
-/* Action buttons */
+/* Action buttons — hover/cursor come from `.is-interactive` when the button is
+   clickable (createProtocolCard with opts.onClick, direct <button> uses in the
+   console panes). Static protocol-cards inherit only the base border. */
 .action-btn {
   padding: 6px 10px;
   background: var(--bg-panel);
@@ -347,18 +373,12 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-}
-
-.action-btn:hover {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
 }
 
 .action-btn.selected {

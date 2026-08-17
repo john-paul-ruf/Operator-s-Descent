@@ -29,7 +29,10 @@ function applyControlState(element, opts) {
   if (opts.label) element.setAttribute('aria-label', opts.label);
   if (opts.description) element.setAttribute('aria-description', opts.description);
   if (opts.describedBy) element.setAttribute('aria-describedby', opts.describedBy);
-  if (opts.disabled) element.disabled = true;
+  if (opts.disabled) {
+    element.disabled = true;
+    element.setAttribute('aria-disabled', 'true');
+  }
   if (opts.busy) element.setAttribute('aria-busy', 'true');
   if (opts.selected != null) element.setAttribute('aria-selected', String(Boolean(opts.selected)));
   if (opts.error) {
@@ -45,6 +48,7 @@ export function createButton(label, opts = {}) {
   button.textContent = label;
   if (opts.danger) button.classList.add('danger');
   if (opts.selected) button.classList.add('selected');
+  button.classList.add('is-interactive');
   applyControlState(button, opts);
   return withCleanup(button, opts.onClick ? listen(button, 'click', opts.onClick) : undefined);
 }
@@ -62,6 +66,7 @@ export function createSlider(label, value, onChange, opts = {}) {
   input.step = String(opts.step ?? 1);
   input.value = String(value);
   input.id = opts.id || `slider-${++nextControlId}`;
+  input.classList.add('is-interactive');
   applyControlState(input, opts);
   const valueEl = document.createElement('span');
   valueEl.className = 'slider-value';
@@ -88,8 +93,9 @@ export function createToggle(label, value, onChange, opts = {}) {
   input.setAttribute('role', 'switch');
   input.setAttribute('aria-label', opts.label || label);
   const visual = document.createElement('span');
-  visual.className = `toggle${value ? ' on' : ''}`;
+  visual.className = `toggle is-interactive${value ? ' on' : ''}`;
   visual.setAttribute('aria-hidden', 'true');
+  if (opts.disabled) visual.setAttribute('aria-disabled', 'true');
   const knob = document.createElement('span');
   knob.className = 'toggle-knob';
   visual.appendChild(knob);
@@ -200,6 +206,7 @@ export function createEquipmentCard(item, opts = {}) {
   card.className = 'equipment-card item-card console-row';
   if (opts.onClick) card.type = 'button';
   if (item.corrupt) card.classList.add('corrupt');
+  if (opts.onClick) card.classList.add('is-interactive');
   applyControlState(card, opts);
   const name = document.createElement('div');
   name.className = 'card-name';
@@ -235,6 +242,7 @@ export function createProtocolCard(protocol, opts = {}) {
   card.className = 'protocol-card action-btn console-row';
   if (opts.onClick) card.type = 'button';
   if (opts.insufficient) card.classList.add('insufficient');
+  if (opts.onClick) card.classList.add('is-interactive');
   applyControlState(card, opts);
   if (protocol.school) {
     const tag = document.createElement('span');
