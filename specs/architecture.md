@@ -1631,3 +1631,18 @@ Combat screen's `overlayOptions()` now returns `confirmCell = ${pathEndpoint(act
 ### M104 Viewport — zoomToCells default-zoom API (ui-clarity-pass UC-01)
 
 **`camera.zoomToCells(worldCellPx, targetScreenPx)`** — sets an absolute default zoom so one world cell renders at ≈`targetScreenPx` on screen, clamped to `[fitScale, fitScale × MAX_ZOOM_SCALE]` (`[fit, 4×fit]`). Preserves the current view center; caller re-centers. No-op if either argument is zero/undefined. Introduced for exploration's "maximize on entry" default — M70 `primeCamera` now primes at 40 px/cell (≈1.6× fit on a world-sized viewport) instead of `fit()`, then centers on the party. Unchanged: `fit()`, `fitScale()`, `clampScale`, `MAX_ZOOM_SCALE` — combat retains fit-to-grid via `fit()`.
+
+<!-- walls-npc-docking SESSION-03 -->
+### M100/M86/M56/M79/M82 — dock-width memory + stale-build surfacing (walls-npc-docking SESSION-03)
+
+**M100 Layout (`src/ui/layout.js`)** — new persisted keys `settings.widePanes.leftOpen` / `rightOpen` (number): last user-chosen open width per dock, restored on chevron/tab expand instead of `bounds.default`. Existing `left`/`right` keep shape (`number | 'collapsed'`) — `tests/e2e/wide-panes.spec.js` unchanged. `attachWidePanes` reads `persisted.leftOpen ?? persisted.left`; every `setWidth` updates `lastOpen[side]` in lock-step.
+
+**M86 Runtime (`src/runtime.js`)** — new bus event `runtime:update-ready` (payload `{}`, no `EVENT_CONTRACTS` entry — passes as unknown event). `controllerchange` now branches on mounted route: in-run surfaces (creation/exploration/combat) set `serviceWorkerStatus.updateReady=true` + dispatch `runtime:update-ready` once (no auto-reload); non-run surfaces keep `runtime:update-applied` + `location.reload()`. New sticky status field `serviceWorkerStatus.updateReady: boolean` in `getRuntimeSnapshot()`.
+
+**M82 Main (`src/main.js`)** — NO new imports; the update-toast subscription lives in `runtime.js` (module-load side effect) to preserve the start-gate contract (zero top-level static imports, exactly 2 dynamic imports).
+
+**M56 Components (`src/ui/components.js`)** — new factory `createUpdateToast({ onReload })` → `.update-toast` div (`role=status`, `aria-live=polite`, `data-testid=update-toast`) with a `NEW BUILD CACHED` label + `.btn-crt.update-toast-reload` button (`data-testid=update-toast-reload`, 48px min-height).
+
+**M79 Components CSS (`styles/components.css`)** — new `.update-toast` block: fixed bottom-center, panel-elevated bg, accent border/glow, `z-index:60`.
+
+**M81 Service Worker** — `CACHE_VERSION = '2026-08-17-walls-npc-docking-v1'`.
