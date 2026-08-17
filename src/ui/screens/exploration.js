@@ -42,6 +42,7 @@ function normalizeMoveOptions(toggles) {
 }
 
 const EXPLORATION_CELL_PX = 24;
+const DEFAULT_ENTRY_CELL_PX = 40;
 const LATTICE_WORLD_W = 20 * EXPLORATION_CELL_PX;
 const LATTICE_WORLD_H = 32 * EXPLORATION_CELL_PX;
 const AUTO_FOLLOW_MARGIN_CELLS = 2;
@@ -176,7 +177,7 @@ export function mount(container, params = {}) {
     camera.setViewport(w, h);
     if (!firstSized) {
       firstSized = true;
-      camera.fit();
+      camera.zoomToCells(EXPLORATION_CELL_PX, DEFAULT_ENTRY_CELL_PX);
       const p = lattice?.getPartyPosition?.();
       if (p) {
         const px = p.x * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
