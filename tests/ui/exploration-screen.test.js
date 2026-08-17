@@ -23,7 +23,7 @@ class FakeElement {
     this.attributes = new Map();
     this.listeners = new Map();
     this.dataset = {};
-    this.style = { properties: {}, setProperty(name, value) { this.properties[name] = value; } };
+    this.style = { properties: {}, setProperty(name, value) { this.properties[name] = value; }, removeProperty(name) { delete this.properties[name]; } };
     this.classList = new FakeClassList(this);
     this._className = '';
     this.textContent = '';
@@ -48,7 +48,7 @@ class FakeElement {
   dispatch(type, event = {}) { for (const listener of this.listeners.get(type) || []) listener({ type, target: this, repeat: false, preventDefault() { this.prevented = true; }, ...event }); }
   click() { if (!this.disabled) this.dispatch('click'); }
   focus() { this.focused = true; }
-  getBoundingClientRect() { return this._boundingRect || { width: 0, height: 0, left: 0, top: 0 }; }
+  getBoundingClientRect() { return this._boundingRect || { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 }; }
   setPointerCapture(id) { this._pointerCapture.add(id); }
   releasePointerCapture(id) { this._pointerCapture.delete(id); }
   contains(node) {
@@ -81,6 +81,7 @@ class FakeContext {
   fillRect(...args) { this.calls.push(['fillRect', this.fillStyle, ...args]); }
   strokeRect(...args) { this.calls.push(['strokeRect', this.strokeStyle, ...args]); }
   fillText(...args) { this.calls.push(['fillText', this.fillStyle, ...args]); }
+  setTransform(...args) { this.calls.push(['setTransform', ...args]); }
 }
 
 function installDocument() {
@@ -156,6 +157,16 @@ async function mountExploration(setup = {}) {
   return { container, controller, runState: state };
 }
 
+// Attach a bounding rect that lets tap/gesture math resolve deterministically.
+function sizeBody(container, { width = 100, height = 100 } = {}) {
+  const playfieldBody = byClass(container, 'exploration-playfield');
+  const canvas = byTestId(container, 'exploration-canvas');
+  playfieldBody._boundingRect = { width, height, left: 0, top: 0, right: width, bottom: height };
+  // Canvas fills body via 100%/100% inline styles; rect matches body.
+  canvas._boundingRect = { width, height, left: 0, top: 0, right: width, bottom: height };
+  return { playfieldBody, canvas };
+}
+
 beforeEach(() => { installDocument(); installMatchMedia(false); });
 afterEach(() => { delete globalThis.document; delete globalThis.window; });
 
@@ -178,48 +189,44 @@ describe('exploration screen controller', () => {
     expect(playfieldBody.style.overflow).toBe('hidden');
     expect(playfieldBody.children).toEqual([canvas]);
     expect([canvas.width, canvas.height]).toEqual([480, 768]);
+    expect(canvas.style.width).toBe('100%');
+    expect(canvas.style.height).toBe('100%');
     expect(canvas.classList.contains('lattice-canvas')).toBe(true);
   });
 
-  it('routes keyboard movement through MOVE: arrow stages, Enter commits (party moves + audio update)', async () => {
+  it('arrow key moves the party immediately (no staging) and updates audio', async () => {
     const audio = [];
     const off = bus.on('audio:update-state', (payload) => audio.push(payload));
     const { container, runState: state } = await mountExploration();
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
-    // Stage-only: party has not moved yet, notice reflects the staged step.
-    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
 
-    container.dispatch('keydown', keyEvent('Enter'));
     expect(state.partyPosition).toEqual({ x: 11, y: 10 });
     expect(byTestId(container, 'move-notice').textContent).toContain('MOVED');
     expect(audio.at(-1).proximity).toEqual({ hostile: null, container: null });
     off();
   });
 
-  it('requests combat on hostile discovery when the staged commit lands next to a hostile', async () => {
+  it('requests combat on hostile discovery when the immediate move lands next to a hostile', async () => {
     const combat = [];
     const off = bus.on('state:combat-start', (payload) => combat.push(payload));
     const hostileFloor = floor({ enemySpawns: [{ id: 0, x: 12, y: 10, archetypeId: 'drone' }] });
     const { container, runState: state } = await mountExploration({ floor: hostileFloor });
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(combat).toHaveLength(1);
     expect(combat[0]).toMatchObject({ runState: state, floor: hostileFloor, reason: 'hostile', encounter: expect.objectContaining({ kind: 'standard' }), moveResult: expect.objectContaining({ interruptType: 'hostile' }) });
     off();
   });
 
-  it('enables LOOT only for an unopened adjacent container discovered by the committed staged step', async () => {
+  it('enables LOOT only for an unopened adjacent container discovered by the immediate move', async () => {
     const opens = [];
     const off = bus.on('loot:open-request', (payload) => opens.push(payload));
     const lootFloor = floor({ containers: [{ id: 0, x: 12, y: 10 }] });
     const { container } = await mountExploration({ floor: lootFloor });
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(byTestId(container, 'console-tab-loot').getAttribute('aria-selected')).toBe('true');
     expect(textOf(byTestId(container, 'loot-container'))).toContain('CONTAINER 0');
@@ -229,20 +236,19 @@ describe('exploration screen controller', () => {
     off();
   });
 
-  it('honors discovery auto-stop toggle while preserving movement (stage → commit)', async () => {
+  it('honors discovery auto-stop toggle while preserving immediate movement', async () => {
     const farContainerFloor = floor({ containers: [{ id: 0, x: 13, y: 10 }] });
     const { container, runState: state } = await mountExploration({ floor: farContainerFloor });
 
     byTestId(container, 'toggle-discovery').click();
     container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(state.partyPosition).toEqual({ x: 11, y: 10 });
     expect(byTestId(container, 'console-tab-loot').disabled).toBe(true);
     expect(textOf(container)).not.toContain('CONTAINER DISCOVERED');
   });
 
-  it('requests floor transition only from confirm on the descent cell (stage → commit → confirm descend)', async () => {
+  it('confirm on the descent cell requests floor-change (single-tap descent flow, no staging)', async () => {
     const changes = [];
     const off = bus.on('state:floor-change', (payload) => changes.push(payload));
     const descentFloor = floor({ descentPoint: { x: 11, y: 10 } });
@@ -250,12 +256,8 @@ describe('exploration screen controller', () => {
     const { container, runState: state } = await mountExploration({ floor: descentFloor });
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
-    expect(changes).toHaveLength(0);
-    // First confirm: commit the staged step (party moves onto descent).
-    byTestId(container, 'move-confirm').click();
-    expect(changes).toHaveLength(0);
     expect(state.partyPosition).toEqual({ x: 11, y: 10 });
-    // Second confirm: nothing staged + standing on descent → onConfirmDescent.
+    expect(changes).toHaveLength(0);
     byTestId(container, 'move-confirm').click();
     expect(changes).toEqual([expect.objectContaining({ runState: state, floor: descentFloor, reason: 'descent-confirmed' })]);
     off();
@@ -266,7 +268,6 @@ describe('exploration screen controller', () => {
     controller.unmount();
 
     container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
   });
@@ -284,10 +285,8 @@ describe('exploration screen controller', () => {
     try {
       const { controller } = await mountExploration();
       const scheduledBefore = raf.length;
-      // A pulse-enabled mount schedules at least one rAF frame after the first render.
       expect(scheduledBefore).toBeGreaterThan(0);
       controller.unmount();
-      // Firing the last-scheduled frame after destroy must NOT schedule another one.
       const lastCallback = raf[raf.length - 1];
       raf.length = 0;
       lastCallback(16);
@@ -301,88 +300,80 @@ describe('exploration screen controller', () => {
     }
   });
 
-  it('does not pan the canvas while the drag stays inside the 6px threshold', async () => {
-    const { container } = await mountExploration();
-    const playfieldBody = byClass(container, 'exploration-playfield');
-    const canvas = byTestId(container, 'exploration-canvas');
-    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
-    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+  it('a sub-threshold drag ending on the party cell does not move the party (tap-on-self ignored)', async () => {
+    const { container, runState: state } = await mountExploration();
+    const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
+
+    // Party at (10,10) → center px (252, 252). Small in-threshold drag → tap fires; tap
+    // on the party cell is ignored by handleTap.
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 252, clientY: 252 });
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 254, clientY: 254 });
+    playfieldBody.dispatch('pointerup', { pointerId: 1 });
+
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
+
+  it('a drag past 6px pans (camera state.x/y move) and does not move the party', async () => {
+    const { container, runState: state } = await mountExploration();
+    const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
     playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
-    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 103, clientY: 103 });
-
-    expect(canvas.style.transform).toBe('translate3d(0px, 0px, 0)');
-  });
-
-  it('pans the canvas and clamps to the body/canvas overflow bounds', async () => {
-    const { container } = await mountExploration();
-    const playfieldBody = byClass(container, 'exploration-playfield');
-    const canvas = byTestId(container, 'exploration-canvas');
-    playfieldBody._boundingRect = { width: 300, height: 500, left: 0, top: 0 };
-    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
-
-    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
-    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: -10000, clientY: -10000 });
-
-    // minX = 300 - 480 = -180, minY = 500 - 768 = -268
-    expect(canvas.style.transform).toBe('translate3d(-180px, -268px, 0)');
-    expect(playfieldBody._pointerCapture.has(1)).toBe(true);
-
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 40, clientY: 40 });
     playfieldBody.dispatch('pointerup', { pointerId: 1 });
-    expect(playfieldBody._pointerCapture.has(1)).toBe(false);
+
+    // Party never moves from a drag alone (no tap fires — moved past threshold).
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
   });
 
-  it('preventDefault on touchmove while a drag is active to stop page scroll', async () => {
-    const { container } = await mountExploration();
-    const playfieldBody = byClass(container, 'exploration-playfield');
-    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
+  it('tap on a revealed reachable cell runs the party along a BFS path immediately', async () => {
+    const { container, runState: state } = await mountExploration();
+    const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    let idlePrevented = false;
-    playfieldBody.dispatch('touchmove', { preventDefault: () => { idlePrevented = true; } });
-    expect(idlePrevented).toBe(false);
+    // Body 480×768 matches the world (20×24=480, 32×24=768). Camera fits & centers on party (10,10);
+    // world origin at (0,0) at scale 1. Tap on world cell (11,10): center px = (11.5*24, 10.5*24)
+    // = (276, 252). With scale 1 and camera state.x=0/y=0 (already at origin, view = 480×768 world),
+    // client coords equal world coords. Since drag threshold isn't exceeded, it fires as tap.
+    playfieldBody.dispatch('pointerdown', { pointerId: 3, clientX: 276, clientY: 252 });
+    playfieldBody.dispatch('pointerup', { pointerId: 3 });
 
-    playfieldBody.dispatch('pointerdown', { pointerId: 2, clientX: 50, clientY: 50 });
-    let activePrevented = false;
-    playfieldBody.dispatch('touchmove', { preventDefault: () => { activePrevented = true; } });
-    expect(activePrevented).toBe(true);
+    // Path length 1 → BFS finds [e], party executes immediately.
+    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
   });
 
-  it('auto-follows the party after a committed staged step so it stays in view', async () => {
-    const { container } = await mountExploration();
-    const playfieldBody = byClass(container, 'exploration-playfield');
-    const canvas = byTestId(container, 'exploration-canvas');
-    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
-    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+  it('tap on an unreachable cell posts NO PATH and does not move the party', async () => {
+    // Ring the party with walls so no move is possible.
+    const walledFloor = floor();
+    walledFloor.cells[9][9] = 0; walledFloor.cells[9][10] = 0; walledFloor.cells[9][11] = 0;
+    walledFloor.cells[10][9] = 0; walledFloor.cells[10][11] = 0;
+    walledFloor.cells[11][9] = 0; walledFloor.cells[11][10] = 0; walledFloor.cells[11][11] = 0;
+    const { container, runState: state } = await mountExploration({ floor: walledFloor });
+    const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    // Party at (10,10) → pixel (252,252). Body 100×100 makes party far off-screen.
-    // Stage east → still at (10,10). Enter (commit) → party at (11,10) → pixel (276,252).
-    // From panOffset (0,0), visibleRight - marginX = 100 - 48 = 52; party.x = 276 → dx = 52 - 276 = -224.
-    // Same math for y → dy = 52 - 252 = -200. Both stay inside [minX -380, 0] / [minY -668, 0].
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
+    // Tap on (15, 15), an unreachable open cell.
+    playfieldBody.dispatch('pointerdown', { pointerId: 4, clientX: 15 * 24 + 12, clientY: 15 * 24 + 12 });
+    playfieldBody.dispatch('pointerup', { pointerId: 4 });
 
-    expect(canvas.style.transform).toBe('translate3d(-224px, -200px, 0)');
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toBe('NO PATH.');
   });
 
-  it('manual drag suppresses auto-follow until the next committed staged step re-engages it', async () => {
-    const { container } = await mountExploration();
-    const playfieldBody = byClass(container, 'exploration-playfield');
-    const canvas = byTestId(container, 'exploration-canvas');
-    playfieldBody._boundingRect = { width: 100, height: 100, left: 0, top: 0 };
-    canvas._boundingRect = { width: 480, height: 768, left: 0, top: 0 };
+  it('tap-to-move truncates on hostile interrupt', async () => {
+    const combat = [];
+    const off = bus.on('state:combat-start', (payload) => combat.push(payload));
+    const hostileFloor = floor({ enemySpawns: [{ id: 0, x: 13, y: 10, archetypeId: 'drone' }] });
+    const { container, runState: state } = await mountExploration({ floor: hostileFloor });
+    const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
-    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 30, clientY: 30 });
-    playfieldBody.dispatch('pointerup', { pointerId: 1 });
-    // Drag alone: dx=-70, dy=-70 from (0,0). Clamped inside [-380, 0].
-    expect(canvas.style.transform).toBe('translate3d(-70px, -70px, 0)');
+    // Tap on (14,10): BFS path [e,e,e,e]. First step (11,10) does not see hostile; second (12,10)
+    // reveals hostile at (13,10) → interrupt → truncate.
+    playfieldBody.dispatch('pointerdown', { pointerId: 5, clientX: 14 * 24 + 12, clientY: 10 * 24 + 12 });
+    playfieldBody.dispatch('pointerup', { pointerId: 5 });
 
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
-    // ensurePartyVisible re-engages. From pan (-70,-70):
-    //   visibleLeft=70, visibleRight=170. party.x=276 > 170-48=122 → dx=122-276=-154 → panOffset.x = -224
-    //   visibleTop=70, visibleBottom=170. party.y=252 > 170-48=122 → dy=122-252=-130 → panOffset.y = -200
-    expect(canvas.style.transform).toBe('translate3d(-224px, -200px, 0)');
+    expect(combat).toHaveLength(1);
+    // Party halted before reaching (14,10); at least one step happened but not all four.
+    expect(state.partyPosition.x).toBeGreaterThan(10);
+    expect(state.partyPosition.x).toBeLessThan(14);
+    off();
   });
 
   it('focuses the container on mount so arrow keys work without a prior click', async () => {
@@ -393,7 +384,6 @@ describe('exploration screen controller', () => {
   it('refocuses the container on pointerdown when focus has drifted elsewhere', async () => {
     const { container } = await mountExploration();
     const playfieldBody = byClass(container, 'exploration-playfield');
-    const state = runState();
     container.focused = false;
     const other = new FakeElement('div');
     globalThis.document.activeElement = other;
@@ -407,7 +397,6 @@ describe('exploration screen controller', () => {
     expect(container.focused).toBe(false);
 
     delete globalThis.document.activeElement;
-    void state;
   });
 
   it('does not steal focus from a console child that already holds it', async () => {
@@ -423,32 +412,28 @@ describe('exploration screen controller', () => {
     delete globalThis.document.activeElement;
   });
 
-  it('routes console:intent move_* actions from panes that decline the input into the staged path', async () => {
+  it('routes console:intent move_* actions from panes that decline the input into an immediate move', async () => {
     const { container, runState: state } = await mountExploration();
     bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
-    // Party has not moved — the action has staged instead.
-    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
+    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toContain('MOVED');
   });
 
-  it('routes each console:intent direction into staging (party position unchanged until commit)', async () => {
+  it('routes each console:intent direction into an immediate move', async () => {
     const directions = ['move_n', 'move_s', 'move_w', 'move_ne', 'move_nw', 'move_se', 'move_sw'];
     for (const action of directions) {
-      const { container, runState: state } = await mountExploration();
+      const { runState: state } = await mountExploration();
       bus.dispatch('console:intent', { mode: 'gear', action, source: 'keyboard' });
-      expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-      expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
+      expect(state.partyPosition).not.toEqual({ x: 10, y: 10 });
     }
   });
 
   it('ignores console:intent moves when combat is active', async () => {
     const state = runState();
     state.activeCombat = { round: 1 };
-    const { container, runState: mounted } = await mountExploration({ runState: state });
+    const { runState: mounted } = await mountExploration({ runState: state });
     bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
     expect(mounted.partyPosition).toEqual({ x: 10, y: 10 });
-    // Nothing staged either — stageMove refuses while combat is active.
-    expect(byTestId(container, 'move-notice')?.textContent || '').not.toContain('STAGED');
   });
 
   it('ignores non-move console:intent actions', async () => {
@@ -462,7 +447,6 @@ describe('exploration screen controller', () => {
     controller.unmount();
     bus.dispatch('console:intent', { mode: 'gear', action: 'move_e', source: 'keyboard' });
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-    // The container has been torn down, so no console notice reflects new staging either.
     expect(byTestId(container, 'move-notice')).toBe(null);
   });
 
@@ -512,8 +496,7 @@ describe('exploration screen controller', () => {
     expect(byTestId(container, 'pane-collapse-right')).toBe(null);
   });
 
-  it('staging rejects walls: press against a wall records a CANNOT STAGE notice and does not extend the path', async () => {
-    // Party at (10,10). Put a wall at (11,10) so ArrowRight is blocked.
+  it('blocked keyboard move (wall) posts BLOCKED notice and does not move the party', async () => {
     const walledFloor = floor();
     walledFloor.cells[10][11] = 0;
     const { container, runState: state } = await mountExploration({ floor: walledFloor });
@@ -521,109 +504,6 @@ describe('exploration screen controller', () => {
     container.dispatch('keydown', keyEvent('ArrowRight'));
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-    expect(byTestId(container, 'move-notice').textContent).toBe('CANNOT STAGE — wall or closed corner.');
-  });
-
-  it('staging rejects a diagonal into a closed corner (both cardinal neighbors are walls)', async () => {
-    // Party at (10,10). NE diagonal to (11,9). Wall both (11,10) and (10,9) → closed corner.
-    const cornerFloor = floor();
-    cornerFloor.cells[10][11] = 0;
-    cornerFloor.cells[9][10] = 0;
-    const { container, runState: state } = await mountExploration({ floor: cornerFloor });
-
-    container.dispatch('keydown', { code: 'KeyE', key: 'e', repeat: false, preventDefault() { this.prevented = true; } });
-
-    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-    expect(byTestId(container, 'move-notice').textContent).toBe('CANNOT STAGE — wall or closed corner.');
-  });
-
-  it('commit loop executes n moveParty steps in order and lands the party on the final cell', async () => {
-    const { container, runState: state } = await mountExploration();
-
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 3 STEPS');
-
-    container.dispatch('keydown', keyEvent('Enter'));
-    expect(state.partyPosition).toEqual({ x: 13, y: 10 });
-    // Staged path drained after commit.
-    expect(byTestId(container, 'move-notice').textContent).not.toContain('STAGED');
-  });
-
-  it('hostile interrupt during commit truncates the remaining staged steps and clears the buffer', async () => {
-    const hostileFloor = floor({ enemySpawns: [{ id: 0, x: 12, y: 10, archetypeId: 'drone' }] });
-    const combat = [];
-    const off = bus.on('state:combat-start', (payload) => combat.push(payload));
-    const { container, runState: state } = await mountExploration({ floor: hostileFloor });
-
-    // Stage 3 east steps. First commit lands (11,10) which reveals hostile at (12,10) → interrupt.
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('Enter'));
-
-    expect(combat).toHaveLength(1);
-    expect(state.partyPosition).toEqual({ x: 11, y: 10 });
-    // Staged buffer flushed regardless of interrupt.
-    container.dispatch('keydown', keyEvent('Enter'));
-    expect(combat).toHaveLength(1);
-    off();
-  });
-
-  it('Escape clears the staged path and posts a cleared notice', async () => {
-    const { container, runState: state } = await mountExploration();
-
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 2 STEPS');
-
-    container.dispatch('keydown', keyEvent('Escape'));
-    expect(byTestId(container, 'move-notice').textContent).toBe('STAGED PATH CLEARED.');
-    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-
-    container.dispatch('keydown', keyEvent('Enter'));
-    // Nothing to commit, party still at origin, no descent underfoot → NO DESCENT POINT UNDERFOOT.
-    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
-  });
-
-  it('UNDO button pops the last staged step', async () => {
-    const { container } = await mountExploration();
-
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 2 STEPS');
-
-    byTestId(container, 'move-undo').click();
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 1 STEP');
-
-    byTestId(container, 'move-undo').click();
-    // Buffer drained, but the notice reverts to a default MOVE hint (no STAGED prefix).
-    expect(byTestId(container, 'move-notice').textContent).not.toContain('STAGED');
-  });
-
-  it('CLEAR button drains any staged steps immediately', async () => {
-    const { container } = await mountExploration();
-
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    container.dispatch('keydown', keyEvent('ArrowRight'));
-    byTestId(container, 'move-clear').click();
-
-    expect(byTestId(container, 'move-notice').textContent).toBe('STAGED PATH CLEARED.');
-  });
-
-  it('staging caps at 24 steps and shows a STAGING FULL notice on further attempts', async () => {
-    // Grid is 20×32; start party high enough that 24 south steps stay in-bounds.
-    const state = runState();
-    state.partyPosition = { x: 10, y: 2 };
-    const tallFloor = floor({ entryPoint: { x: 10, y: 2 } });
-    const { container } = await mountExploration({ runState: state, floor: tallFloor });
-
-    for (let i = 0; i < 24; i++) container.dispatch('keydown', keyEvent('ArrowDown'));
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGED 24 STEPS');
-
-    container.dispatch('keydown', keyEvent('ArrowDown'));
-    expect(byTestId(container, 'move-notice').textContent).toContain('STAGING FULL');
+    expect(byTestId(container, 'move-notice').textContent).toBe('BLOCKED — wall or closed corner.');
   });
 });

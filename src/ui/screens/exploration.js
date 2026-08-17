@@ -1,13 +1,14 @@
 import { createStatusBar, createTelemetryDock } from '../status-strip.js';
-import { createPlayfield } from '../playfield.js';
+import { createPlayfield, cellAtPoint } from '../playfield.js';
 import { createConsole } from '../console/console.js';
 import { createInputHandler } from '../input.js';
 import { attachWidePanes, currentLayoutClass } from '../layout.js';
+import { createViewportCamera, attachViewportGestures, sizeCanvasToContainer } from '../viewport.js';
 import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
-import { moveParty, computeExplorationProximity } from '../../exploration/movement.js';
+import { findExplorationPath, moveParty, computeExplorationProximity } from '../../exploration/movement.js';
 import { computeLOS, createFogState, updateFogOfWar, syncVisitedBitmap } from '../../exploration/shadowcast.js';
 import { createHuntEncounter, createStandardEncounter } from '../../rules/encounters.js';
 import { findEligibleLootContainer } from '../console/loot.js';
@@ -41,14 +42,11 @@ function normalizeMoveOptions(toggles) {
 }
 
 const EXPLORATION_CELL_PX = 24;
+const LATTICE_WORLD_W = 20 * EXPLORATION_CELL_PX;
+const LATTICE_WORLD_H = 32 * EXPLORATION_CELL_PX;
 const AUTO_FOLLOW_MARGIN_CELLS = 2;
-const DRAG_THRESHOLD_PX = 6;
+const TAP_PATH_MAX_STEPS = 64;
 const MOVE_INTENT_PATTERN = /^move_(n|s|w|e|nw|ne|sw|se)$/;
-const STAGE_MAX_STEPS = 24;
-const DIR_DELTAS = {
-  n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0],
-  nw: [-1, -1], ne: [1, -1], sw: [-1, 1], se: [1, 1]
-};
 
 function isInterruptType(result) {
   if (!result || !result.interruptType) return false;
@@ -135,9 +133,10 @@ export function mount(container, params = {}) {
   canvas.className = 'playfield-canvas lattice-canvas';
   canvas.width = 480;
   canvas.height = 768;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
   canvas.dataset.testid = 'exploration-canvas';
   playfieldBody.appendChild(canvas);
-  playfieldBody.style.cursor = 'grab';
   const playfield = createPlayfield(canvas);
   const reducedMotionSetting = loadSettings().reducedMotion;
   const prefersReduced = typeof globalThis.window?.matchMedia === 'function'
@@ -146,62 +145,12 @@ export function mount(container, params = {}) {
     || (reducedMotionSetting !== 'full' && prefersReduced);
   playfield.setPulse(!reduceMotion);
 
-  const panOffset = { x: 0, y: 0 };
+  const camera = createViewportCamera({ worldW: LATTICE_WORLD_W, worldH: LATTICE_WORLD_H });
+  let cameraDpr = 1;
   let suppressFollow = false;
-  let dragState = null;
-
-  function readSizes() {
-    const canvasRect = canvas.getBoundingClientRect?.() || { width: canvas.width, height: canvas.height };
-    const bodyRect = playfieldBody.getBoundingClientRect?.() || { width: canvasRect.width, height: canvasRect.height };
-    return {
-      canvasW: canvasRect.width || canvas.width,
-      canvasH: canvasRect.height || canvas.height,
-      bodyW: bodyRect.width || canvasRect.width || canvas.width,
-      bodyH: bodyRect.height || canvasRect.height || canvas.height
-    };
-  }
-
-  function clampPan() {
-    const { canvasW, canvasH, bodyW, bodyH } = readSizes();
-    const minX = Math.min(0, bodyW - canvasW);
-    const minY = Math.min(0, bodyH - canvasH);
-    panOffset.x = Math.max(minX, Math.min(0, panOffset.x));
-    panOffset.y = Math.max(minY, Math.min(0, panOffset.y));
-  }
-
-  function applyPan() {
-    canvas.style.transform = `translate3d(${panOffset.x}px, ${panOffset.y}px, 0)`;
-  }
-
-  function ensurePartyVisible() {
-    if (suppressFollow) return;
-    const partyPos = lattice.getPartyPosition();
-    if (!partyPos) return;
-    const { canvasW, canvasH, bodyW, bodyH } = readSizes();
-    const scaleX = canvas.width ? canvasW / canvas.width : 1;
-    const scaleY = canvas.height ? canvasH / canvas.height : 1;
-    const cellPxX = EXPLORATION_CELL_PX * scaleX;
-    const cellPxY = EXPLORATION_CELL_PX * scaleY;
-    const partyPxX = partyPos.x * cellPxX + cellPxX / 2;
-    const partyPxY = partyPos.y * cellPxY + cellPxY / 2;
-    const visibleLeft = -panOffset.x;
-    const visibleTop = -panOffset.y;
-    const visibleRight = visibleLeft + bodyW;
-    const visibleBottom = visibleTop + bodyH;
-    const marginX = AUTO_FOLLOW_MARGIN_CELLS * cellPxX;
-    const marginY = AUTO_FOLLOW_MARGIN_CELLS * cellPxY;
-    let dx = 0;
-    let dy = 0;
-    if (partyPxX < visibleLeft + marginX) dx = visibleLeft + marginX - partyPxX;
-    else if (partyPxX > visibleRight - marginX) dx = visibleRight - marginX - partyPxX;
-    if (partyPxY < visibleTop + marginY) dy = visibleTop + marginY - partyPxY;
-    else if (partyPxY > visibleBottom - marginY) dy = visibleBottom - marginY - partyPxY;
-    if (dx === 0 && dy === 0) return;
-    panOffset.x += dx;
-    panOffset.y += dy;
-    clampPan();
-    applyPan();
-  }
+  let firstSized = false;
+  let activeTrail = null;
+  let tapRunToken = 0;
 
   function refocusContainer() {
     const active = globalThis.document?.activeElement;
@@ -210,52 +159,58 @@ export function mount(container, params = {}) {
     container.focus?.({ preventScroll: true });
   }
 
-  function onPointerDown(event) {
+  function onPointerDownCapture() {
     refocusContainer();
-    dragState = {
-      pointerId: event.pointerId,
-      startX: event.clientX ?? 0,
-      startY: event.clientY ?? 0,
-      startPanX: panOffset.x,
-      startPanY: panOffset.y,
-      moved: false
-    };
-    if (event.pointerId != null) playfieldBody.setPointerCapture?.(event.pointerId);
   }
+  playfieldBody.addEventListener('pointerdown', onPointerDownCapture, true);
 
-  function onPointerMove(event) {
-    if (!dragState) return;
-    if (event.pointerId != null && dragState.pointerId != null && event.pointerId !== dragState.pointerId) return;
-    const dx = (event.clientX ?? 0) - dragState.startX;
-    const dy = (event.clientY ?? 0) - dragState.startY;
-    if (!dragState.moved && Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
-    dragState.moved = true;
-    suppressFollow = true;
-    playfieldBody.style.cursor = 'grabbing';
-    panOffset.x = dragState.startPanX + dx;
-    panOffset.y = dragState.startPanY + dy;
-    clampPan();
-    applyPan();
-  }
+  const gestureCleanup = attachViewportGestures(playfieldBody, camera, {
+    onChange: () => {
+      suppressFollow = true;
+      renderPlayfield();
+    },
+    onTap: handleTap
+  });
 
-  function onPointerEnd(event) {
-    if (!dragState) return;
-    if (event.pointerId != null && dragState.pointerId != null) {
-      playfieldBody.releasePointerCapture?.(event.pointerId);
+  function primeCamera(w, h) {
+    camera.setViewport(w, h);
+    if (!firstSized) {
+      firstSized = true;
+      camera.fit();
+      const p = lattice?.getPartyPosition?.();
+      if (p) {
+        const px = p.x * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+        const py = p.y * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+        camera.centerOn(px, py);
+      }
     }
-    dragState = null;
-    playfieldBody.style.cursor = 'grab';
   }
 
-  function onTouchMove(event) {
-    if (dragState) event.preventDefault?.();
+  function resizeCanvas() {
+    const rect = playfieldBody.getBoundingClientRect?.();
+    const rectW = rect?.width || 0;
+    const rectH = rect?.height || 0;
+    if (rectW <= 0 || rectH <= 0) {
+      // Pre-observer fallback: no measurable body yet. Keep the 480×768 canvas
+      // defaults, prime the camera with those dims so viewTransform is usable
+      // for the initial paint. The ResizeObserver will call back with real
+      // dims once layout settles.
+      primeCamera(canvas.width, canvas.height);
+      return;
+    }
+    const { w, h, dpr } = sizeCanvasToContainer(canvas, playfieldBody);
+    cameraDpr = dpr;
+    primeCamera(w, h);
   }
 
-  playfieldBody.addEventListener('pointerdown', onPointerDown);
-  playfieldBody.addEventListener('pointermove', onPointerMove);
-  playfieldBody.addEventListener('pointerup', onPointerEnd);
-  playfieldBody.addEventListener('pointercancel', onPointerEnd);
-  playfieldBody.addEventListener('touchmove', onTouchMove, { passive: false });
+  let resizeObserver = null;
+  if (typeof globalThis.ResizeObserver === 'function') {
+    resizeObserver = new globalThis.ResizeObserver(() => {
+      resizeCanvas();
+      renderPlayfield();
+    });
+    resizeObserver.observe(playfieldBody);
+  }
 
   const lattice = createLattice(floor, runState);
   runState.partyPosition = lattice.getPartyPosition();
@@ -267,7 +222,6 @@ export function mount(container, params = {}) {
 
   const rngCursor = createRNGCursorForRun(runState.worldSeed, runState.rngState);
   const autoStopToggles = { discovery: true, damage: true };
-  const stagedPath = [];
   const viewState = {
     runState,
     floor,
@@ -279,15 +233,10 @@ export function mount(container, params = {}) {
     lastMoveResult: null,
     lootState: null,
     get notice() { return notice; },
-    get stagedPath() { return stagedPath.slice(); },
     canLoot: () => Boolean(findEligibleLootContainer(lattice, runState)),
     canDescend: () => sameCell(lattice.getPartyPosition(), lattice.getDescentPoint()),
     onMove,
     onConfirmDescent,
-    stageMove,
-    onCommitStagedMoves,
-    onUndoStagedMove,
-    onClearStagedMoves,
     setAutoStopToggle(name, value) {
       autoStopToggles[name] = Boolean(value);
       notice = `${name.toUpperCase()} AUTO-STOP ${autoStopToggles[name] ? 'ON' : 'OFF'}`;
@@ -307,15 +256,17 @@ export function mount(container, params = {}) {
   const theme = themeFor(floor, data);
   playfield.setAccent(theme?.accentColor || '#7ec8e3');
   refreshVisibility();
-  renderPlayfield();
   refreshLootState();
   pushAudioProximity();
 
+  resizeCanvas();
+  ensurePartyVisible();
+  renderPlayfield();
   scheduleFrame(() => {
     if (unmounted) return;
-    clampPan();
+    resizeCanvas();
     ensurePartyVisible();
-    applyPan();
+    renderPlayfield();
   });
   container.focus?.({ preventScroll: true });
 
@@ -335,18 +286,9 @@ export function mount(container, params = {}) {
       const match = MOVE_INTENT_PATTERN.exec(payload.action || '');
       if (!match) return;
       if (runState.activeCombat) return;
-      stageMove(match[1]);
+      onMove(match[1]);
     })
   ];
-
-  function onKeyDownEscape(event) {
-    const key = event.key || event.code;
-    if (key !== 'Escape') return;
-    if (stagedPath.length === 0) return;
-    onClearStagedMoves();
-    if (typeof event.preventDefault === 'function') event.preventDefault();
-  }
-  container.addEventListener('keydown', onKeyDownEscape);
 
   function refreshVisibility() {
     const position = lattice.getPartyPosition();
@@ -356,7 +298,10 @@ export function mount(container, params = {}) {
   }
 
   function renderPlayfield() {
-    playfield.renderExploration(lattice, fogState, lattice.getPartyPosition(), { stagedPath: stagedPath.slice() });
+    playfield.renderExploration(lattice, fogState, lattice.getPartyPosition(), {
+      viewTransform: camera.viewTransform(cameraDpr),
+      stagedPath: activeTrail ? activeTrail.slice() : []
+    });
   }
 
   function refreshLootState() {
@@ -392,6 +337,27 @@ export function mount(container, params = {}) {
     bus.dispatch('state:combat-start', { runState, floor, lattice, encounter, reason: result.interruptType, contact: result.discoveredEntity, moveResult: result });
   }
 
+  function ensurePartyVisible() {
+    if (suppressFollow) return;
+    const partyPos = lattice.getPartyPosition();
+    if (!partyPos) return;
+    const st = camera.getState();
+    if (!st.scale || !st.viewW || !st.viewH) return;
+    const spanX = st.viewW / st.scale;
+    const spanY = st.viewH / st.scale;
+    const partyPxX = partyPos.x * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+    const partyPxY = partyPos.y * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+    const margin = AUTO_FOLLOW_MARGIN_CELLS * EXPLORATION_CELL_PX;
+    let dx = 0;
+    let dy = 0;
+    if (partyPxX < st.x + margin) dx = partyPxX - (st.x + margin);
+    else if (partyPxX > st.x + spanX - margin) dx = partyPxX - (st.x + spanX - margin);
+    if (partyPxY < st.y + margin) dy = partyPxY - (st.y + margin);
+    else if (partyPxY > st.y + spanY - margin) dy = partyPxY - (st.y + spanY - margin);
+    if (dx === 0 && dy === 0) return;
+    camera.panBy(dx * st.scale, dy * st.scale);
+  }
+
   function handleMoveResult(result) {
     viewState.lastMoveResult = result;
     if (!result.moved) {
@@ -401,9 +367,9 @@ export function mount(container, params = {}) {
     }
     refreshVisibility();
     refreshLootState();
-    renderPlayfield();
     suppressFollow = false;
     ensurePartyVisible();
+    renderPlayfield();
     runState.rngState = rngCursor.getState();
     bus.dispatch('state:danger-clock-tick', { progress: runState.dangerClockProgress });
     pushAudioProximity();
@@ -440,90 +406,48 @@ export function mount(container, params = {}) {
     return true;
   }
 
-  function stageOrigin() {
-    if (stagedPath.length === 0) return lattice.getPartyPosition();
-    const tail = stagedPath[stagedPath.length - 1];
-    return { x: tail.x, y: tail.y };
-  }
-
-  function stageMove(direction) {
-    if (unmounted || runState.activeCombat) return false;
-    const delta = DIR_DELTAS[direction];
-    if (!delta) return false;
-    if (stagedPath.length >= STAGE_MAX_STEPS) {
-      notice = `STAGING FULL (${STAGE_MAX_STEPS}) — CONFIRM or CLEAR to continue.`;
+  function handleTap({ clientX, clientY }) {
+    if (unmounted || runState.activeCombat) return;
+    const cell = cellAtPoint({ canvas, cellSize: EXPLORATION_CELL_PX, viewTransform: camera.viewTransform(cameraDpr) }, clientX, clientY);
+    if (!cell) return;
+    const party = lattice.getPartyPosition();
+    if (!party || (cell.x === party.x && cell.y === party.y)) return;
+    const path = findExplorationPath(lattice, fogState, party, cell, { maxSteps: TAP_PATH_MAX_STEPS });
+    if (!path) {
+      notice = 'NO PATH.';
       consoleController.refresh();
-      return false;
+      return;
     }
-    const origin = stageOrigin();
-    const nx = origin.x + delta[0];
-    const ny = origin.y + delta[1];
-    if (!lattice.isWalkable(nx, ny)) {
-      notice = 'CANNOT STAGE — wall or closed corner.';
-      consoleController.refresh();
-      return false;
-    }
-    if (delta[0] !== 0 && delta[1] !== 0) {
-      const hWalk = lattice.isWalkable(origin.x + delta[0], origin.y);
-      const vWalk = lattice.isWalkable(origin.x, origin.y + delta[1]);
-      if (!hWalk && !vWalk) {
-        notice = 'CANNOT STAGE — wall or closed corner.';
-        consoleController.refresh();
-        return false;
-      }
-    }
-    stagedPath.push({ direction, x: nx, y: ny });
-    notice = '';
+    activeTrail = path.cells;
     renderPlayfield();
-    consoleController.refresh();
-    return true;
+    const token = ++tapRunToken;
+    scheduleFrame(() => runTapPath(path.path, token));
   }
 
-  function onUndoStagedMove() {
-    if (stagedPath.length === 0) return false;
-    stagedPath.pop();
-    notice = '';
-    renderPlayfield();
-    consoleController.refresh();
-    return true;
-  }
-
-  function onClearStagedMoves() {
-    if (stagedPath.length === 0) return false;
-    stagedPath.length = 0;
-    notice = 'STAGED PATH CLEARED.';
-    renderPlayfield();
-    consoleController.refresh();
-    return true;
-  }
-
-  function onCommitStagedMoves() {
-    if (stagedPath.length === 0) return false;
-    const queue = stagedPath.slice();
-    stagedPath.length = 0;
-    let lastResult = null;
-    for (const step of queue) {
-      if (unmounted) break;
+  function runTapPath(steps, token) {
+    if (token !== tapRunToken || unmounted) return;
+    for (const step of steps) {
+      if (token !== tapRunToken || unmounted) return;
       if (runState.activeCombat) break;
-      lastResult = onMove(step.direction);
-      if (!lastResult || !lastResult.moved) break;
-      if (isInterruptType(lastResult)) break;
+      const result = onMove(step);
+      if (!result || !result.moved) break;
+      if (isInterruptType(result)) break;
     }
-    if (!unmounted) renderPlayfield();
-    return lastResult;
+    if (token === tapRunToken) {
+      activeTrail = null;
+      if (!unmounted) renderPlayfield();
+    }
   }
 
   return {
     unmount() {
       if (unmounted) return;
       unmounted = true;
+      tapRunToken++;
       for (const unsubscribe of unsubscribers) unsubscribe();
-      container.removeEventListener('keydown', onKeyDownEscape);
-      playfieldBody.removeEventListener('pointerdown', onPointerDown);
-      playfieldBody.removeEventListener('pointermove', onPointerMove);
-      playfieldBody.removeEventListener('pointerup', onPointerEnd);
-      playfieldBody.removeEventListener('pointercancel', onPointerEnd);
-      playfieldBody.removeEventListener('touchmove', onTouchMove);
+      gestureCleanup?.();
+      playfieldBody.removeEventListener('pointerdown', onPointerDownCapture, true);
+      resizeObserver?.disconnect();
       widePanesCleanup?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
