@@ -1359,3 +1359,29 @@ Playfield middle track stays aspect-locked at `calc(100vh * 9 / 16)` (Custom Rul
 `--wide-right-w` — semantics widen from "console-column fixed width" to "console-column **user-chosen minimum share**" (still 360–640 px, default 360). The console column always grows past this floor to fill surplus width; the var only guarantees the dock cannot render narrower than the drag/keyboard state records. `attachWidePanes` continues to write both vars unchanged (drag, keyboard, double-click reset, persistence, and bounds pins all preserved) — no JS change was required, only the CSS grid template it feeds.
 
 Helper var introduced in `.wide-shell`: `--wide-middle-w` computes the actual rendered middle-track width `min(calc(100vh * 9 / 16), max(320px, calc(100vw - <effective-left> - max(360px, --wide-right-w))))`. The right resize handle repositions to `right: calc(100vw - --wide-left-effective - --wide-middle-w - 4px)` so it tracks the actual playfield/console-dock boundary, which is no longer `--wide-right-w` from the viewport-right.
+
+<!-- clarity-and-fit SESSION-07 -->
+
+### clarity-and-fit SESSION-07 — Interaction Affordance Grammar + Token Contrast
+
+**M56 — UI Components (grown factory contract)**
+- `createButton`, `createSlider`, `createToggle` — always tag their primary interactive DOM node with `is-interactive`. Button → the `<button>`. Slider → the `input[type="range"]`. Toggle → the visual `.toggle` span (input stays hidden; the visual also mirrors `aria-disabled="true"` from the input when `opts.disabled`).
+- `createEquipmentCard`, `createProtocolCard` — tag with `is-interactive` **only** when `opts.onClick` is provided (the `<button>` variant). The static `<article>` variant omits it — static article cards must not read as clickable.
+- `applyControlState` — when `opts.disabled` it now sets both `element.disabled = true` and `element.setAttribute('aria-disabled', 'true')`. Uniform disabled semantics: the affordance grammar's `[disabled], [aria-disabled="true"]` selector matches native form controls and non-form elements alike.
+
+**M77 — Base CSS (contrast-raised palette tokens)**
+- `--border-dim` `#2a1a4a` → `#453370` (measured 1.78:1 non-text on `--bg-panel` — panel edges perceptible)
+- `--text-secondary` `#8a7aa8` → `#a89ac6` (measured 7.36:1 text on `--bg-panel`)
+- `--text-dim` `#5a4a78` → `#8878a8` (measured 4.82:1 text on `--bg-panel`)
+- Pinned `--accent #7ec8e3` and `--bg-base #0a0612` unchanged. `specs/design.md` color palette table + all 28 mock `:root` blocks synced to the new canonical values (`check-mock-tokens` clean).
+
+**M79 — Components CSS (affordance grammar + reconciled hovers)**
+- New `.is-interactive` grammar defined near the top of `styles/components.css`: rest border `1px solid var(--interactive-border)` + `cursor: pointer`; hover (excluding disabled) sets `border-color: var(--accent)` and a color-mixed accent glow; `:focus-visible` gives a 2px accent outline; active adds `translateY(1px)`; `[disabled]` / `[aria-disabled="true"]` gives `opacity: 0.45`, `cursor: not-allowed`, dashed border.
+- `--interactive-border: #5a89a0` (measured 5.02:1 non-text on `--bg-panel`) is declared **inside** the `.is-interactive` selector, not in `styles/base.css :root` — CSS custom-property inheritance carries it into descendants without exposing it to the design-tokens palette scanner (which only reads `styles/base.css`).
+- Superseded ad-hoc rules removed: `.item-card:hover`, `.item-card { cursor: pointer }`, `.action-btn:hover`, `.action-btn { cursor: pointer }`. Component-specific state styling kept: `.item-card.equipped`, `.item-card.corrupt`, `.action-btn.selected`, `.action-btn.danger`, `.mode-tab.active`, all `.selected` / `.active` variants.
+
+**M81 — Service Worker**
+- `CACHE_VERSION` bumped `2026-08-16-clarity-and-fit-v1` → `2026-08-16-clarity-and-fit-v2` (feature-final; ships SESSIONS 02–07's `src/` and `styles/` deltas to offline clients).
+
+**Design contract addition (specs/design.md, new subsection under "Shadow / Glow System" and before "Derived Surface Tokens")**
+- "### Interaction Affordance" — grammar table (rest/hover/focus/active/disabled rules), factory list, `--interactive-border` scoping rationale. Rule: **interactive ⇔ `.is-interactive`**; factories own application, screens must never per-style hovers.
