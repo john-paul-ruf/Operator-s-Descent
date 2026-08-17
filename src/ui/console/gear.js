@@ -1,7 +1,7 @@
 import { createButton, createEquipmentCard, createScrollArea } from '../components.js';
 import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
-import { describeItem, equipItem, itemDisplayName, unequipItem, resolveLoadout } from '../../rules/equipment.js';
+import { describeItem, describeItemStats, equipItem, itemDisplayName, unequipItem, resolveLoadout } from '../../rules/equipment.js';
 import { INVENTORY_CAP, getInventoryCount, toggleJunkTag, junkAllTagged, getSalvageValue } from '../../rules/inventory.js';
 
 const SLOTS = ['weapon', 'armor', 'offhand'];
@@ -37,6 +37,10 @@ function itemName(item, data) {
 
 function displayItem(item, data) {
   return { ...item, name: itemName(item, data), description: describeItem(item, data || {}) };
+}
+
+function itemStats(item, data) {
+  return describeItemStats(item, { equipmentData: data?.equipment, affixesData: data?.affixes });
 }
 
 function itemUnits(item) {
@@ -278,7 +282,7 @@ function renderEquipped(container, context, character, ui) {
     row.dataset.testid = `gear-equipped-${slot}`;
     row.appendChild(text('equipped-slot', `${SLOT_LABELS[slot]}: ${itemName(item, context.data)}`));
     if (item) {
-      row.appendChild(createEquipmentCard(displayItem(item, context.data)));
+      row.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data) }));
       const disabledReason = combatSwapGate(context, character).reason || (getInventoryCount(context.runState.inventory) + itemUnits(item) > INVENTORY_CAP ? 'Inventory full.' : '');
       const button = createButton('UNEQUIP', { disabled: Boolean(disabledReason), description: disabledReason, onClick: () => requestUnequip(context, slot) });
       button.dataset.testid = `gear-unequip-${slot}`;
@@ -332,7 +336,7 @@ function renderInventoryItem(list, context, character, ui, item) {
   const wrapper = document.createElement('div');
   wrapper.className = `inventory-row console-row${item.junkTagged ? ' junk-tagged' : ''}`;
   wrapper.dataset.testid = `gear-item-${item.id}`;
-  wrapper.appendChild(createEquipmentCard(displayItem(item, context.data)));
+  wrapper.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data) }));
   const before = runStats(context.data || {}, character);
   const after = itemSlotCompatible(ui.slot, item) ? projectedStats(context.data || {}, character, ui.slot, item) : before;
   wrapper.appendChild(text('gear-comparison', statDeltaLine(before, after), `gear-compare-${item.id}`));

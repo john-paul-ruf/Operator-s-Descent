@@ -263,6 +263,18 @@ describe('LOOT mode', () => {
     expect(textOf(detail)).toContain('Precise: +1 accuracy bonus');
     expect(textOf(detail)).toContain('scrap 1');
   });
+
+  it('renders dice/stat chips on loot cards; affix accuracy folds into the ATK chip', () => {
+    const runState = run([]);
+    const precise = item('loot-precise', 'light_ranged', { rarity: 'tuned', affixes: ['precise'] });
+    const lootState = { container: { id: 3, x: 1, y: 1 }, items: [precise] };
+    const { container } = renderLootWith(runState, lootState);
+
+    const row = byTestId(container, 'loot-item-loot-precise');
+    expect(textOf(row)).toContain('ATK d20+2+FIN');
+    expect(textOf(row)).toContain('DMG d6');
+    expect(textOf(row)).toContain('RANGE 1–4 · SHORT');
+  });
 });
 
 describe('COMBAT mode', () => {

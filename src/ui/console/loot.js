@@ -1,6 +1,6 @@
 import { createButton, createEquipmentCard, createScrollArea } from '../components.js';
 import { deriveStats } from '../../rules/attributes.js';
-import { describeItem, itemDisplayName, resolveLoadout } from '../../rules/equipment.js';
+import { describeItem, describeItemStats, itemDisplayName, resolveLoadout } from '../../rules/equipment.js';
 import { generateLoot } from '../../rules/loot.js';
 import { INVENTORY_CAP, addItem, getInventoryCount, toggleJunkTag, junkAllTagged, getSalvageValue } from '../../rules/inventory.js';
 
@@ -89,6 +89,10 @@ function displayItem(item, data) {
 
 function itemDetail(item, data) {
   return describeItem(item, data || {});
+}
+
+function itemStats(item, data) {
+  return describeItemStats(item, { equipmentData: data?.equipment, affixesData: data?.affixes });
 }
 
 function comparisonLine(item, context) {
@@ -192,7 +196,7 @@ function renderContainerItems(container, context, lootContainer, items) {
     const row = document.createElement('div');
     row.className = 'loot-item-row item-card console-row';
     row.dataset.testid = `loot-item-${item.id}`;
-    row.appendChild(createEquipmentCard(displayItem(item, context.data || {})));
+    row.appendChild(createEquipmentCard(displayItem(item, context.data || {}), { stats: itemStats(item, context.data || {}) }));
     row.appendChild(text('loot-detail', itemDetail(item, context.data || {}), `loot-detail-${item.id}`));
     row.appendChild(text('loot-compare', comparisonLine(item, context), `loot-compare-${item.id}`));
     const result = addItem(context.runState?.inventory || [], item);

@@ -214,6 +214,17 @@ export function createEquipmentCard(item, opts = {}) {
     desc.textContent = description;
     card.appendChild(desc);
   }
+  if (Array.isArray(opts.stats) && opts.stats.length) {
+    const statsRow = document.createElement('div');
+    statsRow.className = 'card-stats';
+    for (const chip of opts.stats) {
+      const span = document.createElement('span');
+      span.className = 'stat-chip';
+      span.textContent = String(chip);
+      statsRow.appendChild(span);
+    }
+    card.appendChild(statsRow);
+  }
   if (item.rarity) card.appendChild(createRarityTag(item.rarity));
   if (item.affixes) for (const affix of item.affixes) card.appendChild(createAffixTag(affix, affix.category === 'major'));
   return withCleanup(card, opts.onClick ? listen(card, 'click', opts.onClick) : undefined);

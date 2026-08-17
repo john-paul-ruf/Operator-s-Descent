@@ -307,6 +307,25 @@
   color: var(--accent);
 }
 
+/* Item stat chips — dice/range/defense readout on equipment/loot cards
+   (clarity-and-fit SESSION-05). Follows the .affix-tag pattern; render-time
+   values come from describeItemStats(). */
+.card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.stat-chip {
+  display: inline-block;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-family: inherit;
+  border: 1px solid var(--border-dim);
+  color: var(--text-secondary);
+}
+
 /* Condition Tags */
 .cond-tag {
   display: inline-block;

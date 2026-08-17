@@ -194,6 +194,44 @@ describe('GEAR mode', () => {
     expect(textOf(inventoryRow)).not.toContain('fresh-sidearm ');
   });
 
+  it('surfaces dice chips (ATK/DMG/RANGE) on equipped and inventory cards, and upgraded dies show ↑', () => {
+    const edged = item('edged-sidearm', 'sidearm', { rarity: 'custom', affixes: ['edged'] });
+    const runState = run([edged], [character({ equipment: { weapon: item('base-sidearm', 'sidearm'), armor: null, offhand: null } })]);
+    const { container } = renderGearWith(runState);
+
+    const equippedRow = byTestId(container, 'gear-equipped-weapon');
+    expect(textOf(equippedRow)).toContain('ATK d20+1+MGT');
+    expect(textOf(equippedRow)).toContain('DMG d6');
+    expect(textOf(equippedRow)).toContain('RANGE 1–1 · ADJACENT');
+
+    const inventoryRow = byTestId(container, 'gear-item-edged-sidearm');
+    expect(textOf(inventoryRow)).toContain('DMG d8↑');
+    expect(textOf(inventoryRow)).toContain('ATK d20+1+MGT');
+  });
+
+  it('renders armor DEF/FIN chips on equipped armor and no chips for consumables', () => {
+    const heavyArmor = item('worn-heavy', 'heavy', { category: 'armor' });
+    const runState = run([consumable('spare-patches', 2)], [character({ equipment: { weapon: null, armor: heavyArmor, offhand: null } })]);
+    const { container } = renderGearWith(runState);
+
+    const armorRow = byTestId(container, 'gear-equipped-armor');
+    expect(textOf(armorRow)).toContain('DEF +5');
+    expect(textOf(armorRow)).toContain('FIN -2');
+
+    // Consumable inventory rows render the projected-stat comparison line but
+    // no describeItemStats chip row inside the equipment card itself.
+    const patchRow = byTestId(container, 'gear-item-spare-patches');
+    function findCardStats(node) {
+      if (node?.className === 'card-stats') return node;
+      for (const child of node?.children || []) {
+        const hit = findCardStats(child);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    expect(findCardStats(patchRow)).toBe(null);
+  });
+
   it('equips and unequips through atomic run-state transactions', () => {
     const runState = run([item('fresh-sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
     const { container } = renderGearWith(runState);

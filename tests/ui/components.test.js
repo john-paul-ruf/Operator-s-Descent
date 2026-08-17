@@ -99,4 +99,21 @@ describe('semantic components', () => {
     const idOnly = createEquipmentCard({ id: 'breacher-1-weapon-sidearm' });
     expect(idOnly.children[0].textContent).toBe('breacher-1-weapon-sidearm');
   });
+
+  test('equipment cards render a stats chip row in order when opts.stats is provided', () => {
+    const withStats = createEquipmentCard(
+      { id: 'sidearm-1', name: 'Sidearm' },
+      { stats: ['ATK d20+1+MGT', 'DMG d8↑', 'RANGE 1–1 · ADJACENT'] }
+    );
+    const statsRow = withStats.children.find((child) => child.className === 'card-stats');
+    expect(statsRow).toBeTruthy();
+    expect(statsRow.children.map((chip) => chip.className)).toEqual(['stat-chip', 'stat-chip', 'stat-chip']);
+    expect(statsRow.children.map((chip) => chip.textContent)).toEqual(['ATK d20+1+MGT', 'DMG d8↑', 'RANGE 1–1 · ADJACENT']);
+
+    const bare = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm' });
+    expect(bare.children.find((child) => child.className === 'card-stats')).toBeUndefined();
+
+    const emptyStats = createEquipmentCard({ id: 'sidearm-1', name: 'Sidearm' }, { stats: [] });
+    expect(emptyStats.children.find((child) => child.className === 'card-stats')).toBeUndefined();
+  });
 });
