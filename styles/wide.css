@@ -16,16 +16,24 @@
    * --wide-right-w carry the user-chosen *minimum share* of their dock in
    * px (shift landed by clarity-and-fit SESSION-04); data-pane-left /
    * data-pane-right = "open" | "collapsed" flip the pane between resizable
-   * and rail states. The middle (playfield) track keeps its portrait 9:16
-   * proportion (Custom Rule 8) and never varies with surplus width — the
-   * console-dock column absorbs it instead via 1fr in the third track. When
-   * a dock collapses to a rail (no 1fr in play), the shell centers under
-   * justify-content: center rather than hugging the left edge.
+   * and rail states. Every state assigns 1fr to the track responsible for
+   * absorbing surplus width so the tracks always sum to 100vw and the
+   * collapsed rails (48px left / 96px right) pin flush to the viewport
+   * edges — repaired by walls-npc-docks SESSION-03 after clarity-and-fit
+   * SESSION-04's justify-content:center left rails floating mid-viewport
+   * whenever no 1fr was in play (both dock-open combos already had the
+   * console-dock's 1fr; the right-collapsed combos did not).
+   *   both open       → third (dock) track holds 1fr; middle stays 9:16.
+   *   left  collapsed → third (dock) track holds 1fr; middle stays 9:16.
+   *   right collapsed → middle (playfield) track holds 1fr; .wide-playfield-inner
+   *                     stays 9:16 via max-width + align-self:center (Custom
+   *                     Rule 8: the CANVAS keeps its portrait ratio; the
+   *                     column may grow around it against --bg-base).
+   *   both  collapsed → same as right-collapsed.
    */
   .wide-shell {
     position: relative;
     display: grid;
-    justify-content: center;
     /* Effective left-track width: the fixed rail when telemetry is
      * collapsed, the user-chosen open width otherwise. Read by
      * --wide-middle-w below and by the right handle's position calc. */
@@ -34,7 +42,9 @@
      * pre-computed so the right resize handle stays at the actual
      * playfield/console-dock boundary even though the dock's rendered
      * width no longer equals --wide-right-w (which is now only the
-     * dock's floor, not its actual width). */
+     * dock's floor, not its actual width). Only read when the right
+     * handle is visible (both-docks-open / left-collapsed states); the
+     * right handle is display:none once the right dock collapses. */
     --wide-middle-w: min(
       calc(100vh * 9 / 16),
       max(320px, calc(100vw - var(--wide-left-effective) - max(360px, var(--wide-right-w, 360px))))
@@ -64,11 +74,11 @@
   .wide-shell[data-pane-right="collapsed"] {
     grid-template-columns:
       minmax(280px, var(--wide-left-w, 280px))
-      minmax(320px, calc(100vh * 9 / 16))
+      minmax(320px, 1fr)
       96px;
   }
   .wide-shell[data-pane-left="collapsed"][data-pane-right="collapsed"] {
-    grid-template-columns: 48px minmax(320px, calc(100vh * 9 / 16)) 96px;
+    grid-template-columns: 48px minmax(320px, 1fr) 96px;
   }
   /* Collapsed left dock: only the collapse button (its ◀ flips to ▶ by data-attr) shows.
      Every direct child of the telemetry dock is hidden. */
@@ -268,6 +278,16 @@
     flex-direction: column;
     position: relative;
     overflow: hidden;
+    /* Custom Rule 8: the CANVAS keeps its portrait 9:16 proportion even
+     * when its parent column absorbs surplus width (right-collapsed and
+     * both-collapsed shell states). max-width caps to the 9:16 pair of
+     * 100vh; align-self:center rides the cross-axis center of the flex
+     * column, so any surplus flanks the canvas against --bg-base. In
+     * default and left-collapsed states the column itself is already the
+     * 9:16 track, so this cap is inert. */
+    width: 100%;
+    max-width: calc(100vh * 9 / 16);
+    align-self: center;
   }
   .playfield-alert-banner {
     padding: 10px 14px;
