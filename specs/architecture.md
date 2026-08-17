@@ -1236,3 +1236,36 @@ retry.
 Public API is unchanged: `captureScroll`, `restoreScroll`, `preserveScroll`,
 `clearScrollMemory` keep their exact signatures; the 64-entry LRU is
 untouched. M60/M69/M72 call sites required no edits.
+
+<!-- clarity-and-fit SESSION-03 -->
+
+# SESSION-03 arch delta — clarity-and-fit / staged movement + near-black lattice
+
+## M58 Playfield (`src/ui/playfield.js`) — public contract
+
+- Palette constants now exported: `FLOOR_COLOR = '#101010'`, `FLOOR_DIM_COLOR = '#0a0a0a'`, `TICK_DIM_ALPHA = 0.45`, `WALL_COLOR = '#000000'`, `HIDDEN_COLOR = '#000000'`, `GRID_COLOR = '#3a3a3a'`, `WALL_LINE_COLOR = '#7ec8e3'`. The removed `VISITED_OVERLAY` constant no longer exists (fog-1 is expressed by `FLOOR_DIM_COLOR` + dim-alpha ticks).
+- `renderExploration(lattice, fogState, partyPos, options?)` — signature extended with an optional 4th `options` argument. Currently reads `options.stagedPath` — an array of `{ direction, x, y }` step descriptors. When present and non-empty, the renderer draws a `#d8d8d8` 5×5 preview square at 55 % globalAlpha centered on each staged cell, then a 1 px `#d8d8d8` inset outline on the tail cell. Absent/empty stagedPath yields no preview marks. Callers passing 3 arguments (existing behavior) are unchanged.
+- Internal: floor fills use `FLOOR_DIM_COLOR` when `fog === 1`; a new `drawGridTicks` pass replaces the per-cell `strokeRect` gridline — it draws `-|-` corner ticks (arm ≈ ⌈cellSize / 6⌉ px) at interior intersections touched by ≥ 1 revealed floor cell, at `TICK_DIM_ALPHA` when all 4 touching revealed cells are dim (fog 1). `renderCombat` uses the same tick pass with `isDim: () => false` (combat is always lit).
+
+## M61 Move Console (`src/ui/console/move.js`) — behavior change
+
+- The D-pad no longer executes movement on press. Direction buttons/keys now call `context.stageMove(direction)` when available (falls back to legacy `context.onMove` only if the host does not provide `stageMove`).
+- Center-button label logic — `CONFIRM (n)` (enabled, `n` = staged count) overrides `DESCEND` / `WAIT` whenever `context.stagedPath.length > 0`.
+- `handleInput({ action: 'confirm' })` — commits staged buffer via `context.onCommitStagedMoves()` when `stagedPath` is non-empty; otherwise falls back to descent confirmation.
+- New actions handled by `handleInput` — `undo_stage` → `context.onUndoStagedMove()`; `clear_stage` → `context.onClearStagedMoves()`.
+- Two new toggle-row buttons — `move-undo` and `move-clear`, enabled iff `stagedPath.length > 0`.
+- Notice string reflects staged count and tail coordinates when staged: `STAGED n STEP(S) → x:y — CONFIRM to execute.`; `CANNOT STAGE — wall or closed corner.` on illegal stage; `STAGED PATH CLEARED.` on drain.
+
+## M70 Exploration Screen (`src/ui/screens/exploration.js`) — behavior change
+
+- Exposes on `viewState` (the shared context passed to console modes) — `stageMove(direction)`, `onCommitStagedMoves()`, `onUndoStagedMove()`, `onClearStagedMoves()`, and a read-only `stagedPath` getter that returns a snapshot copy.
+- `stageMove` is pure simulation — it walks a local 8-direction delta map + `lattice.isWalkable` / mirrored closed-corner check (matches `src/exploration/movement.js`) and refuses illegal stages, capped at `STAGE_MAX_STEPS = 24`. It never mutates `runState`, the lattice, the RNG cursor, or the fog buffer.
+- `onCommitStagedMoves` snapshots the staged buffer, drains it, then iterates each step through the existing `onMove(direction)` (`moveParty` semantics unchanged — danger clock, auto-stop toggles, interrupt discovery, LOS + fog updates all preserved). The loop stops on `!result.moved` or any real interrupt (`hostile`, `hunt`, `container`, `descent`, `damage`) or if `runState.activeCombat` becomes truthy mid-loop.
+- `console:intent` bus subscription now routes `move_*` actions from panes that decline the input into `stageMove` (previously `onMove`). Combat-active state still refuses.
+- New keydown listener on the screen container — Escape drains any staged buffer (`onClearStagedMoves`) and calls `preventDefault`; it is a no-op when nothing is staged. Registered alongside pointer listeners and cleaned up on unmount.
+- `renderExploration` invocations pass a fresh `stagedPath` copy every frame.
+- Map-tap-to-stage is **not** implemented — deferred per session prompt (BFS pathing is out of scope). Pointer taps on the canvas still only drive pan; there is no cell-tap-to-stage handler.
+
+## Data flow
+
+Input surface (d-pad button / keyboard arrow / WASD / non-MOVE pane) → console dispatch → MOVE `handleInput` → exploration `stageMove` → path grows → `renderPlayfield()` redraws preview overlay → user presses `CONFIRM` (or Enter) → MOVE `handleInput` sees staged → exploration `onCommitStagedMoves()` → per-step `moveParty()` via existing `onMove()` (all runtime side-effects unchanged) → interrupt or exhaustion → buffer drained → normal notice cycle resumes.
