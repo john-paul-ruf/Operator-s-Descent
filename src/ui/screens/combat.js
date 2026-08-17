@@ -309,6 +309,12 @@ export function mount(container, params = {}) {
   playfieldBody.appendChild(canvas);
   const playfield = createPlayfield(canvas);
   playfield.setAccent(themeFor(floor, data) || '#7ec8e3');
+  const reducedMotionSetting = loadSettings().reducedMotion;
+  const prefersReduced = typeof globalThis.window?.matchMedia === 'function'
+    && globalThis.window.matchMedia('(prefers-reduced-motion: reduce)')?.matches;
+  const reduceMotion = reducedMotionSetting === 'reduce'
+    || (reducedMotionSetting !== 'full' && prefersReduced);
+  playfield.setPulse(!reduceMotion);
 
   const viewState = {
     runState,
@@ -865,6 +871,7 @@ export function mount(container, params = {}) {
       widePanesCleanup?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
+      playfield.destroy();
       consoleController.destroy();
       inputHandler.destroy();
     }

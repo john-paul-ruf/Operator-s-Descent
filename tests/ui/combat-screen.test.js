@@ -479,6 +479,33 @@ describe('combat screen controller', () => {
     expect(byTestId(container, 'pane-collapse-right')).toBe(null);
   });
 
+  it('unmount destroys the playfield pulse loop so no further rAF frames are scheduled', async () => {
+    const raf = [];
+    const cancels = [];
+    const originalRaf = globalThis.window?.requestAnimationFrame;
+    const originalCancel = globalThis.window?.cancelAnimationFrame;
+    globalThis.window = globalThis.window || {};
+    globalThis.window.requestAnimationFrame = (cb) => { raf.push(cb); return raf.length; };
+    globalThis.window.cancelAnimationFrame = (id) => { cancels.push(id); };
+    globalThis.requestAnimationFrame = globalThis.window.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = globalThis.window.cancelAnimationFrame;
+    try {
+      const { controller } = await mountCombat();
+      expect(raf.length).toBeGreaterThan(0);
+      controller.unmount();
+      const lastCallback = raf[raf.length - 1];
+      raf.length = 0;
+      lastCallback(16);
+      expect(raf.length).toBe(0);
+      expect(cancels.length).toBeGreaterThan(0);
+    } finally {
+      if (originalRaf) globalThis.window.requestAnimationFrame = originalRaf; else delete globalThis.window.requestAnimationFrame;
+      if (originalCancel) globalThis.window.cancelAnimationFrame = originalCancel; else delete globalThis.window.cancelAnimationFrame;
+      delete globalThis.requestAnimationFrame;
+      delete globalThis.cancelAnimationFrame;
+    }
+  });
+
   it('routes party wipe to scorecard intent and removes input on unmount', async () => {
     const wipes = [];
     const off = bus.on('state:party-wipe', (payload) => wipes.push(payload));

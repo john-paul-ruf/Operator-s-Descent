@@ -139,6 +139,12 @@ export function mount(container, params = {}) {
   playfieldBody.appendChild(canvas);
   playfieldBody.style.cursor = 'grab';
   const playfield = createPlayfield(canvas);
+  const reducedMotionSetting = loadSettings().reducedMotion;
+  const prefersReduced = typeof globalThis.window?.matchMedia === 'function'
+    && globalThis.window.matchMedia('(prefers-reduced-motion: reduce)')?.matches;
+  const reduceMotion = reducedMotionSetting === 'reduce'
+    || (reducedMotionSetting !== 'full' && prefersReduced);
+  playfield.setPulse(!reduceMotion);
 
   const panOffset = { x: 0, y: 0 };
   let suppressFollow = false;
@@ -521,6 +527,7 @@ export function mount(container, params = {}) {
       widePanesCleanup?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
+      playfield.destroy();
       consoleController.destroy();
       inputHandler.destroy();
     }
