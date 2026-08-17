@@ -78,24 +78,24 @@ export function render(container, context = {}) {
   root.appendChild(dpad);
 
   const toggles = context.autoStopToggles || {};
-  const toggleRow = document.createElement('div');
-  toggleRow.className = 'move-toggle-row';
-  toggleRow.appendChild(createButton('HOSTILE STOP LOCKED', { selected: true, disabled: true, description: 'Hostile contact always stops movement.' }));
-  const discoveryToggle = createButton(`DISCOVERY STOP ${toggles.discovery === false ? 'OFF' : 'ON'}`, {
-    selected: toggles.discovery !== false,
-    onClick: () => context.setAutoStopToggle?.('discovery', toggles.discovery === false)
-  });
-  discoveryToggle.dataset.testid = 'toggle-discovery';
-  toggleRow.appendChild(discoveryToggle);
-  const damageToggle = createButton(`DAMAGE STOP ${toggles.damage === false ? 'OFF' : 'ON'}`, {
-    selected: toggles.damage !== false,
-    onClick: () => context.setAutoStopToggle?.('damage', toggles.damage === false)
-  });
-  damageToggle.dataset.testid = 'toggle-damage';
-  toggleRow.appendChild(damageToggle);
-  root.appendChild(toggleRow);
-
-  if (context.layout === 'wide') {
+  if (context.layout !== 'wide') {
+    const toggleRow = document.createElement('div');
+    toggleRow.className = 'move-toggle-row';
+    toggleRow.appendChild(createButton('HOSTILE STOP LOCKED', { selected: true, disabled: true, description: 'Hostile contact always stops movement.' }));
+    const discoveryToggle = createButton(`DISCOVERY STOP ${toggles.discovery === false ? 'OFF' : 'ON'}`, {
+      selected: toggles.discovery !== false,
+      onClick: () => context.setAutoStopToggle?.('discovery', toggles.discovery === false)
+    });
+    discoveryToggle.dataset.testid = 'toggle-discovery';
+    toggleRow.appendChild(discoveryToggle);
+    const damageToggle = createButton(`DAMAGE STOP ${toggles.damage === false ? 'OFF' : 'ON'}`, {
+      selected: toggles.damage !== false,
+      onClick: () => context.setAutoStopToggle?.('damage', toggles.damage === false)
+    });
+    damageToggle.dataset.testid = 'toggle-damage';
+    toggleRow.appendChild(damageToggle);
+    root.appendChild(toggleRow);
+  } else {
     root.appendChild(autoStopRow('Auto-Stop on hostile detect', true, true, 'autostop-hostile'));
     root.appendChild(autoStopRow('Auto-Stop on container in view', toggles.discovery !== false, false, 'autostop-discovery'));
     root.appendChild(autoStopRow('Auto-Stop on damage taken', toggles.damage !== false, false, 'autostop-damage'));
