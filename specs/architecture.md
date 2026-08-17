@@ -1424,3 +1424,79 @@ Every move action returned by `enemyAI` now includes `desiredRange: OPTIMAL_RANG
 threshold elites, which all route through the same `resolveTurn` → `enemyAI` → `executeAction`
 fallback — traverse up to 5 legal cells per move action instead of a single step. Panicked
 flee stays single-step. Display semantics ("1 MV" = one move ACTION) are unchanged.
+
+<!-- map-pan-zoom SESSION-01 -->
+## M104 — Viewport (new, `src/ui/viewport.js`)
+
+Canvas-space camera engine consumed by exploration and combat screens
+(SESSION-02/03). Vanilla ES module; no runtime deps.
+
+**Exports**
+
+- `MAX_ZOOM_SCALE = 4` — zoom ceiling multiplier over `fitScale()`.
+- `DRAG_THRESHOLD_PX = 6` — pan/tap threshold, matches both screens' current value.
+- `WHEEL_ZOOM_SENSITIVITY = 0.002` — wheel factor is `exp(-deltaY * SENSITIVITY)`.
+- `createViewportCamera({ worldW, worldH })` → camera object:
+  - `setWorld(w, h)` — re-clamps.
+  - `setViewport(w, h)` — preserves the current view center across resize, re-clamps.
+  - `fitScale()` → `min(viewW/worldW, viewH/worldH)` (dynamic zoom floor).
+  - `fit()` — scale = `fitScale()`, world centered per-axis.
+  - `getState()` → `{ x, y, scale, viewW, viewH, worldW, worldH }` (world px units for x/y).
+  - `centerOn(wx, wy)` — world px, clamped.
+  - `panBy(dxPx, dyPx)` — SCREEN-px deltas, internally divided by scale, clamped.
+  - `zoomAt(sx, sy, factor)` — element-local screen px anchor; the world point under
+    `(sx, sy)` stays under `(sx, sy)` after the scale change; clamps to
+    `[fitScale(), fitScale() * MAX_ZOOM_SCALE]`.
+  - `screenToWorld(sx, sy)` → world px.
+  - `viewTransform(dpr = 1)` → `{ scale: scale*dpr, dx: -x*scale*dpr, dy: -y*scale*dpr }`
+    (feed straight to `ctx.setTransform(scale, 0, 0, scale, dx, dy)` and to
+    `cellAtPoint`'s new `viewTransform` option).
+- `attachViewportGestures(element, camera, { onChange, onTap })` → `cleanup()`.
+  Pointer-events based:
+  - 1 pointer past `DRAG_THRESHOLD_PX` → drag, `camera.panBy(-dx, -dy)` per move,
+    `setPointerCapture`, `onChange()` after each applied change.
+  - Release without crossing threshold → `onTap({ clientX, clientY })`.
+  - 2 pointers → pinch: `camera.zoomAt(midX, midY, dist/prevDist)` + mid-point pan;
+    suppresses any pending tap. Entering pinch cancels the tap; exiting pinch does
+    not fire one either.
+  - `wheel` (`passive: false`, `preventDefault`): `camera.zoomAt(cursorX, cursorY,
+    exp(-deltaY * WHEEL_ZOOM_SENSITIVITY))`.
+  - Sets `element.style.touchAction = 'none'` and restores it in cleanup; keeps a
+    `touchmove` preventDefault guard active while any pointer is down.
+- `sizeCanvasToContainer(canvas, container)` → `{ w, h, dpr }`. `w`/`h` are CSS px;
+  canvas backing store = `Math.round(w * dpr) × Math.round(h * dpr)`. Sets
+  `canvas.style.width/height` to the CSS box. `dpr` defaults to 1 when
+  `globalThis.devicePixelRatio` is absent.
+
+**Clamp rule (per axis, independently applied):**
+if `worldSize * scale <= viewSize` the axis letterboxes and centers
+(`x = (worldW - viewW/scale) / 2`); otherwise the origin clamps to
+`[0, worldW - viewW/scale]`. Same for `y`.
+
+## M58 — Playfield (`src/ui/playfield.js`) — additive changes
+
+- **Both render impls** now bracket their work with `ctx.setTransform(1,0,0,1,0,0)`
+  (before clear, after render). When `options.viewTransform` is set, the impl
+  applies `ctx.setTransform(t.scale, 0, 0, t.scale, t.dx, t.dy)` after the clear.
+  `setTransform` is called defensively (`typeof ctx.setTransform === 'function'`)
+  so screen-test FakeContexts without `setTransform` remain compatible.
+- **Combat + `viewTransform`** bypasses the cell-window camera entirely: draws the
+  FULL grid in world px (`colStart:0, rowStart:0, cols:width, rows:height`),
+  actors at absolute `actor.position.x * COMBAT_CELL_SIZE`, no visibility culling,
+  aria label `Combat map, window WxH, round N`. The module's stored `camera`
+  becomes `{x:0, y:0, w:width, h:height}` in this branch. Legacy windowed path
+  (no `viewTransform`) is byte-for-byte unchanged — `calculateCombatCamera`,
+  `options.camera`, `zoomOrigin`, `x/y`, `consoleExpanded` all still honored.
+- **Exploration `viewTransform`** — impl already drew in world px; only the
+  transform wrap and identity reset are new. `stagedPath` overlay retained.
+- **`cellAtPoint({ canvas, camera, cellSize, viewTransform })`** — new
+  `viewTransform` option. When present: element-local CSS px → canvas device px
+  → world px `(px - t.dx) / t.scale` → cell `floor(worldPx / cellSize)`. Legacy
+  `camera` branch unchanged and used when `viewTransform` is absent.
+
+## M81 — Service Worker (`service-worker.js`)
+
+- `PRODUCTION_ASSETS`: added `./src/ui/viewport.js` (alphabetically placed after
+  `./src/ui/status-strip.js`).
+- `CACHE_VERSION = '2026-08-17-map-pan-zoom-v1'` — single bump covers the whole
+  wave (SESSION-02/03/04 ship in the same release).
