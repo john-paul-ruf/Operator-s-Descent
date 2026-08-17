@@ -198,7 +198,7 @@ test('wide-panes: dragging the right handle wider, reload persists dragged floor
   expect(dock.width).toBeGreaterThanOrEqual(restoredRight - 1);
 });
 
-test('wide-panes: collapsing the right dock centers the track group (symmetric gutters)', async ({ page }) => {
+test('wide-panes: collapsing the right dock pins both rails flush to their viewport edges (no dead gutters, chevrons stay adjacent, expand restores content)', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await finalizeOneOperatorRun(page, 6006);
 
@@ -209,18 +209,121 @@ test('wide-panes: collapsing the right dock centers the track group (symmetric g
     .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
     .toBe('collapsed');
 
+  // walls-npc-docks SESSION-03: the middle (playfield) track absorbs surplus
+  // width once the console dock collapses, so both rails hug the viewport
+  // edges. The clarity-and-fit SESSION-04 "symmetric gutters" expectation
+  // was declared bug-tolerant under Custom Rule 11 and is retired here.
   const telemetry = await dockBounds(page, '.wide-telemetry-dock');
   const dock = await dockBounds(page, '.wide-console-dock');
   expect(telemetry).not.toBeNull();
   expect(dock).not.toBeNull();
-  // With no 1fr in play (collapsed right → 96px rail), justify-content: center
-  // on the shell distributes free space evenly to either side of the track
-  // group. The left gutter (telemetry's left edge from viewport-left) equals
-  // the right gutter (viewport-right from dock's right edge).
-  const leftGutter = telemetry.left;
-  const rightGutter = 1600 - dock.right;
-  expect(leftGutter).toBeGreaterThan(0);
-  expect(Math.abs(leftGutter - rightGutter)).toBeLessThanOrEqual(2);
+  expect(telemetry.left).toBeLessThanOrEqual(2);
+  expect(dock.right).toBeGreaterThanOrEqual(1600 - 2);
+  // Right rail keeps its 96px width; content pane is hidden entirely.
+  expect(Math.round(dock.width)).toBe(96);
+  await expect(page.locator('.wide-console-content')).toBeHidden();
+
+  // Chevrons render within 16px of the rail/dock they control (measured
+  // against the outer edge closest to the viewport wall they sit on).
+  const cLeft = await dockBounds(page, '[data-testid="pane-collapse-left"]');
+  const cRight = await dockBounds(page, '[data-testid="pane-collapse-right"]');
+  expect(cLeft.left).toBeLessThanOrEqual(16);
+  expect(1600 - cRight.right).toBeLessThanOrEqual(16);
+
+  // Middle track absorbs surplus, the canvas keeps its 9:16 proportion via
+  // .wide-playfield-inner max-width + align-self:center (Custom Rule 8).
+  const column = await dockBounds(page, '.wide-playfield-column');
+  const inner = await dockBounds(page, '.wide-playfield-inner');
+  expect(column.width).toBeGreaterThan(inner.width + 100);
+  const cap = (900 * 9) / 16;
+  expect(inner.width).toBeLessThanOrEqual(cap + 1);
+  // Inner centered horizontally within the column.
+  const leftPad = inner.left - column.left;
+  const rightPad = column.right - inner.right;
+  expect(Math.abs(leftPad - rightPad)).toBeLessThanOrEqual(2);
+
+  // Re-expand: the content pane must come back and the dock's floor
+  // becomes at least the WIDE_PANE_RIGHT_BOUNDS default (360px).
+  await collapseRight.click();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
+    .toBe('open');
+  await expect(page.locator('.wide-console-content')).toBeVisible();
+  const reopened = await dockBounds(page, '.wide-console-dock');
+  expect(reopened.width).toBeGreaterThanOrEqual(360);
+  expect(reopened.right).toBeGreaterThanOrEqual(1600 - 2);
+});
+
+test('wide-panes: collapsing the left dock keeps both rails flush and chevrons adjacent (telemetry rail at x=0)', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await finalizeOneOperatorRun(page, 6008);
+
+  const collapseLeft = page.getByTestId('pane-collapse-left');
+  await expect(collapseLeft).toBeVisible();
+  await collapseLeft.click();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneLeft))
+    .toBe('collapsed');
+
+  const telemetry = await dockBounds(page, '.wide-telemetry-dock');
+  const dock = await dockBounds(page, '.wide-console-dock');
+  expect(telemetry.left).toBeLessThanOrEqual(2);
+  expect(Math.round(telemetry.width)).toBe(48);
+  expect(dock.right).toBeGreaterThanOrEqual(1600 - 2);
+
+  const cLeft = await dockBounds(page, '[data-testid="pane-collapse-left"]');
+  const cRight = await dockBounds(page, '[data-testid="pane-collapse-right"]');
+  expect(cLeft.left).toBeLessThanOrEqual(16);
+  expect(1600 - cRight.right).toBeLessThanOrEqual(16);
+
+  // Re-expand — telemetry back to WIDE_PANE_LEFT_BOUNDS default (280).
+  await collapseLeft.click();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneLeft))
+    .toBe('open');
+  const reopened = await dockBounds(page, '.wide-telemetry-dock');
+  expect(reopened.width).toBeGreaterThanOrEqual(280);
+  expect(reopened.left).toBeLessThanOrEqual(2);
+});
+
+test('wide-panes: clicking a console tab while the right dock is collapsed auto-expands the dock and still switches mode', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await finalizeOneOperatorRun(page, 6009);
+
+  await page.getByTestId('pane-collapse-right').click();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
+    .toBe('collapsed');
+
+  // Tap a non-active tab — GEAR — while collapsed.
+  const gearTab = page.locator('.wide-mode-tab').filter({ hasText: /GEAR/i }).first();
+  await gearTab.click();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
+    .toBe('open');
+  await expect(page.locator('.wide-console-content')).toBeVisible();
+  await expect(gearTab).toHaveClass(/active/);
+});
+
+test('wide-panes: pane collapse state survives an exploration↔combat entry (persistence across screen swap)', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await finalizeOneOperatorRun(page, 6010);
+
+  await page.getByTestId('pane-collapse-right').click();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
+    .toBe('collapsed');
+
+  // Reload — the settings persist, and the freshly-mounted exploration
+  // screen's wide-shell must reflect the collapsed right pane.
+  await page.reload();
+  await expect(page.getByTestId('exploration-canvas')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
+    .toBe('collapsed');
+  const dock = await dockBounds(page, '.wide-console-dock');
+  expect(dock.right).toBeGreaterThanOrEqual(1600 - 2);
+  expect(Math.round(dock.width)).toBe(96);
 });
 
 test('wide-panes: at 1024x900 (breakpoint minimum), three regions render with no horizontal scrollbar', async ({ page }) => {
