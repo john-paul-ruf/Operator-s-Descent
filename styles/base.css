@@ -8,11 +8,11 @@
   --bg-base: #0a0612;
   --bg-panel: #13092a;
   --bg-panel-elevated: #1a0e36;
-  --border-dim: #2a1a4a;
+  --border-dim: #453370;
   --border-active: var(--accent);
   --text-primary: #e0d8f0;
-  --text-secondary: #8a7aa8;
-  --text-dim: #5a4a78;
+  --text-secondary: #a89ac6;
+  --text-dim: #8878a8;
   --accent: #7ec8e3;
   --danger: #e83a3a;
   --warning: #e8632a;

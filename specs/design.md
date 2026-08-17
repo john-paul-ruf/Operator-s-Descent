@@ -11,11 +11,11 @@ The base is neon-on-violet, ported from Universal Operator's Tarot. A single CSS
 | `--bg-base` | `#0a0612` | Screen background (near-black violet) |
 | `--bg-panel` | `#13092a` | Console, panels, cards |
 | `--bg-panel-elevated` | `#1a0e36` | Raised surfaces, active mode |
-| `--border-dim` | `#2a1a4a` | Inactive borders, dividers |
+| `--border-dim` | `#453370` | Inactive borders, dividers |
 | `--border-active` | `var(--accent)` | Active/focused element borders |
 | `--text-primary` | `#e0d8f0` | Body text, labels, values |
-| `--text-secondary` | `#8a7aa8` | Muted labels, captions, hints |
-| `--text-dim` | `#5a4a78` | Disabled, far-muted |
+| `--text-secondary` | `#a89ac6` | Muted labels, captions, hints |
+| `--text-dim` | `#8878a8` | Disabled, far-muted |
 | `--accent` | `#7ec8e3` (default — Cold Storage) | Per-floor accent; flows through glow, borders, UI tints |
 | `--danger` | `#e83a3a` | HP loss, death, The Terminal theme |
 | `--warning` | `#e8632a` | CORRUPT items, overclock risk, The Foundry theme |
