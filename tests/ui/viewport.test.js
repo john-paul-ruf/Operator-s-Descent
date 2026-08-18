@@ -156,6 +156,49 @@ describe('createViewportCamera', () => {
     expect(t2.scale).toBe(2);
   });
 
+  test('zoomToCells clamps target scale to [fitScale, fitScale * MAX_ZOOM_SCALE] and preserves the view center', () => {
+    // World 400×400, viewport 200×200 → fitScale = min(200/400, 200/400) = 0.5.
+    // Mid case: worldCellPx=20, targetScreenPx=15 → 15/20 = 0.75, inside [0.5, 2.0].
+    const camMid = createViewportCamera({ worldW: 400, worldH: 400 });
+    camMid.setViewport(200, 200);
+    camMid.fit();
+    camMid.centerOn(150, 220);
+    const midBefore = camMid.getState();
+    const centerBeforeMid = {
+      x: midBefore.x + midBefore.viewW / (2 * midBefore.scale),
+      y: midBefore.y + midBefore.viewH / (2 * midBefore.scale)
+    };
+    camMid.zoomToCells(20, 15);
+    const midAfter = camMid.getState();
+    expect(midAfter.scale).toBeCloseTo(15 / 20, 6);
+    const centerAfterMid = {
+      x: midAfter.x + midAfter.viewW / (2 * midAfter.scale),
+      y: midAfter.y + midAfter.viewH / (2 * midAfter.scale)
+    };
+    expect(centerAfterMid.x).toBeCloseTo(centerBeforeMid.x, 6);
+    expect(centerAfterMid.y).toBeCloseTo(centerBeforeMid.y, 6);
+
+    // Upper clamp: targetScreenPx / worldCellPx = 100 > fitScale * MAX_ZOOM_SCALE = 2.0 → pins to 2.0.
+    const camHigh = createViewportCamera({ worldW: 400, worldH: 400 });
+    camHigh.setViewport(200, 200);
+    camHigh.fit();
+    camHigh.centerOn(200, 200);
+    const highBefore = camHigh.getState();
+    const centerBeforeHigh = {
+      x: highBefore.x + highBefore.viewW / (2 * highBefore.scale),
+      y: highBefore.y + highBefore.viewH / (2 * highBefore.scale)
+    };
+    camHigh.zoomToCells(1, 100);
+    const highAfter = camHigh.getState();
+    expect(highAfter.scale).toBe(camHigh.fitScale() * MAX_ZOOM_SCALE);
+    const centerAfterHigh = {
+      x: highAfter.x + highAfter.viewW / (2 * highAfter.scale),
+      y: highAfter.y + highAfter.viewH / (2 * highAfter.scale)
+    };
+    expect(centerAfterHigh.x).toBeCloseTo(centerBeforeHigh.x, 6);
+    expect(centerAfterHigh.y).toBeCloseTo(centerBeforeHigh.y, 6);
+  });
+
   test('setViewport preserves the view center across a viewport resize', () => {
     const cam = createViewportCamera({ worldW: 400, worldH: 400 });
     cam.setViewport(200, 200);
