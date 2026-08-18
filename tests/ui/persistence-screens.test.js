@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { bus } from '../../src/state/bus.js';
 import { deleteRunState, listRuns, loadRun, saveRun } from '../../src/state/library.js';
 import { base64urlEncode, crc32, encodeRun, encodeSeed, initEncoder, SAVE_VERSION } from '../../src/state/save-encode.js';
+import { decodeSeed } from '../../src/state/save-decode.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import { makeParty } from '../helpers/fixtures.js';
@@ -427,5 +428,57 @@ describe('scorecard screen', () => {
     expect(byTestId(sharePane, 'scorecard-copy-world')).toBeTruthy();
     expect(byTestId(sharePane, 'scorecard-restart-seed')).toBeTruthy();
     off();
+  });
+
+  it('exposes the world seed in a selectable fallback field that round-trips through decodeSeed', async () => {
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const shareField = byTestId(container, 'scorecard-share-link');
+    expect(shareField).toBeTruthy();
+    expect(shareField.tagName).toBe('INPUT');
+    expect(shareField.getAttribute('readonly')).toBe('readonly');
+    expect(shareField.value).toContain(`#w=${encodeSeed(777)}`);
+    expect(decodeSeed(encodeSeed(777))).toEqual({ success: true, seed: 777 });
+  });
+
+  it('reports honest success when the clipboard API resolves', async () => {
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const status = byTestId(container, 'scorecard-copy-status');
+    expect(status).toBeTruthy();
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+
+    await byTestId(container, 'scorecard-copy-world').click();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      `http://127.0.0.1:8080/index.html#w=${encodeSeed(777)}`
+    );
+    expect(status.textContent).toBe('WORLD LINK COPIED');
+    expect(status.textContent).not.toContain('UNAVAILABLE');
+  });
+
+  it('reports clipboard-unavailable and keeps a selectable fallback when the API is absent', async () => {
+    // Remove clipboard API entirely to simulate insecure context / permission block.
+    delete globalThis.navigator.clipboard;
+
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const status = byTestId(container, 'scorecard-copy-status');
+    const shareField = byTestId(container, 'scorecard-share-link');
+
+    await byTestId(container, 'scorecard-copy-world').click();
+    expect(status.textContent).toBe('CLIPBOARD UNAVAILABLE — SELECT LINK');
+    expect(status.textContent).not.toContain('COPIED');
+    expect(shareField.focused).toBe(true);
+    expect(shareField.value).toContain(`#w=${encodeSeed(777)}`);
   });
 });
