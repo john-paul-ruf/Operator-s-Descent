@@ -1806,3 +1806,77 @@ When `RUN_SCHEMA_VERSION` bumps 3→4 (and the current symbol table bumps
 be registered via `registerCondenserTable(symbolTableV3)` at the same init
 site as the current table — otherwise `readV3Payload` will fail its symbol
 lookups against the newly-current v2 table.
+
+*(SESSION-02 resolution: the table version was NOT bumped — the v4 change is
+schema-only, the symbol table stays v1 — so the separate v3-table registration
+turned out to be unnecessary; `readV3Payload` resolves against the same v1
+table `initEncoder` registers.)*
+
+<!-- combat-save-budget-reconciliation SESSION-02 — 2026-08-18 -->
+### v4 combat-snapshot codec (M89 Save Schema / Save Codecs)
+
+`RUN_SCHEMA_VERSION` bumped **3 → 4**. Encoding-only change — decoded RunState
+shape unchanged. v3 saves continue loading through `readV3Payload` (M106) +
+the newly-registered `3 → 4` identity migration (M105).
+
+**Wire format for the enemy stat block** (v4):
+
+- **Standard archetypes** (drone / warden / stalker / choir / null / construct /
+  phantom / apex) persist only the per-instance fields: `archetypeId`, `hpMax`,
+  `chargeMax`, `sigilCodepoint`. The archetype-derivable template
+  (attributes / defense / protocolDefense / behavior / retreats / protocolAccess)
+  is re-derived on restore from `(archetypeId, depth)` via `deriveEnemyStats`
+  (M24 `src/rules/combat.js`) and injected into the mounted actor by
+  `actorFromSnapshot` (M86 `src/runtime.js`).
+- **Echo actors** (`archetypeId === 'echo'`) still persist the full inline
+  template — echoes inherit party-character attributes that can't be reduced to
+  any archetype. The v4 codec branches on this in `writeEnemyStats` /
+  `readEnemyStats` (`src/state/save-codecs.js`).
+- Template dedup between adjacent same-archetype enemies (v3's
+  `templateEquals` / `canDedup` bit) is removed — same-archetype packs now
+  only pay a ~5-bit archetype write per enemy, so the extra bookkeeping wasn't
+  earning its complexity. The `previous` parameter is still accepted for
+  signature stability.
+
+**`deriveEnemyStats(archetypeId, depth, enemiesData)`** — pure function,
+consumes zero RNG (STATE.md Design Decision 3 / Design Decision 5). Mirrors
+`createEnemy` (`src/rules/enemies.js`) minus the sigil pick and the id
+synthesis. Returns `null` for `'echo'` or unknown archetypes so the runtime's
+persistedStats fallback chain kicks in. Parity with `createEnemy` is pinned by
+`tests/integration/combat-snapshot-stats.test.js` — every standard archetype at
+depths {1, 4, 10, 50} must match. Drift there = silent enemy-balance corruption
+on resume.
+
+### Migration registration (Custom Rule 13)
+
+The v3 → v4 identity migration is registered from `src/state/save-schema.js` as
+a module-load side effect (guarded try/catch on `duplicate_migration` for
+worker hot-reload and for SESSION-03's follow-up). SESSION-03 owns
+`src/state/migrations/**` — recommend moving the registration into
+`src/state/migrations/v3-to-v4.js` and importing it from `save-migrate.js`'s
+own migration loader, then removing the schema-side registration.
+
+### Sigil-pool drift guard (Issue 3)
+
+`ENEMY_STAT_SIGIL_POOLS` in `save-codecs.js` is now `export`ed. The v4 codec
+uses it to shrink sigil codepoints from 21 bits to a 2-bit variant index, so
+any drift from `data/enemies.json` silently corrupts the sigil column on
+decode. `tests/state/sigil-pool-guard.test.js` asserts pool-for-pool equality
+per archetype and enforces the 3-codepoint / 2-bit invariant. Any legitimate
+pool change MUST bump `RUN_SCHEMA_VERSION` alongside the enemies-data edit.
+
+### Note for SESSION-03
+
+`tests/state/save-versioning.test.js:23-32` ("readV3Payload decodes a
+live-encoded v3 payload identically to decodeRunPayload") now fails: the live
+encoder emits v4 (schemaVersion byte = 4), and the frozen `readV3Payload`
+rightly rejects it with `version_mismatch`. The test's invariant was written
+assuming v3 was the current schema — after the bump it's stale. Update it to
+either (a) decode a v3 fragment from `tests/fixtures/save-versions/v3-*.txt`
+via both readers and compare, or (b) delete it (the golden-corpus test at
+`:44-56` already exercises the frozen reader end-to-end). The 2 pre-existing
+release-budget failures inherited from combat-weapon-resolution SESSION-02 —
+`floor and save stress fixtures` now passes thanks to the v4 codec;
+`static transfer and hot paths` remains (SESSION-06 will add
+`data/symbol-table.v3.json`, `save-migrate.js`, and `versions/*.js` to the
+service-worker asset manifest, resolving that one).
