@@ -1880,3 +1880,32 @@ release-budget failures inherited from combat-weapon-resolution SESSION-02 —
 `static transfer and hot paths` remains (SESSION-06 will add
 `data/symbol-table.v3.json`, `save-migrate.js`, and `versions/*.js` to the
 service-worker asset manifest, resolving that one).
+
+<!-- combat-save-budget-reconciliation SESSION-03 — 2026-08-18 -->
+### M105 Save Migration — v3 → v4 step lands, chain complete for shipped versions
+
+- Added `src/state/migrations/v3-to-v4.js` exporting `v3ToV4 = { from: 3, to: 4, migrate: (state) => state }`. The bump is encoding-only: SESSION-02 slimmed the enemy-stat snapshot but the decoded RunState shape is byte-identical between readV3Payload's output and a native v4 decode (the runtime re-derives the omitted archetype template on restore). No shape transform is required for standard archetypes; conditions still travel as `{conditionId, duration, stacks?}` tuples in both versions.
+- `src/state/save-migrate.js` now imports the module and registers the step at module load, guarded by the same `duplicate_migration` catch pattern SESSION-02 used in `save-schema.js`. Either loader can win; the loser short-circuits. Once SESSION-02's inline block in `save-schema.js` is removed in a later cleanup, this file becomes the sole registrar.
+- Added `tests/fixtures/saves/v3/v3-{minimal,exploration,deep-dense,two-echo,caster-combat}.txt` — five real base64url v3 fragments captured from the pre-b599d1a encoder via a scratch git worktree at `a11dfc5` (SESSION-01 tip). Sizes range 244 → 1063 chars encoded v3; all re-encode to v4 under the 1500 URL budget (worst-case caster-combat shrinks 1063 → 803 chars, showing the v4 slim codec earning its keep on the intended pathological shape).
+- Added `tests/state/save-migration-corpus.test.js` as the enforcement arm of Custom Rule 13. Two guarantees:
+  1. **Golden corpus:** every fragment in `tests/fixtures/saves/v3/` decodes through the current stack (readV3Payload → migrateState → validateRunState), validates, and re-encodes under 1500 chars.
+  2. **Chain completeness:** the migration registry contains a contiguous step for every hop from every `FROZEN_READERS` schemaVersion up to `RUN_SCHEMA_VERSION`. Any schema bump that lands a frozen reader without a matching migration hop fails this guard before shipping.
+
+### Standing obligation carried forward (Custom Rule 13)
+
+Every future `RUN_SCHEMA_VERSION` (or symbol-table) bump MUST land four things in the same feature:
+1. Freeze the prior payload reader under `src/state/versions/read-vN.js` (+ paired `codecs-vN.js`).
+2. Register the payload version in `FROZEN_READERS` inside `src/state/save-decode.js`.
+3. Add `src/state/migrations/vN-to-v(N+1).js` and register it in `save-migrate.js`.
+4. Capture a real golden fixture at `tests/fixtures/saves/vN/*.txt` — the corpus test picks it up automatically.
+
+### Note for SESSION-06 (service-worker manifest)
+
+`tests/performance/release-budgets.test.js` currently reports **five** missing offline-manifest assets that must be added to `service-worker.js` before the release-budget gate passes:
+- `data/symbol-table.v3.json` (SESSION-01)
+- `src/state/save-migrate.js` (SESSION-01)
+- `src/state/versions/codecs-v3.js` (SESSION-01)
+- `src/state/versions/read-v3.js` (SESSION-01)
+- **`src/state/migrations/v3-to-v4.js` (SESSION-03 — new file, add me)**
+
+Fixtures under `tests/fixtures/saves/v3/` are dev-only test data and MUST NOT ship in the service-worker manifest.
