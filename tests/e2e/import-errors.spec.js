@@ -56,5 +56,9 @@ test('import diagnostics show named failures, title return, and seed recovery wh
   await expect(page.getByTestId('import-failure-malformed')).toContainText('Malformed — the link is not a valid save.');
   await expect(page.getByTestId('import-fresh-world')).toHaveCount(0);
   await page.getByTestId('import-return-title-result').click();
+  // Single-state title (commit 30b7172): return lands collapsed; re-expand via
+  // START to reveal the branch list.
+  await expect(page.getByTestId('title-start')).toBeVisible();
+  await page.getByTestId('title-start').click();
   await expect(page.getByTestId('title-begin-new-run')).toBeVisible();
 });
