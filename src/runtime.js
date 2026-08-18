@@ -12,6 +12,7 @@ import { generateFloor } from './floor/generator.js';
 import { beginFloorTransition, completeFloorTransition } from './rules/progression.js';
 import { initLayoutController } from './ui/layout.js';
 import { parseFragment, createHistoryController } from './router.js';
+import { resolveLoadout } from './rules/equipment.js';
 import { createUpdateToast } from './ui/components.js';
 
 // Runtime-scoped update surfacing (walls-npc-docking SESSION-03). Mounts
@@ -272,6 +273,9 @@ function actorFromSnapshot(actor, runState) {
   const charge = Math.max(0, Math.min(255, Math.floor(actor?.charge ?? base.currentCHARGE ?? 0)));
   const equipment = base.equipment || { weapon: null, armor: null, offhand: null };
   const enemy = actor?.side === 'enemy' || actor?.side === 'echo';
+  // Resolve the loadout so party/echo actors carry real weapon stats after resume;
+  // enemies (base = {}) resolve to null and keep DEFAULT_ENEMY_WEAPON below.
+  const loadout = resolveLoadout(base, gameData?.equipment, gameData?.affixes);
   return {
     ...base,
     id: actor?.id ?? base.id,
@@ -285,9 +289,9 @@ function actorFromSnapshot(actor, runState) {
     currentCHARGE: charge,
     attributes: base.attributes || DEFAULT_ATTRIBUTES,
     equipment,
-    weapon: base.weapon ?? equipment.weapon ?? (enemy ? DEFAULT_ENEMY_WEAPON : null),
-    armor: base.armor ?? equipment.armor ?? null,
-    offhand: base.offhand ?? equipment.offhand ?? null,
+    weapon: loadout?.weapon ?? base.weapon ?? equipment.weapon ?? (enemy ? DEFAULT_ENEMY_WEAPON : null),
+    armor: loadout?.armor ?? base.armor ?? equipment.armor ?? null,
+    offhand: loadout?.offhand ?? base.offhand ?? equipment.offhand ?? null,
     protocols: base.protocolDeck || base.protocols || [],
     protocolDeck: base.protocolDeck || base.protocols || [],
     conditions: (actor?.conditions || []).map(snapshotCondition).filter(Boolean),
