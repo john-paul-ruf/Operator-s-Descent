@@ -1909,3 +1909,11 @@ Every future `RUN_SCHEMA_VERSION` (or symbol-table) bump MUST land four things i
 - **`src/state/migrations/v3-to-v4.js` (SESSION-03 — new file, add me)**
 
 Fixtures under `tests/fixtures/saves/v3/` are dev-only test data and MUST NOT ship in the service-worker manifest.
+
+<!-- combat-save-budget-reconciliation SESSION-05 — 2026-08-18 -->
+### Combat rules — on-hit damage floor
+
+- `performAttackRoll` (in `src/rules/combat.js`) now clamps damage at **1** on any successful hit, not 0. The clamp sits inside the `if (hit)` branch, after the melee-attribute-modifier addition and before the `damageMultiplier` step, so misses and fumbles are unaffected (they never enter this branch).
+- Rule: **every successful hit deals ≥ 1 damage** — melee, ranged, and protocol-driven alike. Low-MGT attackers (e.g. Drone, mgt 3 → modifier −2) rolling a natural 1 on a d6 previously floored to 0 damage on a landed hit; that outcome is now impossible.
+- Crit path is unchanged in behavior (starts at `dieSize`, adds melee modifier, then the new floor at 1 — still ≥ 1 for every shipped weapon/attribute combo).
+- No public API additions or signature changes. Regression coverage lives in `tests/rules/combat-damage.test.js`.
