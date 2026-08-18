@@ -38,7 +38,12 @@ describe('RunState v2 binary schema', () => {
     expect(payload.bitLength).toBeLessThanOrEqual(payload.bytes.length * 8);
   });
 
-  it('round-trips an active combat snapshot with a persisted enemy stat block', () => {
+  it('round-trips an active combat snapshot with the v4 slim enemy stat block', () => {
+    // v4 wire format: standard-archetype enemies only carry the per-instance
+    // fields (archetypeId, hpMax, chargeMax, sigilCodepoint). Runtime
+    // re-derives attributes/defense/behavior/protocolAccess from
+    // (archetypeId, depth) via deriveEnemyStats — see
+    // tests/integration/combat-snapshot-stats.test.js for the derivation path.
     const state = buildRealisticRun(11, { depth: 4 });
     state.activeCombat = {
       arena: { originX: 3, originY: 5, contactId: 'encounter_3_5_1' },
@@ -58,18 +63,7 @@ describe('RunState v2 binary schema', () => {
           freeActions: 0,
           defeated: false,
           retreated: false,
-          stats: {
-            archetypeId: 'construct',
-            attributes: { mgt: 7, fin: 2, vit: 8, res: 2, foc: 2, sig: 2 },
-            defense: 18,
-            protocolDefense: 12,
-            hpMax: 56,
-            chargeMax: 0,
-            behavior: 'aggressive',
-            retreats: false,
-            sigilCodepoint: 57407,
-            protocolAccess: null
-          }
+          stats: { archetypeId: 'construct', hpMax: 56, chargeMax: 0, sigilCodepoint: 57407 }
         }
       ],
       initiativeOrder: ['operator_1', 'enemy_4_construct_7'],
@@ -82,21 +76,13 @@ describe('RunState v2 binary schema', () => {
     const payload = roundTrip(state);
     const decoded = decodeRunPayload(payload.bytes, payload.bitLength);
     const restoredEnemy = decoded.runState.activeCombat.actors.find((actor) => actor.side === 'enemy');
-    expect(restoredEnemy.stats).toEqual({
-      archetypeId: 'construct',
-      attributes: { mgt: 7, fin: 2, vit: 8, res: 2, foc: 2, sig: 2 },
-      defense: 18,
-      protocolDefense: 12,
-      hpMax: 56,
-      chargeMax: 0,
-      behavior: 'aggressive',
-      retreats: false,
-      sigilCodepoint: 57407,
-      protocolAccess: null
-    });
+    expect(restoredEnemy.stats).toEqual({ archetypeId: 'construct', hpMax: 56, chargeMax: 0, sigilCodepoint: 57407 });
   });
 
-  it('round-trips an enemy stat block that carries a protocolAccess object', () => {
+  it('round-trips a choir enemy stat block (chargeMax > 0, sigil in pool)', () => {
+    // Choir carries chargeMax > 0 (caster) and its protocolAccess object
+    // is re-derived on restore rather than persisted — this test only
+    // pins the wire round-trip for the slim block.
     const state = buildRealisticRun(13, { depth: 6 });
     state.activeCombat = {
       arena: { originX: 2, originY: 2, contactId: 'encounter_2_2_1' },
@@ -116,18 +102,7 @@ describe('RunState v2 binary schema', () => {
           freeActions: 0,
           defeated: false,
           retreated: false,
-          stats: {
-            archetypeId: 'choir',
-            attributes: { mgt: 2, fin: 4, vit: 3, res: 7, foc: 5, sig: 4 },
-            defense: 10,
-            protocolDefense: 12,
-            hpMax: 12,
-            chargeMax: 20,
-            behavior: 'artillery',
-            retreats: true,
-            sigilCodepoint: 57401,
-            protocolAccess: { schools: ['disrupt', 'scry'], maxTier: 3 }
-          }
+          stats: { archetypeId: 'choir', hpMax: 12, chargeMax: 20, sigilCodepoint: 57401 }
         }
       ],
       initiativeOrder: ['operator_1', 'enemy_6_choir_9'],
@@ -140,9 +115,60 @@ describe('RunState v2 binary schema', () => {
     const payload = roundTrip(state);
     const decoded = decodeRunPayload(payload.bytes, payload.bitLength);
     const restoredEnemy = decoded.runState.activeCombat.actors.find((actor) => actor.side === 'enemy');
-    expect(restoredEnemy.stats.protocolAccess).toEqual({ schools: ['disrupt', 'scry'], maxTier: 3 });
-    expect(restoredEnemy.stats.behavior).toBe('artillery');
-    expect(restoredEnemy.stats.retreats).toBe(true);
+    expect(restoredEnemy.stats).toEqual({ archetypeId: 'choir', hpMax: 12, chargeMax: 20, sigilCodepoint: 57401 });
+  });
+
+  it('round-trips an echo actor with the full inline template (echoes are not archetype-derivable)', () => {
+    // Echoes carry party-character attributes that cannot be derived from
+    // an archetype id, so the v4 codec still writes the full template
+    // inline when archetypeId === 'echo'. sigilCodepoint falls outside
+    // ENEMY_STAT_SIGIL_POOLS['echo'] (there is no echo pool) and always
+    // encodes as a 21-bit raw codepoint.
+    const state = buildRealisticRun(17, { depth: 5 });
+    const echoStats = {
+      archetypeId: 'echo',
+      attributes: { mgt: 8, fin: 6, vit: 7, res: 4, foc: 5, sig: 3 },
+      defense: 14,
+      protocolDefense: 11,
+      hpMax: 32,
+      chargeMax: 4,
+      behavior: 'echo',
+      retreats: false,
+      sigilCodepoint: 57351,
+      protocolAccess: null
+    };
+    state.activeCombat = {
+      arena: { originX: 1, originY: 1, contactId: 'encounter_1_1_1' },
+      actors: [
+        { id: 'operator_1', side: 'party', x: 0, y: 0, hp: 18, charge: 2, conditions: [], initiative: 10, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false },
+        {
+          id: 'echo_operator_1_5',
+          side: 'echo',
+          x: 3,
+          y: 3,
+          hp: 32,
+          charge: 4,
+          conditions: [],
+          initiative: 6,
+          ap: 2,
+          moves: 1,
+          freeActions: 0,
+          defeated: false,
+          retreated: false,
+          stats: echoStats
+        }
+      ],
+      initiativeOrder: ['operator_1', 'echo_operator_1_5'],
+      currentIndex: 0,
+      round: 1,
+      pendingEffects: [],
+      encounter: { id: 'encounter_1_1_1', type: 'standard' },
+      eventOrder: 0
+    };
+    const payload = roundTrip(state);
+    const decoded = decodeRunPayload(payload.bytes, payload.bitLength);
+    const restoredEcho = decoded.runState.activeCombat.actors.find((actor) => actor.side !== 'party');
+    expect(restoredEcho.stats).toEqual(echoStats);
   });
 
   it('round-trips bounded CORRUPT and per-floor affix ledgers without a schema bump', () => {

@@ -13,6 +13,7 @@ import { beginFloorTransition, completeFloorTransition } from './rules/progressi
 import { initLayoutController } from './ui/layout.js';
 import { parseFragment, createHistoryController } from './router.js';
 import { resolveLoadout } from './rules/equipment.js';
+import { deriveEnemyStats } from './rules/combat.js';
 import { createUpdateToast } from './ui/components.js';
 
 // Runtime-scoped update surfacing (walls-npc-docking SESSION-03). Mounts
@@ -276,11 +277,18 @@ function actorFromSnapshot(actor, runState) {
   // Resolve the loadout so party/echo actors carry real weapon stats after resume;
   // enemies (base = {}) resolve to null and keep DEFAULT_ENEMY_WEAPON below.
   const loadout = resolveLoadout(base, gameData?.equipment, gameData?.affixes);
-  // Persisted enemy stat block (SESSION-02). For party actors this is unset
-  // (their stats live on the character record); for enemies it carries the
-  // resolved values from createEnemy so a mid-combat save/restore does not
-  // silently reset def/attributes to DEFAULT_ATTRIBUTES/10.
+  // Persisted enemy stat block. For party actors this is unset (their stats
+  // live on the character record). For standard-archetype enemies the v4
+  // codec only preserves per-instance fields (hpMax/chargeMax/sigilCodepoint);
+  // deriveEnemyStats rebuilds the archetype-derived template from the current
+  // floor depth so def/attributes/behavior don't silently reset to defaults.
+  // v3 saves (or echoes) still carry the full inline template — that path
+  // takes precedence over derivation via the `persistedStats?.field ?? …`
+  // chain below.
   const persistedStats = enemy ? actor?.stats : undefined;
+  const derivedStats = enemy && persistedStats?.archetypeId
+    ? deriveEnemyStats(persistedStats.archetypeId, Number.isInteger(runState?.depth) && runState.depth > 0 ? runState.depth : 1, gameData?.enemies)
+    : null;
   const persistedHpMax = persistedStats?.hpMax;
   const persistedChargeMax = persistedStats?.chargeMax;
   return {
@@ -294,7 +302,7 @@ function actorFromSnapshot(actor, runState) {
     chargeMax: Number.isFinite(persistedChargeMax) ? Math.max(charge, persistedChargeMax) : Math.max(charge, base.maxCHARGE ?? base.currentCHARGE ?? charge),
     currentHP: hp,
     currentCHARGE: charge,
-    attributes: persistedStats?.attributes ?? base.attributes ?? DEFAULT_ATTRIBUTES,
+    attributes: persistedStats?.attributes ?? derivedStats?.attributes ?? base.attributes ?? DEFAULT_ATTRIBUTES,
     equipment,
     weapon: loadout?.weapon ?? base.weapon ?? equipment.weapon ?? (enemy ? DEFAULT_ENEMY_WEAPON : null),
     armor: loadout?.armor ?? base.armor ?? equipment.armor ?? null,
@@ -307,12 +315,13 @@ function actorFromSnapshot(actor, runState) {
     moveAvailable: (actor?.moves ?? 0) > 0,
     freeActions: actor?.freeActions ?? 0,
     sigilCodepoint: persistedStats?.sigilCodepoint ?? base.sigilCodepoint ?? codepointFromSigilId(base.sigilId) ?? (enemy ? 0xE030 : 0xE000),
-    defense: persistedStats?.defense ?? base.defense ?? (enemy ? 10 : 0),
-    protocolDefense: persistedStats?.protocolDefense ?? base.protocolDefense ?? 10,
-    behavior: persistedStats?.behavior ?? base.behavior ?? (enemy ? 'aggressive' : undefined),
+    defense: persistedStats?.defense ?? derivedStats?.defense ?? base.defense ?? (enemy ? 10 : 0),
+    protocolDefense: persistedStats?.protocolDefense ?? derivedStats?.protocolDefense ?? base.protocolDefense ?? 10,
+    behavior: persistedStats?.behavior ?? derivedStats?.behavior ?? base.behavior ?? (enemy ? 'aggressive' : undefined),
     ...(persistedStats?.archetypeId ? { archetypeId: persistedStats.archetypeId } : base.archetypeId ? { archetypeId: base.archetypeId } : {}),
-    ...(persistedStats && 'retreats' in persistedStats ? { retreats: Boolean(persistedStats.retreats) } : base.retreats !== undefined ? { retreats: Boolean(base.retreats) } : {}),
-    ...(persistedStats?.protocolAccess !== undefined ? { protocolAccess: persistedStats.protocolAccess } : base.protocolAccess !== undefined ? { protocolAccess: base.protocolAccess } : {}),
+    ...(persistedStats && 'retreats' in persistedStats ? { retreats: Boolean(persistedStats.retreats) } : derivedStats ? { retreats: Boolean(derivedStats.retreats) } : base.retreats !== undefined ? { retreats: Boolean(base.retreats) } : {}),
+    ...(persistedStats?.protocolAccess !== undefined ? { protocolAccess: persistedStats.protocolAccess } : derivedStats?.protocolAccess !== undefined ? { protocolAccess: derivedStats.protocolAccess } : base.protocolAccess !== undefined ? { protocolAccess: base.protocolAccess } : {}),
+    ...(derivedStats?.actionSlotsPerRound && !persistedStats?.actionSlotsPerRound ? { actionSlotsPerRound: derivedStats.actionSlotsPerRound } : {}),
     defeated: Boolean(actor?.defeated),
     retreated: Boolean(actor?.retreated)
   };

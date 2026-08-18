@@ -1,6 +1,6 @@
 import { modifier } from './attributes.js';
 import { tickConditions, hasCondition, getConditionEffects, applyCondition } from './conditions.js';
-import { enemyAI } from './enemies.js';
+import { enemyAI, scaleEnemyStat } from './enemies.js';
 import { castProtocol, overclockProtocol } from './protocols.js';
 import { applyConsumable } from './consumables.js';
 import { evaluateRange } from './equipment.js';
@@ -778,8 +778,54 @@ export function getCharacterDeaths(combatState) {
 }
 
 const SNAPSHOT_ATTRIBUTE_KEYS = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
+const NEVER_RETREAT = new Set(['drone', 'construct', 'apex']);
+const ARMOR_FIN_PENALTY = -1;
+const ARMOR_DEFENSE_BONUS = 3;
 
+// Standard-archetype enemies are a pure function of (archetypeId, depth) via
+// data/enemies.json — every field except the RNG-picked sigilCodepoint. The
+// runtime uses this to re-derive attributes/defense/behavior/etc. on restore
+// so the v4 combat-snapshot codec doesn't have to persist them. Must stay in
+// lockstep with createEnemy in ./enemies.js (excluding sigil pick + id
+// synthesis); the parity test in tests/integration/combat-snapshot-stats.test.js
+// catches drift. Returns null for unknown or non-derivable archetypes (echoes
+// inherit party-character attributes and stay persisted in the snapshot).
+export function deriveEnemyStats(archetypeId, depth, enemiesData) {
+  if (typeof archetypeId !== 'string' || archetypeId === 'echo') return null;
+  const archetype = enemiesData?.archetypes?.[archetypeId];
+  if (!archetype || !archetype.attributes) return null;
+  const attributes = { ...archetype.attributes };
+  const effectiveFin = attributes.fin + (archetype.armored ? ARMOR_FIN_PENALTY : 0);
+  const baseHp = attributes.vit * 4 + (archetype.hpBonus || 0);
+  const baseDefense = 10 + modifier(effectiveFin) + (archetype.armored ? ARMOR_DEFENSE_BONUS : 0);
+  const baseProtocolDefense = 10 + modifier(attributes.foc);
+  return {
+    archetypeId,
+    attributes,
+    behavior: archetype.behavior,
+    protocolAccess: archetype.protocolAccess ?? null,
+    retreats: Boolean(archetype.retreats && !NEVER_RETREAT.has(archetypeId)),
+    defense: scaleEnemyStat(baseDefense, depth),
+    protocolDefense: scaleEnemyStat(baseProtocolDefense, depth),
+    hpMax: scaleEnemyStat(baseHp, depth),
+    chargeMax: archetypeId === 'choir' ? attributes.res * 2 + depth : 0,
+    actionSlotsPerRound: archetypeId === 'apex' ? 2 : 1
+  };
+}
+
+// v4 combat snapshot: standard archetypes carry only per-instance state
+// (hpMax/chargeMax/sigilCodepoint) since the template is derivable; echoes
+// still carry the full inline block because their attributes come from the
+// dead party character, not from any archetype. `snapshotEnemyStats` mirrors
+// that split so decode → snapshot → derive round-trips without loss.
 function snapshotEnemyStats(actor) {
+  const archetypeId = typeof actor.archetypeId === 'string' ? actor.archetypeId : 'other';
+  const hpMax = Math.max(0, Math.min(1_000_000, Math.floor(actor.hpMax ?? actor.hp ?? 0)));
+  const chargeMax = Math.max(0, Math.min(1_000_000, Math.floor(actor.chargeMax ?? actor.charge ?? 0)));
+  const sigilCodepoint = Math.max(0, Math.min(0x10FFFF, Math.floor(actor.sigilCodepoint ?? 0xE030)));
+  if (archetypeId !== 'echo') {
+    return { archetypeId, hpMax, chargeMax, sigilCodepoint };
+  }
   const source = actor.attributes || {};
   const attributes = {};
   for (const key of SNAPSHOT_ATTRIBUTE_KEYS) {
@@ -787,17 +833,16 @@ function snapshotEnemyStats(actor) {
     attributes[key] = Math.max(1, Math.min(255, value));
   }
   return {
-    archetypeId: typeof actor.archetypeId === 'string' ? actor.archetypeId : 'other',
+    archetypeId,
     attributes,
     defense: Math.max(0, Math.min(65535, Math.floor(actor.defense ?? 10))),
     protocolDefense: Math.max(0, Math.min(65535, Math.floor(actor.protocolDefense ?? 10))),
-    hpMax: Math.max(0, Math.min(1_000_000, Math.floor(actor.hpMax ?? actor.hp ?? 0))),
-    chargeMax: Math.max(0, Math.min(1_000_000, Math.floor(actor.chargeMax ?? actor.charge ?? 0))),
-    behavior: typeof actor.behavior === 'string' ? actor.behavior : 'other',
+    hpMax,
+    chargeMax,
+    behavior: typeof actor.behavior === 'string' ? actor.behavior : 'echo',
     retreats: Boolean(actor.retreats),
     protocolAccess: actor.protocolAccess ?? null,
-    actionSlotsPerRound: Math.max(1, Math.min(7, Math.floor(actor.actionSlotsPerRound ?? 1))),
-    sigilCodepoint: Math.max(0, Math.min(0x10FFFF, Math.floor(actor.sigilCodepoint ?? 0xE030)))
+    sigilCodepoint
   };
 }
 

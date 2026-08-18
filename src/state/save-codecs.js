@@ -362,8 +362,10 @@ const ENEMY_STAT_BEHAVIORS = ['aggressive', 'defensive', 'flanking', 'artillery'
 const ENEMY_STAT_ARCHETYPES = ['drone', 'warden', 'stalker', 'choir', 'null', 'construct', 'phantom', 'apex', 'echo'];
 // Mirrors data/enemies.json sigilCodepoints — snapshot codec encodes known
 // archetype+sigil combos as a 2-bit variant index instead of the full 21-bit
-// codepoint. Any change to those pools MUST bump RUN_SCHEMA_VERSION.
-const ENEMY_STAT_SIGIL_POOLS = {
+// codepoint. Any change to those pools MUST bump RUN_SCHEMA_VERSION. Exported
+// so tests/state/sigil-pool-guard.test.js can assert the pools stay in lockstep
+// with the enemies-data source without a schema bump.
+export const ENEMY_STAT_SIGIL_POOLS = {
   drone: [57392, 57393, 57394],
   warden: [57395, 57396, 57397],
   stalker: [57398, 57399, 57400],
@@ -416,14 +418,17 @@ function readEnemyArchetypeId(reader) {
   return readString(reader, MAX_ARCHETYPE_ID);
 }
 
-// The archetype template covers the fields that are constant across enemies
-// of the same kind at the same depth (attributes, defenses, behavior, …). The
-// varying per-instance fields (hpMax, chargeMax, sigilCodepoint) are always
-// written after the template so a run of same-archetype enemies dedupes cleanly.
+// v4 enemy-stats codec. Standard archetypes (drone/warden/…/apex) are a pure
+// function of (archetypeId, depth) via data/enemies.json — the runtime
+// re-derives attributes/defense/behavior/protocolAccess on restore
+// (deriveEnemyStats in src/rules/combat.js), so the wire format only carries
+// the fields that vary per instance: hpMax, chargeMax, sigilCodepoint. Echoes
+// (archetypeId === 'echo') inherit party-character attributes not derivable
+// from any archetype, so their block still writes the full template inline
+// after the archetype id. v3 saves keep decoding through the frozen reader.
 function writeEnemyStatsTemplate(writer, stats) {
   const attributes = stats.attributes;
   if (!isObject(attributes)) fail('invalid_actor');
-  writeEnemyArchetypeId(writer, stats.archetypeId);
   for (const key of ENEMY_STAT_ATTRIBUTES) {
     writer.writeUint(requireInteger(attributes[key], 1, MAX_ENEMY_ATTRIBUTE, 'invalid_actor'), 5);
   }
@@ -436,37 +441,26 @@ function writeEnemyStatsTemplate(writer, stats) {
 }
 
 function readEnemyStatsTemplate(reader) {
-  const archetypeId = readEnemyArchetypeId(reader);
   const attributes = Object.fromEntries(ENEMY_STAT_ATTRIBUTES.map((key) => [key, requireInteger(reader.readUint(5), 1, MAX_ENEMY_ATTRIBUTE, 'invalid_actor')]));
   const defense = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_STAT_VALUE, 'invalid_actor');
   const protocolDefense = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_STAT_VALUE, 'invalid_actor');
   const behavior = readEnemyBehavior(reader);
   const retreats = reader.readBool();
   const protocolAccess = reader.readBool() ? readValue(reader) : null;
-  return { archetypeId, attributes, defense, protocolDefense, behavior, retreats, protocolAccess };
+  return { attributes, defense, protocolDefense, behavior, retreats, protocolAccess };
 }
 
-function templateEquals(a, b) {
-  if (!a || !b) return false;
-  if (a.archetypeId !== b.archetypeId || a.defense !== b.defense || a.protocolDefense !== b.protocolDefense
-      || a.behavior !== b.behavior || Boolean(a.retreats) !== Boolean(b.retreats)) return false;
-  const aa = a.attributes || {}, ba = b.attributes || {};
-  for (const key of ENEMY_STAT_ATTRIBUTES) if ((aa[key] ?? 0) !== (ba[key] ?? 0)) return false;
-  return JSON.stringify(a.protocolAccess ?? null) === JSON.stringify(b.protocolAccess ?? null);
-}
-
-// Serializes an enemy stat block, reusing the previous entry's template when
-// the archetype matches so a same-kind pack writes only one full template plus
-// per-actor hpMax/chargeMax/sigil. chargeMax is gated on a presence bit since
-// non-caster archetypes always carry chargeMax = 0.
+// `previous` is accepted for API compatibility with the v3 signature (dedup
+// context) but v4 no longer dedups — same-archetype packs already collapse to
+// a ~5-bit archetype write per enemy, so the extra bookkeeping wasn't earning
+// its complexity. Caller state is passed through unchanged.
 function writeEnemyStats(writer, stats, previous) {
   writer.alignToByte();
   const hasStats = isObject(stats);
   writer.writeBool(hasStats);
   if (!hasStats) return previous;
-  const canDedup = templateEquals(previous, stats);
-  writer.writeBool(canDedup);
-  if (!canDedup) writeEnemyStatsTemplate(writer, stats);
+  writeEnemyArchetypeId(writer, stats.archetypeId);
+  if (stats.archetypeId === 'echo') writeEnemyStatsTemplate(writer, stats);
   writer.writeVarUint(requireInteger(stats.hpMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor'));
   const chargeMax = requireInteger(stats.chargeMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
   writer.writeBool(chargeMax > 0);
@@ -484,21 +478,20 @@ function writeEnemyStats(writer, stats, previous) {
 function readEnemyStats(reader, previous) {
   reader.alignToByte();
   if (!reader.readBool()) return { stats: undefined, previous };
-  const canDedup = reader.readBool();
-  if (canDedup && !previous) fail('invalid_actor');
-  const template = canDedup ? previous : readEnemyStatsTemplate(reader);
+  const archetypeId = readEnemyArchetypeId(reader);
+  const template = archetypeId === 'echo' ? readEnemyStatsTemplate(reader) : {};
   const hpMax = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
   const chargeMax = reader.readBool() ? requireInteger(reader.readVarUint(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor') : 0;
   let sigilCodepoint;
   if (reader.readBool()) {
     const variant = reader.readUint(2);
-    const pool = ENEMY_STAT_SIGIL_POOLS[template.archetypeId];
+    const pool = ENEMY_STAT_SIGIL_POOLS[archetypeId];
     if (!pool || variant >= pool.length) fail('invalid_actor');
     sigilCodepoint = pool[variant];
   } else {
     sigilCodepoint = requireInteger(reader.readUint(21), 0, MAX_SIGIL_CODEPOINT, 'invalid_actor');
   }
-  const stats = { ...template, hpMax, chargeMax, sigilCodepoint };
+  const stats = { archetypeId, ...template, hpMax, chargeMax, sigilCodepoint };
   return { stats, previous: stats };
 }
 

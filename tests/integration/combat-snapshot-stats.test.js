@@ -1,22 +1,26 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createEnemy } from '../../src/rules/enemies.js';
-import { toCombatSnapshot } from '../../src/rules/combat.js';
+import { deriveEnemyStats, toCombatSnapshot } from '../../src/rules/combat.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { encodeRun, initEncoder } from '../../src/state/save-encode.js';
 import { decodeRun } from '../../src/state/save-decode.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 import { loadData } from '../helpers/data.js';
 
-// SESSION-02 pins the enemy-stat persistence contract at the snapshot seam.
-// Before this session, mid-combat save/reload rebuilt every enemy from an
-// empty base (base = {} in actorFromSnapshot), silently swapping the enemy's
-// real defense/attributes for DEFAULT_ATTRIBUTES/10 and rewriting balance on
-// resume. These tests prove the resolved stat block now survives:
-//   (1) directly through toCombatSnapshot + the codec round-trip
-//   (2) end-to-end through the encodeRun → decodeRun save pipeline
+// SESSION-02 (v4) pins the enemy-stat persistence contract at the snapshot
+// seam. Standard-archetype enemies are a pure function of
+// (archetypeId, depth), so the wire format only carries the fields that
+// vary per instance (hpMax, chargeMax, sigilCodepoint) and the runtime
+// re-derives attributes/defense/behavior/protocolAccess via
+// deriveEnemyStats on restore. These tests prove:
+//   (1) toCombatSnapshot emits the slim v4 block for standard archetypes
+//   (2) encode → decode preserves the slim block byte-for-byte
+//   (3) deriveEnemyStats reconstructs the full stat block identically to
+//       createEnemy (excluding the RNG-picked sigil, which is persisted)
+//   (4) the derived template is what actorFromSnapshot fills in for
+//       defense/attributes/behavior/retreats/protocolAccess on resume
 // The restore path must NOT re-run createEnemy — that consumes the `gen` RNG
-// stream (see STATE.md Design Decision 3) — so we assert the stored stats
-// come back verbatim, not derived.
+// stream (see STATE.md Design Decision 3) — deriveEnemyStats is pure.
 
 const enemiesData = loadData('enemies');
 const symbolTable = loadData('symbol-table');
@@ -76,28 +80,23 @@ function buildCombatState(enemy) {
 }
 
 describe('enemy combat stats survive save/restore', () => {
-  it('toCombatSnapshot carries the resolved enemy stat block', () => {
+  it('toCombatSnapshot emits the v4 slim block for standard archetypes', () => {
     const enemy = makeConstruct(4);
     const snapshot = toCombatSnapshot(buildCombatState(enemy));
     const enemyEntry = snapshot.actors.find((a) => a.side === 'enemy');
     expect(enemyEntry).toBeDefined();
-    expect(enemyEntry.stats).toBeDefined();
-    expect(enemyEntry.stats.archetypeId).toBe('construct');
-    expect(enemyEntry.stats.defense).toBe(enemy.defense);
-    expect(enemyEntry.stats.protocolDefense).toBe(enemy.protocolDefense);
-    expect(enemyEntry.stats.hpMax).toBe(enemy.hpMax);
-    expect(enemyEntry.stats.chargeMax).toBe(enemy.chargeMax);
-    expect(enemyEntry.stats.attributes).toEqual(enemy.attributes);
-    expect(enemyEntry.stats.behavior).toBe(enemy.behavior);
-    expect(enemyEntry.stats.retreats).toBe(Boolean(enemy.retreats));
-    expect(enemyEntry.stats.sigilCodepoint).toBe(enemy.sigilCodepoint);
+    expect(enemyEntry.stats).toEqual({
+      archetypeId: 'construct',
+      hpMax: enemy.hpMax,
+      chargeMax: enemy.chargeMax,
+      sigilCodepoint: enemy.sigilCodepoint
+    });
   });
 
-  it('round-trips through the save pipeline with defense/attributes preserved', () => {
+  it('round-trips through the save pipeline preserving the slim block byte-for-byte', () => {
     const enemy = makeConstruct(4);
     const snapshot = toCombatSnapshot(buildCombatState(enemy));
     const state = buildRealisticRun(11, { depth: 4 });
-    // Position operator_1 to match party snapshot actor for validation
     state.activeCombat = snapshot;
     const encoded = encodeRun(state);
     expect(encoded.success).toBe(true);
@@ -105,37 +104,56 @@ describe('enemy combat stats survive save/restore', () => {
     expect(decoded.success).toBe(true);
     const restoredEnemy = decoded.runState.activeCombat.actors.find((a) => a.side === 'enemy');
     expect(restoredEnemy).toBeDefined();
-    expect(restoredEnemy.stats.defense).toBe(enemy.defense);
-    expect(restoredEnemy.stats.protocolDefense).toBe(enemy.protocolDefense);
-    expect(restoredEnemy.stats.attributes).toEqual(enemy.attributes);
-    expect(restoredEnemy.stats.hpMax).toBe(enemy.hpMax);
-    expect(restoredEnemy.stats.chargeMax).toBe(enemy.chargeMax);
-    expect(restoredEnemy.stats.behavior).toBe(enemy.behavior);
-    expect(restoredEnemy.stats.retreats).toBe(Boolean(enemy.retreats));
-    expect(restoredEnemy.stats.sigilCodepoint).toBe(enemy.sigilCodepoint);
-    expect(restoredEnemy.stats.archetypeId).toBe('construct');
-    // Sanity: a Construct is unmistakably tanky and strong; the pre-fix defaults
-    // (defense 10, attributes all-5) would fail this.
-    expect(restoredEnemy.stats.defense).toBeGreaterThan(10);
-    expect(restoredEnemy.stats.attributes.mgt).toBeGreaterThanOrEqual(7);
-    expect(restoredEnemy.stats.attributes.vit).toBeGreaterThanOrEqual(8);
+    expect(restoredEnemy.stats).toEqual({
+      archetypeId: 'construct',
+      hpMax: enemy.hpMax,
+      chargeMax: enemy.chargeMax,
+      sigilCodepoint: enemy.sigilCodepoint
+    });
   });
 
-  it('round-trips a choir enemy including protocolAccess and chargeMax > 0', () => {
+  it('deriveEnemyStats reconstructs the same template createEnemy produced (excluding sigil)', () => {
+    // Every standard archetype at multiple depths — this is the parity
+    // guard that pins the runtime re-derivation to createEnemy. If either
+    // side drifts (attribute formulas, hp/defense scaling, behavior list,
+    // never-retreat set), this test lights up and the v4 restore path
+    // silently corrupts enemy balance until it's fixed.
+    for (const archetypeId of ['drone', 'warden', 'stalker', 'choir', 'null', 'construct', 'phantom', 'apex']) {
+      for (const depth of [1, 4, 10, 50]) {
+        const cursor = createRNGCursorForRun(depth * 100 + 7);
+        const enemy = createEnemy(archetypeId, depth, cursor, enemiesData);
+        const derived = deriveEnemyStats(archetypeId, depth, enemiesData);
+        expect(derived).toBeTruthy();
+        expect(derived.archetypeId).toBe(archetypeId);
+        expect(derived.attributes).toEqual(enemy.attributes);
+        expect(derived.defense).toBe(enemy.defense);
+        expect(derived.protocolDefense).toBe(enemy.protocolDefense);
+        expect(derived.hpMax).toBe(enemy.hpMax);
+        expect(derived.chargeMax).toBe(enemy.chargeMax);
+        expect(derived.behavior).toBe(enemy.behavior);
+        expect(derived.retreats).toBe(Boolean(enemy.retreats));
+        expect(derived.protocolAccess ?? null).toEqual(enemy.protocolAccess ?? null);
+      }
+    }
+  });
+
+  it('choir re-derives protocolAccess and chargeMax > 0 from archetype + depth', () => {
     const cursor = createRNGCursorForRun(7);
     const enemy = createEnemy('choir', 6, cursor, enemiesData);
-    enemy.position = { x: 4, y: 5 };
-    const snapshot = toCombatSnapshot(buildCombatState(enemy));
-    const state = buildRealisticRun(13, { depth: 6 });
-    state.activeCombat = snapshot;
-    const encoded = encodeRun(state);
-    expect(encoded.success).toBe(true);
-    const decoded = decodeRun(encoded.fragment);
-    expect(decoded.success).toBe(true);
-    const restoredEnemy = decoded.runState.activeCombat.actors.find((a) => a.side === 'enemy');
-    expect(restoredEnemy.stats.archetypeId).toBe('choir');
-    expect(restoredEnemy.stats.protocolAccess).toEqual({ schools: ['disrupt', 'scry'], maxTier: 3 });
-    expect(restoredEnemy.stats.chargeMax).toBe(enemy.chargeMax);
-    expect(restoredEnemy.stats.chargeMax).toBeGreaterThan(0);
+    const derived = deriveEnemyStats('choir', 6, enemiesData);
+    expect(derived.protocolAccess).toEqual({ schools: ['disrupt', 'scry'], maxTier: 3 });
+    expect(derived.chargeMax).toBe(enemy.chargeMax);
+    expect(derived.chargeMax).toBeGreaterThan(0);
+    expect(derived.behavior).toBe('artillery');
+    expect(derived.retreats).toBe(true);
+  });
+
+  it('deriveEnemyStats returns null for archetypes it cannot derive (echo, unknown)', () => {
+    // Echoes inherit party-character attributes, so the codec still
+    // persists the full inline template for them; the runtime falls back
+    // to persistedStats.* when derivedStats is null.
+    expect(deriveEnemyStats('echo', 4, enemiesData)).toBeNull();
+    expect(deriveEnemyStats('nonexistent', 4, enemiesData)).toBeNull();
+    expect(deriveEnemyStats(null, 4, enemiesData)).toBeNull();
   });
 });
