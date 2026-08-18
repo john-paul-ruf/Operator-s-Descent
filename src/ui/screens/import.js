@@ -14,6 +14,18 @@ const FAILURE_MESSAGES = {
   malformed: ['MALFORMED', 'Malformed — the link is not a valid save.']
 };
 
+// A decodeRun result carrying no runState but a recoveredSeed means the save
+// decoded past the frame but its schemaVersion has no registered reader (or
+// its migration produced no viable state). Per Custom Rule 13 we never dead-
+// end on a version — the caller reroutes straight to a fresh run in the same
+// world. mode === 'seed' and success: true + runState: null are equivalent
+// signals; both are honored here.
+function isSeedRecovery(result) {
+  if (!result || !result.success) return false;
+  if (result.mode === 'seed') return true;
+  return result.runState == null && Number.isInteger(result.recoveredSeed);
+}
+
 function normalizeFailure(error) {
   return FAILURE_MESSAGES[error] ? error : 'malformed';
 }
@@ -202,6 +214,10 @@ export function mount(container, params = {}) {
   }
 
   function handleRunResult(result) {
+    if (isSeedRecovery(result)) {
+      navigate('creation', { preloadedSeed: result.recoveredSeed });
+      return;
+    }
     if (!result.success) {
       showFailure(result.error, Number.isInteger(result.recoveredSeed) ? result.recoveredSeed : null);
       return;
@@ -233,7 +249,7 @@ export function mount(container, params = {}) {
     }
 
     const runResult = decodeRun(parsed.fragment);
-    if (runResult.success) {
+    if (runResult.success || isSeedRecovery(runResult)) {
       handleRunResult(runResult);
       return;
     }

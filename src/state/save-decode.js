@@ -2,14 +2,24 @@ import { expand } from './condense.js';
 import { decompressSync } from './compress/progressive.js';
 import { decrypt } from './encrypt.js';
 import { deserializeRunState } from './run-state.js';
-import { decodeRunPayload } from './save-schema.js';
+import { RUN_SCHEMA_VERSION, decodeRunPayload } from './save-schema.js';
+import { migrateState } from './save-migrate.js';
 import { SAVE_VERSION, base64urlEncode, crc32 } from './save-encode.js';
+import { V3_SCHEMA_VERSION, readV3Payload } from './versions/read-v3.js';
 
 const MAGIC = [0x4f, 0x44];
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const VALUES = Object.fromEntries([...B64URL].map((char, index) => [char, index]));
 const MAX_LAYERS = 5;
 const MAX_PAYLOAD_BYTES = 20000;
+
+// Frozen per-version payload readers (Custom Rule 13). Each entry is pinned
+// to its schemaVersion forever: v3 saves ALWAYS route through readV3Payload,
+// no matter how far RUN_SCHEMA_VERSION advances. The current reader path
+// (schemaVersion === RUN_SCHEMA_VERSION) uses the live decodeRunPayload.
+const FROZEN_READERS = new Map([
+  [V3_SCHEMA_VERSION, readV3Payload]
+]);
 
 function fail(code) { const error = new RangeError(code); error.code = code; throw error; }
 function readUint32(bytes, offset) { return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, true); }
@@ -41,6 +51,13 @@ function decodeV1(bytes) {
     const runState = deserializeRunState(expand(decompressSync(decrypt(encrypted, 1), layers), 1), { sourceVersion: 1 });
     return runState ? { success: true, runState } : { success: false, error: 'malformed' };
   } catch { return { success: false, error: 'malformed' }; }
+}
+
+function decodeWithFrozenReader(reader, payload, bitLength, worldSeed, schemaVersion) {
+  const decoded = reader(payload, bitLength);
+  if (decoded.worldSeed !== worldSeed) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
+  const migrated = migrateState(decoded.runState, schemaVersion, RUN_SCHEMA_VERSION);
+  return { success: true, runState: migrated.state, recoveredSeed: worldSeed };
 }
 
 export function decodeRun(fragment) {
@@ -76,9 +93,21 @@ export function decodeRun(fragment) {
     if ((layers.length && layers.at(-1).dataLength !== encrypted.length) || (!layers.length && Math.ceil(bitLength / 8) !== encrypted.length)) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
     const payload = decompressSync(decrypt(encrypted, SAVE_VERSION), layers, { maxOutput: MAX_PAYLOAD_BYTES, maxInput: MAX_PAYLOAD_BYTES });
     if (payload.length !== Math.ceil(bitLength / 8)) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
-    const decoded = decodeRunPayload(payload, bitLength, { tableVersion });
-    if (decoded.worldSeed !== worldSeed) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
-    return { success: true, runState: decoded.runState, recoveredSeed: worldSeed };
+    // schemaVersion lives in the first 8 bits of the payload; bit-codec packs
+    // bits 0..7 into byte 0 LSB-first, so payload[0] IS the schemaVersion byte.
+    const schemaVersion = payload.length ? payload[0] : null;
+    if (schemaVersion === RUN_SCHEMA_VERSION) {
+      const decoded = decodeRunPayload(payload, bitLength, { tableVersion });
+      if (decoded.worldSeed !== worldSeed) return { success: false, error: 'malformed', recoveredSeed: worldSeed };
+      return { success: true, runState: decoded.runState, recoveredSeed: worldSeed };
+    }
+    const frozen = FROZEN_READERS.get(schemaVersion);
+    if (!frozen) {
+      // Known-good frame, unknown schemaVersion: fall through to seed-recovery
+      // per Custom Rule 13 — versioned saves never dead-end.
+      return { success: true, mode: 'seed', recoveredSeed: worldSeed, runState: null };
+    }
+    return decodeWithFrozenReader(frozen, payload, bitLength, worldSeed, schemaVersion);
   } catch (error) {
     return { success: false, error: error?.code === 'version_mismatch' ? 'version_mismatch' : 'malformed' };
   }

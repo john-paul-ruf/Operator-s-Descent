@@ -17,6 +17,7 @@ import { condense } from '../../src/state/condense.js';
 import { encrypt } from '../../src/state/encrypt.js';
 import { makeParty } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
+import { createBitWriter } from '../../src/state/bit-codec.js';
 
 beforeAll(() => {
   initEncoder(loadData('symbol-table'));
@@ -41,6 +42,32 @@ function encodeV1(state) {
   compressed.layers.forEach((layer, index) => { frame[2 + index] = layer.pass; });
   new DataView(frame.buffer).setUint32(2 + compressed.layers.length, crc32(encrypted), false);
   frame.set(encrypted, 6 + compressed.layers.length);
+  return base64urlEncode(frame);
+}
+
+// Crafts a well-formed v2 frame carrying a payload whose first byte is a
+// future/unknown schemaVersion (no frozen reader). Frame version, CRC, and
+// worldSeed are all valid so it exercises the payload-level seed-recovery
+// path — not the frame-level version_mismatch corruption path.
+function craftFutureSchemaFragment(worldSeed, futureSchemaVersion) {
+  const writer = createBitWriter();
+  writer.writeUint(futureSchemaVersion, 8);
+  writer.writeUint(1, 16);
+  writer.writeUint(worldSeed >>> 0, 32);
+  writer.writeUint(0, 8);
+  const payload = writer.toUint8Array();
+  const bitLength = writer.bitLength;
+  const encrypted = encrypt(payload, SAVE_VERSION);
+  const frame = new Uint8Array(14 + encrypted.length + 4);
+  frame[0] = 0x4f;
+  frame[1] = 0x44;
+  frame[2] = SAVE_VERSION;
+  new DataView(frame.buffer).setUint16(3, 1, true);
+  new DataView(frame.buffer).setUint32(5, worldSeed >>> 0, true);
+  new DataView(frame.buffer).setUint32(9, bitLength, true);
+  frame[13] = 0;
+  frame.set(encrypted, 14);
+  new DataView(frame.buffer).setUint32(frame.length - 4, crc32(frame.slice(0, -4)), true);
   return base64urlEncode(frame);
 }
 
@@ -113,5 +140,22 @@ describe('decodeRun — golden path round-trip', () => {
     const decoded = decodeRun(encodeV1(state));
     expect(decoded.success).toBe(true);
     expect(decoded.runState.serialize()).toEqual(state.serialize());
+  });
+});
+
+describe('decodeRun — never dead-end on version (Custom Rule 13)', () => {
+  it('a well-formed frame carrying a future schemaVersion returns a seed-recovery result (no runState, no error)', () => {
+    const fragment = craftFutureSchemaFragment(1234567, 99);
+    const result = decodeRun(fragment);
+    expect(result).toEqual({ success: true, mode: 'seed', recoveredSeed: 1234567, runState: null });
+  });
+
+  it('preserves checksum_failed for a future schemaVersion whose CRC is broken (corruption still beats seed-recovery)', () => {
+    const fragment = craftFutureSchemaFragment(42, 99);
+    // Flip the final char to invalidate CRC.
+    const corrupted = fragment.slice(0, -1) + (fragment.at(-1) === 'A' ? 'B' : 'A');
+    const result = decodeRun(corrupted);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('checksum_failed');
   });
 });

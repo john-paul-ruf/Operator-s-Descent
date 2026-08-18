@@ -3,6 +3,8 @@ import { bus } from '../../src/state/bus.js';
 import { deleteRunState, listRuns, loadRun, saveRun } from '../../src/state/library.js';
 import { base64urlEncode, crc32, encodeRun, encodeSeed, initEncoder, SAVE_VERSION } from '../../src/state/save-encode.js';
 import { decodeSeed } from '../../src/state/save-decode.js';
+import { encrypt } from '../../src/state/encrypt.js';
+import { createBitWriter } from '../../src/state/bit-codec.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import { makeParty } from '../helpers/fixtures.js';
@@ -173,6 +175,30 @@ function frameWithHeader(seed, options = {}) {
   frame[13] = 0;
   frame.set(data, 14);
   writeUint32(frame, frame.length - 4, options.badChecksum ? 0 : crc32(frame.slice(0, -4)));
+  return base64urlEncode(frame);
+}
+
+// A well-formed v2 frame whose payload advertises a schemaVersion no reader
+// is registered for; exercises the payload-level seed-recovery path.
+function futureSchemaFragment(seed, futureSchemaVersion) {
+  const writer = createBitWriter();
+  writer.writeUint(futureSchemaVersion, 8);
+  writer.writeUint(1, 16);
+  writer.writeUint(seed >>> 0, 32);
+  writer.writeUint(0, 8);
+  const payload = writer.toUint8Array();
+  const bitLength = writer.bitLength;
+  const encrypted = encrypt(payload, SAVE_VERSION);
+  const frame = new Uint8Array(14 + encrypted.length + 4);
+  frame[0] = 0x4f;
+  frame[1] = 0x44;
+  frame[2] = SAVE_VERSION;
+  writeUint16(frame, 3, 1);
+  writeUint32(frame, 5, seed >>> 0);
+  writeUint32(frame, 9, bitLength);
+  frame[13] = 0;
+  frame.set(encrypted, 14);
+  writeUint32(frame, frame.length - 4, crc32(frame.slice(0, -4)));
   return base64urlEncode(frame);
 }
 
@@ -347,6 +373,22 @@ describe('import screen', () => {
 
     await byTestId(container, 'import-return-title-result').click();
     expect(seen.at(-1)).toEqual({ screen: 'title', params: {} });
+    off();
+  });
+
+  it('routes a future-schemaVersion save straight to creation with its recovered seed (never a version dead-end)', async () => {
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/import.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    byTestId(container, 'import-input').value = `#r=${futureSchemaFragment(654321, 99)}`;
+    await byTestId(container, 'import-submit').click();
+    expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 654321 } });
+    // No error panel and no "fresh run" button — the routing is direct.
+    expect(byTestId(container, 'import-failure-version_mismatch')).toBeNull();
+    expect(byTestId(container, 'import-fresh-world')).toBeNull();
     off();
   });
 });
