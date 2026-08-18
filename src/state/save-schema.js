@@ -1,9 +1,23 @@
 import { createBitReader, createBitWriter } from './bit-codec.js';
 import { getTableVersion, readSymbol, writeSymbol } from './condense.js';
 import { deserializeRunState, validateRunState } from './run-state.js';
+import { registerMigration } from './save-migrate.js';
 import { readCharacter, readCombatSnapshot, readEcho, readItem, writeCharacter, writeCombatSnapshot, writeEcho, writeItem } from './save-codecs.js';
 
-export const RUN_SCHEMA_VERSION = 3;
+export const RUN_SCHEMA_VERSION = 4;
+
+// v3 → v4 is an encoding-only bump: the decoded RunState shape is unchanged
+// (the enemy stats snapshot slims down in the wire format, but the runtime
+// re-derives the omitted template fields on restore). Registering the identity
+// hop here means every v3 save still loads through the frozen readV3Payload +
+// migrateState(3, 4) path with byte-identical decoded state — Custom Rule 13.
+// Guarded because vitest may hot-reload the module in a worker that already
+// registered the step (or a future session registers it from its own file).
+try {
+  registerMigration({ from: 3, to: 4, migrate: (state) => state });
+} catch (error) {
+  if (error?.code !== 'duplicate_migration') throw error;
+}
 
 export const RUN_SCHEMA_FIELDS = Object.freeze([
   'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',
