@@ -100,7 +100,11 @@ function equipDisabledReason(context, state, character, item) {
   const swap = combatSwapGate(context, character);
   if (!swap.allowed) return swap.reason;
   if (!itemSlotCompatible(state.slot, item)) return `Cannot equip ${item.category} in ${SLOT_LABELS[state.slot]}.`;
-  if (!itemLegalForCharacter(context.data || {}, character, item)) return 'Class gate blocks this item.';
+  if (!itemLegalForCharacter(context.data || {}, character, item)) {
+    const cls = classDataFor(context.data || {}, character);
+    const who = cls?.name || character?.classId || 'This class';
+    return `${who} can't equip ${itemName(item, context.data)} — not in class ${item.category} gates.`;
+  }
   return '';
 }
 
@@ -348,6 +352,11 @@ function renderInventoryItem(list, context, character, ui, item) {
   });
   equip.dataset.testid = `gear-equip-${item.id}`;
   wrapper.appendChild(equip);
+  if (reason) {
+    const why = text('disabled-reason equip-blocked-reason console-row', reason);
+    why.dataset.testid = `gear-equip-reason-${item.id}`;
+    wrapper.appendChild(why);
+  }
   const junk = createButton(item.junkTagged ? 'UNTAG JUNK' : 'TAG JUNK', { onClick: () => requestJunkToggle(context, item) });
   junk.dataset.testid = `gear-junk-${item.id}`;
   wrapper.appendChild(junk);

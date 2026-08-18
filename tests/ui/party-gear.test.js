@@ -245,12 +245,33 @@ describe('GEAR mode', () => {
     expect(runState.inventory.map((entry) => entry.id)).toContain('fresh-sidearm');
   });
 
-  it('disables class-illegal equipment with a visible reason', () => {
+  it('disables class-illegal equipment with a specific visible reason', () => {
     const runState = run([item('sniper', 'sniper')]);
     const { container } = renderGearWith(runState);
 
-    expect(byTestId(container, 'gear-equip-sniper').disabled).toBe(true);
-    expect(byTestId(container, 'gear-equip-sniper').getAttribute('aria-description')).toBe('Class gate blocks this item.');
+    const equip = byTestId(container, 'gear-equip-sniper');
+    expect(equip.disabled).toBe(true);
+    expect(equip.textContent).toBe('EQUIP BLOCKED');
+    const ariaReason = equip.getAttribute('aria-description');
+    expect(ariaReason).toContain('Breacher');
+    expect(ariaReason).toContain('Sniper');
+    expect(ariaReason).not.toBe('Class gate blocks this item.');
+
+    const reasonNode = byTestId(container, 'gear-equip-reason-sniper');
+    expect(reasonNode).toBeTruthy();
+    expect(reasonNode.className).toContain('disabled-reason');
+    expect(reasonNode.textContent).toContain('Breacher');
+    expect(reasonNode.textContent).toContain('Sniper');
+    expect(reasonNode.textContent).toContain('weapon');
+    expect(reasonNode.textContent).not.toContain('Class gate blocks this item');
+  });
+
+  it('omits the equip-blocked reason node when the item is class-legal', () => {
+    const runState = run([item('fresh-sidearm')]);
+    const { container } = renderGearWith(runState);
+
+    expect(byTestId(container, 'gear-equip-fresh-sidearm').disabled).toBe(false);
+    expect(byTestId(container, 'gear-equip-reason-fresh-sidearm')).toBe(null);
   });
 
   it('requires CORRUPT consent once and never refunds or double-charges the implant', () => {
