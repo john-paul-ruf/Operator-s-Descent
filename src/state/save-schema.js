@@ -3,7 +3,7 @@ import { getTableVersion, readSymbol, writeSymbol } from './condense.js';
 import { deserializeRunState, validateRunState } from './run-state.js';
 import { readCharacter, readCombatSnapshot, readEcho, readItem, writeCharacter, writeCombatSnapshot, writeEcho, writeItem } from './save-codecs.js';
 
-export const RUN_SCHEMA_VERSION = 2;
+export const RUN_SCHEMA_VERSION = 3;
 
 export const RUN_SCHEMA_FIELDS = Object.freeze([
   'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',

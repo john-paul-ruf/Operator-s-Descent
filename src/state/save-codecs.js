@@ -357,6 +357,151 @@ export function readEcho(reader, symbols) {
   return { character, deathFloor, appearanceFloor };
 }
 
+const ENEMY_STAT_ATTRIBUTES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
+const ENEMY_STAT_BEHAVIORS = ['aggressive', 'defensive', 'flanking', 'artillery', 'controller', 'phasing', 'multi-action', 'echo'];
+const ENEMY_STAT_ARCHETYPES = ['drone', 'warden', 'stalker', 'choir', 'null', 'construct', 'phantom', 'apex', 'echo'];
+// Mirrors data/enemies.json sigilCodepoints — snapshot codec encodes known
+// archetype+sigil combos as a 2-bit variant index instead of the full 21-bit
+// codepoint. Any change to those pools MUST bump RUN_SCHEMA_VERSION.
+const ENEMY_STAT_SIGIL_POOLS = {
+  drone: [57392, 57393, 57394],
+  warden: [57395, 57396, 57397],
+  stalker: [57398, 57399, 57400],
+  choir: [57401, 57402, 57403],
+  null: [57404, 57405, 57406],
+  construct: [57407, 57408, 57409],
+  phantom: [57410, 57411, 57412],
+  apex: [57413, 57414, 57415]
+};
+const MAX_ARCHETYPE_ID = 32;
+const MAX_BEHAVIOR_STRING = 64;
+const MAX_ENEMY_STAT_VALUE = 65_535;
+const MAX_ENEMY_HP_MAX = 1_000_000;
+const MAX_ENEMY_ATTRIBUTE = 31;
+const MAX_SIGIL_CODEPOINT = 0x10ffff;
+
+function writeEnemyBehavior(writer, value) {
+  const index = ENEMY_STAT_BEHAVIORS.indexOf(value);
+  const known = index >= 0;
+  writer.writeBool(known);
+  if (known) writer.writeUint(index, 3);
+  else writeString(writer, typeof value === 'string' ? value : 'other', MAX_BEHAVIOR_STRING);
+}
+
+function readEnemyBehavior(reader) {
+  if (reader.readBool()) {
+    const index = reader.readUint(3);
+    const behavior = ENEMY_STAT_BEHAVIORS[index];
+    if (!behavior) fail('invalid_actor');
+    return behavior;
+  }
+  return readString(reader, MAX_BEHAVIOR_STRING);
+}
+
+function writeEnemyArchetypeId(writer, value) {
+  const index = ENEMY_STAT_ARCHETYPES.indexOf(value);
+  const known = index >= 0;
+  writer.writeBool(known);
+  if (known) writer.writeUint(index, 4);
+  else writeString(writer, typeof value === 'string' ? value : '', MAX_ARCHETYPE_ID);
+}
+
+function readEnemyArchetypeId(reader) {
+  if (reader.readBool()) {
+    const index = reader.readUint(4);
+    const archetype = ENEMY_STAT_ARCHETYPES[index];
+    if (!archetype) fail('invalid_actor');
+    return archetype;
+  }
+  return readString(reader, MAX_ARCHETYPE_ID);
+}
+
+// The archetype template covers the fields that are constant across enemies
+// of the same kind at the same depth (attributes, defenses, behavior, …). The
+// varying per-instance fields (hpMax, chargeMax, sigilCodepoint) are always
+// written after the template so a run of same-archetype enemies dedupes cleanly.
+function writeEnemyStatsTemplate(writer, stats) {
+  const attributes = stats.attributes;
+  if (!isObject(attributes)) fail('invalid_actor');
+  writeEnemyArchetypeId(writer, stats.archetypeId);
+  for (const key of ENEMY_STAT_ATTRIBUTES) {
+    writer.writeUint(requireInteger(attributes[key], 1, MAX_ENEMY_ATTRIBUTE, 'invalid_actor'), 5);
+  }
+  writer.writeVarUint(requireInteger(stats.defense ?? 0, 0, MAX_ENEMY_STAT_VALUE, 'invalid_actor'));
+  writer.writeVarUint(requireInteger(stats.protocolDefense ?? 0, 0, MAX_ENEMY_STAT_VALUE, 'invalid_actor'));
+  writeEnemyBehavior(writer, stats.behavior);
+  writer.writeBool(Boolean(stats.retreats));
+  writer.writeBool(stats.protocolAccess != null);
+  if (stats.protocolAccess != null) writeValue(writer, stats.protocolAccess);
+}
+
+function readEnemyStatsTemplate(reader) {
+  const archetypeId = readEnemyArchetypeId(reader);
+  const attributes = Object.fromEntries(ENEMY_STAT_ATTRIBUTES.map((key) => [key, requireInteger(reader.readUint(5), 1, MAX_ENEMY_ATTRIBUTE, 'invalid_actor')]));
+  const defense = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_STAT_VALUE, 'invalid_actor');
+  const protocolDefense = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_STAT_VALUE, 'invalid_actor');
+  const behavior = readEnemyBehavior(reader);
+  const retreats = reader.readBool();
+  const protocolAccess = reader.readBool() ? readValue(reader) : null;
+  return { archetypeId, attributes, defense, protocolDefense, behavior, retreats, protocolAccess };
+}
+
+function templateEquals(a, b) {
+  if (!a || !b) return false;
+  if (a.archetypeId !== b.archetypeId || a.defense !== b.defense || a.protocolDefense !== b.protocolDefense
+      || a.behavior !== b.behavior || Boolean(a.retreats) !== Boolean(b.retreats)) return false;
+  const aa = a.attributes || {}, ba = b.attributes || {};
+  for (const key of ENEMY_STAT_ATTRIBUTES) if ((aa[key] ?? 0) !== (ba[key] ?? 0)) return false;
+  return JSON.stringify(a.protocolAccess ?? null) === JSON.stringify(b.protocolAccess ?? null);
+}
+
+// Serializes an enemy stat block, reusing the previous entry's template when
+// the archetype matches so a same-kind pack writes only one full template plus
+// per-actor hpMax/chargeMax/sigil. chargeMax is gated on a presence bit since
+// non-caster archetypes always carry chargeMax = 0.
+function writeEnemyStats(writer, stats, previous) {
+  writer.alignToByte();
+  const hasStats = isObject(stats);
+  writer.writeBool(hasStats);
+  if (!hasStats) return previous;
+  const canDedup = templateEquals(previous, stats);
+  writer.writeBool(canDedup);
+  if (!canDedup) writeEnemyStatsTemplate(writer, stats);
+  writer.writeVarUint(requireInteger(stats.hpMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor'));
+  const chargeMax = requireInteger(stats.chargeMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
+  writer.writeBool(chargeMax > 0);
+  if (chargeMax > 0) writer.writeVarUint(chargeMax);
+  const sigilCodepoint = requireInteger(stats.sigilCodepoint ?? 0, 0, MAX_SIGIL_CODEPOINT, 'invalid_actor');
+  const pool = ENEMY_STAT_SIGIL_POOLS[stats.archetypeId];
+  const variant = pool ? pool.indexOf(sigilCodepoint) : -1;
+  const inPool = variant >= 0;
+  writer.writeBool(inPool);
+  if (inPool) writer.writeUint(variant, 2);
+  else writer.writeUint(sigilCodepoint, 21);
+  return stats;
+}
+
+function readEnemyStats(reader, previous) {
+  reader.alignToByte();
+  if (!reader.readBool()) return { stats: undefined, previous };
+  const canDedup = reader.readBool();
+  if (canDedup && !previous) fail('invalid_actor');
+  const template = canDedup ? previous : readEnemyStatsTemplate(reader);
+  const hpMax = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
+  const chargeMax = reader.readBool() ? requireInteger(reader.readVarUint(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor') : 0;
+  let sigilCodepoint;
+  if (reader.readBool()) {
+    const variant = reader.readUint(2);
+    const pool = ENEMY_STAT_SIGIL_POOLS[template.archetypeId];
+    if (!pool || variant >= pool.length) fail('invalid_actor');
+    sigilCodepoint = pool[variant];
+  } else {
+    sigilCodepoint = requireInteger(reader.readUint(21), 0, MAX_SIGIL_CODEPOINT, 'invalid_actor');
+  }
+  const stats = { ...template, hpMax, chargeMax, sigilCodepoint };
+  return { stats, previous: stats };
+}
+
 function writeActor(writer, actor) {
   if (!isObject(actor) || !SIDES.includes(actor.side)) fail('invalid_actor');
   writeEntityId(writer, actor.id);
@@ -407,6 +552,14 @@ export function writeCombatSnapshot(writer, combat, symbols) {
     actorIds.add(actor.id);
     writeActor(writer, actor);
   }
+  // Enemy stat blocks are emitted contiguously after the actor list so a run of
+  // identical archetypes can dedup the body (attributes, defense, behavior, …)
+  // against the previous entry and pay only for the varying sigil codepoint.
+  writer.alignToByte();
+  let previousStats = null;
+  for (const actor of combat.actors) {
+    if (actor.side !== 'party') previousStats = writeEnemyStats(writer, actor.stats, previousStats);
+  }
   if (combat.initiativeOrder.length !== combat.actors.length || new Set(combat.initiativeOrder).size !== combat.initiativeOrder.length || combat.initiativeOrder.some((id) => !actorIds.has(id))) fail('invalid_combat');
   for (const id of combat.initiativeOrder) writeEntityId(writer, id);
   writer.writeUint(requireInteger(combat.currentIndex, 0, combat.initiativeOrder.length - 1, 'invalid_combat'), 5);
@@ -427,6 +580,14 @@ export function readCombatSnapshot(reader, symbols) {
   const actors = Array.from({ length: actorLength }, () => readActor(reader));
   const actorIds = new Set(actors.map((actor) => actor.id));
   if (actorIds.size !== actors.length) fail('duplicate_actor');
+  reader.alignToByte();
+  let previousStats = null;
+  for (const actor of actors) {
+    if (actor.side === 'party') continue;
+    const { stats, previous } = readEnemyStats(reader, previousStats);
+    if (stats !== undefined) actor.stats = stats;
+    previousStats = previous;
+  }
   const initiativeOrder = Array.from({ length: actorLength }, () => readEntityId(reader));
   if (new Set(initiativeOrder).size !== actorLength || initiativeOrder.some((id) => !actorIds.has(id))) fail('invalid_combat');
   const currentIndex = requireInteger(reader.readUint(5), 0, actorLength - 1, 'invalid_combat');

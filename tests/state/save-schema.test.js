@@ -17,7 +17,7 @@ function roundTrip(state) {
 
 describe('RunState v2 binary schema', () => {
   it('defines a fixed ordered schema and round-trips a property sweep', () => {
-    expect(RUN_SCHEMA_VERSION).toBe(2);
+    expect(RUN_SCHEMA_VERSION).toBe(3);
     expect(RUN_SCHEMA_FIELDS).toEqual([
       'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',
       'partyPosition', 'fogOfWar', 'openedContainers', 'defeatedEnemies', 'dangerClockProgress',
@@ -38,6 +38,113 @@ describe('RunState v2 binary schema', () => {
     expect(payload.bitLength).toBeLessThanOrEqual(payload.bytes.length * 8);
   });
 
+  it('round-trips an active combat snapshot with a persisted enemy stat block', () => {
+    const state = buildRealisticRun(11, { depth: 4 });
+    state.activeCombat = {
+      arena: { originX: 3, originY: 5, contactId: 'encounter_3_5_1' },
+      actors: [
+        { id: 'operator_1', side: 'party', x: 1, y: 1, hp: 22, charge: 4, conditions: [], initiative: 12, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false },
+        {
+          id: 'enemy_4_construct_7',
+          side: 'enemy',
+          x: 3,
+          y: 4,
+          hp: 48,
+          charge: 0,
+          conditions: [],
+          initiative: 7,
+          ap: 2,
+          moves: 1,
+          freeActions: 0,
+          defeated: false,
+          retreated: false,
+          stats: {
+            archetypeId: 'construct',
+            attributes: { mgt: 7, fin: 2, vit: 8, res: 2, foc: 2, sig: 2 },
+            defense: 18,
+            protocolDefense: 12,
+            hpMax: 56,
+            chargeMax: 0,
+            behavior: 'aggressive',
+            retreats: false,
+            sigilCodepoint: 57407,
+            protocolAccess: null
+          }
+        }
+      ],
+      initiativeOrder: ['operator_1', 'enemy_4_construct_7'],
+      currentIndex: 0,
+      round: 1,
+      pendingEffects: [],
+      encounter: { id: 'encounter_3_5_1', type: 'standard' },
+      eventOrder: 0
+    };
+    const payload = roundTrip(state);
+    const decoded = decodeRunPayload(payload.bytes, payload.bitLength);
+    const restoredEnemy = decoded.runState.activeCombat.actors.find((actor) => actor.side === 'enemy');
+    expect(restoredEnemy.stats).toEqual({
+      archetypeId: 'construct',
+      attributes: { mgt: 7, fin: 2, vit: 8, res: 2, foc: 2, sig: 2 },
+      defense: 18,
+      protocolDefense: 12,
+      hpMax: 56,
+      chargeMax: 0,
+      behavior: 'aggressive',
+      retreats: false,
+      sigilCodepoint: 57407,
+      protocolAccess: null
+    });
+  });
+
+  it('round-trips an enemy stat block that carries a protocolAccess object', () => {
+    const state = buildRealisticRun(13, { depth: 6 });
+    state.activeCombat = {
+      arena: { originX: 2, originY: 2, contactId: 'encounter_2_2_1' },
+      actors: [
+        { id: 'operator_1', side: 'party', x: 0, y: 0, hp: 20, charge: 3, conditions: [], initiative: 15, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false },
+        {
+          id: 'enemy_6_choir_9',
+          side: 'enemy',
+          x: 4,
+          y: 5,
+          hp: 12,
+          charge: 6,
+          conditions: [],
+          initiative: 8,
+          ap: 2,
+          moves: 1,
+          freeActions: 0,
+          defeated: false,
+          retreated: false,
+          stats: {
+            archetypeId: 'choir',
+            attributes: { mgt: 2, fin: 4, vit: 3, res: 7, foc: 5, sig: 4 },
+            defense: 10,
+            protocolDefense: 12,
+            hpMax: 12,
+            chargeMax: 20,
+            behavior: 'artillery',
+            retreats: true,
+            sigilCodepoint: 57401,
+            protocolAccess: { schools: ['disrupt', 'scry'], maxTier: 3 }
+          }
+        }
+      ],
+      initiativeOrder: ['operator_1', 'enemy_6_choir_9'],
+      currentIndex: 0,
+      round: 2,
+      pendingEffects: [],
+      encounter: { id: 'encounter_2_2_1', type: 'hunt' },
+      eventOrder: 4
+    };
+    const payload = roundTrip(state);
+    const decoded = decodeRunPayload(payload.bytes, payload.bitLength);
+    const restoredEnemy = decoded.runState.activeCombat.actors.find((actor) => actor.side === 'enemy');
+    expect(restoredEnemy.stats.protocolAccess).toEqual({ schools: ['disrupt', 'scry'], maxTier: 3 });
+    expect(restoredEnemy.stats.behavior).toBe('artillery');
+    expect(restoredEnemy.stats.retreats).toBe(true);
+  });
+
   it('round-trips bounded CORRUPT and per-floor affix ledgers without a schema bump', () => {
     const state = buildRealisticRun(42);
     state.appliedCorruptItemIds = ['corrupt-item'];
@@ -48,8 +155,11 @@ describe('RunState v2 binary schema', () => {
   it('rejects incompatible versions, duplicate IDs, impossible counts, and non-zero trailing data', () => {
     const payload = encodeRunPayload(buildRealisticRun(4));
     const wrongVersion = payload.bytes.slice();
-    wrongVersion[0] = 3;
+    wrongVersion[0] = RUN_SCHEMA_VERSION + 1;
     expect(() => decodeRunPayload(wrongVersion, payload.bitLength)).toThrow('version_mismatch');
+    const priorVersion = payload.bytes.slice();
+    priorVersion[0] = RUN_SCHEMA_VERSION - 1;
+    expect(() => decodeRunPayload(priorVersion, payload.bitLength)).toThrow('version_mismatch');
 
     const duplicate = buildRealisticRun(5, { inventoryItems: 2 });
     duplicate.inventory[1].id = duplicate.inventory[0].id;
