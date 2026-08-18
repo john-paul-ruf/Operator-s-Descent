@@ -777,6 +777,30 @@ export function getCharacterDeaths(combatState) {
   return deaths;
 }
 
+const SNAPSHOT_ATTRIBUTE_KEYS = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
+
+function snapshotEnemyStats(actor) {
+  const source = actor.attributes || {};
+  const attributes = {};
+  for (const key of SNAPSHOT_ATTRIBUTE_KEYS) {
+    const value = Math.floor(source[key] ?? 5);
+    attributes[key] = Math.max(1, Math.min(255, value));
+  }
+  return {
+    archetypeId: typeof actor.archetypeId === 'string' ? actor.archetypeId : 'other',
+    attributes,
+    defense: Math.max(0, Math.min(65535, Math.floor(actor.defense ?? 10))),
+    protocolDefense: Math.max(0, Math.min(65535, Math.floor(actor.protocolDefense ?? 10))),
+    hpMax: Math.max(0, Math.min(1_000_000, Math.floor(actor.hpMax ?? actor.hp ?? 0))),
+    chargeMax: Math.max(0, Math.min(1_000_000, Math.floor(actor.chargeMax ?? actor.charge ?? 0))),
+    behavior: typeof actor.behavior === 'string' ? actor.behavior : 'other',
+    retreats: Boolean(actor.retreats),
+    protocolAccess: actor.protocolAccess ?? null,
+    actionSlotsPerRound: Math.max(1, Math.min(7, Math.floor(actor.actionSlotsPerRound ?? 1))),
+    sigilCodepoint: Math.max(0, Math.min(0x10FFFF, Math.floor(actor.sigilCodepoint ?? 0xE030)))
+  };
+}
+
 export function toCombatSnapshot(combatState) {
   if (!combatState || combatState.ended) return null;
   const actors = [];
@@ -785,7 +809,7 @@ export function toCombatSnapshot(combatState) {
     const actor = combatState.combatants.get(id);
     if (!actor || actor.hp <= 0) continue;
     initiativeOrder.push(id);
-    actors.push({
+    const entry = {
       id: actor.id,
       side: actor.side,
       x: actor.position?.x ?? 0,
@@ -799,7 +823,9 @@ export function toCombatSnapshot(combatState) {
       freeActions: 0,
       defeated: actor.hp <= 0,
       retreated: Boolean(actor.retreated)
-    });
+    };
+    if (actor.side !== 'party') entry.stats = snapshotEnemyStats(actor);
+    actors.push(entry);
   }
   const window = combatState.window;
   return {
