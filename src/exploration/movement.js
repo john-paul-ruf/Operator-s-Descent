@@ -16,6 +16,59 @@ const DEFAULT_LOS_RADIUS = 8;
 const DIRECTION_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 const DEFAULT_PATH_MAX_STEPS = 64;
 
+export const HOSTILE_CONTACT_RANGE = 2;
+
+// Graph ("connected") distance from the party to the nearest VISIBLE, undefeated
+// hostile, bounded at maxSteps. 8-way over walkable cells, honoring moveParty's
+// closed-corner rule; fog-INDEPENDENT (traversability, not what's revealed) but
+// the hostile itself must be in visibleCells (we only auto-engage what we can
+// see). RNG-free. Returns { distance, entity } or { distance: null, entity: null }.
+function nearestConnectedHostile(lattice, visibleCells, runState, maxSteps = HOSTILE_CONTACT_RANGE) {
+  const defeated = runState?.defeatedEnemies || 0n;
+  const hostileAt = new Map();
+  for (const spawn of lattice.getEnemySpawns()) {
+    if ((defeated & (1n << BigInt(spawn.id))) !== 0n) continue;
+    if (!visibleCells.has(`${spawn.x},${spawn.y}`)) continue;
+    hostileAt.set(`${spawn.x},${spawn.y}`, spawn);
+  }
+  if (hostileAt.size === 0) return { distance: null, entity: null };
+  const start = lattice.getPartyPosition();
+  const w = lattice.getWidth();
+  const h = lattice.getHeight();
+  const dist = new Map([[`${start.x},${start.y}`, 0]]);
+  const queue = [{ x: start.x, y: start.y }];
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head++];
+    const d = dist.get(`${cur.x},${cur.y}`);
+    if (d > 0) {
+      const hit = hostileAt.get(`${cur.x},${cur.y}`);
+      if (hit) return { distance: d, entity: hit };
+    }
+    if (d >= maxSteps) continue;
+    for (const name of DIRECTION_ORDER) {
+      const delta = DIRECTIONS[name];
+      const nx = cur.x + delta.dx;
+      const ny = cur.y + delta.dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nextKey = `${nx},${ny}`;
+      if (dist.has(nextKey)) continue;
+      const occupied = hostileAt.has(nextKey);
+      if (!lattice.isWalkable(nx, ny) && !occupied) continue;
+      if (delta.dx !== 0 && delta.dy !== 0) {
+        const hOpen = lattice.isWalkable(cur.x + delta.dx, cur.y);
+        const vOpen = lattice.isWalkable(cur.x, cur.y + delta.dy);
+        if (!hOpen && !vOpen) continue;
+      }
+      dist.set(nextKey, d + 1);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return { distance: null, entity: null };
+}
+
+export { nearestConnectedHostile };
+
 export function findExplorationPath(lattice, fogState, from, to, options = {}) {
   if (!lattice || !fogState || !from || !to) return null;
   if (from.x === to.x && from.y === to.y) return null;
@@ -132,6 +185,23 @@ export function moveParty(lattice, fogState, direction, rngCursor, runState, opt
   const interrupt = pickInterrupt(discoveries, options);
   const proximity = computeExplorationProximity(lattice, visibleCells, runState);
 
+  let combatContact = false;
+  let hostileContactDistance = null;
+  let contactEntity = null;
+  if (!options.combatActive) {
+    if (!runState._contactedHostiles) runState._contactedHostiles = new Set();
+    const near = nearestConnectedHostile(lattice, visibleCells, runState, HOSTILE_CONTACT_RANGE);
+    if (near.entity) {
+      const key = `${near.entity.x},${near.entity.y}`;
+      hostileContactDistance = near.distance;
+      if (!runState._contactedHostiles.has(key)) {
+        runState._contactedHostiles.add(key);
+        combatContact = true;
+        contactEntity = near.entity;
+      }
+    }
+  }
+
   let huntResult = null;
   let pendingHunt = false;
 
@@ -148,6 +218,9 @@ export function moveParty(lattice, fogState, direction, rngCursor, runState, opt
           discoveredEntity: huntResult.huntData,
           danger: { progress: runState?.dangerClockProgress ?? 0, huntTriggered: true, huntData: huntResult.huntData },
           proximity,
+          combatContact,
+          hostileContactDistance,
+          contactEntity,
           stateDelta: { position: true, fog: true, danger: true }
         };
       } else {
@@ -171,6 +244,9 @@ export function moveParty(lattice, fogState, direction, rngCursor, runState, opt
       pendingHunt
     },
     proximity,
+    combatContact,
+    hostileContactDistance,
+    contactEntity,
     stateDelta: { position: true, fog: true, danger: true }
   };
 }

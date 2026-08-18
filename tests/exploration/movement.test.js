@@ -725,3 +725,107 @@ describe('moveParty — hunt triggering', () => {
     expect(result.interruptType).toBe('hunt');
   });
 });
+
+describe('moveParty — combat contact range', () => {
+  it('hostile within 2 connected squares → combatContact true, contactEntity, hostileContactDistance', () => {
+    const floor = makeFloor({
+      enemySpawns: [{ id: 0, x: 13, y: 15, archetypeId: 'drone' }],
+    });
+    const lat = createLattice(floor);
+    lat.setPartyPosition(10, 15);
+    const rs = makeRunState();
+    const cursor = createRNGCursorForRun(1);
+    const fog = new Uint8Array(640);
+    const result = moveParty(lat, fog, 'e', cursor, rs);
+    expect(result.combatContact).toBe(true);
+    expect(result.contactEntity).toEqual(expect.objectContaining({ id: 0, x: 13, y: 15 }));
+    expect(result.hostileContactDistance).toBeLessThanOrEqual(2);
+    expect(result.hostileContactDistance).toBeGreaterThan(0);
+  });
+
+  it('far sighting in open corridor → hostile interrupt (auto-stop) but combatContact false', () => {
+    const floor = makeFloor({
+      enemySpawns: [{ id: 0, x: 16, y: 15, archetypeId: 'drone' }],
+    });
+    const lat = createLattice(floor);
+    lat.setPartyPosition(10, 15);
+    const rs = makeRunState();
+    const cursor = createRNGCursorForRun(1);
+    const fog = new Uint8Array(640);
+    const result = moveParty(lat, fog, 'e', cursor, rs);
+    expect(result.interruptType).toBe('hostile');
+    expect(result.visibleCells.has('16,15')).toBe(true);
+    expect(result.combatContact).toBe(false);
+    expect(result.contactEntity).toBeNull();
+    expect(result.hostileContactDistance).toBeNull();
+  });
+
+  it('wall-detour crux: visible hostile at Chebyshev 2 but connected > 2 → combatContact false', () => {
+    // Party at (10,15), hostile at (11,13) (Chebyshev = 2, dx=1 dy=-2).
+    // Walls at (10,14) and (11,15) block direct N, direct E, and the direct
+    // NE diagonal (closed-corner rule: both orthogonals walled). The shortest
+    // BFS path detours through (9,14) → (10,13) → (11,13) at distance 3.
+    // Neither wall lies in the NE octant, so LOS still reaches the hostile.
+    const grid = makeGrid(20, 32, 1);
+    grid[14][10] = 0;
+    grid[15][11] = 0;
+    const floor = {
+      cells: grid,
+      containers: [],
+      enemySpawns: [{ id: 0, x: 11, y: 13, archetypeId: 'drone' }],
+      descentPoint: { x: 10, y: 30 },
+    };
+    const lat = createLattice(floor);
+    lat.setPartyPosition(10, 16);
+    const rs = makeRunState();
+    const cursor = createRNGCursorForRun(1);
+    const fog = new Uint8Array(640);
+    const result = moveParty(lat, fog, 'n', cursor, rs);
+    expect(result.moved).toBe(true);
+    expect(result.position).toEqual({ x: 10, y: 15 });
+    expect(result.visibleCells.has('11,13')).toBe(true);
+    expect(result.combatContact).toBe(false);
+    expect(result.contactEntity).toBeNull();
+    expect(result.hostileContactDistance).toBeNull();
+  });
+
+  it('approaching a known enemy: first sight far, later move within range → combatContact true on the later move', () => {
+    const floor = makeFloor({
+      enemySpawns: [{ id: 0, x: 17, y: 15, archetypeId: 'drone' }],
+    });
+    const lat = createLattice(floor);
+    lat.setPartyPosition(10, 15);
+    const rs = makeRunState();
+    const cursor = createRNGCursorForRun(1);
+    const fog = new Uint8Array(640);
+    const first = moveParty(lat, fog, 'e', cursor, rs);
+    expect(first.interruptType).toBe('hostile');
+    expect(first.combatContact).toBe(false);
+    // Walk up to the enemy: (12,15) → (13,15) → (14,15) → (15,15).
+    for (const step of ['e', 'e', 'e']) {
+      const intermediate = moveParty(lat, fog, step, cursor, rs);
+      expect(intermediate.combatContact).toBe(false);
+    }
+    const contact = moveParty(lat, fog, 'e', cursor, rs);
+    expect(lat.getPartyPosition()).toEqual({ x: 15, y: 15 });
+    expect(contact.combatContact).toBe(true);
+    expect(contact.contactEntity).toEqual(expect.objectContaining({ id: 0, x: 17, y: 15 }));
+  });
+
+  it('dedup: once contacted, a further in-range move for the same enemy → combatContact false', () => {
+    const floor = makeFloor({
+      enemySpawns: [{ id: 0, x: 12, y: 15, archetypeId: 'drone' }],
+    });
+    const lat = createLattice(floor);
+    lat.setPartyPosition(10, 15);
+    const rs = makeRunState();
+    const cursor = createRNGCursorForRun(1);
+    const fog = new Uint8Array(640);
+    const first = moveParty(lat, fog, 'e', cursor, rs);
+    expect(first.combatContact).toBe(true);
+    const stepBack = moveParty(lat, fog, 'w', cursor, rs);
+    expect(stepBack.combatContact).toBe(false);
+    const reapproach = moveParty(lat, fog, 'e', cursor, rs);
+    expect(reapproach.combatContact).toBe(false);
+  });
+});
