@@ -330,12 +330,14 @@ export function mount(container, params = {}) {
 
   function requestCombat(result) {
     const position = lattice.getPartyPosition();
+    const contactEntity = result.contactEntity || result.discoveredEntity;
+    const contact = contactEntity || position;
     const encounter = result.interruptType === 'hunt'
       ? createHuntEncounter(floor, position, runState.party, runState, rngCursor, data)
-      : createStandardEncounter(floor, result.discoveredEntity || position, runState.party, [result.discoveredEntity].filter(Boolean), rngCursor);
+      : createStandardEncounter(floor, contact, runState.party, [contactEntity].filter(Boolean), rngCursor);
     runState.rngState = rngCursor.getState();
-    notice = result.interruptType === 'hunt' ? 'HUNT CONTACT REQUESTED.' : 'HOSTILE CONTACT REQUESTED.';
-    bus.dispatch('state:combat-start', { runState, floor, lattice, encounter, reason: result.interruptType, contact: result.discoveredEntity, moveResult: result });
+    notice = result.interruptType === 'hunt' ? 'HUNT CONTACT REQUESTED.' : 'HOSTILE CONTACT — ENGAGING.';
+    bus.dispatch('state:combat-start', { runState, floor, lattice, encounter, reason: result.interruptType || 'contact', contact, moveResult: result });
   }
 
   function ensurePartyVisible() {
@@ -374,9 +376,15 @@ export function mount(container, params = {}) {
     runState.rngState = rngCursor.getState();
     bus.dispatch('state:danger-clock-tick', { progress: runState.dangerClockProgress });
     pushAudioProximity();
-    if (result.interruptType === 'hostile' || result.interruptType === 'hunt') {
+    if (result.combatContact || result.interruptType === 'hunt') {
       alertBanner.hidden = false;
       requestCombat(result);
+    } else if (result.interruptType === 'hostile') {
+      alertBanner.hidden = false;
+      const off = result.proximity?.nearestHostile;
+      notice = off != null
+        ? `HOSTILE SIGHTED — ${off} SQUARES OFF. CLOSE TO ENGAGE.`
+        : 'HOSTILE SIGHTED — CLOSE TO ENGAGE.';
     } else {
       alertBanner.hidden = true;
       if (result.interruptType === 'container' && viewState.lootState) {

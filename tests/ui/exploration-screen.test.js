@@ -228,7 +228,21 @@ describe('exploration screen controller', () => {
     container.dispatch('keydown', keyEvent('ArrowRight'));
 
     expect(combat).toHaveLength(1);
-    expect(combat[0]).toMatchObject({ runState: state, floor: hostileFloor, reason: 'hostile', encounter: expect.objectContaining({ kind: 'standard' }), moveResult: expect.objectContaining({ interruptType: 'hostile' }) });
+    expect(combat[0]).toMatchObject({ runState: state, floor: hostileFloor, reason: 'hostile', encounter: expect.objectContaining({ kind: 'standard' }), moveResult: expect.objectContaining({ interruptType: 'hostile', combatContact: true }) });
+    off();
+  });
+
+  it('far hostile sighting posts SIGHTED notice and does NOT start combat', async () => {
+    const combat = [];
+    const off = bus.on('state:combat-start', (payload) => combat.push(payload));
+    const farHostileFloor = floor({ enemySpawns: [{ id: 0, x: 16, y: 10, archetypeId: 'drone' }] });
+    const { container } = await mountExploration({ floor: farHostileFloor });
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+
+    expect(combat).toHaveLength(0);
+    expect(byTestId(container, 'move-notice').textContent).toContain('SIGHTED');
+    expect(byTestId(container, 'alert-banner').hidden).toBe(false);
     off();
   });
 
