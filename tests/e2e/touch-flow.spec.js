@@ -49,31 +49,43 @@ async function readPartyCell(page) {
 }
 
 // Given a target world cell, compute a client-space tap coordinate on the exploration
-// canvas by inverting the fit-centered camera transform. Assumes the camera is at fit
-// with letterboxing and no user pan — which holds at mount and after any successful
-// move (auto-follow resets suppressFollow, but for cells in-view the tap point
-// remains inside the visible rect).
-async function tapCoordForCell(page, cellX, cellY) {
-  return page.evaluate(({ cellX, cellY }) => {
+// canvas by reproducing the live entry-camera transform: zoomToCells(24, 40) sets
+// scale = clamp(40/24, fitScale, 4·fitScale); mount then centers on the party
+// (subject to world-edge clamp). Callers pass the party cell so this stays robust
+// even when the party spawns near a world edge (camera clamped, party not at canvas
+// center). Keep target cells within ±1 of the party — beyond that, camera auto-follow
+// after a step can shift the anchor before the next assertion polls.
+async function tapCoordForCell(page, cellX, cellY, partyCell) {
+  return page.evaluate(({ cellX, cellY, party }) => {
     const canvas = document.querySelector('[data-testid="exploration-canvas"]');
     const rect = canvas.getBoundingClientRect();
     const WORLD_W = 480;
     const WORLD_H = 768;
     const CELL = 24;
-    const scale = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
+    const ENTRY_CELL_PX = 40;      // DEFAULT_ENTRY_CELL_PX from exploration.js
+    const MAX_ZOOM = 4;            // MAX_ZOOM_SCALE from viewport.js
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const fit = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
+    const scale = clamp(ENTRY_CELL_PX / CELL, fit, MAX_ZOOM * fit);
     const spanX = rect.width / scale;
     const spanY = rect.height / scale;
-    let camX = 0;
-    let camY = 0;
-    if (WORLD_W * scale <= rect.width) camX = (WORLD_W - spanX) / 2;
-    if (WORLD_H * scale <= rect.height) camY = (WORLD_H - spanY) / 2;
+    const partyPxX = party.x * CELL + CELL / 2;
+    const partyPxY = party.y * CELL + CELL / 2;
+    // centerOn(partyPx, partyPy) → state.x = partyPx − viewSpan/2, then clampAxis:
+    // if world fits, center world; else clamp into [0, worldSize − viewSpan].
+    const camX = WORLD_W * scale <= rect.width
+      ? (WORLD_W - spanX) / 2
+      : clamp(partyPxX - spanX / 2, 0, WORLD_W - spanX);
+    const camY = WORLD_H * scale <= rect.height
+      ? (WORLD_H - spanY) / 2
+      : clamp(partyPxY - spanY / 2, 0, WORLD_H - spanY);
     const worldX = cellX * CELL + CELL / 2;
     const worldY = cellY * CELL + CELL / 2;
     return {
       x: rect.left + (worldX - camX) * scale,
       y: rect.top + (worldY - camY) * scale
     };
-  }, { cellX, cellY });
+  }, { cellX, cellY, party: partyCell });
 }
 
 test('touch journey: tap-to-move advances party; drag pans without moving', async ({ page }) => {
@@ -94,33 +106,25 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
   const startCell = await readPartyCell(page);
 
   // 1) Tap a cell one step south of the party — inside LOS, single-step BFS path.
-  const step1 = await tapCoordForCell(page, startCell.x, startCell.y + 1);
+  const step1 = await tapCoordForCell(page, startCell.x, startCell.y + 1, startCell);
   await page.touchscreen.tap(step1.x, step1.y);
   await expect.poll(async () => JSON.stringify(await readPartyCell(page)))
     .toBe(JSON.stringify({ x: startCell.x, y: startCell.y + 1 }));
   await expect(page.getByTestId('move-notice')).not.toContainText('NO PATH');
 
   const afterTapCell = await readPartyCell(page);
-  const canvasBox = await page.getByTestId('exploration-canvas').boundingBox();
-  expect(canvasBox).toBeTruthy();
 
-  // 2) Drag across the canvas → gesture engine treats as pan; party must not move.
-  //    Mouse events on hasTouch=true Chromium fire as pointer events with pointerType=touch.
-  await page.mouse.move(canvasBox.x + 40, canvasBox.y + canvasBox.height * 0.7);
-  await page.mouse.down();
-  await page.mouse.move(canvasBox.x + canvasBox.width - 40, canvasBox.y + canvasBox.height * 0.7, { steps: 8 });
-  await page.mouse.up();
-  const afterDragCell = await readPartyCell(page);
-  expect(afterDragCell).toEqual(afterTapCell);
-
-  // 3) Wheel-zoom in anchored on the party (so party's screen position stays
+  // 2) Wheel-zoom in anchored on the party (so party's screen position stays
   //    fixed), then tap the tile ONE cell north (the previous spawn cell —
-  //    guaranteed walkable). Use page.mouse.wheel first per the plan; if the
-  //    mobile emulator's wheel factor is small, fall back to a synthetic
-  //    WheelEvent with a large deltaY that clamps to MAX_ZOOM_SCALE (4× fit).
-  //    Either way, the post-wheel scale is bounded by [4× fit] so one cell
-  //    displacement in screen space is at most 96px.
-  const partyScreen = await tapCoordForCell(page, afterTapCell.x, afterTapCell.y);
+  //    guaranteed walkable). Runs before the drag so the camera is still
+  //    party-centered — otherwise a prior pan would move the party away from
+  //    partyScreen and the wheel would anchor the wrong world cell. Use
+  //    page.mouse.wheel first per the plan; if the mobile emulator's wheel
+  //    factor is small, fall back to a synthetic WheelEvent with a large
+  //    deltaY that clamps to MAX_ZOOM_SCALE (4× fit). Either way, the
+  //    post-wheel scale is bounded by [4× fit] so one cell displacement in
+  //    screen space is at most 96px.
+  const partyScreen = await tapCoordForCell(page, afterTapCell.x, afterTapCell.y, afterTapCell);
   await page.mouse.move(partyScreen.x, partyScreen.y);
   await page.mouse.wheel(0, -400);
   await page.evaluate(({ x, y }) => {
@@ -134,6 +138,19 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
   await page.touchscreen.tap(partyScreen.x, partyScreen.y - 72);
   await expect.poll(async () => JSON.stringify(await readPartyCell(page)))
     .toBe(JSON.stringify(startCell));
+
+  const afterZoomTapCell = await readPartyCell(page);
+  const canvasBox = await page.getByTestId('exploration-canvas').boundingBox();
+  expect(canvasBox).toBeTruthy();
+
+  // 3) Drag across the canvas → gesture engine treats as pan; party must not move.
+  //    Mouse events on hasTouch=true Chromium fire as pointer events with pointerType=touch.
+  await page.mouse.move(canvasBox.x + 40, canvasBox.y + canvasBox.height * 0.7);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox.x + canvasBox.width - 40, canvasBox.y + canvasBox.height * 0.7, { steps: 8 });
+  await page.mouse.up();
+  const afterDragCell = await readPartyCell(page);
+  expect(afterDragCell).toEqual(afterZoomTapCell);
 });
 
 test('touch combat selects a target first and requires explicit confirm', async ({ page }) => {
