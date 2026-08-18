@@ -521,7 +521,12 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
       damage = damageRoll;
     }
     if (isMelee) damage += attributeModifier;
-    damage = Math.max(0, damage);
+    // A landed hit must matter. Low-MGT attackers (e.g. Drone, mgt 3 → mod −2) rolling low on a
+    // d6 would otherwise floor to 0 damage on a successful hit; floor at 1 instead so any hit
+    // registers. Applies to all successful hits — melee, ranged, protocol-driven — matching the
+    // owner's rule "minimum 1 damage on a successful hit". Guarded by `if (hit)` above, so
+    // misses and fumbles still deal 0 (they never reach this line).
+    damage = Math.max(1, damage);
     if (targetEffects.damageMultiplier > 1) damage = Math.floor(damage * targetEffects.damageMultiplier);
     target.hp -= damage;
   }
