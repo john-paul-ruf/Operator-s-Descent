@@ -378,14 +378,16 @@ describe('scorecard screen', () => {
       'Scrap recovered',
       '42'
     ]));
-    const share = byTestId(container, 'scorecard-share-link').textContent;
-    expect(share).toBe(`#w=${encodeSeed(777)}`);
+    const shareField = byTestId(container, 'scorecard-share-link');
+    const shareUrl = `http://127.0.0.1:8080/index.html#w=${encodeSeed(777)}`;
+    expect(shareField.value).toBe(shareUrl);
+    expect(shareField.getAttribute('readonly')).toBe('readonly');
     expect(allText(container).join(' ')).not.toContain('#r=');
     expect(byTestId(container, 'scorecard-roster').children[0].children[0].classList.contains('sigil-dead')).toBe(true);
     expect(byTestId(container, 'scorecard-library')).toBeTruthy();
 
     await byTestId(container, 'scorecard-copy-world').click();
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`http://127.0.0.1:8080/index.html${share}`);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(shareUrl);
     await byTestId(container, 'scorecard-restart-seed').click();
     expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 777 } });
     await byTestId(container, 'scorecard-title').click();

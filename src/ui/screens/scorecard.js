@@ -105,22 +105,60 @@ export function mount(container, params = {}) {
   ];
 
   const seedFragment = `#w=${encodeSeed(seed)}`;
-  const linkDisplay = document.createElement('output');
-  linkDisplay.className = 'share-link-display';
+  const shareLink = shareUrl(seedFragment);
+  const linkDisplay = document.createElement('input');
+  linkDisplay.type = 'text';
+  linkDisplay.className = 'share-link-display share-input console-row';
   linkDisplay.dataset.testid = 'scorecard-share-link';
-  linkDisplay.textContent = seedFragment;
+  linkDisplay.setAttribute('readonly', 'readonly');
+  linkDisplay.setAttribute('aria-label', 'World seed share link');
+  linkDisplay.value = shareLink;
 
-  const copyBtn = createButton('COPY WORLD LINK', {
-    onClick: () => {
-      const url = shareUrl(seedFragment);
-      globalThis.navigator?.clipboard?.writeText?.(url)?.catch?.(() => {});
-      linkDisplay.textContent = seedFragment;
-      copyBtn.textContent = 'WORLD LINK COPIED';
-      setTimeout(() => { copyBtn.textContent = 'COPY WORLD LINK'; }, 2000);
+  const copyStatus = document.createElement('div');
+  copyStatus.className = 'scorecard-copy-status console-row';
+  copyStatus.dataset.testid = 'scorecard-copy-status';
+  copyStatus.setAttribute('aria-live', 'polite');
+  copyStatus.textContent = '';
+
+  let resetTimer = null;
+
+  async function copyShareLink() {
+    linkDisplay.value = shareLink;
+    let copied = false;
+    try {
+      if (globalThis.navigator?.clipboard?.writeText) {
+        await globalThis.navigator.clipboard.writeText(shareLink);
+        copied = true;
+      }
+    } catch {
+      copied = false;
     }
-  });
+    if (!copied) {
+      linkDisplay.focus?.();
+      linkDisplay.select?.();
+      try { copied = Boolean(globalThis.document?.execCommand?.('copy')); } catch { copied = false; }
+    }
+    if (copied) {
+      copyStatus.textContent = 'WORLD LINK COPIED';
+      copyBtn.textContent = 'WORLD LINK COPIED';
+      if (typeof globalThis.setTimeout === 'function') {
+        if (resetTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(resetTimer);
+        resetTimer = globalThis.setTimeout(() => { copyBtn.textContent = 'COPY WORLD LINK'; resetTimer = null; }, 2000);
+      }
+    } else {
+      copyStatus.textContent = 'CLIPBOARD UNAVAILABLE — SELECT LINK';
+      linkDisplay.focus?.();
+      linkDisplay.select?.();
+    }
+  }
+
+  const copyBtn = createButton('COPY WORLD LINK', { onClick: copyShareLink });
   copyBtn.dataset.testid = 'scorecard-copy-world';
-  cleanups.push(() => copyBtn.cleanup?.());
+  cleanups.push(() => {
+    if (resetTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(resetTimer);
+    resetTimer = null;
+    copyBtn.cleanup?.();
+  });
 
   const restart = createButton('RESTART SAME SEED', {
     primary: true,
@@ -234,7 +272,7 @@ export function mount(container, params = {}) {
     const shareNote = document.createElement('p');
     shareNote.className = 'micro';
     shareNote.textContent = 'SEED ONLY — NO RUN STATE';
-    sharePanel.append(shareNote, linkDisplay, copyBtn);
+    sharePanel.append(shareNote, linkDisplay, copyBtn, copyStatus);
 
     const stats = createPanel({ title: '◈ RUN SUMMARY' });
     stats.classList.add('scorecard-stats');
@@ -313,7 +351,7 @@ export function mount(container, params = {}) {
     const shareNote = document.createElement('p');
     shareNote.className = 'micro';
     shareNote.textContent = 'SEED ONLY — NO RUN STATE';
-    sharePanel.append(shareNote, linkDisplay, copyBtn);
+    sharePanel.append(shareNote, linkDisplay, copyBtn, copyStatus);
 
     const stats = createPanel({ title: '◈ RUN SUMMARY' });
     stats.classList.add('scorecard-stats', 's-4');
