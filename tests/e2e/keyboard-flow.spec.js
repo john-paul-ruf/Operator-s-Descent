@@ -100,5 +100,10 @@ test('keyboard can enter settings and return without a trap', async ({ page }) =
   await expect(page.getByTestId('settings-status')).toContainText('SAVED');
   await page.getByTestId('settings-back').focus();
   await page.keyboard.press('Enter');
+  // Single-state title (commit 30b7172): return lands collapsed; START is
+  // focusable — no trap. Re-expand via START to reach the branch list.
+  await expect(page.getByTestId('title-start')).toBeVisible();
+  await page.getByTestId('title-start').focus();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('title-begin-new-run')).toBeVisible();
 });
