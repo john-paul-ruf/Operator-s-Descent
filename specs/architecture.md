@@ -1649,3 +1649,57 @@ Combat screen's `overlayOptions()` now returns `confirmCell = ${pathEndpoint(act
 
 <!-- AC-01 (accessibility-pass SESSION-01) — 2026-08-17 -->
 **M97 Design Compliance Scanner — `scripts/design-scan/check-contrast.js` (additive):** new standalone WCAG 2.1 contrast gate; extends M97, no new module ID. Named exports `runContrastCheck(): Finding[]` plus reusable `parseColor` / `contrastRatio`; no default export. CLI: `node scripts/design-scan/check-contrast.js [--json]` — scans `styles/*.css`, exits non-zero on any AA failure; `--json` emits `{ findings, summary }`. Imports `readText`/`listFiles`/`parseRootTokens` from `scripts/design-scan/lib.js` and `node:url` `pathToFileURL` (CLI guard for the space-containing workspace path). **Intentionally NOT wired into `scan.js`** — runs as a standalone gate so `npm run design:scan`'s pass budget stays clean until accessibility-pass Wave B (contrast fixes) lands green; Forge may then compose it into `runDesignComplianceScan()`. Finding shape: `{ level: 'error'|'warning', category: 'text-contrast'|'ui-boundary', message, ratio, throughCrt, threshold: 3|4.5, selector, file?, wcag: '1.4.3'|'1.4.11' }`. Thresholds: text 4.5:1 (3:1 for large text ≥24px or ≥18.66px/700); UI-boundary 3:1 (WCAG 1.4.11). Alpha backgrounds are composited over an inferred ancestor surface; the CRT overlay is modeled as a single `rgba(30,25,40,0.72)` layer that can only downgrade a pass to a warning, never to a failure.
+
+<!-- equip-reasons-and-contact-range SESSION-02 — 2026-08-18 -->
+### M32 Movement — combat-contact BFS
+
+Adds two exported symbols to `src/exploration/movement.js`:
+
+- **`HOSTILE_CONTACT_RANGE`** (const, `2`) — the connected-square radius
+  at which movement escalates a sighting into combat.
+- **`nearestConnectedHostile(lattice, visibleCells, runState, maxSteps = HOSTILE_CONTACT_RANGE)`** —
+  pure, RNG-free 8-way BFS from the party over walkable cells, honoring
+  `moveParty`'s closed-corner rule. Only considers hostiles that are (a)
+  in `visibleCells` and (b) undefeated per `runState.defeatedEnemies`.
+  Treats the hostile's own cell as a terminal step (BFS may end on an
+  otherwise-non-walkable enemy cell). Returns
+  `{ distance: number, entity: spawn }` or `{ distance: null, entity: null }`
+  when nothing qualifies within `maxSteps`.
+
+`moveParty` result gains three fields on every non-blocked return
+(including the hunt early-return):
+
+- **`combatContact: boolean`** — true iff a visible, undefeated hostile
+  sits within `HOSTILE_CONTACT_RANGE` connected squares of the party's
+  new position AND has not already been contacted this movement session
+  (dedup via the transient `runState._contactedHostiles: Set<"x,y">` —
+  underscore-prefixed like `_knownHostiles`, not serialized to the save
+  schema).
+- **`hostileContactDistance: number | null`** — the BFS distance to that
+  hostile (1 or 2), or `null` if none qualifies (including when the
+  nearest was already contacted).
+- **`contactEntity: spawn | null`** — the hostile spawn record when
+  `combatContact === true`, else `null`.
+
+Auto-stop-on-sighting (`interruptType: 'hostile'` on `newlyDiscovered`)
+is unchanged and remains non-disableable. Contact and sighting are
+independent signals: a far new sighting fires `interruptType: 'hostile'`
+with `combatContact: false`; walking within range of a previously-known
+enemy fires `combatContact: true` with no new `hostile` interrupt.
+
+### M70 Exploration Screen — combat-entry gate
+
+`handleMoveResult` (`src/ui/screens/exploration.js`) enters combat on
+`result.combatContact || result.interruptType === 'hunt'` only. A far
+sighting (`interruptType === 'hostile'` with `combatContact === false`)
+shows the alert banner and posts a `HOSTILE SIGHTED — N SQUARES OFF.
+CLOSE TO ENGAGE.` notice without dispatching `state:combat-start`.
+
+`requestCombat` deploys the standard encounter around
+`result.contactEntity || result.discoveredEntity`, so approaching a
+known enemy still centers the deployment on that enemy. The dispatched
+`state:combat-start.reason` falls back to `'contact'` when no interrupt
+type is present, and `contact` is always the resolved contact entity
+(or party position if none).
+
+**M81 Service Worker** — `CACHE_VERSION = '2026-08-18-equip-reasons-and-contact-range-v1'` (ships M64 gear.js + M32/M70 edits for the feature).
