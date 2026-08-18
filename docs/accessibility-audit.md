@@ -375,3 +375,184 @@ apply padding to the stepper wrappers rather than the buttons themselves.
   reachable. **OK.**
 - **`.mode-tab.disabled`** uses `cursor: not-allowed` and `disabled` — a
   pointer user gets clear feedback that the tab is inactive. **OK.**
+
+## 5. Per-screen quick reference
+
+| Screen file | Contrast issues | Keyboard issues | Pointer/touch issues |
+|-------------|-----------------|-----------------|----------------------|
+| `src/ui/screens/title.js` | Ripple from `--danger`/`--border-dim` | Two `<h1>`; START toggle does not focus branch list; missing `aria-expanded` on START | None specific |
+| `src/ui/screens/library.js` | Ripple; `.run-row.broken .load-error` fails CRT-through | Cards use `<article>` + manual `tabIndex` — need native `<button>` or `role="button"` | Card actions reachable; no drag/hover-only affordances |
+| `src/ui/screens/import.js` | Ripple; `.link-input` border fails 1.4.11 | `<textarea>` reachable; failure result panel needs focus move on decode-error | None specific |
+| `src/ui/screens/tutorial.js` | Ripple only | Dots are not focusable (informational OK); PREV/NEXT/DONE/SKIP reachable | 8×8 `.tutorial-dot` at 20 px — decorative, exempt |
+| `src/ui/screens/settings.js` | Ripple; `.info-row` micro text fails CRT-through | `role="radiogroup"` on motion options present; sliders labelled | Sliders are 16 px thumbs — need larger touch strip (wrap `.slider-row` @ ≥ 44 px) |
+| `src/ui/screens/scorecard.js` | Ripple; `.scorecard-cod` `--danger` fails CRT-through | Focus moves to link on clipboard failure — good; primary CTA reachable | Copy button labelled; readonly input selectable |
+| `src/ui/screens/exploration.js` | Playfield-alert-banner `--danger` fails CRT-through | Container focused on mount — OK; no keyboard for camera pan/zoom (§4A) | Tap-to-path OK; pinch OK; camera keyboard gap |
+| `src/ui/screens/combat.js` | Ripple + `.combat-terminal`/`.combat-error` fails CRT-through | No container focus on mount (§3A); target cycling via Tab OK | Direction grid 56 px — below 96 px rule for wide |
+| `src/ui/screens/creation.js` (+ `creation-model.js`) | Ripple; `.config-name-input`; sigil ring shadow-only cue | Cards need `role="radiogroup"`/`role="radio"`; row `aria-label` double-announces with steppers | Attribute steppers 32 px — wrap row to 96 px |
+| `src/ui/console/console.js` | Passes (uses tokens) | Tabpanel + tablist correct; disabled tab reason not announced by AT | Tab bar 96 px in wide, 48 px in portrait — passes |
+| `src/ui/console/move.js` | Passes | 8-way d-pad reachable + labelled | 96 px buttons |
+| `src/ui/console/combat.js` | `.combat-*` `--danger` texts fail CRT | Direction stepping works | 56 px combat-direction; other buttons are console-row 48 px |
+| `src/ui/console/party.js` | Passes | Card `aria-selected` without `role="option"` — WCAG 4.1.2 | 96 px cards |
+| `src/ui/console/gear.js` | Passes | Scroll area focusable | 96 px rows |
+| `src/ui/console/tech.js` | Passes | Scroll area focusable | 96 px rows |
+| `src/ui/console/loot.js` | Passes | Scroll area focusable | 96 px rows |
+| `src/ui/console/log.js` | Passes | Copy link accessible via readonly input + Enter binding | 96 px rows |
+| `src/ui/status-strip.js` (+ `components.css`) | Ripple | Missing `role="status"`/`aria-live` on the strip | Not interactive |
+| `src/ui/components.js` (+ `input.js`) | N/A (framework layer) | See §3B — mostly OK; document `bindActionControl` `<button>` assumption | See touch-target §4C |
+
+## 6. Classification of the red test — `tests/e2e/accessibility.spec.js:56`
+
+**Verdict: STALE — the assertions do not survive the adaptive-layouts contract (Custom Rule 8, amended 2026-08-14 and 2026-08-17).**
+
+Evidence:
+
+1. The test sets `viewport: 1600×900` — aspect ratio ≈ 1.78 satisfies
+   `@media (min-width: 900px) and (min-aspect-ratio: 1/1)` in
+   `styles/wide.css`, so the **wide layout is active**.
+2. Under wide, `#portrait-frame:has([data-wide-root])` sets
+   `width: 100vw; height: 100vh; aspect-ratio: auto` — the assertion
+   `Math.abs((frame.width / frame.height) - (1080 / 1920)) < 0.01` cannot
+   hold (actual ratio 1.78, not 0.5625).
+3. The exploration screen in wide mode renders `<div class="wide-shell">`
+   with tabs classed `.wide-mode-tab`, not `.mode-tab`. The assertion
+   `page.locator('.mode-tab').evaluateAll(...)` returns `[]` in wide mode.
+4. The console dock in wide is `.wide-console-dock`, not `.console-bar`.
+   The `bottom: 0px` assertion cannot bind.
+
+The test measures a real thing (portrait frame ratio + tab label order)
+but does so at a viewport where the framework legitimately dispatches to
+a different layout. **It is a test-reconciliation task, not an
+implementation bug.**
+
+**Fix hint (Wave B, `test-reconciliation` feature — NOT owned by this
+audit)**: split the test into two — one at portrait viewport (e.g.
+`600×900` or `800×1400`) that keeps the current assertions, and one at
+wide viewport (`1600×900`) that instead asserts `.wide-shell` exists,
+tab labels resolve to `['MOVE', 'CMBT', …]` via
+`page.locator('.wide-mode-tab').evaluateAll(...)`, and `.wide-console-dock`
+is present at the right edge.
+
+## 7. Proposed fix waves (input to Forge for STATE.md wave planning)
+
+Waves and owned files match the provisional map in
+`accessibility-pass/STATE.md`. **All waves depend on this audit (Wave A).**
+
+### Wave B1 — Contrast fixes (owner: `styles/base.css` + `styles/components.css` + `styles/crt.css` + `styles/wide.css`)
+
+- Nudge `--danger` (#e83a3a → #f04b4b or similar) to clear 4.5:1 on all
+  three surface tokens.
+- Nudge `--border-dim` (#453370 → ~#7a5fb8) to clear 3:1 on all three
+  surface tokens — this single change eliminates the majority of §2F
+  errors.
+- Nudge `--text-dim` (#8878a8 → ~#9c8dc0) so it clears 4.5:1 through the
+  CRT overlay (currently 4.48:1 raw on `--bg-panel`).
+- Promote the `#b026d4` rarity-Prototype literal to a token (e.g.
+  `--rarity-prototype`) and brighten to 4.7:1.
+- Raise disabled opacities from 0.30-0.45 to ≥ 0.55 (see §2D) AND signal
+  disabled state via a distinct token/label rather than opacity alone.
+- Add `aria-hidden="true"` to `#crt-overlays` and to `[data-glitch]::before/after`
+  content (or route the chromatic pseudo-content behind `role="presentation"`).
+- Add solid-border tuning on `.selected` shells (accent-glow-only cues fail
+  in reduced-motion contexts).
+- Verify the `check-contrast.js` gate is green after each change — this is
+  the merge condition.
+
+### Wave B2 — Interaction primitives + focus routing (owner: `src/ui/components.js` + `src/ui/input.js` + `src/runtime.js`)
+
+- Central focus-on-route-mount fix in `runtime.js` (§3A) — after
+  `mod.mount(container, params)` returns, ensure `container` (or a
+  named landmark) receives keyboard focus.
+- Reference the new focus-ring classes B1 lands (verify parity for
+  `.pane-resize-handle` and `.pane-collapse-btn`).
+- Add `role="button"` support to `createButton` when the caller opts into
+  a non-button element (currently the factory always uses `<button>` —
+  document and forbid opting into `<div>` factories for interactive
+  controls).
+- Consider a `createRadioGroup(items, opts)` helper that emits the
+  `role="radiogroup"` + `role="radio"` skeleton — reused by creation
+  cards, motion options, and party-mode member grid.
+
+Depends: B1 (border/focus-ring color).
+
+### Wave B3 — Menu-screen a11y (owner: `src/ui/screens/title.js`, `library.js`, `import.js`, `tutorial.js`, `settings.js`, `scorecard.js`)
+
+- Title: single `<h1>`, `aria-expanded` + `aria-controls` on START,
+  focus first branch on toggle.
+- Library: convert `.run-row` / `.run-card` to native `<button>` OR
+  `role="button" aria-pressed`. Ensure keyboard select surfaces `notice`
+  text into the live region.
+- Import: focus the failure-result panel on decode error.
+- Tutorial: verify dots are marked `aria-hidden` (informational only),
+  ensure `Tab` reaches PREV/NEXT/DONE/SKIP in the expected order.
+- Settings: wrap slider rows to hit 96 px touch-target contract; sliders
+  themselves are already reachable.
+- Scorecard: verify focus lands on RESTART or COPY after mount (currently
+  no focus move); wire copy-status ↔ `aria-live` (already `aria-live="polite"`).
+
+Depends: B2 (primitives). Scorecard also depends on `share-seed-link-repair`.
+
+### Wave B4 — Creation-screen a11y (owner: `src/ui/screens/creation.js` + `src/ui/creation-model.js`)
+
+- Add `role="radiogroup"` + `role="radio"` on class-selection grid,
+  sigil picker, and equipment/protocol pickers.
+- Drop double-`aria-label` on attribute rows (§3D).
+- Add a solid selection border in `.sigil-choice.selected` to survive
+  reduced-motion.
+- Wrap stepper rows so their outer touch area hits ≥ 96 px in portrait.
+- Confirm-overwrite / confirm-delete two-click pattern: announce via
+  `aria-pressed` or a live region.
+
+Own session due to context ceiling (creation.js ~1300 lines).
+Depends: B2.
+
+### Wave B5 — In-run + console a11y (owner: `src/ui/screens/exploration.js`, `combat.js`, `src/ui/console/*.js`, `src/ui/status-strip.js`, `src/ui/playfield.js`)
+
+- Add `role="img"` + dynamic `aria-label` to `.playfield-body` (both
+  screens).
+- Focus container on combat mount (parity with exploration).
+- Add `role="status" aria-live="polite"` to `.status-strip`.
+- Party mode: `role="listbox"` + `role="option"` on member cards.
+- Wide combat: raise `.combat-direction` to 96 px OR add outer padding
+  to bring the tap-target to 96 px.
+- Console: attach `aria-describedby` to disabled tabs so AT announces the
+  reason (`mode.reason` copy already computed).
+- Optional keyboard bindings for viewport pan/zoom (§4A) — nice-to-have.
+
+May split console modes from screens if the audit here proves too broad
+for one session's context.
+
+## 8. Coverage summary
+
+| Category | Total | Owners |
+|----------|-------|--------|
+| Contrast — 1.4.3 text | 27 errors, 47 warnings | B1 |
+| Contrast — 1.4.11 UI boundary | 72 errors, 25 warnings | B1 |
+| Focus / keyboard operability | 18 items | B2, B3, B4, B5 |
+| Pointer / touch parity + targets | 7 items | B2, B3, B4, B5 |
+| Semantics / role gaps | 9 items | B2, B3, B4, B5 |
+
+Total unique findings: **~110** (many contrast items collapse to one
+token bump).
+
+## 9. Assumptions & unresolvable-within-CRT-aesthetic pairs (owner decision needed)
+
+None of the pairs below can reach WCAG 2.1 AA without either (a) changing
+the token value beyond the aesthetic's current palette, or (b) shipping a
+high-contrast override toggle:
+
+- **CRT-through worst-case ratios** — several tokens pass at raw ratios
+  but slip below 4.5:1 in the modelled scanline+vignette worst case. If
+  the vignette pulse is animated (currently 0.65 → 0.92 over 4 s), users
+  see the failing ratio for < 500 ms per cycle. Owner call: either drop
+  the vignette dark end from 0.92 to 0.80 (visible aesthetic change) or
+  accept the tier as warning-only in the gate (current behavior). See §1.
+- **Decorative chromatic RGB ghosts** (title-glitch, chroma-text) —
+  literal `#f00`/`#00f` fail at raw ratios and cannot be recolored without
+  losing the aberration effect. Treat as decorative (WCAG 1.4.3 exempts
+  incidental text); ensure `aria-hidden` and that the base text underneath
+  remains legible.
+- **Playfield in-canvas colors** (`.party-token`, `.enemy-marker` set
+  color to `--bg-base` as fill for a badge) — these are canvas-drawn
+  graphics. Static analysis flags them; runtime rendering blends them
+  differently. Confirm no AT-visible text uses these tokens.
+
