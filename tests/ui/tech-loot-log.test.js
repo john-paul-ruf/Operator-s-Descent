@@ -292,7 +292,7 @@ describe('COMBAT mode', () => {
     });
 
     expect(byTestId(container, 'combat-action-attack').className).toContain('action-btn');
-    expect(textOf(byTestId(container, 'combat-selected-preview'))).toContain('range short 3 · cover +2');
+    expect(textOf(byTestId(container, 'combat-selected-preview'))).toContain('Range: Short 3 · Cover: +2');
   });
 
   it('never lets the combat-target- prefix match the non-interactive selected-target preview', () => {
