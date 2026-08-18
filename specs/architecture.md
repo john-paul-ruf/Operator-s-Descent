@@ -1703,3 +1703,42 @@ type is present, and `contact` is always the resolved contact entity
 (or party position if none).
 
 **M81 Service Worker** — `CACHE_VERSION = '2026-08-18-equip-reasons-and-contact-range-v1'` (ships M64 gear.js + M32/M70 edits for the feature).
+
+<!-- combat-weapon-resolution SESSION-02 — 2026-08-18 -->
+### combat-weapon-resolution SESSION-02 — enemy stats survive save/restore
+
+**`RUN_SCHEMA_VERSION` bumped 2 → 3.** Prior-layout in-flight combat saves are rejected by the `decodeRunPayload` version gate as the named `version_mismatch` error (not a crash). Exploration saves and completed runs from build v2 are otherwise unaffected in shape — the change is confined to the combat-snapshot layout.
+
+**M24 combat-snapshot serializer (`src/rules/combat.js`).** For every actor whose `side !== 'party'`, `toCombatSnapshot` now emits an additional `stats` object carrying the resolved enemy stat block:
+
+- `archetypeId` (from `createEnemy`)
+- `attributes` (six-key `mgt/fin/vit/res/foc/sig` object, clamped 1–255)
+- `defense`, `protocolDefense` (scaled per-depth values)
+- `hpMax`, `chargeMax` (scaled per-depth values)
+- `behavior` (AI archetype behavior string)
+- `retreats` (boolean)
+- `actionSlotsPerRound` (defaults to 1; apex encodes 2)
+- `protocolAccess` (choir/null carry an object; null otherwise)
+- `sigilCodepoint` (PUA codepoint chosen at `createEnemy` time)
+
+Party actors are byte-for-byte unchanged — their stats live on the character record.
+
+**M89 save-schema binary codec (`src/state/save-codecs.js`).** The combat-snapshot codec grew a versioned enemy-stat block emitted contiguously after the `writeActor` loop (so a same-archetype pack dedupes cleanly against the previous template body). Structural notes:
+
+- `writeEnemyArchetypeId`: nine-slot enum (`drone/warden/stalker/choir/null/construct/phantom/apex/echo`) with a string-escape fallback.
+- Attributes: fixed 5-bit uints (values ≥ 32 are rejected — sufficient for archetype rolls plus echo calibration).
+- `defense`/`protocolDefense`/`hpMax`/`chargeMax`: variable-length uints; `chargeMax` gated on a presence bit since non-caster archetypes carry 0.
+- `writeEnemyBehavior`: eight-slot enum with a string-escape fallback.
+- `sigilCodepoint`: encoded as a 2-bit variant index into a hardcoded `ENEMY_STAT_SIGIL_POOLS` table (mirroring `data/enemies.json.sigilCodepoints`) when the codepoint belongs to the archetype's pool; falls back to a 21-bit fixed codepoint otherwise. Any future edit to those pools MUST bump `RUN_SCHEMA_VERSION` again.
+- Template dedup: 1-bit `hasStats` + 1-bit `canDedup`. When set, the template body (attributes/defenses/behavior/retreats/protocolAccess/archetypeId) is inherited from the previous entry and only `hpMax`/`chargeMax`/`sigilCodepoint` are written per-actor.
+- `actionSlotsPerRound` is NOT persisted (only consumed by `buildTurnOrder` at combat start; the resume path already has a fixed `turnOrder`). Restore defaults to `1`.
+
+**M86 hot runtime (`src/runtime.js:actorFromSnapshot`).** For enemy/echo actors, the restore path now prefers the persisted `actor.stats.*` over the empty `base = {}` defaults. Party actors are unchanged (they still resolve via `resolveLoadout` from SESSION-01). Field resolution order for enemies:
+
+- `attributes`: `actor.stats.attributes` → `DEFAULT_ATTRIBUTES` (previously always the default)
+- `defense`: `actor.stats.defense` → `10` (previously always `10`)
+- `protocolDefense`, `behavior`, `hpMax`, `chargeMax`, `sigilCodepoint`, `archetypeId`, `retreats`, `protocolAccess`: same pattern — persisted wins over the enemy default.
+
+`createEnemy` is intentionally NOT called on the restore path — it consumes the `gen` RNG stream (sigil pick + id) and would desync the run's deterministic stream. Stats come from stored values only.
+
+**Custom Rule 6 boundary.** Adding the persisted stat block adds ~30 chars to the deep-active-combat-boundary stress fixture at depth 100 with 4 identical drones. Even with aggressive codec compression (archetype enum, sigil variant-index, template dedup, chargeMax gating, 5-bit attributes), that fixture's fragment lands at ~1503 chars, three above the 1500-char `BUDGET` in `src/state/save-encode.js`. Every other stress fixture (`legal-minimum`, `typical-depth-12`, `stack-aware-100-item-cap`, `four-operator-deep-dense`, `two-echo-queue`) stays comfortably under budget. Because `src/state/save-encode.js` and `scripts/stress-saves.js` are outside this session's lease, the budget/fixture tension is left for owner resolution — see this session's handoff `surprises` field for options.
