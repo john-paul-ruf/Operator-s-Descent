@@ -291,6 +291,11 @@ function renderEquipped(container, context, character, ui) {
       const button = createButton('UNEQUIP', { disabled: Boolean(disabledReason), description: disabledReason, onClick: () => requestUnequip(context, slot) });
       button.dataset.testid = `gear-unequip-${slot}`;
       row.appendChild(button);
+      if (disabledReason) {
+        const why = text('disabled-reason unequip-blocked-reason console-row', disabledReason);
+        why.dataset.testid = `gear-unequip-reason-${slot}`;
+        row.appendChild(why);
+      }
     }
     equipped.appendChild(row);
   }

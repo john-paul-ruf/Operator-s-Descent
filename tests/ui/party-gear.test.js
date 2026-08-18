@@ -291,12 +291,17 @@ describe('GEAR mode', () => {
     expect(runState.corruption).toBeCloseTo(0.15);
   });
 
-  it('preserves the inventory cap when unequipping', () => {
+  it('preserves the inventory cap when unequipping and surfaces the reason visibly', () => {
     const runState = run([consumable('patches', 100)]);
     const { container } = renderGearWith(runState);
 
     expect(byTestId(container, 'gear-unequip-weapon').disabled).toBe(true);
     expect(runState.party[0].equipment.weapon.id).toBe('equipped-sidearm');
+
+    const reasonNode = byTestId(container, 'gear-unequip-reason-weapon');
+    expect(reasonNode).toBeTruthy();
+    expect(reasonNode.className).toContain('disabled-reason');
+    expect(reasonNode.textContent).toBe('Inventory full.');
   });
 
   it('toggles junk tags, confirms destruction, and adds exact scrap', () => {
@@ -326,5 +331,29 @@ describe('GEAR mode', () => {
     expect(runState.party[0].equipment.weapon.id).toBe('fresh-sidearm');
     expect(byTestId(container, 'gear-equip-backup-sidearm').disabled).toBe(true);
     expect(byTestId(container, 'gear-equip-backup-sidearm').getAttribute('aria-description')).toBe('Free combat swap already spent.');
+  });
+
+  it('renders the combat swap-locked reason visibly beside the disabled UNEQUIP button', () => {
+    const runState = run([]);
+    const actor = { id: 'breacher', side: 'party', ap: 2, swapAvailable: false, weapon: runState.party[0].equipment.weapon, equipment: { ...runState.party[0].equipment } };
+    const combatState = { turnOrder: ['breacher'], currentTurn: 0, combatants: new Map([['breacher', actor]]) };
+    const { container } = renderGearWith(runState, { combatState });
+
+    const unequip = byTestId(container, 'gear-unequip-weapon');
+    expect(unequip.disabled).toBe(true);
+    expect(unequip.getAttribute('aria-description')).toBe('Free combat swap already spent.');
+
+    const reasonNode = byTestId(container, 'gear-unequip-reason-weapon');
+    expect(reasonNode).toBeTruthy();
+    expect(reasonNode.className).toContain('disabled-reason');
+    expect(reasonNode.textContent).toBe('Free combat swap already spent.');
+  });
+
+  it('omits the unequip-blocked reason node when the swap is allowed', () => {
+    const runState = run([]);
+    const { container } = renderGearWith(runState);
+
+    expect(byTestId(container, 'gear-unequip-weapon').disabled).toBe(false);
+    expect(byTestId(container, 'gear-unequip-reason-weapon')).toBe(null);
   });
 });
