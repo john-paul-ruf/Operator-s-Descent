@@ -167,6 +167,18 @@ function sizeBody(container, { width = 100, height = 100 } = {}) {
   return { playfieldBody, canvas };
 }
 
+// zoomToCells(24, 40): body==world (480×768) → fitScale 1 → scale = clamp(40/24, 1, 4) = 5/3.
+// Camera centers the party at the canvas center; one world cell = 24 * 5/3 = 40 screen px.
+const CELL_PX = 24;
+const SCALE = 40 / CELL_PX;
+const CENTER = { x: 240, y: 384 };
+function cellToClient(dxCells, dyCells) {
+  return {
+    x: CENTER.x + dxCells * CELL_PX * SCALE,
+    y: CENTER.y + dyCells * CELL_PX * SCALE
+  };
+}
+
 beforeEach(() => { installDocument(); installMatchMedia(false); });
 afterEach(() => { delete globalThis.document; delete globalThis.window; });
 
@@ -304,10 +316,12 @@ describe('exploration screen controller', () => {
     const { container, runState: state } = await mountExploration();
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    // Party at (10,10) → center px (252, 252). Small in-threshold drag → tap fires; tap
-    // on the party cell is ignored by handleTap.
-    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 252, clientY: 252 });
-    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 254, clientY: 254 });
+    // Body 480×768 == world → fitScale 1; primeCamera calls zoomToCells(24, 40) → scale 5/3
+    // and centers the party (10,10) at the canvas center (240, 384). A +2px pointermove
+    // stays under the 6px drag threshold → tap fires; tap on the party cell is ignored.
+    const down = cellToClient(0, 0);
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: down.x, clientY: down.y });
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: down.x + 2, clientY: down.y + 2 });
     playfieldBody.dispatch('pointerup', { pointerId: 1 });
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
@@ -329,14 +343,14 @@ describe('exploration screen controller', () => {
     const { container, runState: state } = await mountExploration();
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    // Body 480×768 matches the world (20×24=480, 32×24=768). Camera fits & centers on party (10,10);
-    // world origin at (0,0) at scale 1. Tap on world cell (11,10): center px = (11.5*24, 10.5*24)
-    // = (276, 252). With scale 1 and camera state.x=0/y=0 (already at origin, view = 480×768 world),
-    // client coords equal world coords. Since drag threshold isn't exceeded, it fires as tap.
-    playfieldBody.dispatch('pointerdown', { pointerId: 3, clientX: 276, clientY: 252 });
-    playfieldBody.dispatch('pointerup', { pointerId: 3 });
+    // Body 480×768 == world (20×24=480, 32×24=768). primeCamera runs zoomToCells(24, 40) →
+    // scale 5/3 and centers party (10,10) at canvas center (240, 384). One world cell = 40
+    // screen px. Tap on world cell (11,10) → client (280, 384). Below drag threshold →
+    // fires as tap; BFS finds [e]; party executes immediately.
+    const tap = cellToClient(1, 0);
+    playfieldBody.dispatch('pointerdown', { pointerId: 3, clientX: tap.x, clientY: tap.y });
+    playfieldBody.dispatch('pointerup', { pointerId: 3, clientX: tap.x, clientY: tap.y });
 
-    // Path length 1 → BFS finds [e], party executes immediately.
     expect(state.partyPosition).toEqual({ x: 11, y: 10 });
   });
 
