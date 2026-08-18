@@ -74,7 +74,10 @@ export function resolveArmorStats(baseArmor = {}, affixes = [], affixesData) {
 
 function equipped(character, key, catalog, affixesData) {
   const source = character?.equipment?.[key] ?? character?.[key];
-  const item = typeof source === 'string' && catalog?.[source] ? { id: source, ...catalog[source] } : source;
+  if (!source) return null;
+  const baseType = typeof source === 'string' ? source : source.baseType;
+  const base = baseType && catalog?.[baseType] ? { id: baseType, ...catalog[baseType] } : null;
+  const item = typeof source === 'string' ? base : (base ? { ...base, ...source } : source);
   if (!item) return null;
   const affixes = item.affixes ?? character?.equipment?.[`${key}Affixes`] ?? [];
   return key === 'armor' ? resolveArmorStats(item, affixes, affixesData) : resolveWeaponStats(item, affixes, affixesData);

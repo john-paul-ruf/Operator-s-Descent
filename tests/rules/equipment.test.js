@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyFloorEntryAffixes, describeItem, describeItemStats, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, itemDisplayName, resolveArmorStats, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
+import { applyFloorEntryAffixes, describeItem, describeItemStats, equipItem, evaluateRange, getCoverBonus, getRangeBand, getAffixHooks, getSalvageValue, itemDisplayName, resolveArmorStats, resolveLoadout, resolveWeaponStats, unequipItem, useAffixReroll } from '../../src/rules/equipment.js';
 import { createRunState, deserializeRunState } from '../../src/state/run-state.js';
 import { loadData } from '../helpers/data.js';
 
@@ -47,6 +47,17 @@ describe('affix runtime hooks', () => {
     lattice[5][5] = 'wall';
     expect(getCoverBonus(lattice, 6, 6, 1, 1)).toBe(4);
     expect(getSalvageValue({ salvageValue: 3 })).toBe(3);
+  });
+
+  it('resolves an object-form equipped item via its baseType against the catalog', () => {
+    // Object-form is what materializeItem/normalizeItem actually produce — no baseline
+    // damageDie/rangeBand/maxRange on the item itself. Before this fix equipped() ignored
+    // object sources, resolveWeaponStats saw `{}`, and evaluateRange fell through with
+    // reason:'not_a_weapon' → every armed party attack missed 100% of the time.
+    const character = { equipment: { weapon: { id: 'op-w-sidearm', category: 'weapon', baseType: 'sidearm', rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false } } };
+    const { weapon } = resolveLoadout(character, equipmentData, affixesData);
+    expect(weapon).toMatchObject({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 1 });
+    expect(evaluateRange(weapon, 1).legal).toBe(true);
   });
 });
 
