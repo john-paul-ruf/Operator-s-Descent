@@ -11,7 +11,7 @@ import { createEnemy } from '../../rules/enemies.js';
 import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalActions, getCharacterDeaths, toCombatSnapshot, reachableMoveCells, isLegalMoveStep, MOVE_RANGE } from '../../rules/combat.js';
 import { createStandardEncounter, completeEncounter } from '../../rules/encounters.js';
 import { distanceCells, getEdgeCoverBonus, isFlanked } from '../../rules/combat-geometry.js';
-import { evaluateRange } from '../../rules/equipment.js';
+import { evaluateRange, resolveLoadout } from '../../rules/equipment.js';
 import { createViewportCamera, attachViewportGestures, sizeCanvasToContainer } from '../viewport.js';
 
 const ACTION_PHASES = {
@@ -52,11 +52,15 @@ function normalizeCondition(condition) {
   return { ...condition, id, conditionId: id, duration: condition?.duration ?? 0 };
 }
 
-function normalizeCombatActor(actor, fallbackSide = 'party') {
+function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
   const side = actorSide(actor, fallbackSide);
   const equipment = actor?.equipment || { weapon: actor?.weapon ?? null, armor: actor?.armor ?? null, offhand: actor?.offhand ?? null };
   const hp = actor?.hp ?? actor?.currentHP ?? 1;
   const charge = actor?.charge ?? actor?.currentCHARGE ?? 0;
+  // Resolve object-form equipment through the catalog so the engine sees real
+  // damageDie/rangeBand/maxRange. A null loadout (equipment-less enemy) falls
+  // through so the caller's UNARMED_WEAPON / archetype fallback stays intact.
+  const loadout = data && actor?.equipment ? resolveLoadout(actor, data.equipment, data.affixes) : null;
   return {
     ...actor,
     side,
@@ -67,29 +71,29 @@ function normalizeCombatActor(actor, fallbackSide = 'party') {
     protocols: actor?.protocols ?? actor?.protocolDeck ?? [],
     protocolDeck: actor?.protocolDeck ?? actor?.protocols ?? [],
     equipment,
-    weapon: actor?.weapon ?? equipment.weapon ?? null,
-    armor: actor?.armor ?? equipment.armor ?? null,
-    offhand: actor?.offhand ?? equipment.offhand ?? null,
+    weapon: loadout?.weapon ?? actor?.weapon ?? equipment.weapon ?? null,
+    armor: loadout?.armor ?? actor?.armor ?? equipment.armor ?? null,
+    offhand: loadout?.offhand ?? actor?.offhand ?? equipment.offhand ?? null,
     sigilCodepoint: actorSigil(actor, side),
     conditions: (actor?.conditions || []).map(normalizeCondition)
   };
 }
 
-function normalizeEncounter(encounter) {
+function normalizeEncounter(encounter, data = null) {
   if (!encounter || !Array.isArray(encounter.actors)) return null;
   return {
     ...encounter,
     window: encounter.window || DEFAULT_WINDOW,
-    actors: encounter.actors.map((actor) => normalizeCombatActor(actor, actor?.side || 'enemy'))
+    actors: encounter.actors.map((actor) => normalizeCombatActor(actor, actor?.side || 'enemy', data))
   };
 }
 
-function normalizeCombatState(combatState) {
+function normalizeCombatState(combatState, data = null) {
   if (!combatState) return null;
   const entries = combatState.combatants instanceof Map
-    ? [...combatState.combatants.entries()].map(([id, actor]) => [id, normalizeCombatActor(actor, actor?.side || 'party')])
+    ? [...combatState.combatants.entries()].map(([id, actor]) => [id, normalizeCombatActor(actor, actor?.side || 'party', data)])
     : Array.isArray(combatState.combatants)
-      ? combatState.combatants.map((actor) => [actor.id, normalizeCombatActor(actor, actor?.side || 'party')])
+      ? combatState.combatants.map((actor) => [actor.id, normalizeCombatActor(actor, actor?.side || 'party', data)])
       : null;
   if (!entries) return null;
   combatState.combatants = new Map(entries);
@@ -116,7 +120,7 @@ function normalizeEnemySpawns(spawns, depth, rngCursor, enemiesData) {
 
 function fallbackEncounter(floor, runState, rngCursor, data) {
   const enemies = data.enemies ? normalizeEnemySpawns(floor?.enemySpawns, runState.depth, rngCursor, data.enemies) : [];
-  return normalizeEncounter(createStandardEncounter(floor, runState.partyPosition || floor?.entryPoint || { x: 0, y: 0 }, runState.party || [], enemies, rngCursor));
+  return normalizeEncounter(createStandardEncounter(floor, runState.partyPosition || floor?.entryPoint || { x: 0, y: 0 }, runState.party || [], enemies, rngCursor), data);
 }
 
 function windowLattice(window) {
@@ -216,8 +220,8 @@ export function mount(container, params = {}) {
   const data = params.data || {};
   const rngCursor = createRNGCursorForRun(runState.worldSeed, runState.rngState);
   const lattice = params.lattice || (floor ? createLattice(floor, runState) : null);
-  const encounter = normalizeEncounter(params.encounter) || fallbackEncounter(floor, runState, rngCursor, data) || { id: 'combat', kind: 'standard', window: DEFAULT_WINDOW, actors: [] };
-  const combatState = normalizeCombatState(params.combatState) || initiateCombat(encounter, rngCursor);
+  const encounter = normalizeEncounter(params.encounter, data) || fallbackEncounter(floor, runState, rngCursor, data) || { id: 'combat', kind: 'standard', window: DEFAULT_WINDOW, actors: [] };
+  const combatState = normalizeCombatState(params.combatState, data) || initiateCombat(encounter, rngCursor);
   const combatLattice = windowLattice(combatState.window);
   const rulesContext = {
     runState,
