@@ -1742,3 +1742,67 @@ Party actors are byte-for-byte unchanged — their stats live on the character r
 `createEnemy` is intentionally NOT called on the restore path — it consumes the `gen` RNG stream (sigil pick + id) and would desync the run's deterministic stream. Stats come from stored values only.
 
 **Custom Rule 6 boundary.** Adding the persisted stat block adds ~30 chars to the deep-active-combat-boundary stress fixture at depth 100 with 4 identical drones. Even with aggressive codec compression (archetype enum, sigil variant-index, template dedup, chargeMax gating, 5-bit attributes), that fixture's fragment lands at ~1503 chars, three above the 1500-char `BUDGET` in `src/state/save-encode.js`. Every other stress fixture (`legal-minimum`, `typical-depth-12`, `stack-aware-100-item-cap`, `four-operator-deep-dense`, `two-echo-queue`) stays comfortably under budget. Because `src/state/save-encode.js` and `scripts/stress-saves.js` are outside this session's lease, the budget/fixture tension is left for owner resolution — see this session's handoff `surprises` field for options.
+
+<!-- combat-save-budget-reconciliation SESSION-01 — 2026-08-18 -->
+## Versioned decode substrate (M35 update + M105/M106 new)
+
+`decodeRun` no longer strict-rejects on version. After the frame parses,
+decrypts, and decompresses, the payload's first byte (`schemaVersion`) is
+peeked and dispatched:
+
+```
+decodeRun(fragment)
+  → frame parse (magic, SAVE_VERSION check, CRC, layers)
+  → decompress
+  → peek payload[0] = schemaVersion
+  → dispatch:
+      schemaVersion === RUN_SCHEMA_VERSION     → live decodeRunPayload
+      schemaVersion in FROZEN_READERS          → frozen reader + migrateState → validate
+      otherwise (future/unknown)               → { success: true, mode: 'seed', recoveredSeed }
+  → return
+```
+
+The frame's worldSeed offset (bytes 5–8, little-endian) is frozen; the
+seed-recovery floor reads it directly regardless of payload contents.
+
+### M35 Condense — now version-keyed
+- `registerCondenserTable(tableData)` — add a historical/current table by
+  its `version` without changing "current".
+- `initCondenser(tableData)` — register + set "current".
+- `hasCondenserTable(version)` — probe registry.
+- `readSymbol` / `writeSymbol` accept an optional trailing `version` param
+  (defaults to current). Frozen readers pass their pinned version so old
+  symbols keep resolving even after the current table advances.
+- `expand(data, version)` selects the registered table for `version`;
+  throws `unknown_table_version` if the version was never registered.
+
+### M105 Save Migration (new)
+`src/state/save-migrate.js` holds an ordered chain of
+`{from, to: from + 1, migrate}` steps. `migrateState(state, from, to)`
+walks the chain and applies each step. Empty chain = identity — the state
+SESSION-01 leaves the runner in. SESSION-02's v3→v4 hop lands here (as a
+no-op, since v3→v4 is encoding-only). Later schema bumps that change the
+state shape add real migration functions here.
+
+### M106 Version Readers (new)
+`src/state/versions/read-v3.js` and `codecs-v3.js` are self-contained
+byte-copies of the payload readers pinned to `RUN_SCHEMA_VERSION = 3` and
+its paired symbol-table snapshot `data/symbol-table.v3.json`. They do NOT
+import the live `save-schema.js` / `save-codecs.js`; the only shared seam
+is `readSymbol(reader, field, raw, V3_TABLE_VERSION)`.
+
+Header comment on both files: `FROZEN — reads schema v3 forever; never edit`.
+
+### Custom Rule 13 (new)
+Versioned saves never dead-end. Every schema/table bump lands:
+(a) a frozen reader under `src/state/versions/`, (b) a real fixture in
+`tests/fixtures/save-versions/` that the corpus test decodes every run,
+(c) `registerCondenserTable` for the historical symbol table so the frozen
+reader's symbols still resolve, and (d) the seed-recovery floor stays intact.
+
+## Note for SESSION-02
+When `RUN_SCHEMA_VERSION` bumps 3→4 (and the current symbol table bumps
+1→2), the v3 snapshot table (`data/symbol-table.v3.json`, version 1) MUST
+be registered via `registerCondenserTable(symbolTableV3)` at the same init
+site as the current table — otherwise `readV3Payload` will fail its symbol
+lookups against the newly-current v2 table.
