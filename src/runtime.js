@@ -276,18 +276,25 @@ function actorFromSnapshot(actor, runState) {
   // Resolve the loadout so party/echo actors carry real weapon stats after resume;
   // enemies (base = {}) resolve to null and keep DEFAULT_ENEMY_WEAPON below.
   const loadout = resolveLoadout(base, gameData?.equipment, gameData?.affixes);
+  // Persisted enemy stat block (SESSION-02). For party actors this is unset
+  // (their stats live on the character record); for enemies it carries the
+  // resolved values from createEnemy so a mid-combat save/restore does not
+  // silently reset def/attributes to DEFAULT_ATTRIBUTES/10.
+  const persistedStats = enemy ? actor?.stats : undefined;
+  const persistedHpMax = persistedStats?.hpMax;
+  const persistedChargeMax = persistedStats?.chargeMax;
   return {
     ...base,
     id: actor?.id ?? base.id,
     side: actor?.side === 'echo' ? 'echo' : enemy ? 'enemy' : 'party',
     position: { x: Math.floor(actor?.x ?? 0), y: Math.floor(actor?.y ?? 0) },
     hp,
-    hpMax: Math.max(hp, base.maxHP ?? base.currentHP ?? hp),
+    hpMax: Number.isFinite(persistedHpMax) ? Math.max(hp, persistedHpMax) : Math.max(hp, base.maxHP ?? base.currentHP ?? hp),
     charge,
-    chargeMax: Math.max(charge, base.maxCHARGE ?? base.currentCHARGE ?? charge),
+    chargeMax: Number.isFinite(persistedChargeMax) ? Math.max(charge, persistedChargeMax) : Math.max(charge, base.maxCHARGE ?? base.currentCHARGE ?? charge),
     currentHP: hp,
     currentCHARGE: charge,
-    attributes: base.attributes || DEFAULT_ATTRIBUTES,
+    attributes: persistedStats?.attributes ?? base.attributes ?? DEFAULT_ATTRIBUTES,
     equipment,
     weapon: loadout?.weapon ?? base.weapon ?? equipment.weapon ?? (enemy ? DEFAULT_ENEMY_WEAPON : null),
     armor: loadout?.armor ?? base.armor ?? equipment.armor ?? null,
@@ -299,10 +306,13 @@ function actorFromSnapshot(actor, runState) {
     ap: Math.max(0, Math.min(7, actor?.ap ?? 0)),
     moveAvailable: (actor?.moves ?? 0) > 0,
     freeActions: actor?.freeActions ?? 0,
-    sigilCodepoint: base.sigilCodepoint ?? codepointFromSigilId(base.sigilId) ?? (enemy ? 0xE030 : 0xE000),
-    defense: base.defense ?? (enemy ? 10 : 0),
-    protocolDefense: base.protocolDefense ?? 10,
-    behavior: base.behavior ?? (enemy ? 'aggressive' : undefined),
+    sigilCodepoint: persistedStats?.sigilCodepoint ?? base.sigilCodepoint ?? codepointFromSigilId(base.sigilId) ?? (enemy ? 0xE030 : 0xE000),
+    defense: persistedStats?.defense ?? base.defense ?? (enemy ? 10 : 0),
+    protocolDefense: persistedStats?.protocolDefense ?? base.protocolDefense ?? 10,
+    behavior: persistedStats?.behavior ?? base.behavior ?? (enemy ? 'aggressive' : undefined),
+    ...(persistedStats?.archetypeId ? { archetypeId: persistedStats.archetypeId } : base.archetypeId ? { archetypeId: base.archetypeId } : {}),
+    ...(persistedStats && 'retreats' in persistedStats ? { retreats: Boolean(persistedStats.retreats) } : base.retreats !== undefined ? { retreats: Boolean(base.retreats) } : {}),
+    ...(persistedStats?.protocolAccess !== undefined ? { protocolAccess: persistedStats.protocolAccess } : base.protocolAccess !== undefined ? { protocolAccess: base.protocolAccess } : {}),
     defeated: Boolean(actor?.defeated),
     retreated: Boolean(actor?.retreated)
   };
