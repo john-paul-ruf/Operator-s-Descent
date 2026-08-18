@@ -283,3 +283,95 @@ sub-tabs, saved configs, dual portrait/wide layouts. Findings:
   which sets `tabIndex = 0` on a `<div>` labelled `Inventory`, `Container
   contents`, `Prepared protocols`. **OK** — the scroll area is
   focusable so keyboard users can scroll with arrows.
+
+### 3F. Exploration + combat screens (owners: `src/ui/screens/exploration.js`, `src/ui/screens/combat.js`, `src/ui/playfield.js`, `src/ui/viewport.js`)
+
+- **Playfield canvas** carries `pointer-events: none` (base.css) and is
+  wrapped in a `.playfield-body` div that hosts `attachViewportGestures`
+  (drag-pan, pinch, wheel, tap). The **canvas has no `role="img"`** — the
+  existing accessibility spec asserts `getByRole('img', { name: /Exploration
+  map/ })` finds it, meaning the label is set on the wrapper. Verify the
+  wrapper actually carries `role="img"` and an `aria-label` in every
+  screen — grep of source shows none of the exploration/combat modules do
+  this; the spec passes today only because the exploration screen sets
+  the label elsewhere. **WCAG 1.1.1**. Fix hint: in `exploration.js`
+  after `playfieldBody.appendChild(canvas)`, add
+  `playfieldBody.setAttribute('role', 'img'); playfieldBody.setAttribute('aria-label', 'Exploration map at depth …');`
+  and update on each render. Do the same in `combat.js`.
+- **Exploration container** is focused after mount (line 272) — **OK**.
+  Every subsequent `renderPlayfield` call does not steal focus (correct).
+  The `pointerdown` capture handler `refocusContainer()` recovers focus
+  after the user taps the canvas — **OK** for keyboard-after-pointer flow.
+- **Combat screen** — no equivalent `container.focus()` on mount. Falls
+  under §3A fix.
+- **Exploration danger clock** is spoken by the status strip
+  (`CLK\d+\.\d{2}`) as a live text; assertion in the existing spec
+  passes. But the status strip is not marked `role="status"` or
+  `aria-live` — deep-tree updates go silent. Fix hint: add
+  `role="status" aria-live="polite" aria-atomic="false"` to `.status-strip`
+  in `styles/components.css` or in `src/ui/status-strip.js`.
+
+### 3G. Menu screens (settings, tutorial, library, import, scorecard) — see per-screen notes in §5
+
+## 4. Pointer / no-keyboard parity (WCAG 2.5.1 / 2.5.5)
+
+### 4A. Global — every keyboard-only path
+
+Cross-referenced `src/ui/input.js` KEY_MAP against on-screen affordances:
+
+| Keyboard action | Pointer / touch affordance | Verdict |
+|-----------------|----------------------------|---------|
+| `Arrow`/`WASD`/`Numpad` movement | MOVE mode d-pad (portrait + wide) | **OK** — parity |
+| `Digit 1-7` (mode switching) | Console tab bar (portrait bottom, wide right dock) | **OK** — parity |
+| `Enter`/`Space` (confirm) | CONFIRM button in COMBAT, DESCEND button in MOVE d-pad, per-action confirm buttons | **OK** — parity |
+| `Escape`/`Backspace` (cancel) | BACK button in every sub-flow (creation, import, settings, tutorial, combat) | **OK** — parity |
+| `Tab` (cycle target in combat) | Target list rows in COMBAT mode | **OK** — parity, and tap on target beats keyboard cycling for speed |
+| Arrow keys cycle target in `choose-target` phase | Same target list | **OK** |
+| **`Enter` in LOG mode copies share link** | Explicit COPY LINK button | **OK** — parity |
+| Playfield tap → path-plan → auto-run | No keyboard equivalent for tap-to-path; keyboard is step-by-step d-pad | **Gap** — keyboard users cannot request a multi-step auto-run to a target cell. Fix hint: add a `pathToCell(cellFocus)` action bound to a target-cell overlay reachable via a "focus cell mode" (T-key), OR document as a pointer-only convenience |
+| Playfield pinch/wheel-zoom, drag-pan | No keyboard equivalent for camera control (M104 exposes `panBy`/`anchorZoom` in `viewport.js`, no key binding) | **Gap** — keyboard users can move the party, but cannot pan/zoom the map. Fix hint: bind `+`/`-` for zoom and `Shift+Arrow` for camera pan in the viewport gesture layer |
+
+### 4B. Pointer-only gaps per screen
+
+- **Title screen** — START button (pointer + keyboard both work). Branch
+  list toggle discoverable only after clicking START, no keyboard hint on
+  the button itself. Not a WCAG failure but worsens discoverability.
+- **Creation screen** — all controls have pointer affordances; the
+  attribute steppers are pointer-friendly (44×44 wide-layout,
+  32×32 portrait — see §4C touch targets).
+- **Library / import / tutorial / settings / scorecard** — every action
+  has a button; no keyboard-only path detected.
+- **Combat direction grid** — the `.combat-direction-grid` is a 3×3
+  56×56 button grid. Pointer parity to keyboard direction keys **OK**,
+  though 56 px is below the wide-layout 96 px min-row expectation (§4C).
+- **Console tab bar (portrait)** — 48 px min-height + full tap area,
+  pointer-friendly. Wide dock uses 96 px min-height. **OK.**
+
+### 4C. Touch targets (WCAG 2.5.5 AAA, project rule = 96 px console rows)
+
+`scripts/design-scan/check-touch-targets.js` reports three warnings
+against the project's 96 px minimum:
+
+| Declaration | Value | File | Fix hint |
+|-------------|-------|------|----------|
+| `min-height: 34px` | `.init-slot`, `.init-sigil`, `.status-*` rows | `styles/components.css` | Init-slots are decorative rail dots — annotate `role="presentation"`; keep 34 px. Status rows contain no interactive controls — same treatment. |
+| `min-height: 32px` | `.stepper-btn`, `.combat-direction`, `.dpad-btn` inline | `styles/components.css` | Steppers ARE interactive — raise wrap container (`.slider-row` / `.attr-row`) padding to hit 96 px in portrait; wide layout already does 44×44 which is a legitimate exception. Add a per-context override or increase padding. |
+| `min-height: 64px` | `.config-name-input` (creation save-name field) | `styles/components.css` | Passes WCAG 2.5.5 AA (24×24) but below the project 96 px rule. Consider adding a wrapper row that hits 96 px and let the input flow inside. |
+
+Note: the check itself does not distinguish decorative rows from
+interactive ones. Wave B should annotate `role="presentation"` on init-rail
+sigils and status readouts to remove them from the touch-target audit, and
+apply padding to the stepper wrappers rather than the buttons themselves.
+
+### 4D. Non-target-related pointer findings
+
+- **`.crt-scanlines .crt-vignette .crt-grille` etc.** in `styles/crt.css`
+  are `pointer-events: none` — decorative overlays never intercept clicks.
+  **OK.**
+- **`.playfield-canvas` in `styles/components.css`** — `pointer-events:
+  none` (already asserted by the existing accessibility spec) with the
+  wrapper handling gestures. **OK.**
+- **`.update-toast` reload button** — `min-height: 48px`, keyboard-
+  reachable. **OK.**
+- **`.mode-tab.disabled`** uses `cursor: not-allowed` and `disabled` — a
+  pointer user gets clear feedback that the tab is inactive. **OK.**
