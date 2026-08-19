@@ -26,6 +26,11 @@ describe('release performance and budget gates', () => {
     expect(floors.timingsMs.p95).toBeLessThan(100);
     expect(floors.attempts.max).toBeLessThan(100);
     expect(saves.maxLength).toBeLessThan(1500);
+    const ceilings = ['caster-pack-ceiling', 'apex-pack-ceiling'];
+    const names = saves.cases.map((entry) => entry.name);
+    for (const name of ceilings) expect(names).toContain(name);
+    const worst = saves.cases.find((entry) => entry.length === saves.maxLength);
+    expect(ceilings).toContain(worst.name);
   });
 
   it('deterministic balance simulation covers the corruption and hunt curve', () => {
