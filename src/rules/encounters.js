@@ -1,6 +1,8 @@
 const WINDOW_WIDTH = 8;
 const WINDOW_HEIGHT = 16;
 const CANDIDATE_RING_RADIUS = 2;
+const OPEN_CELL_TARGET = 48;
+const MAX_WIDENING_PASSES = 3;
 
 function isOpenFloorCell(floorCells, x, y) {
   return floorCells[y]?.[x] !== undefined && floorCells[y][x] !== 0;
@@ -129,15 +131,200 @@ function pickBestWindow(floorCells, contact) {
   return best;
 }
 
-// Pure — no PRNG, no side effects on floorCells. Picks the best of ~25 candidate origins
-// in a Chebyshev-2 ring. Returns { originX, originY, width: 8, height: 16, cells }. If
+// Flood-fill open regions, sorted by descending size (ties broken by earliest (y, x) cell
+// so widening choices stay deterministic when two regions tie in size).
+function openRegionsOf(cells) {
+  const visited = Array.from({ length: WINDOW_HEIGHT }, () => new Array(WINDOW_WIDTH).fill(false));
+  const regions = [];
+  for (let y = 0; y < WINDOW_HEIGHT; y++) {
+    for (let x = 0; x < WINDOW_WIDTH; x++) {
+      if (cells[y][x] === 0 || visited[y][x]) continue;
+      const region = [];
+      const stack = [[x, y]];
+      visited[y][x] = true;
+      let minKey = y * WINDOW_WIDTH + x;
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop();
+        region.push({ x: cx, y: cy });
+        const key = cy * WINDOW_WIDTH + cx;
+        if (key < minKey) minKey = key;
+        for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= WINDOW_WIDTH || ny >= WINDOW_HEIGHT) continue;
+          if (cells[ny][nx] === 0 || visited[ny][nx]) continue;
+          visited[ny][nx] = true;
+          stack.push([nx, ny]);
+        }
+      }
+      regions.push({ cells: region, minKey });
+    }
+  }
+  regions.sort((a, b) => b.cells.length - a.cells.length || a.minKey - b.minKey);
+  return regions.map(r => r.cells);
+}
+
+function isBorder(x, y) {
+  return x === 0 || y === 0 || x === WINDOW_WIDTH - 1 || y === WINDOW_HEIGHT - 1;
+}
+
+// BFS through INTERIOR wall cells from any interior wall touching regionA seeking any interior
+// wall touching regionB. Border walls are excluded so the outer ring stays whatever the crop
+// gave us — cover geometry needs the wall boundary intact. Seed frontier iterated in (y, x)
+// order so re-runs pick the same connector path.
+function shortestWallChain(cells, regionA, regionB) {
+  const inB = new Set(regionB.map(c => `${c.x},${c.y}`));
+  const seeds = [];
+  const seedSeen = new Set();
+  for (const cell of regionA) {
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const nx = cell.x + dx;
+      const ny = cell.y + dy;
+      if (nx <= 0 || ny <= 0 || nx >= WINDOW_WIDTH - 1 || ny >= WINDOW_HEIGHT - 1) continue;
+      if (cells[ny][nx] !== 0) continue;
+      const key = `${nx},${ny}`;
+      if (seedSeen.has(key)) continue;
+      seedSeen.add(key);
+      seeds.push({ x: nx, y: ny });
+    }
+  }
+  seeds.sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const visited = new Set();
+  const queue = [];
+  for (const seed of seeds) {
+    const key = `${seed.x},${seed.y}`;
+    visited.add(key);
+    queue.push({ x: seed.x, y: seed.y, path: [{ x: seed.x, y: seed.y }] });
+  }
+
+  let cap = WINDOW_WIDTH * WINDOW_HEIGHT;
+  while (queue.length > 0 && cap-- > 0) {
+    const cur = queue.shift();
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const nx = cur.x + dx;
+      const ny = cur.y + dy;
+      if (inB.has(`${nx},${ny}`)) return cur.path;
+    }
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const nx = cur.x + dx;
+      const ny = cur.y + dy;
+      if (nx <= 0 || ny <= 0 || nx >= WINDOW_WIDTH - 1 || ny >= WINDOW_HEIGHT - 1) continue;
+      if (cells[ny][nx] !== 0) continue;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      queue.push({ x: nx, y: ny, path: [...cur.path, { x: nx, y: ny }] });
+    }
+  }
+  return null;
+}
+
+// Open a 2-wide connector along the shortest interior wall chain between the two largest
+// open regions. For each chain cell, also open exactly ONE perpendicular neighbor to make
+// the corridor 2-wide (skipped if that side is already open). Border cells never touched.
+// Returns true if any wall was opened.
+function connectorPass(cells) {
+  const regions = openRegionsOf(cells);
+  if (regions.length < 2) return false;
+  const path = shortestWallChain(cells, regions[0], regions[1]);
+  if (!path || path.length === 0) return false;
+
+  let mutated = false;
+  for (const cell of path) {
+    if (isBorder(cell.x, cell.y)) continue;
+    if (cells[cell.y][cell.x] === 0) {
+      cells[cell.y][cell.x] = 1;
+      mutated = true;
+    }
+  }
+  for (let i = 0; i < path.length; i++) {
+    const p = path[i];
+    const neighbor = i > 0 ? path[i - 1] : (i + 1 < path.length ? path[i + 1] : null);
+    let perpendicular;
+    if (neighbor && neighbor.y === p.y) {
+      perpendicular = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+    } else if (neighbor && neighbor.x === p.x) {
+      perpendicular = [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+    } else {
+      perpendicular = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+    }
+    let alreadyWide = false;
+    for (const d of perpendicular) {
+      const nx = p.x + d.dx;
+      const ny = p.y + d.dy;
+      if (nx < 0 || ny < 0 || nx >= WINDOW_WIDTH || ny >= WINDOW_HEIGHT) continue;
+      if (cells[ny][nx] !== 0) { alreadyWide = true; break; }
+    }
+    if (alreadyWide) continue;
+    for (const d of perpendicular) {
+      const nx = p.x + d.dx;
+      const ny = p.y + d.dy;
+      if (nx < 0 || ny < 0 || nx >= WINDOW_WIDTH || ny >= WINDOW_HEIGHT) continue;
+      if (isBorder(nx, ny)) continue;
+      if (cells[ny][nx] === 0) {
+        cells[ny][nx] = 1;
+        mutated = true;
+        break;
+      }
+    }
+  }
+  return mutated;
+}
+
+// Open every INTERIOR wall cell orthogonally adjacent to the largest open region. Border cells
+// never touched; candidates iterated in (y, x) order for determinism. Returns true if any wall
+// was opened.
+function perimeterPass(cells) {
+  const regions = openRegionsOf(cells);
+  if (regions.length === 0) return false;
+  const largest = regions[0];
+  const inRegion = new Set(largest.map(c => `${c.x},${c.y}`));
+  const candidates = new Map();
+  for (const cell of largest) {
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const nx = cell.x + dx;
+      const ny = cell.y + dy;
+      if (nx < 0 || ny < 0 || nx >= WINDOW_WIDTH || ny >= WINDOW_HEIGHT) continue;
+      if (isBorder(nx, ny)) continue;
+      if (cells[ny][nx] !== 0) continue;
+      if (inRegion.has(`${nx},${ny}`)) continue;
+      candidates.set(`${nx},${ny}`, { x: nx, y: ny });
+    }
+  }
+  const ordered = [...candidates.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+  if (ordered.length === 0) return false;
+  for (const p of ordered) cells[p.y][p.x] = 1;
+  return true;
+}
+
+// Post-carve widening. Mutates the passed-in window `cells` only (never floorCells). Runs a
+// connector pass first, then perimeter passes; caps total passes at MAX_WIDENING_PASSES for
+// bounded latency. Short-circuits as soon as OPEN_CELL_TARGET is met, so re-invoking on an
+// already-saturated grid returns immediately (idempotent when the target is reachable — true
+// for every real 20x32 floor slice we generate).
+function widenWindow(cells) {
+  let passes = 0;
+  while (passes < MAX_WIDENING_PASSES && countOpenCellsIn(cells) < OPEN_CELL_TARGET) {
+    const mutated = passes === 0 ? connectorPass(cells) : perimeterPass(cells);
+    passes++;
+    if (!mutated) break;
+  }
+  return { passes, hitCap: passes === MAX_WIDENING_PASSES };
+}
+
+// Pure — no PRNG, no side effects on floorCells. Picks the best of ~25 candidate origins in a
+// Chebyshev-2 ring, then widens the CARVED WINDOW ONLY when the initial slice falls short of
+// OPEN_CELL_TARGET open cells. Returns { originX, originY, width: 8, height: 16, cells }. If
 // floorCells collapses to `[[1]]` the smallest legal window is returned with just (0,0) open.
-// Checkpoint 2 will add post-carve widening when countOpenCellsIn(cells) < OPEN_CELL_TARGET.
 function carveWindow(floorCells, contact) {
   const best = pickBestWindow(floorCells, contact);
   const cells = best ? best.cells : buildWindowCells(floorCells, 0, 0);
   const originX = best ? best.originX : 0;
   const originY = best ? best.originY : 0;
+  if (countOpenCellsIn(cells) < OPEN_CELL_TARGET) {
+    widenWindow(cells);
+  }
   return { originX, originY, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, cells };
 }
 

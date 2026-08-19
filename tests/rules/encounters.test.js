@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createStandardEncounter, createHuntEncounter, completeEncounter, getDueEchoes, consumeEcho, injectEcho } from '../../src/rules/encounters.js';
+// windowMetricsOfWindow / buildRawWindow below are local mirrors used by the widening tests.
 import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { createPRNG } from '../../src/core/prng.js';
@@ -286,6 +287,128 @@ describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkp
     }
   });
 });
+
+describe('carveWindow — post-carve widening (SESSION-03 checkpoint 2)', () => {
+  const cursor = createRNGCursorForRun(1);
+  const party = [makeCharacter({ id: 'a' })];
+  const enemy = [{ id: 'e1', archetypeId: 'drone' }];
+
+  it('narrow-corridor contact yields a spacious final window (>= 48 open cells, >= 2 2x2 regions)', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const encounter = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
+    const metrics = windowMetricsOfWindow(encounter.window.cells);
+    expect(metrics.openCells).toBeGreaterThanOrEqual(48);
+    expect(metrics.twoByTwoRegions).toBeGreaterThanOrEqual(2);
+  });
+
+  it('final window on any tested corridor contact never has fewer than 32 open cells', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const contacts = [
+      { x: 5, y: 8 }, { x: 10, y: 16 }, { x: 10, y: 20 }, { x: 15, y: 25 }, { x: 3, y: 5 }
+    ];
+    for (const contact of contacts) {
+      const e = createStandardEncounter(floor, contact, party, enemy, cursor);
+      const metrics = windowMetricsOfWindow(e.window.cells);
+      expect(metrics.openCells).toBeGreaterThanOrEqual(32);
+    }
+  });
+
+  it('deployBands returns anchors with Chebyshev separation >= 8 on the widened corridor case', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const enemies2 = [
+      { id: 'e1', archetypeId: 'drone' }, { id: 'e2', archetypeId: 'drone' }
+    ];
+    const encounter = createStandardEncounter(floor, { x: 10, y: 16 }, makeParty(2), enemies2, cursor);
+    const partyPositions = encounter.actors.filter(a => a.side === 'party').map(a => a.position);
+    const hostilePositions = encounter.actors.filter(a => a.side === 'enemy').map(a => a.position);
+    let minSeparation = Infinity;
+    for (const p of partyPositions) for (const h of hostilePositions) {
+      minSeparation = Math.min(minSeparation, Math.max(Math.abs(p.x - h.x), Math.abs(p.y - h.y)));
+    }
+    expect(minSeparation).toBeGreaterThanOrEqual(8);
+  });
+
+  it('widening never opens a border cell — the outer ring matches the raw crop', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const contacts = [
+      { x: 10, y: 16 }, { x: 5, y: 8 }, { x: 15, y: 20 }
+    ];
+    for (const contact of contacts) {
+      const e = createStandardEncounter(floor, contact, party, enemy, cursor);
+      const raw = buildRawWindow(floor.cells, e.window.originX, e.window.originY);
+      for (let x = 0; x < 8; x++) {
+        expect(e.window.cells[0][x]).toBe(raw[0][x]);
+        expect(e.window.cells[15][x]).toBe(raw[15][x]);
+      }
+      for (let y = 0; y < 16; y++) {
+        expect(e.window.cells[y][0]).toBe(raw[y][0]);
+        expect(e.window.cells[y][7]).toBe(raw[y][7]);
+      }
+    }
+  });
+
+  it('widening is idempotent — re-carving on the same inputs is a no-op', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const contact = { x: 10, y: 16 };
+    const first = createStandardEncounter(floor, contact, party, enemy, cursor);
+    const second = createStandardEncounter(floor, contact, party, enemy, cursor);
+    expect(JSON.stringify(first.window.cells)).toBe(JSON.stringify(second.window.cells));
+  });
+
+  it('carveWindow never mutates the input floorCells (widening writes only into the window)', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const before = JSON.stringify(floor.cells);
+    createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
+    createStandardEncounter(floor, { x: 5, y: 5 }, party, enemy, cursor);
+    expect(JSON.stringify(floor.cells)).toBe(before);
+  });
+});
+
+// Local re-computation of window metrics for widening assertions. Mirrors the internal
+// windowMetrics logic in src/rules/encounters.js but takes a pre-built cells grid so we can
+// measure the ALREADY-WIDENED window rather than rebuilding from floorCells.
+function windowMetricsOfWindow(cells) {
+  const H = cells.length;
+  const W = cells[0].length;
+  const isOpen = (x, y) => y >= 0 && y < H && x >= 0 && x < W && cells[y][x] !== 0;
+  let openCells = 0;
+  let oneWideCorridors = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (!isOpen(x, y)) continue;
+      openCells++;
+      const n = isOpen(x, y - 1), s = isOpen(x, y + 1), e = isOpen(x + 1, y), w = isOpen(x - 1, y);
+      const on = (n ? 1 : 0) + (s ? 1 : 0) + (e ? 1 : 0) + (w ? 1 : 0);
+      if (on === 2 && ((n && s) || (e && w))) oneWideCorridors++;
+    }
+  }
+  const claimed = Array.from({ length: H }, () => new Array(W).fill(false));
+  let twoByTwoRegions = 0;
+  for (let y = 0; y < H - 1; y++) {
+    for (let x = 0; x < W - 1; x++) {
+      if (claimed[y][x] || claimed[y][x + 1] || claimed[y + 1][x] || claimed[y + 1][x + 1]) continue;
+      if (!isOpen(x, y) || !isOpen(x + 1, y) || !isOpen(x, y + 1) || !isOpen(x + 1, y + 1)) continue;
+      claimed[y][x] = claimed[y][x + 1] = claimed[y + 1][x] = claimed[y + 1][x + 1] = true;
+      twoByTwoRegions++;
+    }
+  }
+  return { openCells, oneWideCorridors, twoByTwoRegions };
+}
+
+// Rebuilds the raw 8x16 slice of floorCells at the given origin — no widening applied.
+// Lets tests distinguish widened cells from what the base crop provided.
+function buildRawWindow(floorCells, originX, originY) {
+  const cells = [];
+  for (let y = 0; y < 16; y++) {
+    const row = [];
+    for (let x = 0; x < 8; x++) {
+      const v = floorCells[originY + y]?.[originX + x];
+      row.push(v !== undefined && v !== 0 ? 1 : 0);
+    }
+    cells.push(row);
+  }
+  return cells;
+}
 
 describe('completeEncounter — hunt outcome', () => {
   it('victory on hunt returns resolved with loot', () => {
