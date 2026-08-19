@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-18-the-manual-v1';
+const CACHE_VERSION = '2026-08-19-the-manual-modal-v1';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -84,6 +84,8 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/ui/creation-model.js',
   './src/ui/input.js',
   './src/ui/layout.js',
+  './src/ui/manual/manual-modal.js',
+  './src/ui/manual/manual-view.js',
   './src/ui/playfield.js',
   './src/ui/screens/combat.js',
   './src/ui/screens/creation.js',
