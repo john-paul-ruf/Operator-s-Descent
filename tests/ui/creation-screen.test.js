@@ -92,6 +92,27 @@ function allText(root) {
   return [root.textContent, ...(root.children || []).flatMap((child) => allText(child))].filter(Boolean);
 }
 
+function collectButtons(root, acc = []) {
+  if (root?.tagName === 'BUTTON') acc.push(root);
+  for (const child of root?.children || []) collectButtons(child, acc);
+  return acc;
+}
+
+function hasNestedButton(root) {
+  for (const button of collectButtons(root)) {
+    const descendants = [];
+    for (const child of button.children || []) collectButtons(child, descendants);
+    if (descendants.length > 0) return true;
+  }
+  return false;
+}
+
+function captureManualDispatches() {
+  const seen = [];
+  const off = bus.on('ui:manual-open', (payload) => seen.push(payload));
+  return { seen, off };
+}
+
 function mountCreation(params = {}) {
   const container = new FakeElement('div');
   return import('../../src/ui/screens/creation.js').then(({ mount }) => ({ container, controller: mount(container, { data: gameData, ...params }) }));
@@ -303,6 +324,69 @@ describe('creation screen workflow', () => {
     byTestId(container, 'tab-attrs').click();
     expect(byTestId(container, 'attribute-mgt').style.minHeight).toBe('96px');
     expect(byTestId(container, 'attribute-mgt').getAttribute('aria-label')).toContain('MIGHT rank 3');
+  });
+});
+
+describe('creation screen — manual links (portrait)', () => {
+  it('header manual chip dispatches character_creation', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 111 });
+    const chip = byTestId(container, 'manual-link-character_creation');
+    expect(chip).not.toBeNull();
+    chip.click();
+    expect(seen).toContainEqual({ target: 'character_creation', source: 'creation' });
+    off();
+  });
+
+  it('class-detail manual chip dispatches the class id and is not nested inside the class button', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 222 });
+    byTestId(container, 'add-character').click();
+    const chip = byTestId(container, 'manual-link-breacher');
+    expect(chip).not.toBeNull();
+    // Chip must be a sibling within the wrapper, NOT a descendant of the class-select button.
+    expect(byTestId(container, 'class-breacher').children.every((c) => c !== chip)).toBe(true);
+    chip.click();
+    expect(seen).toContainEqual({ target: 'breacher', source: 'creation' });
+    off();
+  });
+
+  it('every class option has a manual chip beside its card', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 333 });
+    byTestId(container, 'add-character').click();
+    for (const id of ['breacher', 'ghost', 'compiler', 'anchor', 'oracle', 'operator']) {
+      expect(byTestId(container, `manual-link-${id}`)).not.toBeNull();
+    }
+    // Radio group still has 6 direct children (wrappers now, one per class).
+    expect(byTestId(container, 'panel-class').children.find((c) => c.classList?.contains('class-card-row')).children).toHaveLength(6);
+  });
+
+  it('attribute label chips dispatch attribute ids', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 444 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    byTestId(container, 'tab-attrs').click();
+    for (const key of ['mgt', 'fin', 'vit', 'res', 'foc', 'sig']) {
+      const chip = byTestId(container, `manual-link-${key}`);
+      expect(chip).not.toBeNull();
+      chip.click();
+      expect(seen).toContainEqual({ target: key, source: 'creation' });
+    }
+    off();
+  });
+
+  it('portrait render never nests manual buttons inside another button (class, attrs, gear, tech)', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 555 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    expect(hasNestedButton(container)).toBe(false);
+    byTestId(container, 'tab-attrs').click();
+    expect(hasNestedButton(container)).toBe(false);
+    byTestId(container, 'tab-gear').click();
+    expect(hasNestedButton(container)).toBe(false);
+    byTestId(container, 'tab-tech').click();
+    expect(hasNestedButton(container)).toBe(false);
   });
 });
 
@@ -557,6 +641,62 @@ describe('creation screen — wide layout', () => {
     expect(byTestId(container, 'wide-protocol-ward-1')).toBeNull();
     expect(byTestId(container, 'wide-protocol-rewrite-1')).toBeNull();
     expect(byTestId(container, 'wide-tech-gate-note').textContent).toContain('TIER ≤ 5');
+  });
+
+  it('header manual chip appears beside the wide readout and dispatches character_creation', async () => {
+    installMatchMedia(true);
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 666 });
+    // Chip lives in the left pane as a sibling of the readout (readout children unchanged).
+    expect(byTestId(container, 'wide-readout').children).toHaveLength(3);
+    const chip = byTestId(container, 'manual-link-character_creation');
+    expect(chip).not.toBeNull();
+    expect(chip.parentNode).toBe(byTestId(container, 'wide-creation-left'));
+    chip.click();
+    expect(seen).toContainEqual({ target: 'character_creation', source: 'creation' });
+    off();
+  });
+
+  it('every wide class option has a manual chip beside its card and none is nested inside the card', async () => {
+    installMatchMedia(true);
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 777 });
+    byTestId(container, 'add-character').click();
+    for (const id of ['breacher', 'ghost', 'compiler', 'anchor', 'oracle', 'operator']) {
+      const chip = byTestId(container, `manual-link-${id}`);
+      expect(chip).not.toBeNull();
+      expect(byTestId(container, `wide-class-${id}`).children.every((c) => c !== chip)).toBe(true);
+    }
+    // Grid still has 6 direct children (wrappers).
+    const classSection = byTestId(container, 'wide-section-class');
+    const grid = classSection.children.find((c) => c.classList?.contains('class-grid'));
+    expect(grid.children).toHaveLength(6);
+    byTestId(container, 'manual-link-ghost').click();
+    expect(seen).toContainEqual({ target: 'ghost', source: 'creation' });
+    off();
+  });
+
+  it('wide attribute rows expose manual chips per attribute', async () => {
+    installMatchMedia(true);
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 888 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    for (const key of ['mgt', 'fin', 'vit', 'res', 'foc', 'sig']) {
+      const chip = byTestId(container, `manual-link-${key}`);
+      expect(chip).not.toBeNull();
+      chip.click();
+      expect(seen).toContainEqual({ target: key, source: 'creation' });
+    }
+    off();
+  });
+
+  it('wide render never nests manual buttons inside another button', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 999 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    expect(hasNestedButton(container)).toBe(false);
   });
 
   it('finalizes from the wide footer and navigates to exploration', async () => {

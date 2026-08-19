@@ -1,4 +1,4 @@
-import { createAttributeRow, createButton, createPanel, createScreenBody, createScrollArea, createSigilToken, createTextInput } from '../components.js';
+import { createAttributeRow, createButton, createManualLink, createPanel, createScreenBody, createScrollArea, createSigilToken, createTextInput } from '../components.js';
 import { createInputHandler } from '../input.js';
 import { currentLayoutClass } from '../layout.js';
 import { bus } from '../../state/bus.js';
@@ -25,6 +25,11 @@ const TABS = [
   ['class', 'CLASS'], ['sigil', 'SIGIL'], ['attrs', 'ATTRS'], ['gear', 'GEAR'], ['tech', 'TECH'], ['blueprints', 'BLUEPRINTS']
 ];
 const SAVE_NAME_MAX = 80;
+
+const manualDispatch = (event, payload) => bus.dispatch(event, payload);
+function manualLink(target, opts = {}) {
+  return createManualLink(target, { source: 'creation', dispatch: manualDispatch, ...opts });
+}
 
 function clear(element) {
   if (typeof element.replaceChildren === 'function') element.replaceChildren();
@@ -202,7 +207,12 @@ export function mount(container, params = {}) {
     left.className = 'wide-creation-left';
     left.dataset.testid = 'wide-creation-left';
     left.setAttribute('aria-label', 'Party roster and saved configurations');
-    left.append(renderWideReadout(summary), renderWideRoster(summary), renderWideSavedConfigs(summary));
+    left.append(
+      renderWideReadout(summary),
+      manualLink('character_creation', { variant: 'chip' }),
+      renderWideRoster(summary),
+      renderWideSavedConfigs(summary)
+    );
 
     const right = document.createElement('section');
     right.className = 'wide-creation-right';
@@ -398,7 +408,10 @@ export function mount(container, params = {}) {
       );
       row.append(marker, nameStack);
       card.append(row, text('div', 'desc', (cls.signature?.tiers?.[0] || '').split('.')[0]));
-      grid.appendChild(card);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'class-card-wrap';
+      wrapper.append(card, manualLink(cls.id, { variant: 'chip' }));
+      grid.appendChild(wrapper);
     }
     section.appendChild(grid);
     if (selected?.projectedStats) section.appendChild(renderWideProjectedStats(selected));
@@ -542,6 +555,7 @@ export function mount(container, params = {}) {
       row.appendChild(barTrack);
       const mod = modifier(rank);
       row.appendChild(text('div', 'desc', `MODIFIER ${mod >= 0 ? '+' : ''}${mod}`));
+      row.appendChild(manualLink(key, { variant: 'chip' }));
       grid.appendChild(row);
     }
     section.appendChild(grid);
@@ -725,6 +739,7 @@ export function mount(container, params = {}) {
     partyCount.dataset.testid = 'party-count';
     ap.appendChild(partyCount);
     header.append(remaining, credits, ap);
+    header.appendChild(manualLink('character_creation', { variant: 'chip' }));
     return header;
   }
 
@@ -863,7 +878,10 @@ export function mount(container, params = {}) {
       const subtitle = text('span', 'card-subtitle', `${ATTR_LABELS[cls.primaryAttribute] || ''} · Hit Die ${cls.hitDieBase || ''}`);
       const desc = text('span', 'card-detail', (cls.signature?.tiers?.[0] || '').split('.')[0]);
       card.append(marker, nameSpan, subtitle, desc);
-      group.appendChild(card);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'class-card-wrap';
+      wrapper.append(card, manualLink(cls.id, { variant: 'chip' }));
+      group.appendChild(wrapper);
     }
     panel.appendChild(group);
     if (selected?.projectedStats) panel.appendChild(renderProjectedStats(selected));
@@ -957,6 +975,7 @@ export function mount(container, params = {}) {
       row.append(meter, text('span', 'card-detail', `MODIFIER ${modifier(rank) >= 0 ? '+' : ''}${modifier(rank)}`));
       if (increaseReason) row.appendChild(text('span', 'disabled-reason', `+ ${increaseReason}`));
       if (decreaseReason) row.appendChild(text('span', 'disabled-reason', `− ${decreaseReason}`));
+      row.appendChild(manualLink(key, { variant: 'chip' }));
       section.appendChild(row);
     }
     panel.appendChild(section);
