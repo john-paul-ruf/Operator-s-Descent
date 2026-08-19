@@ -1181,6 +1181,25 @@ button.protocol-card[aria-selected="true"],
   margin-top: 2px;
 }
 
+/* Class-usable chip (Issue I) — SESSION-03 emits `.card-classes` on gear +
+   loot equipment cards. SESSION-05 gives it a compact secondary-tone chip so
+   the eligible-class list reads clearly without competing with card-name. */
+.card-classes {
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  padding: 2px 0;
+}
+
+/* Rarity row (Issue J) — SESSION-03 emits `.card-rarity-row` on loot cards
+   after moving the rarity chip out of the removed outer description block. */
+.card-rarity-row {
+  padding: 4px 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .class-card .card-detail {
   display: block;
   margin-top: 4px;
