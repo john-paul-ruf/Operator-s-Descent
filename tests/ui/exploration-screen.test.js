@@ -204,7 +204,9 @@ describe('exploration screen controller', () => {
     expect(alert.hidden).toBe(true);
     expect(alert.textContent).toBe('◈ HOSTILE DETECTED — MOVEMENT HALTED — TAP TO ENGAGE');
     expect(playfieldBody.style.overflow).toBe('hidden');
-    expect(playfieldBody.children).toEqual([canvas]);
+    // SESSION-04 Fix B: canvas + eligible-container marker overlay.
+    const marker = byTestId(container, 'loot-eligible-marker');
+    expect(playfieldBody.children).toEqual([canvas, marker]);
     expect([canvas.width, canvas.height]).toEqual([480, 768]);
     expect(canvas.style.width).toBe('100%');
     expect(canvas.style.height).toBe('100%');
@@ -589,6 +591,69 @@ describe('exploration screen controller', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  // SESSION-04 Fix B — the loot-eligible marker is a DOM overlay pinned to the
+  // currently-eligible container's cell via camera-state math. See the audit
+  // note above refreshLootState in src/ui/screens/exploration.js for why the
+  // marker (not a distance widen) is the chosen fix.
+  //
+  // Camera math for these tests: playfieldBody has no bounding rect in the fake
+  // DOM → resizeCanvas fallback primes the camera to canvas.width×height
+  // (480×768). zoomToCells(24, 40) → scale 5/3. centerOn party (10,10) center
+  // (252, 252) → state.x = 108, state.y = 21.6 (both in-range after clamp).
+  it('renders the loot-eligible marker positioned over an adjacent unopened container', async () => {
+    const containerFloor = floor({ containers: [{ id: 0, x: 11, y: 10 }] });
+    const { container } = await mountExploration({ floor: containerFloor });
+    const marker = byTestId(container, 'loot-eligible-marker');
+
+    expect(marker).not.toBe(null);
+    expect(marker.hidden).toBe(false);
+    // Container (11,10) center: worldX = 11*24 + 12 = 276, worldY = 252.
+    // cssX = (276 − 108) * 5/3 = 280; cssY = (252 − 21.6) * 5/3 = 384.
+    expect(marker.style.left).toBe('280px');
+    expect(marker.style.top).toBe('384px');
+  });
+
+  it('hides the loot-eligible marker on mount when no container is adjacent', async () => {
+    const { container } = await mountExploration();
+    const marker = byTestId(container, 'loot-eligible-marker');
+    expect(marker).not.toBe(null);
+    expect(marker.hidden).toBe(true);
+  });
+
+  it('hides the loot-eligible marker after the party steps away from the container', async () => {
+    const containerFloor = floor({ containers: [{ id: 0, x: 11, y: 10 }] });
+    const { container, runState: state } = await mountExploration({ floor: containerFloor });
+    const marker = byTestId(container, 'loot-eligible-marker');
+    expect(marker.hidden).toBe(false);
+
+    // Move west: party (10,10) → (9,10) → Chebyshev 2 from container (11,10),
+    // eligibility drops synchronously via refreshLootState → renderPlayfield
+    // → positionEligibleMarker (regression against Issue K: loot/map sync).
+    container.dispatch('keydown', keyEvent('ArrowLeft'));
+
+    expect(state.partyPosition).toEqual({ x: 9, y: 10 });
+    expect(marker.hidden).toBe(true);
+  });
+
+  it('shows the loot-eligible marker after the party moves into range of a container', async () => {
+    // Container two east of the party — not eligible on mount.
+    const containerFloor = floor({ containers: [{ id: 0, x: 12, y: 10 }] });
+    const { container } = await mountExploration({ floor: containerFloor });
+    const marker = byTestId(container, 'loot-eligible-marker');
+    expect(marker.hidden).toBe(true);
+
+    // Step east → party (11,10), container (12,10) → Chebyshev 1, eligible.
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+
+    expect(marker.hidden).toBe(false);
+    // Container (12,10) center: worldX = 12*24 + 12 = 300, worldY = 252.
+    // Camera re-centered on party (11,10) after move → new worldCenter (276,252)
+    // → state.x = 276 − 144 = 132 (clamped to ≤192, in range), state.y = 21.6.
+    // cssX = (300 − 132) * 5/3 = 280; cssY = (252 − 21.6) * 5/3 = 384.
+    expect(marker.style.left).toBe('280px');
+    expect(marker.style.top).toBe('384px');
   });
 
   it('user pan sets userAdjusted=true and preserves camera between moves; next party move re-centers', async () => {

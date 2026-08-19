@@ -137,6 +137,19 @@ export function mount(container, params = {}) {
   canvas.style.height = '100%';
   canvas.dataset.testid = 'exploration-canvas';
   playfieldBody.appendChild(canvas);
+  // SESSION-04 Fix B: DOM overlay marking the currently-eligible loot container
+  // (see audit note above refreshLootState). Positioned every renderPlayfield()
+  // call from camera state; hidden when no container is eligible. CSS lands in
+  // SESSION-05 (M79); until then the marker renders as an unstyled div sitting
+  // over the eligible container's cell, still resolving Issue K.
+  const eligibleMarker = document.createElement('div');
+  eligibleMarker.className = 'loot-eligible-marker';
+  eligibleMarker.dataset.testid = 'loot-eligible-marker';
+  eligibleMarker.style.position = 'absolute';
+  eligibleMarker.style.pointerEvents = 'none';
+  eligibleMarker.style.transform = 'translate(-50%, -50%)';
+  eligibleMarker.hidden = true;
+  playfieldBody.appendChild(eligibleMarker);
   const playfield = createPlayfield(canvas);
   const reducedMotionSetting = loadSettings().reducedMotion;
   const prefersReduced = typeof globalThis.window?.matchMedia === 'function'
@@ -312,6 +325,32 @@ export function mount(container, params = {}) {
       viewTransform: camera.viewTransform(cameraDpr),
       stagedPath: activeTrail ? activeTrail.slice() : []
     });
+    positionEligibleMarker();
+  }
+
+  // Position the SESSION-04 Fix B overlay over the currently-eligible loot
+  // container. Runs on every renderPlayfield(). Camera exposes viewTransform()
+  // and getState() but not worldToScreen, so we compute the CSS-pixel offset
+  // inside playfieldBody directly from state: (worldPx − state.[xy]) × scale.
+  // Marker's transform: translate(-50%, -50%) centers it on that coordinate.
+  function positionEligibleMarker() {
+    const eligible = findEligibleLootContainer(lattice, runState);
+    if (!eligible) {
+      eligibleMarker.hidden = true;
+      return;
+    }
+    const st = camera.getState();
+    if (!st.scale || !st.viewW || !st.viewH) {
+      eligibleMarker.hidden = true;
+      return;
+    }
+    const worldX = eligible.x * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+    const worldY = eligible.y * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+    const cssX = (worldX - st.x) * st.scale;
+    const cssY = (worldY - st.y) * st.scale;
+    eligibleMarker.style.left = `${cssX}px`;
+    eligibleMarker.style.top = `${cssY}px`;
+    eligibleMarker.hidden = false;
   }
 
   // SESSION-04 audit (2026-08-19). Screenshot: container icon rendered one cell
