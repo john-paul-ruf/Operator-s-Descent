@@ -1,4 +1,12 @@
+import { widenOneWideCorridors } from './archetypes.js';
+
 const MODIFIER_IDS = new Set(['dense', 'sparse', 'dangerous']);
+
+// Modifiers marked TIGHT skip the post-application dilation pass and are allowed
+// to leave 1-wide corridors behind. Design intent: at most one wall-adder is
+// deliberately narrow; the rest respect the minimum 2-wide floor. `dense` owns
+// the tight slot because its whole purpose is to compact passages.
+const TIGHT_MODIFIER_IDS = new Set(['dense']);
 
 export function applyModifiers(grid, prng, modifierWeights) {
   const weights = modifierWeights || { none: 1 };
@@ -58,6 +66,7 @@ function applyDense(grid, prng) {
     const y = prng.nextInt(h - 2) + 1;
     if (grid[y][x] === 1 && countOrthoOpen(grid, x, y) >= 4) grid[y][x] = 0;
   }
+  // `dense` is TIGHT — skip the dilation pass so its narrowing effect survives.
   return grid;
 }
 
@@ -83,5 +92,9 @@ function applyDangerous(grid, prng) {
     const y = prng.nextInt(h - 2) + 1;
     if (grid[y][x] === 1 && countOrthoOpen(grid, x, y) >= 4) grid[y][x] = 0;
   }
+  // `dangerous` is not TIGHT — enforce the 2-wide corridor floor after pit placement.
+  widenOneWideCorridors(grid);
   return grid;
 }
+
+export { TIGHT_MODIFIER_IDS };

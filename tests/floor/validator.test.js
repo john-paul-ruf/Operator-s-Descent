@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateFloor } from '../../src/floor/validator.js';
+import { validateFloor, countOneWideCorridors, MAX_ONE_WIDE_CORRIDOR } from '../../src/floor/validator.js';
 import { makeGrid, carve } from '../helpers/grids.js';
 
 describe('validator — return shape', () => {
@@ -177,8 +177,55 @@ describe('validator — metrics', () => {
   });
 });
 
+describe('validator — corridor-width', () => {
+  it('MAX_ONE_WIDE_CORRIDOR is exported and > 0', () => {
+    expect(typeof MAX_ONE_WIDE_CORRIDOR).toBe('number');
+    expect(MAX_ONE_WIDE_CORRIDOR).toBeGreaterThan(0);
+  });
+
+  it('countOneWideCorridors counts collinear-neighbor open cells only', () => {
+    const grid = makeGrid(20, 32, 0);
+    // A 20-cell horizontal snake — every interior cell has E+W collinear open pair.
+    for (let x = 1; x < 21; x++) grid[5][x] = 1;
+    // Endpoints (x=1 and x=20) each have only one collinear open neighbor,
+    // so are not counted; the 18 interior cells are.
+    expect(countOneWideCorridors(grid)).toBe(18);
+  });
+
+  it('20-cell collinear snake fails corridor-width', () => {
+    const grid = makeGrid(20, 32, 0);
+    for (let x = 1; x < 20; x++) grid[5][x] = 1;
+    const result = validateFloor({ cells: grid, descentPoint: { x: 1, y: 5 }, containers: [] });
+    expect(result.failures).toContain('corridor-width');
+  });
+
+  it('4x4 room with a 2-wide 4-cell corridor passes corridor-width', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 2, 2, 4, 4, 1);
+    carve(grid, 10, 2, 4, 4, 1);
+    // 2-wide corridor connecting the two rooms
+    for (let x = 6; x < 10; x++) {
+      grid[3][x] = 1;
+      grid[4][x] = 1;
+    }
+    const result = validateFloor({ cells: grid, descentPoint: { x: 3, y: 3 }, containers: [] });
+    expect(result.failures).not.toContain('corridor-width');
+  });
+
+  it('metrics.oneWideCorridors is reported', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 1, 5, 5, 1);
+    const result = validateFloor({ cells: grid, descentPoint: { x: 2, y: 2 }, containers: [] });
+    expect(typeof result.metrics.oneWideCorridors).toBe('number');
+  });
+});
+
 describe('validator — fully valid floor', () => {
   it('chambers-like hand-grid with loops, all features reachable → {valid: true, failures: []}', () => {
+    // Regenerated per Custom Rule 11 — the pre-widening fixture used 1-cell
+    // connectors between rooms which now trip the corridor-width check.
+    // 2-wide connectors keep the geometry chambers-like while respecting the
+    // new baseline; multiple loops still exercise the loops metric.
     const grid = makeGrid(20, 32, 0);
     carve(grid, 1, 1, 4, 4, 1);
     carve(grid, 8, 1, 4, 4, 1);
@@ -186,13 +233,15 @@ describe('validator — fully valid floor', () => {
     carve(grid, 1, 7, 4, 4, 1);
     carve(grid, 8, 7, 4, 4, 1);
     carve(grid, 14, 7, 4, 4, 1);
-    grid[2][5] = 1; grid[2][6] = 1; grid[2][7] = 1;
-    grid[2][12] = 1; grid[2][13] = 1;
-    grid[8][5] = 1; grid[8][6] = 1; grid[8][7] = 1;
-    grid[8][12] = 1; grid[8][13] = 1;
-    grid[5][2] = 1; grid[6][2] = 1;
-    grid[5][9] = 1; grid[6][9] = 1;
-    grid[5][15] = 1; grid[6][15] = 1;
+    // Horizontal 2-wide connectors between neighbouring rooms.
+    for (let x = 5; x < 8; x++) { grid[2][x] = 1; grid[3][x] = 1; }
+    for (let x = 12; x < 14; x++) { grid[2][x] = 1; grid[3][x] = 1; }
+    for (let x = 5; x < 8; x++) { grid[8][x] = 1; grid[9][x] = 1; }
+    for (let x = 12; x < 14; x++) { grid[8][x] = 1; grid[9][x] = 1; }
+    // Vertical 2-wide connectors between top-row and bottom-row rooms.
+    for (let y = 5; y < 7; y++) { grid[y][2] = 1; grid[y][3] = 1; }
+    for (let y = 5; y < 7; y++) { grid[y][9] = 1; grid[y][10] = 1; }
+    for (let y = 5; y < 7; y++) { grid[y][15] = 1; grid[y][16] = 1; }
     const result = validateFloor({
       cells: grid,
       descentPoint: { x: 2, y: 2 },

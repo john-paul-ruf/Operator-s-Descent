@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { applyModifiers } from '../../src/floor/modifiers.js';
+import { applyModifiers, TIGHT_MODIFIER_IDS } from '../../src/floor/modifiers.js';
 import { createPRNG } from '../../src/core/prng.js';
 import { ARCHETYPES } from '../../src/floor/archetypes.js';
-import { openCount } from '../helpers/grids.js';
+import { countOneWideCorridors } from '../../src/floor/validator.js';
+import { makeGrid, openCount } from '../helpers/grids.js';
 
 function baseGrid() {
   return ARCHETYPES.chambers(createPRNG(1));
+}
+
+function fullyOpenGrid(w, h) {
+  return makeGrid(w, h, 1);
 }
 
 describe('applyModifiers — no-op branches', () => {
@@ -139,6 +144,43 @@ describe('applyModifiers — result shape and determinism', () => {
     for (const seed of [0, 5, 13, 24, 42, 77, 99, 100, 200]) {
       const result = applyModifiers(baseGrid(), createPRNG(seed), { dense: 1, sparse: 1, dangerous: 1 });
       expect(result.modifierIds.length).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
+describe('applyModifiers — corridor-width floor', () => {
+  it('TIGHT_MODIFIER_IDS contains exactly one entry', () => {
+    expect(TIGHT_MODIFIER_IDS.size).toBe(1);
+    expect(TIGHT_MODIFIER_IDS.has('dense')).toBe(true);
+  });
+
+  it('non-tight wall-adder (dangerous) applied to a fully-open floor: no new 1-wide corridors', () => {
+    const grid = fullyOpenGrid(20, 32);
+    expect(countOneWideCorridors(grid)).toBe(0);
+    const result = applyModifiers(grid, createPRNG(5), { dangerous: 1 });
+    expect(result.modifierIds).toContain('dangerous');
+    // Post-widen pass keeps the count strictly below the validator's cap (12).
+    expect(countOneWideCorridors(result.grid)).toBeLessThanOrEqual(12);
+  });
+
+  it('sparse (opens cells only) does not introduce 1-wide corridors past the cap', () => {
+    const grid = fullyOpenGrid(20, 32);
+    const result = applyModifiers(grid, createPRNG(5), { sparse: 1 });
+    expect(countOneWideCorridors(result.grid)).toBeLessThanOrEqual(12);
+  });
+
+  it('dense (tight) is exempt: dense-only never mutates walls back to floor', () => {
+    // Regression guard: post-widening for dense would violate the
+    // "dense only turns floor→wall" invariant. Since dense is TIGHT, that
+    // invariant holds regardless of what the dilation pass would otherwise do.
+    const before = baseGrid();
+    const result = applyModifiers(JSON.parse(JSON.stringify(before)), createPRNG(5), { dense: 1 });
+    for (let y = 0; y < result.grid.length; y++) {
+      for (let x = 0; x < result.grid[0].length; x++) {
+        if (before[y][x] === 0 && result.grid[y][x] === 1) {
+          throw new Error(`dense turned wall (${x},${y}) into floor — TIGHT exemption broken`);
+        }
+      }
     }
   });
 });

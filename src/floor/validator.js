@@ -57,6 +57,33 @@ function countLoops(grid) {
   return loopPoints;
 }
 
+// Count open cells whose only two open orthogonal neighbors are collinear
+// (N+S or E+W). Those cells are the "throat" of a 1-cell-wide corridor.
+// Exported so callers (e.g. src/rules/encounters.js) can reuse the same
+// definition; kept in the floor layer as the source of truth.
+export function countOneWideCorridors(grid) {
+  const h = grid.length;
+  const w = grid[0].length;
+  let count = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!isOpenCell(grid[y][x])) continue;
+      const openN = isOpenCell(grid[y - 1]?.[x]);
+      const openS = isOpenCell(grid[y + 1]?.[x]);
+      const openW = isOpenCell(grid[y]?.[x - 1]);
+      const openE = isOpenCell(grid[y]?.[x + 1]);
+      const total = (openN ? 1 : 0) + (openS ? 1 : 0) + (openW ? 1 : 0) + (openE ? 1 : 0);
+      if (total === 2 && ((openN && openS) || (openE && openW))) count++;
+    }
+  }
+  return count;
+}
+
+// Maximum number of 1-wide corridor tiles a candidate floor may contain
+// before the `corridor-width` check rejects it. The repair-fallback path
+// in src/floor/generator.js is exempt so the generator always terminates.
+export const MAX_ONE_WIDE_CORRIDOR = 12;
+
 function maxOpenArea(grid) {
   const h = grid.length;
   const w = grid[0].length;
@@ -142,8 +169,14 @@ export function validateFloor(floor) {
     }
   }
 
-  if (totalOpen > 100 && openArea < 40 && loops < 2) {
+  if (totalOpen > 100 && openArea < 60 && loops < 2) {
     failures.push('interior-cover');
+  }
+
+  const oneWide = countOneWideCorridors(grid);
+  metrics.oneWideCorridors = oneWide;
+  if (oneWide > MAX_ONE_WIDE_CORRIDOR) {
+    failures.push('corridor-width');
   }
 
   return { valid: failures.length === 0, failures, metrics };
