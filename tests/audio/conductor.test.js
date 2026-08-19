@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { FakeContext } from '../helpers/fake-audio.js';
 import {
   chordFor,
+  createConductor,
   directorTargets,
   drumPattern,
   melodyBar,
@@ -168,5 +170,173 @@ describe('conductor.ROOTS coverage', () => {
     for (const key of Object.keys(SCALES)) {
       expect(typeof ROOTS[key]).toBe('number');
     }
+  });
+});
+
+describe('conductor clock', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function drive(ctxOrList, endTimeSeconds, stepMs = 25) {
+    const ctxs = Array.isArray(ctxOrList) ? ctxOrList : [ctxOrList];
+    const startMs = Math.round(ctxs[0].currentTime * 1000);
+    const endMs = Math.round(endTimeSeconds * 1000);
+    for (let t = startMs + stepMs; t <= endMs; t += stepMs) {
+      for (const c of ctxs) c.currentTime = t / 1000;
+      vi.advanceTimersByTime(stepMs);
+    }
+  }
+
+  test('ticks are monotonic in time and pos.step wraps 0..15 with bar++', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    const events = [];
+    c.subscribe((p) => events.push({ time: p.time, step: p.pos.step, bar: p.pos.bar }));
+    c.start();
+    drive(ctx, 6);
+    c.stop();
+
+    expect(events.length).toBeGreaterThan(16);
+    for (let i = 1; i < events.length; i++) {
+      expect(events[i].time).toBeGreaterThan(events[i - 1].time);
+      const prev = events[i - 1];
+      const cur = events[i];
+      if (prev.step === 15) {
+        expect(cur.step).toBe(0);
+        expect(cur.bar).toBe(prev.bar + 1);
+      } else {
+        expect(cur.step).toBe(prev.step + 1);
+        expect(cur.bar).toBe(prev.bar);
+      }
+    }
+  });
+
+  test('tempo change requested mid-bar applies only at next bar boundary', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    const events = [];
+    c.subscribe((p) => events.push({ step: p.pos.step, tempo: p.tempo }));
+    c.start();
+    drive(ctx, 0.6);
+    const midBarTempo = events.at(-1).tempo;
+    c.updateState({ depth: 30 });
+    drive(ctx, 3);
+    c.stop();
+
+    let boundaryIndex = -1;
+    for (let i = 1; i < events.length; i++) {
+      if (events[i].step === 0 && events[i - 1].step === 15) { boundaryIndex = i; break; }
+    }
+    expect(boundaryIndex).toBeGreaterThan(-1);
+    for (let i = 0; i < boundaryIndex; i++) expect(events[i].tempo).toBe(midBarTempo);
+    expect(events[boundaryIndex].tempo).toBeGreaterThan(midBarTempo);
+  });
+
+  test('floor change resets phraseIndex at next bar boundary', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    c.updateState({ worldSeed: 5, depth: 3, floorId: 'a', audioMode: 'organic-green' });
+    const events = [];
+    c.subscribe((p) => events.push({ step: p.pos.step, bar: p.pos.bar, phraseIndex: p.pos.phraseIndex }));
+    c.start();
+    drive(ctx, 6);
+    c.updateState({ floorId: 'b' });
+    const beforeSwapLength = events.length;
+    drive(ctx, 10);
+    c.stop();
+
+    const afterSwap = events.slice(beforeSwapLength);
+    const boundary = afterSwap.find((e, i, arr) => i > 0 && arr[i - 1].step === 15 && e.step === 0);
+    expect(boundary).toBeTruthy();
+    expect(boundary.phraseIndex).toBe(0);
+  });
+
+  test('subscriber exception does not stall other subscribers', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    let goodCalls = 0;
+    c.subscribe(() => { throw new Error('boom'); });
+    c.subscribe(() => { goodCalls++; });
+    c.start();
+    drive(ctx, 2);
+    c.stop();
+    expect(goodCalls).toBeGreaterThan(3);
+  });
+
+  test('stop halts scheduling and start after stop resumes ticks', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    const events = [];
+    c.subscribe(() => events.push(1));
+    c.start();
+    drive(ctx, 1);
+    const firstRun = events.length;
+    expect(firstRun).toBeGreaterThan(0);
+    c.stop();
+    drive(ctx, 2);
+    expect(events.length).toBe(firstRun);
+    c.start();
+    drive(ctx, 4);
+    c.stop();
+    expect(events.length).toBeGreaterThan(firstRun);
+  });
+
+  test('two conductors with identical ctx timing + state emit identical streams', () => {
+    const ctx1 = new FakeContext();
+    const ctx2 = new FakeContext();
+    const c1 = createConductor(ctx1);
+    const c2 = createConductor(ctx2);
+    const e1 = [], e2 = [];
+    const capture = (arr) => (p) => arr.push({
+      pos: { ...p.pos },
+      tempo: p.tempo,
+      chordDegree: p.chord?.degree ?? null,
+      chordSemis: p.chord ? [...p.chord.semis] : null,
+      drumsKick: [...p.drums.kick],
+      drumsSnare: [...p.drums.snare],
+      drumsHat: [...p.drums.hat],
+      melody: p.melody.map((s) => (s ? { ...s } : null))
+    });
+    c1.subscribe(capture(e1));
+    c2.subscribe(capture(e2));
+    c1.updateState({ worldSeed: 42, depth: 7, floorId: 'shared', audioMode: 'geometric-cyan' });
+    c2.updateState({ worldSeed: 42, depth: 7, floorId: 'shared', audioMode: 'geometric-cyan' });
+    c1.start();
+    c2.start();
+    drive([ctx1, ctx2], 5);
+    c1.stop();
+    c2.stop();
+    expect(e1.length).toBeGreaterThan(16);
+    expect(e2).toEqual(e1);
+  });
+
+  test('getState reports pos/tempo/audioMode/phraseKey/ledgerSize', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    c.updateState({ worldSeed: 1, depth: 2, floorId: 'aa', audioMode: 'cold-ambient' });
+    c.start();
+    drive(ctx, 3);
+    const s = c.getState();
+    expect(s).toHaveProperty('tempo');
+    expect(s.pos).toHaveProperty('step');
+    expect(s.pos).toHaveProperty('phraseIndex');
+    expect(s.audioMode).toBe('cold-ambient');
+    expect(typeof s.phraseKey).toBe('string');
+    expect(s.ledgerSize).toBeGreaterThan(0);
+    c.stop();
+  });
+
+  test('rootFreq reflects ROOTS shift and drops an octave per 12 depth', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    c.updateState({ worldSeed: 0, depth: 15, floorId: 'f', audioMode: 'flowing-cyan' });
+    let payload = null;
+    c.subscribe((p) => { if (!payload) payload = p; });
+    c.start();
+    drive(ctx, 0.5);
+    c.stop();
+    expect(payload).toBeTruthy();
+    const expected = 110 * Math.pow(2, ROOTS['flowing-cyan'] / 12) * Math.pow(2, -1);
+    expect(payload.rootFreq).toBeCloseTo(expected, 6);
   });
 });
