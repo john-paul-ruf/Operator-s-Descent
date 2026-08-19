@@ -433,7 +433,7 @@ export function createPlayfield(canvas) {
       const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
       const tokenColor = isDead ? 'rgba(40,40,40,0.6)' : roleColor;
       if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
-      if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px + 4, py + 4, DANGER_COLOR, 'TARGET');
+      if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px, py, DANGER_COLOR, 'TARGET', 4);
       drawCreatureSigil(ctx, {
         codepoint: actorSigil(actor),
         size: 72,

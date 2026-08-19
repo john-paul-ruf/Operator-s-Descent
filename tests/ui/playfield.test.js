@@ -479,10 +479,48 @@ describe('playfield rendering', () => {
     expect(canvas.getAttribute('aria-label')).toBe('Combat map, window 20x32, round 4.');
 
     // Selected enemy at (18, 30) is drawn at absolute world coords — no camera.x/y subtraction.
-    // TARGET frame passes px+4/py+4, then drawFrame adds inset=2 → strokeRect at (18*48+6, 30*48+6).
+    // TARGET frame passes (px, py) with inset=4 → strokeRect at (18*48+4, 30*48+4, 48-8, 48-8),
+    // centered on the cell (ui-clarity-polish SESSION-01: Issue A fix).
     // In the legacy windowed path this actor sits outside the 8×16 window and would be culled entirely.
     const strokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#e83a3a');
-    expect(strokes.some((c) => c[2] === 18 * 48 + 6 && c[3] === 30 * 48 + 6)).toBe(true);
+    expect(strokes.some((c) => c[2] === 18 * 48 + 4 && c[3] === 30 * 48 + 4 && c[4] === 40 && c[5] === 40)).toBe(true);
+  });
+
+  test('SESSION-01 Issue A: TARGET frame is centered on the selected enemy cell (inset=4 from every edge)', () => {
+    // Before the fix, drawFrame was called with (px+4, py+4) and the default inset=2, which
+    // biased the strokeRect SE by 4px in each axis (rect at (px+6, py+6, 44, 44)) — the sigil
+    // rendered at the cell center escaped the frame to the NW. After the fix, drawFrame is
+    // called with (px, py, ..., inset=4) so the rect sits at (px+4, py+4, 40, 40), centered
+    // on the sigil that lands at (px + COMBAT_CELL_SIZE/2, py + COMBAT_CELL_SIZE/2).
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const enemy = { id: 'e1', side: 'enemy', position: { x: 3, y: 5 }, sigilCodepoint: 0xE030 };
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', position: { x: 1, y: 1 }, sigilCodepoint: 0xE000 }],
+      ['e1', enemy]
+    ]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+
+    playfield.renderCombat(
+      { combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 },
+      lattice(),
+      { viewTransform, selectedTargetId: 'e1' }
+    );
+
+    const px = 3 * 48;
+    const py = 5 * 48;
+    // TARGET strokeRect: origin (px+4, py+4), dimensions (48-8, 48-8) = (40, 40).
+    const dangerStrokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#e83a3a');
+    const targetRect = dangerStrokes.find((c) => c[2] === px + 4 && c[3] === py + 4 && c[4] === 40 && c[5] === 40);
+    expect(targetRect).toBeDefined();
+    // Regression guard: the pre-fix rect at (px+6, py+6, 44, 44) MUST NOT be emitted anymore.
+    expect(dangerStrokes.some((c) => c[2] === px + 6 && c[3] === py + 6 && c[4] === 44 && c[5] === 44)).toBe(false);
+
+    // Frame center matches the sigil center (both land at px + 24, py + 24).
+    const rectCenterX = targetRect[2] + targetRect[4] / 2;
+    const rectCenterY = targetRect[3] + targetRect[5] / 2;
+    expect(rectCenterX).toBe(px + 48 / 2);
+    expect(rectCenterY).toBe(py + 48 / 2);
   });
 
   test('cellAtPoint inverts a viewTransform under CSS scaling + dpr ≠ 1', () => {
