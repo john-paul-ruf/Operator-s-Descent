@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createManualModal } from '../../src/ui/manual/manual-modal.js';
 import { createManualView } from '../../src/ui/manual/manual-view.js';
+
+const MANUAL_JSON = JSON.parse(readFileSync(fileURLToPath(new URL('../../data/manual.json', import.meta.url)), 'utf8'));
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -581,5 +585,64 @@ describe('createManualView — TOC + section + back stack (CP2)', () => {
 
     view.destroy();
     expect(view.canBack()).toBe(false);
+  });
+});
+
+describe('createManualView — real data/manual.json coverage (CP2)', () => {
+  function makeView() {
+    return createManualView({ manual: MANUAL_JSON, dispatch: vi.fn(), onNavigate: vi.fn() });
+  }
+
+  it('renders every one of the shipped 62 sections without throwing', () => {
+    const view = makeView();
+    for (const section of MANUAL_JSON.sections) {
+      expect(() => view.showSection(section.id)).not.toThrow();
+      const title = byTestId(view.element, 'manual-section-title');
+      expect(title).toBeTruthy();
+      expect(title.textContent).toBe(section.title);
+      expect(byTestId(view.element, 'manual-section').dataset.sectionId).toBe(section.id);
+    }
+  });
+
+  it('TOC contains every section id from the shipped manual', () => {
+    const view = makeView();
+    view.showTOC();
+    const targets = new Set();
+    (function walk(node) {
+      const value = node.getAttribute?.('data-manual-target');
+      if (value) targets.add(value);
+      for (const child of node.children || []) walk(child);
+    })(view.element);
+    expect(targets).toEqual(new Set(MANUAL_JSON.sections.map((section) => section.id)));
+    expect(targets.size).toBe(62);
+  });
+
+  it('every internal link target resolves inside the manual', () => {
+    const ids = new Set(MANUAL_JSON.sections.map((section) => section.id));
+    for (const section of MANUAL_JSON.sections) {
+      for (const paragraph of section.body || []) {
+        for (const run of paragraph || []) {
+          if (Array.isArray(run) && run[0] === 'link') expect(ids.has(run[1])).toBe(true);
+        }
+      }
+      for (const target of section.seeAlso || []) expect(ids.has(target)).toBe(true);
+    }
+  });
+
+  it('every rendered section-body link click navigates without dispatching to the external bus', () => {
+    const dispatch = vi.fn();
+    const view = createManualView({ manual: MANUAL_JSON, dispatch, onNavigate: vi.fn() });
+    for (const section of MANUAL_JSON.sections) {
+      view.showSection(section.id);
+      const linkNodes = [];
+      (function walk(node) {
+        if (node.getAttribute?.('data-manual-target') && node.tagName === 'BUTTON') linkNodes.push(node);
+        for (const child of node.children || []) walk(child);
+      })(view.element);
+      for (const link of linkNodes) {
+        expect(() => link.dispatch('click')).not.toThrow();
+      }
+    }
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
