@@ -2161,4 +2161,31 @@ Adds `.manual-term-link` (inline: dotted-underline accent-color text link with `
 
 ### Event contract addition (SESSION-02, the-manual — pending)
 
-`'ui:manual-open'` and `'ui:manual-close'` are NOT yet registered in `src/state/bus.js` `EVENT_CONTRACTS`. Unknown events pass through `validateEventPayload` (default `true`), so link dispatch works today. **SESSION-03** will register both when it wires the modal — but note that `src/state/bus.js` is not currently in SESSION-03's declared Owns (Forge scoping caveat surfaced by SESSION-02's handoff).
+`'ui:manual-open'` and `'ui:manual-close'` are NOT yet registered in `src/state/bus.js` `EVENT_CONTRACTS`. Unknown events pass through `validateEventPayload` (default `true`), so link dispatch works today. **SESSION-03** will register both when it wires the modal — but note that `src/state/bus.js` is not currently in SESSION-03's declared Owns (Forge scoping caveat surfaced by SESSION-02's handoff). *[Update: owner authorized proactive Owns extension for SESSION-03 to include `src/state/bus.js`.]*
+
+<!-- SESSION-01 the-manual -->
+### M107 — Manual Content (new module, SESSION-01, the-manual)
+
+- **Path:** `data/manual.json`
+- **Owns:** The manual's single source of truth — 62 authored sections (12 interface, 12 systems, 38 glossary) plus schema version. Prose is the on-screen text; hyperlinks between sections are encoded as `["link", targetSectionId, labelString]` runs.
+- **Schema (contract — SESSION-03 renders this shape verbatim):**
+  - Top: `{ version: 1, sections: Section[] }`
+  - `Section = { id: stableId, chapter: 'interface'|'systems'|'glossary', group: string|null, title: string, body: Paragraph[], seeAlso: stableId[] }`
+  - `Paragraph = Run[]`
+  - `Run = ['text', string] | ['link', stableId, string]`
+  - `group` is `null` for interface/systems; non-null only for glossary (allowed: `conditions`, `schools`, `classes`, `attributes`, `consumables`, `rarities`, `affixes`, `entities`)
+  - `id` matches `/^[a-z][a-z0-9_]*$/`, unique across the file
+  - Every `link` target and every `seeAlso` entry MUST resolve to a section id in the same file
+- **Imports From:** — (pure data)
+- **Key Files:** `manual.json`
+
+### Registry / cross-cutting deltas (SESSION-01, the-manual)
+
+- **M87 (Data Loader, `src/data-loader.js`):** registers `['manual', 'data/manual.json']` in `DATA_FILES`; adds `validateManual` (schema + link/seeAlso resolution) called from `validateGameData`. Introduces `OPTIONAL_DATA_KEYS = new Set(['manual'])` — a documented escape hatch that lets partial-registry fixture harnesses (e.g. `tests/helpers/game-fixture.js`) omit UI-only data without tripping the missing-file gate. `loadGameData` always fetches manual (a missing fetch surfaces as `fetch_failed` before validation runs).
+- **M94 (Validation Tooling, `scripts/validate-data.js`):** local `DATA_FILES` extended with `['manual', 'manual.json']` to keep the CLI in step with the loader.
+- **M81 (Service Worker):** `./data/manual.json` added to `PRODUCTION_ASSETS`; `CACHE_VERSION` bumped to `2026-08-18-the-manual-v1`. `node scripts/verify-assets.js` remains green (106 assets; brotli 259.9 KB, well within 500 KB budget).
+- **Test coverage:** `tests/data/contracts.test.js` gains an exact 12/12/38 section-id inventory check plus schema-shape assertions; `tests/data/manual-content.test.js` (new) enforces tutorial parity (the 12 tutorial page titles are present as interface sections), full link/seeAlso resolvability, non-empty bodies, and — for every condition in `data/conditions.json` — anchor phrases proving the glossary section mirrors the effect semantics. `tests/data/loader.test.js` `names` array extended to 11 to reflect the widened `DATA_FILES`.
+
+### FORGE-CONFIG note (SESSION-01, the-manual)
+
+The FORGE-CONFIG conventions line reads "Module IDs: M01–M103" — after this run's landings the ceiling should read M01–M109 (M107 lands here; M108/M109 land in SESSION-03).
