@@ -314,6 +314,40 @@ export function mount(container, params = {}) {
     });
   }
 
+  // SESSION-04 audit (2026-08-19). Screenshot: container icon rendered one cell
+  // south of party, LOOT tab says "no unopened container adjacent or underfoot".
+  //
+  // Traces:
+  //   1. Party position — findEligibleLootContainer (loot.js:47) reads
+  //      lattice.getPartyPosition() DIRECTLY, not runState.partyPosition. Both
+  //      stay in lockstep via moveParty (movement.js:169-173). No divergence.
+  //   2. Refresh order — refreshLootState() runs BEFORE consoleController.refresh()
+  //      on every path: mount (267-268), handleMoveResult (374,400), and the
+  //      state:combat-end handler (288,291). viewState.canLoot is also a fresh
+  //      getter (line 246). No stale read possible from this path.
+  //   3. Distance — Chebyshev ≤ 1 via loot.js:44. Container one south of party =
+  //      distance 1, eligible. Metric matches the geometric adjacency the map
+  //      renders. Not the cause.
+  //   4. Cull vs opened divergence — the REAL cause. The map renders via
+  //      lattice.getActiveContainers() (playfield.js:344), which filters using
+  //      the lattice's isContainerOpened(id) — a FROZEN snapshot of
+  //      runState.openedContainers taken at createLattice() time (lattice.js:36).
+  //      findEligibleLootContainer filters using isOpened(runState, container)
+  //      against the LIVE runState.openedContainers. When a container is opened
+  //      via the loot flow, runState.markContainerOpened flips the runState bit
+  //      but the lattice's snapshot stays untouched — so playfield keeps drawing
+  //      the container while LOOT correctly excludes it. Exact match for the
+  //      "map shows, loot excludes" screenshot.
+  //
+  // Fix chosen: **Fix B (marker overlay)** — a DOM overlay pinned to the
+  // eligible container's cell via camera.getState() world→screen math. The
+  // marker only appears when findEligibleLootContainer returns a container, so
+  // ghost containers on the map no longer read as eligible; the user sees which
+  // container the LOOT tab is actually going to open. The underlying
+  // lattice-snapshot staleness stays as a follow-up for a session with lease on
+  // src/exploration/lattice.js or src/ui/playfield.js (either would sync the
+  // lattice's openedContainers snapshot from runState on each render or drop
+  // the snapshot entirely).
   function refreshLootState() {
     const container = findEligibleLootContainer(lattice, runState);
     viewState.lootState = container ? { container, items: [] } : null;
