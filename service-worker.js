@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-19-the-manual-access-v1';
+const CACHE_VERSION = '2026-08-19-clarity-pass-v1';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -9,7 +9,9 @@ const PRODUCTION_ASSETS = Object.freeze([
   './styles/base.css',
   './styles/components.css',
   './styles/crt.css',
+  './styles/icons.css',
   './styles/manual.css',
+  './styles/tailwind.css',
   './styles/wide.css',
   './src/audio/drone.js',
   './src/audio/engine.js',
@@ -83,6 +85,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/ui/console/party.js',
   './src/ui/console/tech.js',
   './src/ui/creation-model.js',
+  './src/ui/icon.js',
   './src/ui/input.js',
   './src/ui/layout.js',
   './src/ui/manual/manual-modal.js',
