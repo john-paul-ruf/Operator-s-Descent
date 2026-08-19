@@ -332,6 +332,65 @@ export const createScreenBody = ({ scroll = true, className = '' } = {}) => {
  * @param {{onReload: () => void}} opts
  * @returns {HTMLDivElement}
  */
+/**
+ * createManualLink — shared factory for every "term hyperlink" in the UI
+ * (the-manual SESSION-02). Renders a native <button type="button"> that
+ * dispatches `ui:manual-open` via an injected dispatcher.
+ *
+ * DI note: components.js currently imports nothing (bus stays out). Callers
+ * pass `opts.dispatch = (event, payload) => bus.dispatch(event, payload)`.
+ * When `opts.dispatch` is omitted the link is marked `aria-disabled="true"`
+ * and clicks are inert — the modal is not yet wired.
+ *
+ * Event contract (fixed for the-manual — SESSION-01/03 consume this verbatim):
+ *   `ui:manual-open` payload = { target: sectionId|null, source: string }
+ *
+ * @param {string|null} target - manual section id, or null for the TOC
+ * @param {{
+ *   label?: string,
+ *   variant?: 'inline'|'chip',
+ *   source?: string,
+ *   dispatch?: (event: string, payload: object) => void,
+ *   describedBy?: string,
+ *   disabled?: boolean,
+ *   testid?: false | string
+ * }} [opts]
+ * @returns {HTMLButtonElement}
+ */
+export function createManualLink(target, opts = {}) {
+  const variant = opts.variant === 'chip' ? 'chip' : 'inline';
+  const displayLabel = opts.label || (variant === 'chip' ? '?' : (target ?? 'contents'));
+  const ariaAnchor = opts.label || target || 'contents';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = variant === 'chip'
+    ? 'manual-term-link manual-term-link--chip is-interactive'
+    : 'manual-term-link is-interactive';
+  button.textContent = String(displayLabel);
+  button.setAttribute('aria-label', `Open manual: ${ariaAnchor}`);
+  button.setAttribute('data-manual-target', target == null ? '' : String(target));
+  if (opts.testid !== false) {
+    button.dataset.testid = typeof opts.testid === 'string'
+      ? opts.testid
+      : `manual-link-${target || 'toc'}`;
+  }
+  if (opts.describedBy) button.setAttribute('aria-describedby', opts.describedBy);
+  const canDispatch = typeof opts.dispatch === 'function';
+  const explicitlyDisabled = Boolean(opts.disabled);
+  const inert = explicitlyDisabled || !canDispatch;
+  if (inert) button.setAttribute('aria-disabled', 'true');
+  if (explicitlyDisabled) button.disabled = true;
+  const cleanup = (canDispatch && !explicitlyDisabled)
+    ? listen(button, 'click', () => {
+        opts.dispatch('ui:manual-open', {
+          target: target == null ? null : target,
+          source: opts.source || 'ui'
+        });
+      })
+    : undefined;
+  return withCleanup(button, cleanup);
+}
+
 export function createUpdateToast({ onReload } = {}) {
   const toast = document.createElement('div');
   toast.className = 'update-toast';

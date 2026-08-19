@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createButton, createChargeBar, createEquipmentCard, createHPBar, createProtocolCard, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
+import { createButton, createChargeBar, createEquipmentCard, createHPBar, createManualLink, createProtocolCard, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -177,6 +177,109 @@ describe('semantic components', () => {
     const button = toast.children.find((child) => child.dataset?.testid === 'update-toast-reload');
     expect(() => button.dispatch('click')).not.toThrow();
     expect(() => toast.cleanup?.()).not.toThrow();
+  });
+
+  test('createManualLink renders a button that dispatches ui:manual-open with target and source', () => {
+    const dispatched = [];
+    const link = createManualLink('burning', {
+      label: 'Burning',
+      source: 'party',
+      dispatch: (event, payload) => dispatched.push([event, payload])
+    });
+
+    expect(link.tagName).toBe('BUTTON');
+    expect(link.type).toBe('button');
+    expect(link.className).toBe('manual-term-link is-interactive');
+    expect(link.textContent).toBe('Burning');
+    expect(link.getAttribute('aria-label')).toBe('Open manual: Burning');
+    expect(link.getAttribute('data-manual-target')).toBe('burning');
+    expect(link.dataset.testid).toBe('manual-link-burning');
+
+    link.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'burning', source: 'party' }]]);
+
+    link.cleanup();
+    link.dispatch('click');
+    expect(dispatched.length).toBe(1);
+  });
+
+  test('createManualLink with a null target opens the table of contents', () => {
+    const dispatched = [];
+    const link = createManualLink(null, {
+      label: 'Manual',
+      source: 'title',
+      dispatch: (event, payload) => dispatched.push([event, payload])
+    });
+    expect(link.getAttribute('data-manual-target')).toBe('');
+    expect(link.dataset.testid).toBe('manual-link-toc');
+    expect(link.getAttribute('aria-label')).toBe('Open manual: Manual');
+
+    link.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: null, source: 'title' }]]);
+  });
+
+  test('createManualLink chip variant carries the chip class and defaults its label to ?', () => {
+    const link = createManualLink('mgt', { variant: 'chip', dispatch: () => {} });
+    expect(link.className).toBe('manual-term-link manual-term-link--chip is-interactive');
+    expect(link.textContent).toBe('?');
+    expect(link.getAttribute('aria-label')).toBe('Open manual: mgt');
+  });
+
+  test('createManualLink without a dispatch handler is aria-disabled and click is a no-op', () => {
+    const link = createManualLink('burning');
+    expect(link.getAttribute('aria-disabled')).toBe('true');
+    expect(link.disabled).toBeUndefined();
+    expect(() => link.dispatch('click')).not.toThrow();
+    expect(() => link.cleanup?.()).not.toThrow();
+  });
+
+  test('createManualLink defaults source to "ui" when the caller omits it', () => {
+    const dispatched = [];
+    const link = createManualLink('affixes', { dispatch: (event, payload) => dispatched.push([event, payload]) });
+    link.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'affixes', source: 'ui' }]]);
+  });
+
+  test('createManualLink with opts.disabled sets disabled AND aria-disabled and does not dispatch', () => {
+    const dispatched = [];
+    const link = createManualLink('burning', {
+      dispatch: (event, payload) => dispatched.push([event, payload]),
+      disabled: true
+    });
+    expect(link.disabled).toBe(true);
+    expect(link.getAttribute('aria-disabled')).toBe('true');
+    link.dispatch('click');
+    expect(dispatched).toEqual([]);
+  });
+
+  test('createManualLink applies describedBy and testid overrides', () => {
+    const linkWithDesc = createManualLink('burning', {
+      dispatch: () => {},
+      describedBy: 'burning-help'
+    });
+    expect(linkWithDesc.getAttribute('aria-describedby')).toBe('burning-help');
+
+    const linkWithCustomTestid = createManualLink('burning', {
+      dispatch: () => {},
+      testid: 'custom-id'
+    });
+    expect(linkWithCustomTestid.dataset.testid).toBe('custom-id');
+
+    const linkNoTestid = createManualLink('burning', { dispatch: () => {}, testid: false });
+    expect(linkNoTestid.dataset.testid).toBeUndefined();
+  });
+
+  test('createManualLink defaults its label to the target id when no label supplied', () => {
+    const link = createManualLink('mgt', { dispatch: () => {} });
+    expect(link.textContent).toBe('mgt');
+    expect(link.getAttribute('aria-label')).toBe('Open manual: mgt');
+  });
+
+  test('createManualLink does not throw when constructed under the jsdom-baseline FakeDocument', () => {
+    expect(() => {
+      const link = createManualLink(null, { variant: 'chip', dispatch: () => {} });
+      link.cleanup?.();
+    }).not.toThrow();
   });
 
   test('disabled controls carry aria-disabled and .is-interactive simultaneously', () => {
