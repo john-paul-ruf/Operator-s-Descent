@@ -1,3 +1,269 @@
-/* Manual modal (the-manual SESSION-03). Full styling is delivered in
-   SESSION-03 CP4; this file is registered at CP3 so runtime wiring,
-   index.html, and the service-worker manifest land together. */
+/* Manual modal (the-manual SESSION-03 CP4).
+ *
+ * z-index 50 — sits UNDER the CRT overlay layers (55–62 in styles/crt.css)
+ * so scanlines/grain/vignette visibly render over the modal, and OVER the
+ * console (z 30 in styles/components.css) so the reader is fully covered.
+ *
+ * Mounts into #portrait-frame as a sibling of #app-root. Portrait: near
+ * full-frame inset panel with 12px margins, header/body/footer column.
+ * Wide: centered panel max-width 1040px, two-pane grid — persistent TOC
+ * rail (260px) + scrollable content pane.
+ *
+ * Aesthetic mirrors mocks/tutorial.html + mocks/wide/tutorial.html for the
+ * eyebrow / accent-glow header idiom.
+ *
+ * All colors come from tokens defined in styles/base.css — no new hex
+ * literals introduced.
+ */
+
+.manual-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 12px;
+  animation: manual-fade-in 120ms ease-out;
+}
+
+.manual-backdrop[hidden] {
+  display: none;
+}
+
+@keyframes manual-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.manual-modal {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.6), 0 0 8px var(--accent);
+  color: var(--text-primary);
+  overflow: hidden;
+  outline: none;
+}
+
+.manual-header {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-panel-elevated);
+  border-bottom: 1px solid var(--accent);
+  text-align: center;
+}
+
+.manual-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.manual-title-slot {
+  font-size: 14px;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.manual-controls {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.manual-controls > * {
+  min-height: 44px;
+}
+
+.manual-body {
+  overflow-y: auto;
+  padding: 16px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--bg-panel);
+}
+
+.manual-body::-webkit-scrollbar { width: 4px; }
+.manual-body::-webkit-scrollbar-thumb { background: var(--accent); }
+.manual-body::-webkit-scrollbar-track { background: var(--bg-panel); }
+
+.manual-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.manual-notice {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  background: rgba(232, 99, 42, 0.08);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+/* ─── Table of contents ───────────────────────────────────────── */
+
+.manual-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.manual-chapter {
+  border: 1px solid var(--border-dim);
+  padding: 12px 14px;
+  background: var(--bg-base);
+}
+
+.manual-chapter-title {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 6px var(--accent);
+  margin: 0 0 10px;
+}
+
+.manual-group {
+  margin-top: 8px;
+}
+
+.manual-group-title {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 12px 0 6px;
+}
+
+.manual-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.manual-toc-list li {
+  padding: 0;
+}
+
+/* ─── Section ─────────────────────────────────────────────────── */
+
+.manual-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manual-section-title {
+  font-size: 14px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
+  margin: 0;
+}
+
+.manual-paragraph {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.manual-see-also {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.manual-see-also-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+/* ─── Wide layout ─────────────────────────────────────────────── */
+
+@media (min-width: 900px) and (min-aspect-ratio: 1/1) {
+  .manual-backdrop {
+    padding: 32px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .manual-modal {
+    width: 100%;
+    max-width: 1040px;
+    max-height: min(880px, calc(100vh - 64px));
+    height: auto;
+    grid-template-rows: auto 1fr;
+  }
+
+  html[data-layout="wide"] .manual-body {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  html[data-layout="wide"] .manual-view {
+    display: contents;
+  }
+
+  html[data-layout="wide"] .manual-toc {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 1px solid var(--border-dim);
+    padding: 16px 14px;
+    overflow-y: auto;
+    background: var(--bg-panel-elevated);
+    gap: 12px;
+  }
+
+  html[data-layout="wide"] .manual-section {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+  }
+
+  html[data-layout="wide"] .manual-notice {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: center;
+    justify-self: center;
+  }
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .manual-backdrop {
+    animation: none;
+  }
+}

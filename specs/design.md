@@ -218,6 +218,7 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 | **Log Entry** | Timestamped event line in LOG mode | Combat, discovery, damage, death |
 | **Tutorial Page** | Manual content card with illustration area | Current, navigated-away |
 | **Mode Indicator** | Label showing current console mode | 7 modes |
+| **Manual Modal** | Blocking overlay: eyebrow header, TOC or section body, back stack, focus trap (z 50, under CRT layers) | Closed, TOC, section, wide two-pane |
 
 ---
 
