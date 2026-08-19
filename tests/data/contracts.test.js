@@ -3,7 +3,7 @@ import { loadData } from '../helpers/data.js';
 import { ARCHETYPES } from '../../src/floor/archetypes.js';
 import { validateGameData } from '../../src/data-loader.js';
 
-const NAMES = ['sigils', 'themes', 'classes', 'protocols', 'enemies', 'equipment', 'affixes', 'conditions', 'consumables', 'symbol-table'];
+const NAMES = ['sigils', 'themes', 'classes', 'protocols', 'enemies', 'equipment', 'affixes', 'conditions', 'consumables', 'symbol-table', 'manual'];
 
 const sigils = loadData('sigils');
 const themes = loadData('themes');
@@ -15,7 +15,8 @@ const affixes = loadData('affixes');
 const conditions = loadData('conditions');
 const consumables = loadData('consumables');
 const symbolTable = loadData('symbol-table');
-const registry = { sigils, themes, classes, protocols, enemies, equipment, affixes, conditions, consumables, symbolTable };
+const manual = loadData('manual');
+const registry = { sigils, themes, classes, protocols, enemies, equipment, affixes, conditions, consumables, symbolTable, manual };
 
 const PROTOCOL_SCHOOL_IDS = Object.keys(protocols.schools);
 const CONDITION_IDS = Object.keys(conditions.conditions);

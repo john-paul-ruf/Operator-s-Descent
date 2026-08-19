@@ -9,7 +9,11 @@ const DATA_FILES = [
   ['conditions', 'data/conditions.json'],
   ['consumables', 'data/consumables.json'],
   ['symbolTable', 'data/symbol-table.json'],
+  ['manual', 'data/manual.json'],
 ];
+
+const MANUAL_CHAPTERS = new Set(['interface', 'systems', 'glossary']);
+const MANUAL_GROUPS = new Set(['conditions', 'schools', 'classes', 'attributes', 'consumables', 'rarities', 'affixes', 'entities']);
 
 const ATTRIBUTES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
 const ARCHETYPES = ['chambers', 'caves', 'mazes', 'cathedrals', 'spines', 'fractured', 'rings', 'shards'];
@@ -302,6 +306,72 @@ function validateSymbolTable(data, errors, registry) {
   if (!table.theme_id?.entries || table.theme_id.entries.join('|') !== THEME_IDS.join('|') || !table.protocol_ref?.entries || SCHOOL_IDS.some((school) => ![1, 2, 3, 4, 5].every((tier) => table.protocol_ref.entries.some((entry) => Array.isArray(entry) && entry[0] === school && entry[1] === tier))) || !table.affix_id?.entries || table.affix_id.entries.join('|') !== AFFIX_IDS.join('|')) addError(errors, 'invalid_reference', file, 'Symbol tables must match theme, protocol, and affix catalogs.');
 }
 
+function validateManual(data, errors) {
+  const file = 'data/manual.json';
+  if (!Array.isArray(data?.sections) || data.sections.length === 0) {
+    addError(errors, 'invalid_schema', file, 'Expected non-empty sections array.');
+    return;
+  }
+  const ids = new Set();
+  const sections = data.sections;
+  for (const section of sections) {
+    if (!isObject(section) || !isStableId(section?.id)) {
+      addError(errors, 'invalid_schema', file, `Invalid section id ${section?.id ?? '(unknown)'}.`);
+      continue;
+    }
+    if (ids.has(section.id)) addError(errors, 'duplicate_id', file, `Duplicate section id ${section.id}.`);
+    ids.add(section.id);
+    if (!MANUAL_CHAPTERS.has(section.chapter)) addError(errors, 'invalid_schema', file, `Invalid chapter for ${section.id}.`);
+    if (section.chapter === 'glossary') {
+      if (typeof section.group !== 'string' || !MANUAL_GROUPS.has(section.group)) addError(errors, 'invalid_schema', file, `Invalid glossary group for ${section.id}.`);
+    } else if (section.group !== null) {
+      addError(errors, 'invalid_schema', file, `Non-glossary section ${section.id} must have group=null.`);
+    }
+    if (!isString(section.title)) addError(errors, 'invalid_schema', file, `Missing title for ${section.id}.`);
+    if (!Array.isArray(section.body) || section.body.length === 0) {
+      addError(errors, 'invalid_schema', file, `Empty body for ${section.id}.`);
+    } else {
+      for (const paragraph of section.body) {
+        if (!Array.isArray(paragraph) || paragraph.length === 0) {
+          addError(errors, 'invalid_schema', file, `Empty paragraph in ${section.id}.`);
+          continue;
+        }
+        for (const run of paragraph) {
+          if (!Array.isArray(run) || run.length < 2) {
+            addError(errors, 'invalid_schema', file, `Invalid run in ${section.id}.`);
+            continue;
+          }
+          if (run[0] === 'text') {
+            if (run.length !== 2 || typeof run[1] !== 'string' || run[1].length === 0) addError(errors, 'invalid_schema', file, `Invalid text run in ${section.id}.`);
+          } else if (run[0] === 'link') {
+            if (run.length !== 3 || !isStableId(run[1]) || typeof run[2] !== 'string' || run[2].length === 0) addError(errors, 'invalid_schema', file, `Invalid link run in ${section.id}.`);
+          } else {
+            addError(errors, 'invalid_schema', file, `Unknown run kind in ${section.id}.`);
+          }
+        }
+      }
+    }
+    if (!Array.isArray(section.seeAlso)) addError(errors, 'invalid_schema', file, `Missing seeAlso for ${section.id}.`);
+    else if (!section.seeAlso.every(isStableId)) addError(errors, 'invalid_schema', file, `Invalid seeAlso entry in ${section.id}.`);
+  }
+  for (const section of sections) {
+    if (!Array.isArray(section?.body)) continue;
+    for (const paragraph of section.body) {
+      if (!Array.isArray(paragraph)) continue;
+      for (const run of paragraph) {
+        if (Array.isArray(run) && run[0] === 'link' && isStableId(run[1]) && !ids.has(run[1])) {
+          addError(errors, 'invalid_reference', file, `Unresolved link target ${run[1]} in ${section.id}.`);
+        }
+      }
+    }
+    if (Array.isArray(section?.seeAlso)) {
+      for (const target of section.seeAlso) {
+        if (isStableId(target) && !ids.has(target)) addError(errors, 'invalid_reference', file, `Unresolved seeAlso target ${target} in ${section.id}.`);
+      }
+    }
+  }
+}
+
 export function validateGameData(registry) {
   const errors = [];
   validateVersions(registry, errors);
@@ -316,6 +386,7 @@ export function validateGameData(registry) {
   validateConsumables(registry.consumables, errors, registry);
   validateThemes(registry.themes, errors, registry);
   validateSymbolTable(registry.symbolTable, errors, registry);
+  validateManual(registry.manual, errors);
   return { valid: errors.length === 0, errors };
 }
 

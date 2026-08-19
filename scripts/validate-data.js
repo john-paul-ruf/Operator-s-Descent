@@ -14,7 +14,8 @@ const DATA_FILES = [
   ['affixes', 'affixes.json'],
   ['conditions', 'conditions.json'],
   ['consumables', 'consumables.json'],
-  ['symbolTable', 'symbol-table.json']
+  ['symbolTable', 'symbol-table.json'],
+  ['manual', 'manual.json']
 ];
 
 function readJson(file) {

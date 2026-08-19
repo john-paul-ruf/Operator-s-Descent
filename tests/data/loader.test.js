@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadData } from '../helpers/data.js';
 import { getGameData, loadGameData, resetGameDataForTests } from '../../src/data-loader.js';
 
-const names = ['sigils', 'themes', 'classes', 'protocols', 'enemies', 'equipment', 'affixes', 'conditions', 'consumables', 'symbol-table'];
+const names = ['sigils', 'themes', 'classes', 'protocols', 'enemies', 'equipment', 'affixes', 'conditions', 'consumables', 'symbol-table', 'manual'];
 
 function createFetch(overrides = {}) {
   return async (file) => {

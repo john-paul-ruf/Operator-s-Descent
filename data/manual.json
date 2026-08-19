@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "console_overview",
+      "chapter": "interface",
+      "group": null,
+      "title": "Console Overview",
+      "body": [
+        [
+          ["text", "Every meaningful action routes through the single bottom console; the "],
+          ["link", "the_map", "map"],
+          ["text", " itself handles pan, zoom, and tap-to-move. Tabs 1–7 select modes ("],
+          ["link", "move_mode", "MOVE"],
+          ["text", ", "],
+          ["link", "combat_mode", "COMBAT"],
+          ["text", ", "],
+          ["link", "party_mode", "PARTY"],
+          ["text", ", "],
+          ["link", "gear_mode", "GEAR"],
+          ["text", ", "],
+          ["link", "tech_mode", "TECH"],
+          ["text", ", "],
+          ["link", "loot_mode", "LOOT"],
+          ["text", ", "],
+          ["link", "log_mode", "LOG"],
+          ["text", "); the panel expands for detail and collapses to keep the playfield visible."]
+        ]
+      ],
+      "seeAlso": ["move_mode", "combat_mode", "status_strip"]
+    },
+    {
+      "id": "move_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "MOVE Mode",
+      "body": [
+        [
+          ["text", "MOVE owns exploration input. Use the directional controls or movement keys for eight-way steps — or tap the "],
+          ["link", "the_map", "map"],
+          ["text", " to walk to a revealed cell. Hostiles always stop movement; container, descent, and damage stops are shown as "],
+          ["link", "console_overview", "console"],
+          ["text", " decisions."]
+        ]
+      ],
+      "seeAlso": ["the_map", "console_overview", "combat_mode"]
+    },
+    {
+      "id": "the_map",
+      "chapter": "interface",
+      "group": null,
+      "title": "The Map",
+      "body": [
+        [
+          ["text", "The map is live. Drag to pan; pinch or scroll to zoom (fit the whole floor out to a 4× close-up). In "],
+          ["link", "move_mode", "exploration"],
+          ["text", ", tap a revealed, walkable cell to walk there — auto-stops (hostile, container, descent, damage) still fire. In "],
+          ["link", "combat_mode", "combat"],
+          ["text", ", tap a cell to preview the route, tap it again to commit. The "],
+          ["link", "console_overview", "console"],
+          ["text", " still owns every action — attack, cast, item, descend, wait."]
+        ]
+      ],
+      "seeAlso": ["move_mode", "combat_mode", "console_overview"]
+    },
+    {
+      "id": "combat_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "COMBAT Mode",
+      "body": [
+        [
+          ["text", "COMBAT presents one actor turn at a time: choose an action, choose a target or path, then confirm. Cycle targets with Tab or arrows and press Enter; on the "],
+          ["link", "the_map", "map"],
+          ["text", ", tap-to-route then tap the same cell to commit. Turns follow initiative, AP, movement, reactions, and d20 outcomes."]
+        ]
+      ],
+      "seeAlso": ["the_map", "console_overview", "status_strip"]
+    },
+    {
+      "id": "party_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "PARTY Mode",
+      "body": [
+        [
+          ["text", "PARTY is the read-only roster: HP, CHARGE, attributes, defenses, conditions, calibration, corruption, equipment, protocol deck, and current combat resources."]
+        ]
+      ],
+      "seeAlso": ["gear_mode", "tech_mode", "status_strip"]
+    },
+    {
+      "id": "gear_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "GEAR Mode",
+      "body": [
+        [
+          ["text", "GEAR handles equipment, inventory, junk tags, scrap, class gates, slot gates, and CORRUPT consent. In "],
+          ["link", "combat_mode", "combat"],
+          ["text", ", the active actor gets one free swap per turn. Nearby containers are opened from "],
+          ["link", "loot_mode", "LOOT"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["loot_mode", "party_mode", "combat_mode"]
+    },
+    {
+      "id": "tech_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "TECH Mode",
+      "body": [
+        [
+          ["text", "TECH shows each prepared protocol, CHARGE cost, target shape, and overclock risk. Select a protocol, choose a legal target, then confirm before CHARGE or RNG is consumed."]
+        ]
+      ],
+      "seeAlso": ["party_mode", "combat_mode", "console_overview"]
+    },
+    {
+      "id": "loot_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "LOOT Mode",
+      "body": [
+        [
+          ["text", "LOOT opens nearby containers. Items remain in the container until taken, inventory cap failures do not delete them, and CORRUPT items remain explicit decisions. Move items into a character's pack from here; manage equipped slots in "],
+          ["link", "gear_mode", "GEAR"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["gear_mode", "log_mode", "console_overview"]
+    },
+    {
+      "id": "log_mode",
+      "chapter": "interface",
+      "group": null,
+      "title": "LOG Mode",
+      "body": [
+        [
+          ["text", "LOG keeps the ordered recent event tail: discoveries, damage, d20 rolls, "],
+          ["link", "combat_mode", "combat"],
+          ["text", " outcomes, and link actions. Living runs can copy a full "],
+          ["link", "seed_links", "#r= state link"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["seed_links", "combat_mode", "status_strip"]
+    },
+    {
+      "id": "status_strip",
+      "chapter": "interface",
+      "group": null,
+      "title": "Status Strip",
+      "body": [
+        [
+          ["text", "The top strip is the compact truth readout. "],
+          ["link", "move_mode", "Exploration"],
+          ["text", " shows depth, seed, party HP, corruption, and danger clock. "],
+          ["link", "combat_mode", "Combat"],
+          ["text", " shows round, initiative, active HP, CHARGE, AP, and move."]
+        ]
+      ],
+      "seeAlso": ["move_mode", "combat_mode", "seed_links"]
+    },
+    {
+      "id": "settings_help",
+      "chapter": "interface",
+      "group": null,
+      "title": "Settings",
+      "body": [
+        [
+          ["text", "Settings are reachable from the title and in play. Master mute, five audio layers, glitch, motion policy, and scanline/grain are the complete v1 list."]
+        ]
+      ],
+      "seeAlso": ["console_overview", "status_strip"]
+    },
+    {
+      "id": "seed_links",
+      "chapter": "interface",
+      "group": null,
+      "title": "Seed & Share Links",
+      "body": [
+        [
+          ["text", "The world seed identifies the dungeon. Copy #w= to share the world, or #r= while the party lives to share the entire current run state. Failed links name the reason. Copy the current state from "],
+          ["link", "log_mode", "LOG"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["log_mode", "status_strip", "console_overview"]
+    }
+  ]
+}
