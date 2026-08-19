@@ -129,6 +129,29 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     expect(firstIconChild(junkAll)).toBeTruthy();
   });
 
+  it('SESSION-03 — .card-classes chip lists the classes that can equip the item, on both equipped and inventory rows', () => {
+    const runState = run([item('fresh-polearm', 'polearm')]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    // Equipped weapon slot holds a sidearm — every class can equip it.
+    const equippedChip = byTestId(container, 'gear-classes-weapon');
+    expect(equippedChip).toBeTruthy();
+    expect(equippedChip.className.split(/\s+/)).toContain('card-classes');
+    for (const name of ['Breacher', 'Ghost', 'Compiler', 'Anchor', 'Oracle', 'Operator']) {
+      expect(equippedChip.textContent).toContain(name);
+    }
+
+    // Inventory polearm — Ghost + Oracle do not gate it.
+    const invChip = byTestId(container, 'gear-classes-fresh-polearm');
+    expect(invChip).toBeTruthy();
+    expect(invChip.className.split(/\s+/)).toContain('card-classes');
+    expect(invChip.textContent).toContain('Breacher');
+    expect(invChip.textContent).not.toContain('Ghost');
+    expect(invChip.textContent).not.toContain('Oracle');
+  });
+
   it('a disabled icon-prefixed UNEQUIP does not fire its handler on click', () => {
     // Full inventory blocks the unequip transaction — the button is rendered
     // disabled, and clicking must not call requestUnequip (icon should never

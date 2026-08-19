@@ -146,6 +146,30 @@ describe('LOOT mode — SESSION-06 icon coverage', () => {
     expect(vaultHeader.children[1].tagName).toBe('SVG');
   });
 
+  it('SESSION-03 — container item card carries a .card-classes chip listing every class that can equip it', () => {
+    const runState = run();
+    const sidearm = item('loot-sidearm-chip', 'sidearm');
+    const polearm = item('loot-polearm-chip', 'polearm');
+    const lootState = { container: { id: 5, kind: 'standard', x: 1, y: 1 }, items: [sidearm, polearm] };
+    const container = new FakeElement('div');
+    renderLoot(container, { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+
+    const sidearmChip = byTestId(container, 'loot-classes-loot-sidearm-chip');
+    expect(sidearmChip).toBeTruthy();
+    expect(sidearmChip.className.split(/\s+/)).toContain('card-classes');
+    // Every class gates sidearm.
+    for (const name of ['Breacher', 'Ghost', 'Compiler', 'Anchor', 'Oracle', 'Operator']) {
+      expect(sidearmChip.textContent).toContain(name);
+    }
+
+    const polearmChip = byTestId(container, 'loot-classes-loot-polearm-chip');
+    expect(polearmChip).toBeTruthy();
+    // Ghost + Oracle do not gate polearm in shipped data.
+    expect(polearmChip.textContent).toContain('Breacher');
+    expect(polearmChip.textContent).not.toContain('Ghost');
+    expect(polearmChip.textContent).not.toContain('Oracle');
+  });
+
   it('SESSION-03 — container row renders the item description exactly once, keeps the rarity link, and drops loot-detail', () => {
     const runState = run();
     const weapon = item('loot-polearm', 'polearm');

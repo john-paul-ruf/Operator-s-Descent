@@ -44,6 +44,23 @@ function itemStats(item, data) {
   return describeItemStats(item, { equipmentData: data?.equipment, affixesData: data?.affixes });
 }
 
+// SESSION-03 — duplicated in loot.js by design (STATE.md Design Decisions §4);
+// extracting to components.js would force this session to lease that file.
+function classesUsableFor(item, data) {
+  if (!item || !data?.classes?.classes) return [];
+  if (item.category === 'consumable') return ['All classes'];
+  return data.classes.classes.filter((cls) => canEquip(cls, item)).map((cls) => cls.name);
+}
+
+function classesChip(item, data, testid) {
+  const chip = document.createElement('div');
+  chip.className = 'card-classes';
+  const names = classesUsableFor(item, data);
+  chip.textContent = names.length ? `Classes: ${names.join(' · ')}` : 'Classes: none';
+  chip.dataset.testid = testid;
+  return chip;
+}
+
 function itemUnits(item) {
   return Number.isInteger(item?.count) ? item.count : 1;
 }
@@ -311,6 +328,7 @@ function renderEquipped(container, context, character, ui) {
         }
         row.appendChild(detail);
       }
+      row.appendChild(classesChip(item, context.data || {}, `gear-classes-${slot}`));
       const disabledReason = combatSwapGate(context, character).reason || (getInventoryCount(context.runState.inventory) + itemUnits(item) > INVENTORY_CAP ? 'Inventory full.' : '');
       const button = createButton('UNEQUIP', {
         disabled: Boolean(disabledReason), description: disabledReason,
@@ -389,6 +407,7 @@ function renderInventoryItem(list, context, character, ui, item) {
   const before = runStats(context.data || {}, character);
   const after = itemSlotCompatible(ui.slot, item) ? projectedStats(context.data || {}, character, ui.slot, item) : before;
   wrapper.appendChild(text('gear-comparison', statDeltaLine(before, after), `gear-compare-${item.id}`));
+  wrapper.appendChild(classesChip(item, context.data || {}, `gear-classes-${item.id}`));
   const reason = equipDisabledReason(context, ui, character, item);
   const equip = createButton(reason ? `EQUIP BLOCKED` : `EQUIP ${SLOT_LABELS[ui.slot].toUpperCase()}`, {
     disabled: Boolean(reason),

@@ -1,5 +1,6 @@
 import { createButton, createEquipmentCard, createManualLink, createRarityTag, createScrollArea } from '../components.js';
 import { createIcon } from '../icon.js';
+import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
 
 // SESSION-06 — icon helper mirrors the fail-soft pattern in tech.js so the
@@ -99,6 +100,14 @@ function displayItem(item, data) {
 
 function itemStats(item, data) {
   return describeItemStats(item, { equipmentData: data?.equipment, affixesData: data?.affixes });
+}
+
+// SESSION-03 — duplicated in gear.js by design (STATE.md Design Decisions §4);
+// extracting to components.js would force this session to lease that file.
+function classesUsableFor(item, data) {
+  if (!item || !data?.classes?.classes) return [];
+  if (item.category === 'consumable') return ['All classes'];
+  return data.classes.classes.filter((cls) => canEquip(cls, item)).map((cls) => cls.name);
 }
 
 function comparisonLine(item, context) {
@@ -214,6 +223,14 @@ function renderContainerItems(container, context, lootContainer, items) {
       rarityRow.appendChild(rarityLink);
       row.appendChild(rarityRow);
     }
+    const classesRow = document.createElement('div');
+    classesRow.className = 'card-classes';
+    const classNames = classesUsableFor(item, context.data || {});
+    classesRow.textContent = classNames.length
+      ? `Classes: ${classNames.join(' · ')}`
+      : 'Classes: none';
+    classesRow.dataset.testid = `loot-classes-${item.id}`;
+    row.appendChild(classesRow);
     row.appendChild(text('loot-compare', comparisonLine(item, context), `loot-compare-${item.id}`));
     const result = addItem(context.runState?.inventory || [], item);
     const reason = inventoryFull || !result.success ? 'Inventory full; pickup blocked until space is freed.' : '';
