@@ -205,6 +205,17 @@
   color: var(--accent);
 }
 
+.init-slot.enemy {
+  border-color: rgba(232, 58, 58, 0.3);
+}
+
+.init-slot.enemy.active {
+  border-color: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  background: rgba(232, 58, 58, 0.1);
+  color: var(--danger);
+}
+
 .init-sigil {
   width: 34px;
   height: 34px;
