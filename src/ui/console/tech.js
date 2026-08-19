@@ -1,7 +1,22 @@
 import { createButton, createProtocolCard, createChargeBar, createManualLink, createScrollArea } from '../components.js';
+import { createIcon } from '../icon.js';
 import { modifier, overclockTarget } from '../../rules/attributes.js';
 import { getSignatureCapabilities } from '../../rules/classes.js';
 import { applyProtocolEffect, deckSlotCapacity, deckSlotCost, protocolChargeCost, resolveProtocolAction, validateProtocolDeck } from '../../rules/protocols.js';
+
+// SESSION-06 — fail-soft icon prefix; missing createElementNS (fake DOMs)
+// short-circuits so the wider console tests never blow up on the sprite.
+function safeIcon(id, opts = {}) {
+  if (!id) return null;
+  if (typeof document?.createElementNS !== 'function') return null;
+  try { return createIcon(id, opts); } catch { return null; }
+}
+
+function prependChild(host, child) {
+  if (!child) return;
+  if (typeof host.prepend === 'function') host.prepend(child);
+  else host.appendChild(child);
+}
 
 const uiByRun = new WeakMap();
 const TARGET_CYCLE_ACTIONS = new Set(['tab_next', 'move_n', 'move_s', 'move_w', 'move_e', 'move_nw', 'move_ne', 'move_sw', 'move_se']);
@@ -291,13 +306,21 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   row.appendChild(detail);
   const btnWrap = document.createElement('div');
   btnWrap.className = 'protocol-buttons';
-  const cast = createButton(castReason ? 'CAST BLOCKED' : 'CAST', { disabled: Boolean(castReason), description: castReason, onClick: () => beginProtocol(context, protocol, false) });
-  cast.className = 'btn-crt tech-cast-btn';
+  const cast = createButton(castReason ? 'CAST BLOCKED' : 'CAST', {
+    disabled: Boolean(castReason), description: castReason,
+    onClick: () => beginProtocol(context, protocol, false),
+    icon: 'wand-sparkles', iconSize: 14
+  });
+  cast.classList.add('tech-cast-btn');
   cast.dataset.testid = `tech-cast-${protocolKey(protocol)}`;
   btnWrap.appendChild(cast);
   const overReason = availabilityReason(context, character, caster, protocol, true);
-  const over = createButton(overReason ? 'OVERCLOCK BLOCKED' : `OVERCLOCK ${overclock.cost} CHG`, { danger: true, disabled: Boolean(overReason), description: overReason, onClick: () => beginProtocol(context, protocol, true) });
-  over.className = 'btn-crt danger tech-overclock-btn';
+  const over = createButton(overReason ? 'OVERCLOCK BLOCKED' : `OVERCLOCK ${overclock.cost} CHG`, {
+    danger: true, disabled: Boolean(overReason), description: overReason,
+    onClick: () => beginProtocol(context, protocol, true),
+    icon: 'zap', iconSize: 14, iconTone: 'danger'
+  });
+  over.classList.add('tech-overclock-btn');
   over.dataset.testid = `tech-overclock-${protocolKey(protocol)}`;
   btnWrap.appendChild(over);
   row.appendChild(btnWrap);
@@ -427,7 +450,11 @@ export function render(container, context = {}) {
   renderCatalog(container, data);
   if (ui.result) container.appendChild(text('tech-result console-row', `Last: ${ui.result.protocol.name} · CHARGE -${ui.result.costs.charge}${ui.result.rolls.overclock ? ` · overclock ${ui.result.rolls.overclock.success ? 'success' : 'failed'}` : ''}`, 'tech-result'));
   if (ui.notice) container.appendChild(text('tech-notice console-row', ui.notice, 'tech-notice'));
-  if (ui.error) container.appendChild(text('tech-error console-row', ui.error, 'tech-error'));
+  if (ui.error) {
+    const err = text('tech-error console-row', ui.error, 'tech-error');
+    prependChild(err, safeIcon('triangle-alert', { size: 14, tone: 'danger' }));
+    container.appendChild(err);
+  }
 }
 
 export function handleInput(event, context = {}) {

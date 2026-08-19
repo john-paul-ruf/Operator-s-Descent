@@ -1,7 +1,25 @@
 import { createButton, createSigilToken, createHPBar, createChargeBar, createConditionTag, createManualLink, createScrollArea, createEquipmentCard, createProtocolCard } from '../components.js';
+import { createIcon } from '../icon.js';
 import { modifier, deriveStats, ATTRIBUTE_KEYS } from '../../rules/attributes.js';
 import { getSignatureCapabilities } from '../../rules/classes.js';
 import { resolveLoadout } from '../../rules/equipment.js';
+
+// SESSION-06 — roster stat rows tone icons for their category. The icon is
+// prefixed on the derived-stat row via `row()`'s new `icon` param.
+const DERIVED_ICONS = {
+  Defense: 'shield',
+  'Protocol Defense': 'shield',
+  Initiative: 'sparkles',
+  'Melee / Ranged / Protocol': 'sword',
+  Detection: 'eye',
+  'CHARGE regen': 'battery'
+};
+
+function safeCreateIcon(id, opts = {}) {
+  if (!id) return null;
+  if (typeof document?.createElementNS !== 'function') return null;
+  try { return createIcon(id, opts); } catch { return null; }
+}
 
 const ATTR_LABELS = { mgt: 'MGT', fin: 'FIN', vit: 'VIT', res: 'RES', foc: 'FOC', sig: 'SIG' };
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', offhand: 'Off-hand' };
@@ -53,17 +71,19 @@ function text(className, value, testid = null) {
   return element;
 }
 
-function row(label, value, testid = null) {
+function row(label, value, testid = null, iconId = null) {
   const element = document.createElement('div');
   element.className = 'party-stat-row console-row';
   if (testid) element.dataset.testid = testid;
   const name = document.createElement('span');
   name.className = 'stat-label';
   name.textContent = label;
+  const icon = safeCreateIcon(iconId, { size: 14, tone: 'dim' });
   const val = document.createElement('span');
   val.className = 'stat-value';
   val.textContent = value;
-  element.append(name, val);
+  if (icon) element.append(icon, name, val);
+  else element.append(name, val);
   return element;
 }
 
@@ -82,12 +102,13 @@ function rowWithLink(label, value, target, dispatch, source, testid = null, link
   return element;
 }
 
-function compactBar(label, current, max, colorVar) {
+function compactBar(label, current, max, colorVar, iconId = null) {
   const wrap = document.createElement('div');
   wrap.className = 'party-inline-bar console-row';
   const info = document.createElement('span');
   info.className = 'stat-label';
   info.textContent = `${label} ${current}/${max}`;
+  const icon = safeCreateIcon(iconId, { size: 14, tone: 'dim' });
   const track = document.createElement('div');
   track.className = 'party-inline-track';
   const fill = document.createElement('div');
@@ -95,7 +116,8 @@ function compactBar(label, current, max, colorVar) {
   fill.style.width = `${max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0}%`;
   fill.style.background = `var(${colorVar})`;
   track.appendChild(fill);
-  wrap.append(info, track);
+  if (icon) wrap.append(icon, info, track);
+  else wrap.append(info, track);
   return wrap;
 }
 
@@ -164,6 +186,8 @@ export function render(container, context = {}) {
     card.addEventListener('click', select);
     card.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') select(); });
     card.appendChild(createSigilToken(sigilOf(character), 34, { role: 'player', label: `Party member ${character.id}` }));
+    const roleIcon = safeCreateIcon('user', { size: 14, tone: 'dim' });
+    if (roleIcon) card.appendChild(roleIcon);
     const meta = document.createElement('div');
     meta.className = 'member-card-meta';
     const name = document.createElement('div');
@@ -172,8 +196,8 @@ export function render(container, context = {}) {
     meta.appendChild(name);
     meta.appendChild(text('member-card-calibration', `Cal ${character.calibrationCount || 0} · T${getSignatureCapabilities(character, classDataFor(context.data || {}, character)).tier}`));
     card.appendChild(meta);
-    card.appendChild(compactBar('HP', hp.current, hp.max, '--danger'));
-    card.appendChild(compactBar('CHG', charge.current, charge.max, '--accent'));
+    card.appendChild(compactBar('HP', hp.current, hp.max, '--danger', 'heart'));
+    card.appendChild(compactBar('CHG', charge.current, charge.max, '--accent', 'battery'));
     const equip = document.createElement('div');
     equip.className = 'member-card-equip';
     equip.textContent = equipmentLine(character);
@@ -246,12 +270,12 @@ function renderDetail(area, character, context) {
   stats.className = 'party-derived';
   stats.dataset.testid = 'party-derived';
   stats.append(
-    row('Defense', String(derived.defenseBase), 'party-defense'),
-    row('Protocol Defense', String(derived.protocolDefenseBase)),
-    row('Initiative', `${derived.initiativeMod >= 0 ? '+' : ''}${derived.initiativeMod}`),
-    row('Melee / Ranged / Protocol', `${derived.meleeAccuracy >= 0 ? '+' : ''}${derived.meleeAccuracy} / ${derived.rangedAccuracy >= 0 ? '+' : ''}${derived.rangedAccuracy} / ${derived.protocolAccuracy >= 0 ? '+' : ''}${derived.protocolAccuracy}`),
-    row('Detection', `${derived.detectionRadius} cells`),
-    row('CHARGE regen', String(derived.chargeRegen))
+    row('Defense', String(derived.defenseBase), 'party-defense', DERIVED_ICONS['Defense']),
+    row('Protocol Defense', String(derived.protocolDefenseBase), null, DERIVED_ICONS['Protocol Defense']),
+    row('Initiative', `${derived.initiativeMod >= 0 ? '+' : ''}${derived.initiativeMod}`, null, DERIVED_ICONS['Initiative']),
+    row('Melee / Ranged / Protocol', `${derived.meleeAccuracy >= 0 ? '+' : ''}${derived.meleeAccuracy} / ${derived.rangedAccuracy >= 0 ? '+' : ''}${derived.rangedAccuracy} / ${derived.protocolAccuracy >= 0 ? '+' : ''}${derived.protocolAccuracy}`, null, DERIVED_ICONS['Melee / Ranged / Protocol']),
+    row('Detection', `${derived.detectionRadius} cells`, null, DERIVED_ICONS['Detection']),
+    row('CHARGE regen', String(derived.chargeRegen), null, DERIVED_ICONS['CHARGE regen'])
   );
   area.appendChild(stats);
 

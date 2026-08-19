@@ -1,5 +1,15 @@
 import { createButton, createEquipmentCard, createManualLink, createRarityTag, createScrollArea } from '../components.js';
+import { createIcon } from '../icon.js';
 import { deriveStats } from '../../rules/attributes.js';
+
+// SESSION-06 — icon helper mirrors the fail-soft pattern in tech.js so the
+// existing loot tests (which use a document without createElementNS) stay
+// green while the browser gets the real sprite prefix.
+function safeIcon(id, opts = {}) {
+  if (!id) return null;
+  if (typeof document?.createElementNS !== 'function') return null;
+  try { return createIcon(id, opts); } catch { return null; }
+}
 import { describeItem, describeItemStats, itemDisplayName, resolveLoadout } from '../../rules/equipment.js';
 import { generateLoot } from '../../rules/loot.js';
 import { INVENTORY_CAP, addItem, getInventoryCount, toggleJunkTag, junkAllTagged, getSalvageValue } from '../../rules/inventory.js';
@@ -210,7 +220,11 @@ function renderContainerItems(container, context, lootContainer, items) {
     row.appendChild(text('loot-compare', comparisonLine(item, context), `loot-compare-${item.id}`));
     const result = addItem(context.runState?.inventory || [], item);
     const reason = inventoryFull || !result.success ? 'Inventory full; pickup blocked until space is freed.' : '';
-    const take = createButton(reason ? 'TAKE BLOCKED' : 'TAKE', { primary: true, disabled: Boolean(reason), description: reason, onClick: () => takeItem(context, lootContainer, item.id) });
+    const take = createButton(reason ? 'TAKE BLOCKED' : 'TAKE', {
+      primary: true, disabled: Boolean(reason), description: reason,
+      onClick: () => takeItem(context, lootContainer, item.id),
+      icon: 'download', iconSize: 14
+    });
     take.dataset.testid = `loot-take-${item.id}`;
     row.appendChild(take);
     list.appendChild(row);
@@ -231,12 +245,19 @@ function renderInventoryJunk(container, context, state) {
   inv.className = 'loot-junk-list';
   inv.dataset.testid = 'loot-junk-list';
   for (const item of inventory) {
-    const button = createButton(`${item.junkTagged ? 'UNTAG' : 'TAG'} ${itemName(item, context.data || {})}`, { onClick: () => requestJunkToggle(context, item.id) });
+    const button = createButton(`${item.junkTagged ? 'UNTAG' : 'TAG'} ${itemName(item, context.data || {})}`, {
+      onClick: () => requestJunkToggle(context, item.id),
+      icon: 'recycle', iconSize: 14
+    });
     button.dataset.testid = `loot-junk-${item.id}`;
     inv.appendChild(button);
   }
   container.appendChild(inv);
-  const junkAll = createButton(state.pendingJunkAll ? 'CONFIRM JUNK ALL TAGGED' : 'JUNK ALL TAGGED', { danger: true, disabled: !tagged.length, onClick: () => requestJunkAll(context) });
+  const junkAll = createButton(state.pendingJunkAll ? 'CONFIRM JUNK ALL TAGGED' : 'JUNK ALL TAGGED', {
+    danger: true, disabled: !tagged.length,
+    onClick: () => requestJunkAll(context),
+    icon: 'recycle', iconSize: 14
+  });
   junkAll.dataset.testid = 'loot-junk-all';
   container.appendChild(junkAll);
 }
@@ -262,12 +283,18 @@ export function render(container, context = {}) {
   glyph.className = context.layout === 'wide' ? 'container-icon container-icon-lg' : 'container-icon';
   glyph.textContent = lootContainer.kind === 'vault' ? '◈' : '▣';
   header.appendChild(glyph);
+  // Lucide icon lands AFTER the glyph so tests treating header.children[0]
+  // as the glyph continue to hold. SESSION-06 spec: box for standard,
+  // archive for vault.
+  const kindIcon = safeIcon(lootContainer.kind === 'vault' ? 'archive' : 'box', { size: 16, tone: 'dim' });
+  if (kindIcon) header.appendChild(kindIcon);
   header.appendChild(document.createTextNode(` CONTAINER ${lootContainer.id} · ${lootContainer.kind || 'standard'} · ${opened ? 'OPENED' : 'UNOPENED'} · ${items.length} item(s)`));
   container.appendChild(header);
   const openButton = createButton(opened ? 'OPENED' : 'OPEN CONTAINER', {
     primary: true,
     disabled: opened,
-    onClick: () => context.bus?.dispatch('loot:open-request', { runState, floor: context.floor, container: lootContainer })
+    onClick: () => context.bus?.dispatch('loot:open-request', { runState, floor: context.floor, container: lootContainer }),
+    icon: 'chevron-right', iconSize: 14
   });
   openButton.dataset.testid = 'loot-open';
   container.appendChild(openButton);

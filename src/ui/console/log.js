@@ -148,7 +148,13 @@ export function render(container, context = {}) {
     fallback.setAttribute('readonly', 'readonly');
     share.appendChild(fallback);
   }
-  const copyBtn = createButton('◈ COPY LINK', { primary: true, disabled: !livingRun(context.runState) || context.runWiped, description: !livingRun(context.runState) || context.runWiped ? 'Full-state link unavailable after wipe.' : '', onClick: () => copyLink(container, context) });
+  const copyBtn = createButton('◈ COPY LINK', {
+    primary: true,
+    disabled: !livingRun(context.runState) || context.runWiped,
+    description: !livingRun(context.runState) || context.runWiped ? 'Full-state link unavailable after wipe.' : '',
+    onClick: () => copyLink(container, context),
+    icon: 'link', iconSize: 14
+  });
   copyBtn.dataset.testid = 'log-copy-link';
   share.appendChild(copyBtn);
   container.appendChild(share);

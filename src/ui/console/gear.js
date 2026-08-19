@@ -6,6 +6,7 @@ import { INVENTORY_CAP, getInventoryCount, toggleJunkTag, junkAllTagged, getSalv
 
 const SLOTS = ['weapon', 'armor', 'offhand'];
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', offhand: 'Off-hand' };
+const SLOT_ICONS = { weapon: 'sword', armor: 'shield', offhand: 'star' };
 const uiByRun = new WeakMap();
 
 function clear(container) {
@@ -249,7 +250,8 @@ export function render(container, context = {}) {
       selected: index === ui.charIndex,
       onClick: () => { ui.charIndex = index; ui.pendingCorruptItemId = null; ui.pendingJunkAll = false; context.refresh?.(); }
     });
-    button.className = `gear-character member-pill console-row${index === ui.charIndex ? ' active' : ''}`;
+    button.classList.add('gear-character', 'member-pill', 'console-row');
+    if (index === ui.charIndex) button.classList.add('active');
     button.dataset.testid = `gear-character-${member.id}`;
     selectors.appendChild(button);
   }
@@ -260,9 +262,10 @@ export function render(container, context = {}) {
   for (const slot of SLOTS) {
     const button = createButton(`${SLOT_LABELS[slot]} · ${itemName(character.equipment?.[slot], context.data)}`, {
       selected: ui.slot === slot,
-      onClick: () => { ui.slot = slot; ui.pendingCorruptItemId = null; context.refresh?.(); }
+      onClick: () => { ui.slot = slot; ui.pendingCorruptItemId = null; context.refresh?.(); },
+      icon: SLOT_ICONS[slot], iconSize: 14
     });
-    button.className = 'gear-slot console-row';
+    button.classList.add('gear-slot', 'console-row');
     button.dataset.testid = `gear-slot-${slot}`;
     slotRow.appendChild(button);
   }
@@ -309,7 +312,11 @@ function renderEquipped(container, context, character, ui) {
         row.appendChild(detail);
       }
       const disabledReason = combatSwapGate(context, character).reason || (getInventoryCount(context.runState.inventory) + itemUnits(item) > INVENTORY_CAP ? 'Inventory full.' : '');
-      const button = createButton('UNEQUIP', { disabled: Boolean(disabledReason), description: disabledReason, onClick: () => requestUnequip(context, slot) });
+      const button = createButton('UNEQUIP', {
+        disabled: Boolean(disabledReason), description: disabledReason,
+        onClick: () => requestUnequip(context, slot),
+        icon: 'x', iconSize: 14
+      });
       button.dataset.testid = `gear-unequip-${slot}`;
       row.appendChild(button);
       if (disabledReason) {
@@ -367,7 +374,8 @@ function renderInventory(container, context, character, ui) {
   const junkButton = createButton(ui.pendingJunkAll ? 'CONFIRM JUNK ALL TAGGED' : 'JUNK ALL TAGGED', {
     danger: true,
     disabled: tagged.length === 0,
-    onClick: () => requestJunkAll(context)
+    onClick: () => requestJunkAll(context),
+    icon: 'recycle', iconSize: 14
   });
   junkButton.dataset.testid = 'gear-junk-all';
   container.appendChild(junkButton);
@@ -394,7 +402,10 @@ function renderInventoryItem(list, context, character, ui, item) {
     why.dataset.testid = `gear-equip-reason-${item.id}`;
     wrapper.appendChild(why);
   }
-  const junk = createButton(item.junkTagged ? 'UNTAG JUNK' : 'TAG JUNK', { onClick: () => requestJunkToggle(context, item) });
+  const junk = createButton(item.junkTagged ? 'UNTAG JUNK' : 'TAG JUNK', {
+    onClick: () => requestJunkToggle(context, item),
+    icon: 'recycle', iconSize: 14
+  });
   junk.dataset.testid = `gear-junk-${item.id}`;
   wrapper.appendChild(junk);
   if (item.corrupt) wrapper.appendChild(text('corrupt-tag', `CORRUPT +${Number(item.corruptionValue || 0).toFixed(2)}`));

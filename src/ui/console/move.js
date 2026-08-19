@@ -1,15 +1,15 @@
 import { createButton } from '../components.js';
 
 const DIRECTIONS = [
-  { action: 'move_nw', direction: 'nw', label: '↖', name: 'Northwest' },
-  { action: 'move_n', direction: 'n', label: '↑', name: 'North' },
-  { action: 'move_ne', direction: 'ne', label: '↗', name: 'Northeast' },
-  { action: 'move_w', direction: 'w', label: '←', name: 'West' },
-  { action: 'confirm', direction: null, label: 'CONFIRM', name: 'Confirm descent or selection' },
-  { action: 'move_e', direction: 'e', label: '→', name: 'East' },
-  { action: 'move_sw', direction: 'sw', label: '↙', name: 'Southwest' },
-  { action: 'move_s', direction: 's', label: '↓', name: 'South' },
-  { action: 'move_se', direction: 'se', label: '↘', name: 'Southeast' }
+  { action: 'move_nw', direction: 'nw', label: '↖', name: 'Northwest', icon: 'arrow-up-left' },
+  { action: 'move_n', direction: 'n', label: '↑', name: 'North', icon: 'arrow-up' },
+  { action: 'move_ne', direction: 'ne', label: '↗', name: 'Northeast', icon: 'arrow-up-right' },
+  { action: 'move_w', direction: 'w', label: '←', name: 'West', icon: 'arrow-left' },
+  { action: 'confirm', direction: null, label: 'CONFIRM', name: 'Confirm descent or selection', icon: null },
+  { action: 'move_e', direction: 'e', label: '→', name: 'East', icon: 'arrow-right' },
+  { action: 'move_sw', direction: 'sw', label: '↙', name: 'Southwest', icon: 'arrow-down-left' },
+  { action: 'move_s', direction: 's', label: '↓', name: 'South', icon: 'arrow-down' },
+  { action: 'move_se', direction: 'se', label: '↘', name: 'Southeast', icon: 'arrow-down-right' }
 ];
 
 const ACTION_TO_DIRECTION = Object.fromEntries(DIRECTIONS.filter((entry) => entry.direction).map((entry) => [entry.action, entry.direction]));
@@ -67,9 +67,13 @@ export function render(container, context = {}) {
     const label = isConfirm ? confirmLabel : entry.label;
     const button = createButton(label, {
       label: isConfirm ? confirmAria : entry.name,
-      disabled: isConfirm && !canDescend
+      disabled: isConfirm && !canDescend,
+      icon: entry.icon || undefined,
+      iconSize: 16
     });
-    button.className = isConfirm ? 'dpad-center console-row' : 'dpad-btn console-row';
+    // classList.add (not className assignment) preserves the has-icon marker
+    // set by createButton opts.icon. Reassigning className wipes it.
+    button.classList.add(...(isConfirm ? ['dpad-center', 'console-row'] : ['dpad-btn', 'console-row']));
     button.dataset.testid = entry.direction ? `move-${entry.direction}` : 'move-confirm';
     dpad.appendChild(button);
     if (context.inputHandler?.bindActionControl) cleanups.push(context.inputHandler.bindActionControl(button, entry.action));
@@ -81,16 +85,23 @@ export function render(container, context = {}) {
   if (context.layout !== 'wide') {
     const toggleRow = document.createElement('div');
     toggleRow.className = 'move-toggle-row';
-    toggleRow.appendChild(createButton('HOSTILE STOP LOCKED', { selected: true, disabled: true, description: 'Hostile contact always stops movement.' }));
-    const discoveryToggle = createButton(`DISCOVERY STOP ${toggles.discovery === false ? 'OFF' : 'ON'}`, {
-      selected: toggles.discovery !== false,
-      onClick: () => context.setAutoStopToggle?.('discovery', toggles.discovery === false)
+    toggleRow.appendChild(createButton('HOSTILE STOP LOCKED', {
+      selected: true, disabled: true, description: 'Hostile contact always stops movement.',
+      icon: 'eye', iconSize: 14, iconTone: 'dim'
+    }));
+    const discoveryOn = toggles.discovery !== false;
+    const discoveryToggle = createButton(`DISCOVERY STOP ${discoveryOn ? 'ON' : 'OFF'}`, {
+      selected: discoveryOn,
+      onClick: () => context.setAutoStopToggle?.('discovery', toggles.discovery === false),
+      icon: discoveryOn ? 'eye' : 'eye-off', iconSize: 14, iconTone: 'dim'
     });
     discoveryToggle.dataset.testid = 'toggle-discovery';
     toggleRow.appendChild(discoveryToggle);
-    const damageToggle = createButton(`DAMAGE STOP ${toggles.damage === false ? 'OFF' : 'ON'}`, {
-      selected: toggles.damage !== false,
-      onClick: () => context.setAutoStopToggle?.('damage', toggles.damage === false)
+    const damageOn = toggles.damage !== false;
+    const damageToggle = createButton(`DAMAGE STOP ${damageOn ? 'ON' : 'OFF'}`, {
+      selected: damageOn,
+      onClick: () => context.setAutoStopToggle?.('damage', toggles.damage === false),
+      icon: damageOn ? 'eye' : 'eye-off', iconSize: 14, iconTone: 'dim'
     });
     damageToggle.dataset.testid = 'toggle-damage';
     toggleRow.appendChild(damageToggle);
