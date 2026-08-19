@@ -1,6 +1,26 @@
 import { bus } from '../state/bus.js';
 import { createSigilToken, createHPBar, createChargeBar, createManualLink } from './components.js';
+import { createIcon } from './icon.js';
 import { createLogEntryElement, collectLogEntries } from './console/log.js';
+
+// SESSION-06 — telemetry dock field labels each lead with a lucide sprite
+// so the wide-mode density pass reads as a proper "gauge dashboard" rather
+// than a stack of ALL-CAPS text. `hash` is not in the current sprite subset;
+// fall back to `chevron-right` for Seed per SESSION-06.md guidance.
+const DOCK_ICONS = {
+  Depth: 'gauge',
+  Seed: 'chevron-right',
+  Party: 'users',
+  'Danger Clock': 'clock',
+  Corruption: 'flame',
+  Round: 'sparkles'
+};
+
+function safeIcon(id, opts = {}) {
+  if (!id) return null;
+  if (typeof document?.createElementNS !== 'function') return null;
+  try { return createIcon(id, opts); } catch { return null; }
+}
 
 // the-manual SESSION-04 — `?` manual chip is the exploration/combat access point.
 // Kept as a lightweight helper so both the portrait strip and the wide telemetry
@@ -211,8 +231,17 @@ function appendDockField(header, label, valueBuilder) {
   row.className = 'wide-telemetry-field';
   const labelEl = document.createElement('span');
   labelEl.className = 'wide-telemetry-label';
+  // textContent set first so tests reading `labelEl.textContent` still see
+  // the label string; the icon child is then prepended so the sprite renders
+  // before the text in the browser DOM. The fake-DOM `.textContent` remains
+  // a plain stored property regardless of appended children.
   labelEl.textContent = label;
   labelEl.setAttribute('aria-label', label);
+  const icon = safeIcon(DOCK_ICONS[label], { size: 14, tone: 'dim' });
+  if (icon) {
+    if (typeof labelEl.prepend === 'function') labelEl.prepend(icon);
+    else labelEl.appendChild(icon);
+  }
   const valueEl = valueBuilder();
   valueEl.classList.add('wide-telemetry-value');
   row.append(labelEl, valueEl);

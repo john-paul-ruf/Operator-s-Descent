@@ -137,8 +137,10 @@
     overflow: hidden;
     min-width: 0;
   }
+  /* SESSION-06 density pass — dock/header/body padding tightened so the
+     360px-max dock reclaims vertical space for actual content. */
   .wide-telemetry-header {
-    padding: 14px 16px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--border-dim);
     background: var(--bg-panel-elevated);
   }
@@ -146,7 +148,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding: 8px 0;
+    padding: 6px 0;
     border-bottom: 1px dashed rgba(42, 26, 74, 0.5);
   }
   .wide-telemetry-field:last-child { border-bottom: 0; }
@@ -155,6 +157,9 @@
     text-transform: uppercase;
     letter-spacing: 0.15em;
     color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .wide-telemetry-value {
     font-size: 14px;
@@ -291,7 +296,9 @@
   }
   .wide-mode-tab {
     flex: 1;
-    min-height: 96px;
+    /* SESSION-06 density pass — 96px → 72px reclaims vertical space while
+       staying above the 44px minimum touch target. */
+    min-height: 72px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -326,7 +333,8 @@
     background: var(--bg-panel);
   }
   .wide-console-content-header {
-    padding: 14px 20px;
+    /* SESSION-06 density pass — 14/20 → 10/14 padding trim. */
+    padding: 10px 14px;
     border-bottom: 1px solid var(--border-dim);
     background: var(--bg-panel-elevated);
     display: flex;
@@ -341,10 +349,23 @@
   }
   .wide-console-content-body {
     flex: 1;
-    padding: 20px;
+    /* SESSION-06 density pass — 20 → 12 padding + systematic 8px rhythm on
+       every direct child to reclaim vertical space in the narrow dock. */
+    padding: 12px;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+  }
+  .wide-console-content-body > * + * { margin-top: 8px; }
+  /* Combat actions ship as a 2-column grid in the wide dock so seven actions
+     fit in four rows instead of a seven-tall stack. SESSION-05's combat pane
+     emits `.combat-action-list` regardless of layout — this scope keeps
+     portrait unchanged. */
+  .wide-console-content-body .combat-action-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
   }
 
   /* ═══ MOVE-mode extras (autostop rows) ═══ */
@@ -375,8 +396,11 @@
   }
 
   /* ═══ COMBAT-mode extras (targeting) ═══ */
+  /* SESSION-06 density pass — target-info and btn-confirm tighten padding
+     so combat targeting fits inside the narrow dock without pushing the
+     confirm button below the fold. */
   .target-info {
-    padding: 12px 16px;
+    padding: 8px 12px;
     background: var(--bg-panel);
     border: 1px solid var(--border-dim);
     font-size: 11px;
@@ -390,14 +414,14 @@
   .target-info .target-detail {
     color: var(--text-dim);
     font-size: 10px;
-    margin-top: 4px;
+    margin-top: 2px;
   }
   .btn-confirm {
     background: transparent;
     border: 1px solid var(--accent);
     color: var(--accent);
-    padding: 14px 24px;
-    font-size: 12px;
+    padding: 12px 20px;
+    font-size: 11px;
     font-family: inherit;
     text-transform: uppercase;
     letter-spacing: 0.15em;

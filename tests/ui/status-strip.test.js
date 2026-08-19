@@ -12,8 +12,9 @@ class FakeClassList {
 }
 
 class FakeElement {
-  constructor(tagName) {
+  constructor(tagName, namespaceURI = null) {
     this.tagName = tagName.toUpperCase();
+    this.namespaceURI = namespaceURI;
     this.children = [];
     this.attributes = new Map();
     this.dataset = {};
@@ -27,12 +28,18 @@ class FakeElement {
     this.disabled = false;
   }
   set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
-  get className() { return this._className; }
+  // SVG sprites created via createElementNS set class through setAttribute
+  // (not the className setter). Fall back to the raw attribute so tests
+  // reading `.className` on icon <svg>s see the sprite classes.
+  get className() { return this._className || this.attributes.get('class') || ''; }
   get firstChild() { return this.children[0] || null; }
   appendChild(child) { this.children.push(child); return child; }
   append(...children) { for (const child of children) this.appendChild(child); }
+  // SESSION-06 — icon prefix uses element.prepend() when available.
+  prepend(...children) { this.children = [...children, ...this.children]; }
   removeChild(child) { this.children = this.children.filter((entry) => entry !== child); return child; }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  setAttributeNS(_ns, name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
   removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((candidate) => candidate !== listener)); }
@@ -43,7 +50,10 @@ class FakeElement {
 }
 
 function installDocument() {
-  globalThis.document = { createElement: (tagName) => new FakeElement(tagName) };
+  globalThis.document = {
+    createElement: (tagName) => new FakeElement(tagName),
+    createElementNS: (ns, tagName) => new FakeElement(tagName, ns)
+  };
 }
 
 function textOf(root) {
@@ -265,6 +275,38 @@ describe('telemetry dock (wide)', () => {
     expect(events).toEqual([{ target: null, source: 'status-strip' }]);
     off();
     dock.cleanup();
+  });
+
+  // SESSION-06 — wide-mode field labels each lead with a lucide sprite so
+  // the telemetry dock reads as a dashboard rather than an all-caps ladder.
+  test('every wide-mode telemetry field label carries a lucide sprite prefix and keeps its label text', () => {
+    const runState = { depth: 7, worldSeed: 'A4F29C1E', corruption: 0.1, dangerClockProgress: 0.32, party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 8, maxHP: 10 }] };
+    const dock = createTelemetryDock(runState);
+    const labels = findAllByClass(dock, 'wide-telemetry-label');
+    expect(labels.map((el) => el.textContent)).toEqual(['Depth', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
+    for (const label of labels) {
+      const svg = label.children.find((child) => child.tagName === 'SVG');
+      expect(svg, `no sprite child on "${label.textContent}"`).toBeTruthy();
+      expect(svg.className.split(/\s+/)).toContain('icon');
+      expect(svg.className.split(/\s+/)).toContain('icon-14');
+    }
+    dock.cleanup();
+  });
+
+  test('portrait createStatusBar still returns groups with no icon children (dashboard icons are wide-only)', () => {
+    const strip = createStatusBar({ depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] });
+    const groups = ['status-depth-group', 'status-seed-group', 'status-party-group', 'status-danger-group', 'status-clock-group'];
+    for (const groupName of groups) {
+      const group = findByClass(strip, groupName);
+      expect(group).not.toBe(null);
+      // No <svg> icons anywhere inside portrait status groups.
+      function anySvg(node) {
+        if (node.tagName === 'SVG') return true;
+        return (node.children || []).some(anySvg);
+      }
+      expect(anySvg(group)).toBe(false);
+    }
+    strip.cleanup();
   });
 
   test('marks wide telemetry enemy slots with the enemy class and stacks it with active', () => {
