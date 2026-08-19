@@ -1917,3 +1917,164 @@ Fixtures under `tests/fixtures/saves/v3/` are dev-only test data and MUST NOT sh
 - Rule: **every successful hit deals ≥ 1 damage** — melee, ranged, and protocol-driven alike. Low-MGT attackers (e.g. Drone, mgt 3 → modifier −2) rolling a natural 1 on a d6 previously floored to 0 damage on a landed hit; that outcome is now impossible.
 - Crit path is unchanged in behavior (starts at `dieSize`, adds melee modifier, then the new floor at 1 — still ≥ 1 for every shipped weapon/attribute combo).
 - No public API additions or signature changes. Regression coverage lives in `tests/rules/combat-damage.test.js`.
+
+<!-- save-codec-v5-and-release-gate SESSION-02 — 2026-08-18 -->
+### v5 combat-snapshot codec + apex serialization fix (M89 Save Schema / Save Codecs, M24 Combat Rules)
+
+`RUN_SCHEMA_VERSION` bumped **4 → 5**. Encoding-only change — decoded RunState
+shape unchanged. v4 saves continue loading through `readV4Payload` (M106) +
+the registered `4 → 5` identity migration (M105). Every prior wire-format
+invariant holds: pipeline order `condense → compress → encrypt → frame →
+base64` unchanged, decode/migration/restore consume zero RNG, `src/state/versions/**`
+and `src/state/migrations/**` are unchanged (SESSION-01 froze them; they
+stay frozen).
+
+The redundant `try/catch registerMigration({from:3,to:4,…})` block in
+`save-schema.js` is removed — `save-migrate.js` is now the sole registrar
+for every hop.
+
+### Apex serialization fix
+
+Pre-v5, apex actors (`actionSlotsPerRound === 2`) tripped a save-blocking
+bug: `combat.js buildTurnOrder` inserted the apex id twice into `turnOrder`
+(the intended two-slot layout), `toCombatSnapshot` iterated `turnOrder` and
+emitted the duplicated id into BOTH `initiativeOrder` and `actors[]`, and
+`writeCombatSnapshot` rejected the snapshot with `duplicate_actor`. **Any
+real combat containing an apex could not save.**
+
+Post-fix:
+- `toCombatSnapshot` (`src/rules/combat.js`) still walks `turnOrder` but
+  dedups actor emission via a `seenActorIds` set — `initiativeOrder` keeps
+  both apex slots, `actors[]` emits each unique actor once.
+- `buildTurnOrder` and `combatStateFromSnapshot` (`src/runtime.js`) are
+  untouched. The restore path's `initiativeOrder.filter((id) =>
+  actorIds.has(id))` already preserves duplicates without dedup — verified
+  by the new regression tests in `tests/integration/combat-snapshot-stats.test.js`.
+
+### v5 wire format for the combat snapshot
+
+**`writeCombatSnapshot` / `readCombatSnapshot` signature.** Third positional
+parameter changed from unused `symbols` to `options = { depth }`. `depth`
+seeds the hp/chargeMax baseline in lever C (below); defaults to 1 when
+omitted (test round-trips work without the caller threading state.depth).
+Call sites in `src/state/save-schema.js` pass `{ depth: state.depth }` on
+both encode and decode.
+
+**Initiative indices (Lever A).** `initiativeOrder` is written as a 6-bit
+length prefix + N × 5-bit indices into `actors[]`, replacing v4's per-entry
+full entity-id write. `MAX_INITIATIVE = 2 × MAX_ACTORS = 48` accommodates
+the apex two-slot ceiling. `currentIndex` widens to 6 bits, bounded by
+`initiativeOrder.length - 1`. Duplicates are legal, capped at 2 per actor;
+every actor must be referenced at least once. Reads validate the same
+constraints.
+
+**Enemy-id delta context (Lever A).** Inside `writeCombatSnapshot`, an
+enemy-only delta context (`{ previous: null }`) is threaded through
+`writeActor`. The first enemy in `actors[]` writes the full compact form
+(2-bit type = 2 + 8-bit depth + 3-bit archetype + varUint cursor).
+Subsequent enemies use a new 2-bit type = 3 marker + 1-bit same-depth flag
++ optional 8-bit depth + 3-bit archetype + signed varInt cursor DELTA from
+the previous enemy's cursor. Scoped to the actor list inside the combat
+snapshot only — non-enemy ids (`operator_N`, `echo_...`, raw strings)
+continue through the unchanged encoding.
+
+**Alignment trim (Lever A).** The per-enemy `alignToByte()` pair in
+`writeEnemyStats` / `readEnemyStats` is dropped. The single block-level
+`alignToByte()` at the enemy-stats section boundary remains as the anchor.
+
+**Encounter-id sameAs flag (Lever A).** `combat.encounter.id` is emitted
+as a 1-bit `sameAs-arena.contactId` flag + optional full-form encoding
+escape. Every real snapshot has the two matching (both come from
+`combatState.id` in `toCombatSnapshot`), so the escape path only fires
+under tests / corner cases.
+
+**Condition enum (Lever B).** `CONDITION_IDS` pins the alphabetical list
+of shipped condition ids (`blinded, burning, corroded, immobilized,
+jammed, marked, overloaded, panicked, shielded`, matching
+`data/conditions.json`). `writeConditions` / `readConditions` encode known
+ids as `1-bit known flag + 4-bit index` (5 bits total, ~8-11 raw bytes
+saved per condition). Unknown ids fall through to the string escape path,
+so future condition additions decode without a schema bump wound. Applies
+uniformly to party characters, echo characters, and every combat actor.
+
+**hpMax / chargeMax delta from pinned baseline (Lever C).** `writeEnemyStats`
+/ `readEnemyStats` encode `hpMax` and `chargeMax` as `1-bit natural flag +
+optional signed varInt delta` where the baseline is computed from a
+codec-owned pinned table:
+- `ENEMY_HP_BASELINES` snapshots `(vit * 4 + hpBonus)` per shipped
+  archetype (drone 8, warden 28, stalker 14, choir 12, null 18, construct
+  40, phantom 14, apex 40).
+- `ENEMY_CHOIR_CHARGE_RES = 7` captures the only non-zero chargeMax
+  baseline (choir: `res * 2 + depth`).
+- `enemyStatScaleFrozen` mirrors `src/rules/scaling.js` — same design rule
+  as `ENEMY_STAT_SIGIL_POOLS`: decode stays pure and data-independent, and
+  a drift-guard test binds the two.
+
+Fresh spawns pay 1 bit instead of the previous 1-2-byte varUint. Unknown
+archetypes fall back to raw signed varInt from baseline 0.
+
+**Echo extension sanitization.** `writeEcho` sanitizes the echo character
+through `EPHEMERAL_ECHO_EXTENSION_KEYS` before delegating to
+`writeCharacter`. The set contains combat-actor field names (`side,
+position, hpMax, defense, protocolDefense, chargeMax, ap, moveAvailable,
+_deathRecorded, ...`) that leak into `character.extensions` via
+`getCharacterDeaths` (spreads a combat actor) → `queueEcho` →
+`normalizeCharacter`'s unknown-key fallback. None of them are needed to
+rehydrate the echo — `createEcho` computes every field fresh from the
+canonical character record at summon time. Party characters go through
+`writeCharacter` directly and are NOT touched. Canonical progression-driven
+keys (`deckSlotBonus`, `proficiencies` from `progression.js`) survive
+untouched because they are not in the ephemeral set.
+
+### Pinned-table drift guards
+
+`tests/state/codec-drift-guards.test.js` locks each pinned table against
+its live source:
+- `CONDITION_IDS` vs `data/conditions.json` keys (alphabetical, ≤16 entries).
+- `ENEMY_HP_BASELINES` vs `(vit * 4 + hpBonus)` from `data/enemies.json`
+  for every shipped archetype.
+- `enemyStatScaleFrozen` vs live `enemyStatScale` at depths
+  `{1, 10, 55, 100} × 8 archetypes`.
+- `ENEMY_CHOIR_CHARGE_RES` vs `data/enemies.json` choir res attribute.
+
+Any legitimate drift MUST bump `RUN_SCHEMA_VERSION` and freeze the previous
+values under `src/state/versions/` — the guards light up before shipping,
+mirroring the sigil-pool-guard pattern.
+
+### Migration hop
+
+`src/state/migrations/v4-to-v5.js` is a pure identity — all v5 changes are
+encoding-only. No shipped v4 payload can carry duplicate initiative entries
+(the pre-fix apex bug prevented apex saves from existing), and no
+condition-id or enemy-hp shape changes across the boundary. `save-migrate.js`
+is the sole registrar; the `save-schema.js` inline block is gone.
+
+### Standing obligation (Custom Rule 13)
+
+Every future `RUN_SCHEMA_VERSION` (or symbol-table) bump MUST land four
+things in the same feature:
+1. Freeze the prior payload reader under `src/state/versions/read-vN.js`
+   (+ paired `codecs-vN.js`).
+2. Register the payload version in `FROZEN_READERS` inside
+   `src/state/save-decode.js`.
+3. Add `src/state/migrations/vN-to-v(N+1).js` and register it in
+   `save-migrate.js`.
+4. Capture a real golden fixture at `tests/fixtures/saves/vN/*.txt` — the
+   corpus test picks it up automatically.
+
+### Note for SESSION-03 (service-worker manifest)
+
+`tests/performance/release-budgets.test.js` reports **eight** missing
+offline-manifest assets that SESSION-03 adds to `service-worker.js` before
+the release-budget gate passes:
+- `data/symbol-table.v3.json` (SESSION-01, prior)
+- `src/state/save-migrate.js` (SESSION-01, prior)
+- `src/state/versions/codecs-v3.js` (SESSION-01, prior)
+- `src/state/versions/read-v3.js` (SESSION-01, prior)
+- `src/state/migrations/v3-to-v4.js` (SESSION-01, prior)
+- `src/state/versions/codecs-v4.js` (SESSION-01, prior)
+- `src/state/versions/read-v4.js` (SESSION-01, prior)
+- `src/state/migrations/v4-to-v5.js` (SESSION-01, prior)
+
+Nothing new from SESSION-02 — the fork touches existing shipped files only,
+no new source under `src/**`.
