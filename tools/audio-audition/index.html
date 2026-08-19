@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AUDIO AUDITION — DEV ONLY</title>
+  <link rel="stylesheet" href="../../styles/base.css" />
+  <style>
+    /* Rig-only layout — base.css tokens drive all colour. Nothing here ships. */
+    html, body {
+      overflow: auto;
+    }
+    body {
+      display: block;
+      align-items: unset;
+      justify-content: unset;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .audition-root {
+      max-width: 640px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .dev-banner {
+      background: var(--danger);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 4px;
+      text-align: center;
+      letter-spacing: 0.2em;
+      font-weight: 700;
+      text-transform: uppercase;
+      box-shadow: 0 0 12px var(--danger);
+    }
+    .rig-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      border-bottom: 1px solid var(--border-dim);
+      padding-bottom: 12px;
+    }
+    .rig-header h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 8px var(--accent);
+    }
+    .rig-status {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+    .rig-status.is-running {
+      color: var(--heal);
+      text-shadow: 0 0 8px var(--heal);
+    }
+    .start-gate {
+      display: flex;
+      justify-content: center;
+      padding: 32px 0;
+    }
+    .start-gate[hidden] { display: none; }
+    .panel-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      border-radius: 4px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .panel-card h2 {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .control-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 48px;
+      gap: 10px;
+      align-items: center;
+    }
+    .control-row label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-secondary);
+    }
+    .control-row .value {
+      font-size: 11px;
+      color: var(--accent);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .control-row input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .control-row input[type="checkbox"] {
+      justify-self: start;
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+    .controls[hidden] { display: none; }
+    .rig-note {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="audition-root">
+    <div class="dev-banner">AUDIO AUDITION — DEV ONLY, NOT SHIPPED</div>
+
+    <div class="rig-header">
+      <h1>Operator's Descent · Audio Audition Rig</h1>
+      <div class="rig-status" data-testid="rig-status">IDLE — click START</div>
+    </div>
+
+    <p class="rig-note">
+      Boots the real <code>createAudioEngine</code> against the pre-rewrite audio layers.
+      Master + five layer sliders route through <code>setMasterVolume</code>/<code>setLayerVolume</code>.
+      Game-state controls arrive in checkpoint&nbsp;2.
+    </p>
+
+    <div class="start-gate" data-testid="start-gate">
+      <button class="btn-crt btn-start" type="button" data-testid="start-button">START</button>
+    </div>
+
+    <div class="controls" data-testid="controls" hidden>
+      <section class="panel-card" aria-label="Mixer">
+        <h2>Mixer</h2>
+        <div class="control-row">
+          <label for="master-volume">Master</label>
+          <input type="range" id="master-volume" min="0" max="100" step="1" value="100" />
+          <span class="value" data-value-for="master-volume">100</span>
+        </div>
+        <div class="control-row">
+          <label for="master-mute">Mute</label>
+          <input type="checkbox" id="master-mute" />
+          <span class="value" data-value-for="master-mute">off</span>
+        </div>
+        <div class="control-row">
+          <label for="layer-drone">Drone</label>
+          <input type="range" id="layer-drone" data-layer="drone" min="0" max="100" step="1" value="75" />
+          <span class="value" data-value-for="layer-drone">75</span>
+        </div>
+        <div class="control-row">
+          <label for="layer-pulse">Pulse</label>
+          <input type="range" id="layer-pulse" data-layer="pulse" min="0" max="100" step="1" value="75" />
+          <span class="value" data-value-for="layer-pulse">75</span>
+        </div>
+        <div class="control-row">
+          <label for="layer-sparkle">Sparkle</label>
+          <input type="range" id="layer-sparkle" data-layer="sparkle" min="0" max="100" step="1" value="75" />
+          <span class="value" data-value-for="layer-sparkle">75</span>
+        </div>
+        <div class="control-row">
+          <label for="layer-lead">Lead</label>
+          <input type="range" id="layer-lead" data-layer="lead" min="0" max="100" step="1" value="75" />
+          <span class="value" data-value-for="layer-lead">75</span>
+        </div>
+        <div class="control-row">
+          <label for="layer-noiseBed">Noise&nbsp;Bed</label>
+          <input type="range" id="layer-noiseBed" data-layer="noiseBed" min="0" max="100" step="1" value="75" />
+          <span class="value" data-value-for="layer-noiseBed">75</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="./audition.js"></script>
+</body>
+</html>
