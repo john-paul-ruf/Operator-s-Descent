@@ -60,16 +60,23 @@ class FakeContext {
   setTransform(...args) { this.calls.push(['setTransform', ...args]); }
 }
 
-function lattice() {
+function lattice({ containers, enemySpawns, activeContainers, activeEnemySpawns } = {}) {
   const grid = Array.from({ length: 32 }, () => Array.from({ length: 20 }, () => 1));
   grid[0][0] = 0;
   grid[4][4] = 2;
+  const c = containers ?? [{ id: 'c1', x: 4, y: 4 }];
+  const e = enemySpawns ?? [{ id: 'e1', x: 5, y: 5 }];
   return {
     getGrid: () => grid,
     getWidth: () => 20,
     getHeight: () => 32,
-    getContainers: () => [{ id: 'c1', x: 4, y: 4 }],
-    getEnemySpawns: () => [{ id: 'e1', x: 5, y: 5 }]
+    getContainers: () => c,
+    getEnemySpawns: () => e,
+    // SESSION-04: playfield renders exploration via the active accessors so
+    // culled/opened containers and culled/defeated enemies drop out and hunter
+    // positions supersede spawn positions.
+    getActiveContainers: () => activeContainers ?? c,
+    getActiveEnemySpawns: () => activeEnemySpawns ?? e,
   };
 }
 
@@ -597,6 +604,47 @@ describe('playfield rendering', () => {
     // FLASH label emitted alongside the frame.
     const labels = canvas.context.calls.filter(([n]) => n === 'fillText').map((c) => c[2]);
     expect(labels).toContain('FLASH');
+  });
+
+  test('SESSION-04: culled container is skipped by the renderer (no yellow fill, no glyph)', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    // Base lattice has container at (4,4); active list returns none (culled).
+    playfield.renderExploration(lattice({ activeContainers: [] }), fog, { x: 1, y: 1 });
+    // No yellow container fill/glyph anywhere.
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    const containerFills = fills.filter((c) => c[1] === 'rgba(232,210,58,0.1)');
+    expect(containerFills.length).toBe(0);
+    const glyphs = canvas.context.calls.filter(([n]) => n === 'fillText').map((c) => c[2]);
+    expect(glyphs.some((g) => g === '▣' || g === '◈')).toBe(false);
+  });
+
+  test('SESSION-04: culled enemy is skipped by the renderer (no danger-red token)', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    playfield.renderExploration(lattice({ activeEnemySpawns: [] }), fog, { x: 1, y: 1 });
+    // No danger-red token stroke around any enemy cell.
+    const strokes = canvas.context.calls.filter(([n, style]) => n === 'stroke' && style === '#e83a3a');
+    expect(strokes.length).toBe(0);
+  });
+
+  test('SESSION-04: hunter-overridden enemy renders at the override cell, not the spawn cell', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const fog = new Uint8Array(20 * 32).fill(2);
+    // Spawn is (5,5) but active list places the enemy at (7,7) via hunter override.
+    playfield.renderExploration(
+      lattice({ activeEnemySpawns: [{ id: 'e1', x: 7, y: 7 }] }),
+      fog,
+      { x: 1, y: 1 }
+    );
+    // Enemy token center at cell (7,7) = pixel (7*24+12, 7*24+12) = (180, 180).
+    const arcs = canvas.context.calls.filter(([n]) => n === 'arc');
+    expect(arcs.some((c) => c[1] === 180 && c[2] === 180)).toBe(true);
+    // No arc at the original spawn cell (5,5) → (5*24+12=132).
+    expect(arcs.some((c) => c[1] === 132 && c[2] === 132)).toBe(false);
   });
 
   test('renderCombat with no playback options (positionOverrides/activeOverrideId/flashCells) is pixel-identical to today', () => {

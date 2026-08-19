@@ -310,7 +310,10 @@ export function createPlayfield(canvas) {
       }
     }
 
-    for (const c of lattice.getContainers?.() || []) {
+    // SESSION-04: use the active accessors so opened / culled containers and
+    // defeated / culled enemies are filtered out, and hunter-overridden enemy
+    // positions render at the moved cell (not the spawn cell).
+    for (const c of lattice.getActiveContainers?.() || []) {
       if (fogState[c.y * w + c.x] !== 2) continue;
       ctx.fillStyle = 'rgba(232,210,58,0.1)';
       ctx.fillRect(c.x * EXPLORATION_CELL_SIZE + 2, c.y * EXPLORATION_CELL_SIZE + 2, EXPLORATION_CELL_SIZE - 4, EXPLORATION_CELL_SIZE - 4);
@@ -320,7 +323,7 @@ export function createPlayfield(canvas) {
       ctx.textBaseline = 'middle';
       ctx.fillText(c.kind === 'vault' ? '◈' : '▣', c.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2, c.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2);
     }
-    for (const e of lattice.getEnemySpawns?.() || []) {
+    for (const e of lattice.getActiveEnemySpawns?.() || []) {
       if (fogState[e.y * w + e.x] !== 2) continue;
       drawToken(ctx, {
         codepoint: e.sigilCodepoint || codepointFromSigilId(e.sigilId) || 0xE030,
