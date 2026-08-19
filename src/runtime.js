@@ -537,6 +537,15 @@ async function handleFloorChange({ runState, selections = {}, reason = 'descent-
 
 async function handleNavigation({ screen, params = {} } = {}) {
   if (!isValidRoute(screen)) return false;
+  // the-manual SESSION-04 — the tutorial route is retired: any navigation to
+  // it mounts the title and opens the manual modal instead. `ROUTES` still
+  // includes 'tutorial' so `#a=tutorial` deep-links keep parsing and shipped
+  // share links never dead-end.
+  if (screen === 'tutorial') {
+    const ok = await mountScreen('title');
+    bus.dispatch('ui:manual-open', { target: null, source: 'route-tutorial' });
+    return ok;
+  }
   if (screen !== currentRoute) pendingPush = true;
   if (screen === 'exploration') return routeToExploration(params);
   if (screen === 'combat' && params.runState) {
@@ -783,6 +792,13 @@ async function resolveParsedFragment(parsed) {
   if (route === 'scorecard') return mountScreen('title');
   if (route === 'combat') return mountScreen('title');
   if (route === 'settings') return mountScreen('settings', from ? { from } : {});
+  // the-manual SESSION-04 — `#a=tutorial` back-compat: land on the title and
+  // pop the manual modal instead of mounting a retired screen.
+  if (route === 'tutorial') {
+    const ok = await mountScreen('title');
+    bus.dispatch('ui:manual-open', { target: null, source: 'route-tutorial' });
+    return ok;
+  }
   return mountScreen(route);
 }
 

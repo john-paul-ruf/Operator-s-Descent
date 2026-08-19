@@ -287,4 +287,13 @@ describe('router — ROUTES export', () => {
   it('matches the runtime route set', () => {
     expect(new Set(ROUTES)).toEqual(new Set(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']));
   });
+
+  // the-manual SESSION-04 — the tutorial route is retired at the runtime layer
+  // but MUST stay in ROUTES so `#a=tutorial` fragments keep classifying rather
+  // than falling through to `invalid`. The runtime redirects it to title + a
+  // `ui:manual-open` dispatch (covered in integration/runtime.test.js).
+  it('#a=tutorial still parses as a route (runtime redirects to title + manual)', () => {
+    expect(parseFragment('#a=tutorial')).toEqual({ kind: 'route', route: 'tutorial', save: null, seed: null, from: null });
+    expect(canonicalFragmentFor('tutorial')).toBe('#a=tutorial');
+  });
 });

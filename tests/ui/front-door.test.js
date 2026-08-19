@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
-import { getFlag, loadSettings, saveSettings } from '../../src/state/library.js';
+import { loadSettings, saveSettings } from '../../src/state/library.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 
 class FakeClassList {
@@ -261,81 +261,18 @@ describe('title screen', () => {
   });
 });
 
-describe('tutorial manual', () => {
-  it('paginates the complete manual and records completion as tutorial suppression', async () => {
-    const seen = [];
-    const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
-    const { mount } = await import('../../src/ui/screens/tutorial.js');
-    const container = new FakeElement('div');
-    mount(container);
-
-    expect(byTestId(container, 'tutorial-page').parentNode.classList.contains('screen-body')).toBe(true);
-
-    const titles = [];
-    while (byTestId(container, 'tutorial-next')) {
-      titles.push(byTestId(container, 'tutorial-page-title').textContent);
-      await byTestId(container, 'tutorial-next').click();
-    }
-    titles.push(byTestId(container, 'tutorial-page-title').textContent);
-
-    expect(titles).toEqual([
-      'Console Overview',
-      'MOVE Mode',
-      'The Map',
-      'COMBAT Mode',
-      'PARTY Mode',
-      'GEAR Mode',
-      'TECH Mode',
-      'LOOT Mode',
-      'LOG Mode',
-      'Status Strip',
-      'Settings',
-      'Seed & Share Links'
-    ]);
-    expect(byTestId(container, 'tutorial-page-index').textContent).toBe('12/12');
-
-    await byTestId(container, 'tutorial-done').click();
-    expect(getFlag('tutorialDeclined')).toBe(true);
-    expect(seen.at(-1)).toEqual({ screen: 'title', params: { tutorialCompleted: true } });
-    offNavigate();
-  });
-
-  it('renders the wide-layout tutorial as a two-page spread with an appended summary state', async () => {
-    installMatchMedia(true);
-    const seen = [];
-    const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
-    const { mount } = await import('../../src/ui/screens/tutorial.js');
-    const container = new FakeElement('div');
-    mount(container);
-
-    const shell = container.children[0];
-    expect(shell.classList.contains('wide-tutorial-shell')).toBe(true);
-    expect(shell.dataset.wideRoot).toBe('');
-
-    // Spread 0 is the first pair — left pane holds the primary tutorial-page.
-    expect(byTestId(container, 'tutorial-spread')).toBeTruthy();
-    expect(byTestId(container, 'tutorial-page').classList.contains('wide-tutorial-pane')).toBe(true);
-    expect(byTestId(container, 'tutorial-right-pane').classList.contains('wide-tutorial-pane')).toBe(true);
-    expect(byTestId(container, 'tutorial-page-title').textContent).toBe('Console Overview');
-
-    // 11 production pages → 6 content spreads + 1 summary; advance through them all.
-    let advanced = 0;
-    while (byTestId(container, 'tutorial-next')) {
-      await byTestId(container, 'tutorial-next').click();
-      advanced += 1;
-      if (advanced > 20) throw new Error('spread advancement did not terminate');
-    }
-    // After 6 next-clicks the summary state renders with DONE + summary marker.
-    expect(advanced).toBe(6);
-    expect(byTestId(container, 'tutorial-summary')).toBeTruthy();
-    expect(byTestId(container, 'tutorial-done')).toBeTruthy();
-
-    // Prev returns to the previous content spread and re-renders NEXT.
-    await byTestId(container, 'tutorial-prev').click();
-    expect(byTestId(container, 'tutorial-next')).toBeTruthy();
-    expect(byTestId(container, 'tutorial-summary')).toBeNull();
-
-    offNavigate();
+describe('tutorial route retirement', () => {
+  // SESSION-04 retires the tutorial as a reachable UX surface. The runtime
+  // redirects both #a=tutorial deep-links and ui:navigate({screen: 'tutorial'})
+  // to `title` + `ui:manual-open`. The physical src/ui/screens/tutorial.js
+  // module stays on disk pending a follow-up session with wider lease (the
+  // design-scan scanner map and its tooling test hard-reference the path);
+  // the runtime never imports it. `ROUTES` MUST keep 'tutorial' so shipped
+  // links continue to classify.
+  it('the router still parses #a=tutorial as a route (runtime redirects to title + manual)', async () => {
+    const { parseFragment, ROUTES } = await import('../../src/router.js');
+    expect(ROUTES).toContain('tutorial');
+    expect(parseFragment('#a=tutorial')).toEqual({ kind: 'route', route: 'tutorial', save: null, seed: null, from: null });
   });
 });
 
