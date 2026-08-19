@@ -150,20 +150,80 @@ function initiativeRail(container, combatState) {
   container.appendChild(rail);
 }
 
+// SESSION-02 (Issue C): every non-END-TURN action carries an explicit disabled
+// reason routed through createButton({ description }) — that populates the
+// tooltip (title) + aria-describedby so the console explains *why* a button is
+// dark. `legalActions.actions` from src/rules/combat.js is coarse: it excludes
+// jammed/panicked and enforces AP for costed actions, but it does not check
+// per-action preconditions like "no weapon" or "not enough charge for any
+// prepared protocol". This helper adds those finer gates. Do not couple the
+// helper to the rules layer — the console owns its own disabled contract so
+// SESSION-05 (combat-and-overworld) can tune it without editing rules/combat.
+function combatActionDisabledReason(action, context, active, legalActions) {
+  if (context.selection?.resolving) return 'Action resolving.';
+  if (action.id === 'end-turn') return '';
+  if (!legalActions.actions?.includes(action.id)) return 'Not legal this turn.';
+  const ap = active?.ap ?? 0;
+  const charge = active?.charge ?? active?.currentCHARGE ?? 0;
+  if (action.id === 'attack') {
+    if (ap <= 0) return 'No AP.';
+    if (!active?.weapon) return 'No weapon equipped.';
+    return '';
+  }
+  if (action.id === 'cast') {
+    if (ap <= 0) return 'No AP.';
+    const protocols = active?.protocols || active?.protocolDeck || [];
+    const affordable = protocols.some((protocol) => {
+      const cost = context.protocolsData?.schools?.[protocol.school]?.tiers?.[protocol.tier - 1]?.chargeCost || 0;
+      return cost <= charge;
+    });
+    if (!affordable) return 'Not enough CHARGE for any prepared protocol.';
+    return '';
+  }
+  if (action.id === 'overclock') {
+    if (ap <= 0) return 'No AP.';
+    // Trust legalActions for overclock premium — src/rules/combat.js already
+    // accounts for the overclock premium when deciding legality.
+    return '';
+  }
+  if (action.id === 'item') {
+    if (ap <= 0) return 'No AP.';
+    if ((context.combatGetItems?.() || []).length === 0) return 'No consumables.';
+    return '';
+  }
+  if (action.id === 'retreat') {
+    if (ap <= 0) return 'No AP.';
+    return '';
+  }
+  return '';
+}
+
 function renderActions(container, context, legalActions) {
   const list = document.createElement('div');
   list.className = 'combat-action-list';
   list.dataset.testid = 'combat-actions';
   const selection = context.selection || {};
+  const active = context.combatGetActiveActor?.() || null;
   for (const action of ACTIONS) {
-    const disabled = selection.resolving || !legalActions.actions?.includes(action.id) || (action.id === 'retreat' && (context.combatGetActiveActor?.()?.ap ?? 0) <= 0);
+    const reason = combatActionDisabledReason(action, context, active, legalActions);
+    const disabled = Boolean(reason);
     const button = createButton(`${action.label.toUpperCase()} · ${action.needs.toUpperCase()}`, {
       disabled,
+      description: reason || undefined,
       selected: selection.actionType === action.id,
-      onClick: () => context.combatChooseAction?.(action.id)
+      // Guard onClick when disabled — createButton would otherwise attach the
+      // handler and rely solely on the DOM's `disabled` attribute. If a keyboard
+      // shortcut route ever bypasses the DOM disabled check, an undefined
+      // onClick keeps the click inert.
+      onClick: disabled ? undefined : () => context.combatChooseAction?.(action.id)
     });
     button.className = selectedClass(`combat-action action-btn console-row${action.id === 'retreat' ? ' danger' : ''}`, selection.actionType === action.id);
     button.dataset.testid = `combat-action-${action.id}`;
+    // components.js:createButton exposes `description` via aria-description only.
+    // Set `title` here so the browser tooltip surfaces the reason to sighted
+    // pointer users (aria-description alone reaches AT but not the hover UI).
+    // See handoff for the components.js gap this papers over.
+    if (reason) button.setAttribute('title', reason);
     // Prepend the action's icon (SESSION-01's createIcon returns an <svg> element with class
     // "icon"). Uses prepend() so the sprite sits before the button's textContent, giving the
     // "◈ ATTACK · 1 AP" glyph-then-label rhythm the mocks establish. safeCreateIcon returns

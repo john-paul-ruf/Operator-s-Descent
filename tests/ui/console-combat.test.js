@@ -259,3 +259,127 @@ describe('console/combat.js — out-of-range target rows (SESSION-05 checkpoint 
     expect(row.className).not.toContain('is-illegal');
   });
 });
+
+// SESSION-02 (Issue C): every non-END-TURN action carries an explicit disabled
+// reason. The test context varies per action to make one precondition fail at a
+// time; each assertion checks the DOM's `disabled` flag, the reason exposed via
+// `title` (tooltip) and `aria-description` (createButton), AND that clicking
+// the disabled button is inert.
+describe('console/combat.js — action button disabled reasons (SESSION-02)', () => {
+  function makePartyContext({ active, legalActions, items = [], protocolsData = { schools: {} } }) {
+    const combatants = new Map([[active.id, active]]);
+    return {
+      combatState: { combatants, turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => legalActions,
+      combatGetTargets: () => [],
+      combatGetPreview: () => null,
+      combatGetItems: () => items,
+      combatChooseAction: () => {},
+      protocolsData
+    };
+  }
+
+  const ALL_ACTIONS = ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'wait', 'end-turn'];
+
+  it('ATTACK — disabled when the active actor has no weapon equipped', () => {
+    const active = makeActive({ ap: 1, weapon: null });
+    const context = makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] }
+    });
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    const button = byTestId(container, 'combat-action-attack');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('No weapon equipped.');
+    expect(button.getAttribute('aria-description')).toBe('No weapon equipped.');
+  });
+
+  it('CAST — disabled when no prepared protocol is affordable at current CHARGE', () => {
+    const active = makeActive({
+      ap: 1, charge: 0,
+      protocols: [{ school: 'signal', tier: 1 }]
+    });
+    const protocolsData = { schools: { signal: { tiers: [{ chargeCost: 3 }] } } };
+    const container = new FakeElement('div');
+    renderCombat(container, makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] },
+      protocolsData
+    }));
+    const button = byTestId(container, 'combat-action-cast');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('Not enough CHARGE for any prepared protocol.');
+  });
+
+  it('OVERCLOCK — disabled with "Not legal this turn." when rules exclude it from legalActions', () => {
+    const active = makeActive({ ap: 1, protocols: [{ school: 'signal', tier: 1 }] });
+    const container = new FakeElement('div');
+    renderCombat(container, makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS.filter((id) => id !== 'overclock'), legalMoveDirections: [] },
+      protocolsData: { schools: { signal: { tiers: [{ chargeCost: 0 }] } } }
+    }));
+    const button = byTestId(container, 'combat-action-overclock');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('Not legal this turn.');
+  });
+
+  it('ITEM — disabled when the consumables list is empty', () => {
+    const active = makeActive({ ap: 1 });
+    const container = new FakeElement('div');
+    renderCombat(container, makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] },
+      items: []
+    }));
+    const button = byTestId(container, 'combat-action-item');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('No consumables.');
+  });
+
+  it('RETREAT — disabled with "No AP." when the active actor has 0 AP', () => {
+    const active = makeActive({ ap: 0 });
+    const container = new FakeElement('div');
+    renderCombat(container, makePartyContext({
+      active,
+      // At 0 AP, src/rules/combat.js excludes retreat from legalActions; the
+      // console reason chain hits the "Not legal this turn." branch first. The
+      // legacy `combat-action-${id}` check for AP still guarantees the button
+      // is disabled — which is what the user cares about.
+      legalActions: { actions: ALL_ACTIONS.filter((id) => id !== 'retreat'), legalMoveDirections: [] }
+    }));
+    const button = byTestId(container, 'combat-action-retreat');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('Not legal this turn.');
+  });
+
+  it('END TURN — never disabled, even when active actor has 0 AP', () => {
+    const active = makeActive({ ap: 0 });
+    const container = new FakeElement('div');
+    renderCombat(container, makePartyContext({
+      active,
+      legalActions: { actions: ['wait', 'end-turn'], legalMoveDirections: [] }
+    }));
+    const button = byTestId(container, 'combat-action-end-turn');
+    expect(button.disabled).toBe(false);
+    // No reason → no title attribute set. aria-description similarly absent.
+    expect(button.getAttribute('title')).toBe(null);
+  });
+
+  it('disabled action button does NOT invoke combatChooseAction on click', () => {
+    const calls = [];
+    const active = makeActive({ ap: 1, weapon: null });
+    const context = makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] }
+    });
+    context.combatChooseAction = (id) => calls.push(id);
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    byTestId(container, 'combat-action-attack').click();
+    expect(calls).toEqual([]);
+  });
+});
