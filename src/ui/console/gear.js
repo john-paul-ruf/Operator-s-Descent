@@ -1,4 +1,4 @@
-import { createButton, createEquipmentCard, createScrollArea } from '../components.js';
+import { createButton, createEquipmentCard, createManualLink, createRarityTag, createAffixTag, createScrollArea } from '../components.js';
 import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
 import { describeItem, describeItemStats, equipItem, itemDisplayName, unequipItem, resolveLoadout } from '../../rules/equipment.js';
@@ -276,6 +276,7 @@ export function render(container, context = {}) {
 }
 
 function renderEquipped(container, context, character, ui) {
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const equipped = document.createElement('div');
   equipped.className = 'equipped-section';
   equipped.dataset.testid = 'gear-equipped';
@@ -287,6 +288,26 @@ function renderEquipped(container, context, character, ui) {
     row.appendChild(text('equipped-slot', `${SLOT_LABELS[slot]}: ${itemName(item, context.data)}`));
     if (item) {
       row.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data) }));
+      if (item.rarity) {
+        const detail = document.createElement('div');
+        detail.className = 'gear-item-detail console-row';
+        detail.dataset.testid = `gear-item-detail-${slot}`;
+        detail.appendChild(createRarityTag(item.rarity, {
+          manualLink: { source: 'gear-rarity', dispatch }
+        }));
+        const affixList = Array.isArray(item.affixes) ? item.affixes : [];
+        for (const affix of affixList) {
+          const affixObj = typeof affix === 'string'
+            ? { id: affix, name: context.data?.affixes?.affixes?.[affix]?.name || affix, ...(context.data?.affixes?.affixes?.[affix] || {}) }
+            : affix;
+          const affixLink = createAffixTag(affixObj, affixObj.category === 'major', {
+            manualLink: { source: 'gear-affix', dispatch }
+          });
+          affixLink.dataset.testid = `gear-affix-link-${slot}-${affixObj.id || affixObj.name || 'affix'}`;
+          detail.appendChild(affixLink);
+        }
+        row.appendChild(detail);
+      }
       const disabledReason = combatSwapGate(context, character).reason || (getInventoryCount(context.runState.inventory) + itemUnits(item) > INVENTORY_CAP ? 'Inventory full.' : '');
       const button = createButton('UNEQUIP', { disabled: Boolean(disabledReason), description: disabledReason, onClick: () => requestUnequip(context, slot) });
       button.dataset.testid = `gear-unequip-${slot}`;
@@ -303,6 +324,7 @@ function renderEquipped(container, context, character, ui) {
 }
 
 function renderInventory(container, context, character, ui) {
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const inventory = context.runState.inventory || [];
   container.appendChild(text('mode-indicator', '◈ INVENTORY', 'gear-inventory-heading'));
   const header = document.createElement('div');
@@ -310,7 +332,12 @@ function renderInventory(container, context, character, ui) {
   header.dataset.testid = 'gear-inventory-header';
   const tagged = inventory.filter((item) => item.junkTagged);
   const taggedScrap = tagged.reduce((sum, item) => sum + getSalvageValue(item), 0);
-  header.textContent = `Inventory ${getInventoryCount(inventory)}/${INVENTORY_CAP} · Scrap ${context.runState.scrapCounter || 0} · Tagged ${tagged.length} / ${taggedScrap}`;
+  const headerText = document.createElement('span');
+  headerText.textContent = `Inventory ${getInventoryCount(inventory)}/${INVENTORY_CAP} · Scrap ${context.runState.scrapCounter || 0} · Tagged ${tagged.length} / ${taggedScrap}`;
+  header.appendChild(headerText);
+  header.appendChild(createManualLink('loot_and_salvage', {
+    variant: 'chip', source: 'gear-salvage', dispatch, testid: 'gear-salvage-link'
+  }));
   container.appendChild(header);
 
   if (ui.pendingCorruptItemId) {
@@ -318,7 +345,12 @@ function renderInventory(container, context, character, ui) {
     const warning = document.createElement('div');
     warning.className = 'corrupt-warning console-row';
     warning.dataset.testid = 'gear-corrupt-warning';
-    warning.textContent = `CORRUPT WARNING: ${itemName(pending, context.data)} permanently raises run corruption/danger. Removing it never refunds the cost.`;
+    const warningText = document.createElement('span');
+    warningText.textContent = `CORRUPT WARNING: ${itemName(pending, context.data)} permanently raises run corruption/danger. Removing it never refunds the cost.`;
+    warning.appendChild(warningText);
+    warning.appendChild(createManualLink('corrupt_items', {
+      variant: 'chip', source: 'gear-corrupt', dispatch, testid: 'gear-corrupt-link'
+    }));
     const confirm = createButton('CONFIRM CORRUPT EQUIP', { danger: true, onClick: () => requestEquip(context, pending) });
     confirm.dataset.testid = 'gear-confirm-corrupt';
     warning.appendChild(confirm);

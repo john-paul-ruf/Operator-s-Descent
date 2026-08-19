@@ -73,6 +73,33 @@ function textOf(root) {
   return [root.textContent, ...(root.children || []).flatMap((child) => textOf(child))].filter(Boolean).join(' ');
 }
 
+function collectAll(root, predicate, matches = []) {
+  if (predicate(root)) matches.push(root);
+  for (const child of root.children || []) collectAll(child, predicate, matches);
+  return matches;
+}
+
+function isButton(el) {
+  return el?.tagName === 'BUTTON';
+}
+
+function hasNestedButtonInButton(root) {
+  const buttons = collectAll(root, isButton);
+  for (const outer of buttons) {
+    const nested = collectAll(outer, (el) => el !== outer && isButton(el));
+    if (nested.length) return true;
+  }
+  return false;
+}
+
+function recordingBus() {
+  const events = [];
+  return {
+    events,
+    bus: { dispatch: (event, payload) => events.push([event, payload]) }
+  };
+}
+
 function item(id, baseType = 'sidearm', overrides = {}) {
   const source = overrides.category === 'armor' ? data.equipment.armor[baseType] : data.equipment.weapons[baseType];
   return {
@@ -142,6 +169,64 @@ describe('PARTY mode', () => {
     expect(textOf(byTestId(container, 'party-conditions'))).toContain('burning');
     expect(textOf(byTestId(container, 'party-equipment'))).toContain('sidearm');
     expect(textOf(byTestId(container, 'party-deck'))).toContain('SPARK');
+  });
+
+  it('opens the manual for condition tags on the selected member', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const { bus, events } = recordingBus();
+
+    renderParty(container, { runState, data, bus });
+
+    const link = byTestId(container, 'manual-link-shielded');
+    expect(link).toBeTruthy();
+    expect(link.tagName).toBe('BUTTON');
+    expect(link.className).toContain('manual-term-link');
+    link.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'shielded', source: 'party-condition' }]);
+  });
+
+  it('opens the manual for each attribute label chip on the detail view', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const { bus, events } = recordingBus();
+
+    renderParty(container, { runState, data, bus });
+
+    for (const key of ['mgt', 'fin', 'vit', 'res', 'foc', 'sig']) {
+      const attrRow = byTestId(container, `party-attr-${key}`);
+      expect(attrRow).toBeTruthy();
+      const link = byTestId(attrRow, `manual-link-${key}`);
+      expect(link).toBeTruthy();
+      expect(link.tagName).toBe('BUTTON');
+      link.click();
+    }
+    for (const key of ['mgt', 'fin', 'vit', 'res', 'foc', 'sig']) {
+      expect(events).toContainEqual(['ui:manual-open', { target: key, source: 'party-attribute' }]);
+    }
+  });
+
+  it('opens the manual from the corrupt-load and calibration rows', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const { bus, events } = recordingBus();
+
+    renderParty(container, { runState, data, bus });
+
+    byTestId(container, 'manual-link-corruption').click();
+    byTestId(container, 'manual-link-calibration').click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'corruption', source: 'party' }]);
+    expect(events).toContainEqual(['ui:manual-open', { target: 'calibration', source: 'party' }]);
+  });
+
+  it('never nests a button inside another button', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const { bus } = recordingBus();
+
+    renderParty(container, { runState, data, bus });
+
+    expect(hasNestedButtonInButton(container)).toBe(false);
   });
 
   it('applies sigil-lg to the selected member detail sigil in wide layout only', () => {
@@ -355,5 +440,65 @@ describe('GEAR mode', () => {
 
     expect(byTestId(container, 'gear-unequip-weapon').disabled).toBe(false);
     expect(byTestId(container, 'gear-unequip-reason-weapon')).toBe(null);
+  });
+
+  it('opens the manual for the equipped-weapon rarity and affix chips in the detail pane', () => {
+    const tuned = item('detail-sidearm', 'sidearm', { rarity: 'tuned', affixes: ['precise'] });
+    const runState = run([], [character({ equipment: { weapon: tuned, armor: null, offhand: null } })]);
+    const { bus, events } = recordingBus();
+    const { container } = renderGearWith(runState, { bus });
+
+    const detail = byTestId(container, 'gear-item-detail-weapon');
+    expect(detail).toBeTruthy();
+    const rarity = byTestId(detail, 'manual-link-rarity_tuned');
+    expect(rarity).toBeTruthy();
+    expect(rarity.tagName).toBe('BUTTON');
+    expect(rarity.className).toContain('rarity-tag');
+    rarity.click();
+    const affix = byTestId(detail, 'gear-affix-link-weapon-precise');
+    expect(affix).toBeTruthy();
+    expect(affix.tagName).toBe('BUTTON');
+    affix.click();
+
+    expect(events).toContainEqual(['ui:manual-open', { target: 'rarity_tuned', source: 'gear-rarity' }]);
+    expect(events).toContainEqual(['ui:manual-open', { target: 'affixes', source: 'gear-affix' }]);
+  });
+
+  it('opens the manual from the salvage/scrap header chip', () => {
+    const runState = run([item('fresh-sidearm')]);
+    const { bus, events } = recordingBus();
+    const { container } = renderGearWith(runState, { bus });
+
+    const link = byTestId(container, 'gear-salvage-link');
+    expect(link).toBeTruthy();
+    expect(link.tagName).toBe('BUTTON');
+    link.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'loot_and_salvage', source: 'gear-salvage' }]);
+  });
+
+  it('surfaces the corrupt manual link inside the pending consent warning', () => {
+    const corrupt = item('corrupt-sidearm', 'sidearm', { rarity: 'corrupt', corrupt: true, corruptionValue: 0.1 });
+    const runState = run([corrupt], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const { bus, events } = recordingBus();
+    const { container } = renderGearWith(runState, { bus });
+
+    byTestId(container, 'gear-equip-corrupt-sidearm').click();
+    const warning = byTestId(container, 'gear-corrupt-warning');
+    expect(warning).toBeTruthy();
+    const link = byTestId(warning, 'gear-corrupt-link');
+    expect(link).toBeTruthy();
+    expect(link.tagName).toBe('BUTTON');
+    link.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'corrupt_items', source: 'gear-corrupt' }]);
+  });
+
+  it('never nests a button inside another button', () => {
+    const corrupt = item('corrupt-sidearm', 'sidearm', { rarity: 'corrupt', corrupt: true, corruptionValue: 0.1, affixes: ['precise'] });
+    const runState = run([corrupt, item('fresh-sidearm', 'sidearm', { rarity: 'tuned', affixes: ['edged'] })]);
+    const { bus } = recordingBus();
+    const { container } = renderGearWith(runState, { bus });
+
+    byTestId(container, 'gear-equip-corrupt-sidearm').click();
+    expect(hasNestedButtonInButton(container)).toBe(false);
   });
 });

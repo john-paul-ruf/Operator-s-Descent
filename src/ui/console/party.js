@@ -1,4 +1,4 @@
-import { createButton, createSigilToken, createHPBar, createChargeBar, createConditionTag, createScrollArea, createEquipmentCard, createProtocolCard } from '../components.js';
+import { createButton, createSigilToken, createHPBar, createChargeBar, createConditionTag, createManualLink, createScrollArea, createEquipmentCard, createProtocolCard } from '../components.js';
 import { modifier, deriveStats, ATTRIBUTE_KEYS } from '../../rules/attributes.js';
 import { getSignatureCapabilities } from '../../rules/classes.js';
 import { resolveLoadout } from '../../rules/equipment.js';
@@ -64,6 +64,21 @@ function row(label, value, testid = null) {
   val.className = 'stat-value';
   val.textContent = value;
   element.append(name, val);
+  return element;
+}
+
+function rowWithLink(label, value, target, dispatch, source, testid = null, linkTestid = null) {
+  const element = document.createElement('div');
+  element.className = 'party-stat-row console-row';
+  if (testid) element.dataset.testid = testid;
+  const name = document.createElement('span');
+  name.className = 'stat-label';
+  name.textContent = label;
+  const link = createManualLink(target, { variant: 'chip', source, dispatch, testid: linkTestid || undefined });
+  const val = document.createElement('span');
+  val.className = 'stat-value';
+  val.textContent = value;
+  element.append(name, link, val);
   return element;
 }
 
@@ -186,6 +201,7 @@ function renderDetail(area, character, context) {
   const hp = hpOf(character, combatActor);
   const charge = chargeOf(character, combatActor);
   const signature = getSignatureCapabilities(character, classData);
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
 
   area.appendChild(text('mode-indicator', `◈ ${String(classData?.name || character.classId || 'OPERATOR').toUpperCase()} DETAIL`, 'party-detail-heading'));
   const header = document.createElement('div');
@@ -203,13 +219,27 @@ function renderDetail(area, character, context) {
     : 'Not in combat';
   area.appendChild(row('Combat', combatLine, 'party-combat-resources'));
   area.appendChild(row('Run resources', `COR ${Number(context.runState.corruption || 0).toFixed(2)} · CRED ${context.runState.credits || 0} · SCRAP ${context.runState.scrapCounter || 0}`, 'party-resources'));
-  area.appendChild(row('Corrupt load', corruptionContribution(character).toFixed(2), 'party-corrupt-load'));
-  area.appendChild(row('Calibration', `${character.calibrationCount || 0} choices · T${signature.tier}`, 'party-calibration'));
+  area.appendChild(rowWithLink('Corrupt load', corruptionContribution(character).toFixed(2), 'corruption', dispatch, 'party', 'party-corrupt-load'));
+  area.appendChild(rowWithLink('Calibration', `${character.calibrationCount || 0} choices · T${signature.tier}`, 'calibration', dispatch, 'party', 'party-calibration'));
 
   const attrs = document.createElement('div');
   attrs.className = 'party-attributes';
   attrs.dataset.testid = 'party-attributes';
-  for (const key of ATTRIBUTE_KEYS) attrs.appendChild(row(ATTR_LABELS[key], `${character.attributes?.[key] ?? 0} (${modifier(character.attributes?.[key] ?? 3) >= 0 ? '+' : ''}${modifier(character.attributes?.[key] ?? 3)})`));
+  for (const key of ATTRIBUTE_KEYS) {
+    const attrRow = document.createElement('div');
+    attrRow.className = 'party-stat-row console-row';
+    attrRow.dataset.testid = `party-attr-${key}`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'stat-label';
+    nameSpan.textContent = ATTR_LABELS[key];
+    const attrLink = createManualLink(key, { variant: 'chip', source: 'party-attribute', dispatch });
+    const valSpan = document.createElement('span');
+    valSpan.className = 'stat-value';
+    const attrMod = modifier(character.attributes?.[key] ?? 3);
+    valSpan.textContent = `${character.attributes?.[key] ?? 0} (${attrMod >= 0 ? '+' : ''}${attrMod})`;
+    attrRow.append(nameSpan, attrLink, valSpan);
+    attrs.appendChild(attrRow);
+  }
   area.appendChild(attrs);
 
   const stats = document.createElement('div');
@@ -231,7 +261,12 @@ function renderDetail(area, character, context) {
   conditions.appendChild(text('section-label', 'Conditions'));
   const activeConditions = combatActor?.conditions || character.conditions || [];
   if (!activeConditions.length) conditions.appendChild(text('condition-empty', 'None'));
-  for (const condition of activeConditions) conditions.appendChild(createConditionTag(condition.id || condition.conditionId || condition, condition.duration));
+  for (const condition of activeConditions) {
+    const conditionId = condition.id || condition.conditionId || condition;
+    conditions.appendChild(createConditionTag(conditionId, condition.duration, {
+      manualLink: { source: 'party-condition', dispatch }
+    }));
+  }
   area.appendChild(conditions);
 
   const equipment = document.createElement('div');
