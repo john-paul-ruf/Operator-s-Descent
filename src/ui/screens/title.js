@@ -9,13 +9,19 @@ const BRANCHES = [
   ['◈ IMPORT LINK', 'import', 'title-import-link']
 ];
 
+// the-manual SESSION-04 — TUTORIAL branch retired; MANUAL opens the modal.
+// Distinguished from SETTINGS by `action: 'manual'` vs the default navigate.
 const SECONDARY_BRANCHES = [
-  ['TUTORIAL', 'tutorial', 'title-tutorial'],
+  ['MANUAL', 'manual', 'title-manual', 'manual'],
   ['SETTINGS', 'settings', 'title-settings']
 ];
 
 function navigate(screen, params = {}) {
   bus.dispatch('ui:navigate', { screen, params });
+}
+
+function openManual(source) {
+  bus.dispatch('ui:manual-open', { target: null, source });
 }
 
 function mountPortrait(container, cleanups) {
@@ -92,8 +98,9 @@ function mountPortrait(container, cleanups) {
   secondaryRow.style.display = 'flex';
   secondaryRow.style.gap = '12px';
   secondaryRow.dataset.testid = 'title-secondary-branches';
-  for (const [label, route, testid] of SECONDARY_BRANCHES) {
-    const button = createButton(label, { onClick: () => navigate(route) });
+  for (const [label, route, testid, action] of SECONDARY_BRANCHES) {
+    const onClick = action === 'manual' ? () => openManual('title') : () => navigate(route);
+    const button = createButton(label, { onClick });
     button.classList.add('btn-crt');
     button.style.flex = '1';
     button.dataset.testid = testid;
@@ -192,8 +199,9 @@ function mountWide(container, cleanups) {
   const branchRow = document.createElement('div');
   branchRow.className = 'branch-row';
   branchRow.dataset.testid = 'title-secondary-branches';
-  for (const [label, route, testid] of SECONDARY_BRANCHES) {
-    const button = createButton(label, { onClick: () => navigate(route) });
+  for (const [label, route, testid, action] of SECONDARY_BRANCHES) {
+    const onClick = action === 'manual' ? () => openManual('title') : () => navigate(route);
+    const button = createButton(label, { onClick });
     button.classList.add('btn-crt');
     button.dataset.testid = testid;
     cleanups.push(() => button.cleanup?.());

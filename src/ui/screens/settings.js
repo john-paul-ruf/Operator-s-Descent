@@ -190,6 +190,14 @@ export function mount(container, params = {}) {
   visualPanel.appendChild(texture);
   appendCaption(visualPanel, 'CRT frame texture (independent of glitch)');
 
+  // the-manual SESSION-04 — Settings routes the reader into the settings
+  // section of the manual via the fixed `settings_help` target id.
+  const manualButton = createButton("OPERATOR'S MANUAL", {
+    onClick: () => bus.dispatch('ui:manual-open', { target: 'settings_help', source: 'settings' })
+  });
+  manualButton.dataset.testid = 'settings-manual';
+  cleanups.push(() => manualButton.cleanup?.());
+
   const infoTitle = document.createElement('div');
   infoTitle.className = 'section-header glow';
   infoTitle.textContent = '◈ INFO';
@@ -230,10 +238,10 @@ export function mount(container, params = {}) {
     const visualColumn = document.createElement('div');
     visualColumn.className = 'wide-settings-column';
     visualColumn.dataset.testid = 'settings-visual-column';
-    visualColumn.append(visualTitle, visualPanel, infoTitle, infoPanel);
+    visualColumn.append(visualTitle, visualPanel, infoTitle, infoPanel, manualButton);
     body.append(audioColumn, visualColumn);
   } else {
-    body.append(status, audioTitle, audioPanel, visualTitle, visualPanel, infoTitle, infoPanel);
+    body.append(status, audioTitle, audioPanel, visualTitle, visualPanel, infoTitle, infoPanel, manualButton);
   }
 
   screen.append(header, body, footer);

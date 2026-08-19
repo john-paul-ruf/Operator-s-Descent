@@ -185,7 +185,8 @@ describe('title screen', () => {
     expect(branches.classList.contains('hidden-branches')).toBe(false);
     expect(allText(container)).toContain('◈ BEGIN NEW RUN');
     expect(byTestId(container, 'title-secondary-branches').children).toHaveLength(2);
-    expect(byTestId(container, 'title-tutorial').textContent).toBe('TUTORIAL');
+    expect(byTestId(container, 'title-manual').textContent).toBe('MANUAL');
+    expect(byTestId(container, 'title-tutorial')).toBeNull();
     expect(byTestId(container, 'title-settings').textContent).toBe('SETTINGS');
 
     await start.click();
@@ -206,7 +207,33 @@ describe('title screen', () => {
 
     expect(byTestId(container, 'tutorial-offer')).toBeNull();
     expect(byTestId(container, 'title-offer-tutorial')).toBeNull();
-    expect(byTestId(container, 'title-tutorial')).toBeTruthy();
+    expect(byTestId(container, 'title-manual')).toBeTruthy();
+    expect(byTestId(container, 'title-tutorial')).toBeNull();
+  });
+
+  it('MANUAL branch dispatches ui:manual-open in portrait and wide', async () => {
+    const events = [];
+    const off = bus.on('ui:manual-open', (payload) => events.push(payload));
+    const { mount } = await import('../../src/ui/screens/title.js');
+
+    const portrait = new FakeElement('div');
+    const portraitController = mount(portrait);
+    await byTestId(portrait, 'title-start').click();
+    await byTestId(portrait, 'title-manual').click();
+
+    installMatchMedia(true);
+    const wide = new FakeElement('div');
+    const wideController = mount(wide);
+    await byTestId(wide, 'title-start').click();
+    await byTestId(wide, 'title-manual').click();
+
+    expect(events).toEqual([
+      { target: null, source: 'title' },
+      { target: null, source: 'title' }
+    ]);
+    portraitController.unmount();
+    wideController.unmount();
+    off();
   });
 
   it('renders the wide-layout title composition with a data-wide-root and toggling branch list', async () => {
@@ -226,6 +253,8 @@ describe('title screen', () => {
     const secondary = byTestId(container, 'title-secondary-branches');
     expect(secondary.classList.contains('branch-row')).toBe(true);
     expect(secondary.children).toHaveLength(2);
+    expect(byTestId(container, 'title-manual').textContent).toBe('MANUAL');
+    expect(byTestId(container, 'title-tutorial')).toBeNull();
 
     await byTestId(container, 'title-start').click();
     expect(branches.classList.contains('hidden-branches')).toBe(false);
@@ -377,6 +406,34 @@ describe('settings screen', () => {
     expect(byTestId(container, 'settings-visual-column').classList.contains('wide-settings-column')).toBe(true);
     expect(byTestId(container, 'settings-master-mute').parentNode.classList.contains('panel')).toBe(true);
     expect(byTestId(container, 'settings-glitch').parentNode.classList.contains('panel')).toBe(true);
+  });
+
+  it('the OPERATOR\'S MANUAL row dispatches ui:manual-open with target=settings_help', async () => {
+    const events = [];
+    const off = bus.on('ui:manual-open', (payload) => events.push(payload));
+    const { mount } = await import('../../src/ui/screens/settings.js');
+
+    const portrait = new FakeElement('div');
+    const portraitController = mount(portrait);
+    const portraitButton = byTestId(portrait, 'settings-manual');
+    expect(portraitButton).toBeTruthy();
+    expect(portraitButton.textContent).toBe("OPERATOR'S MANUAL");
+    await portraitButton.click();
+
+    installMatchMedia(true);
+    const wide = new FakeElement('div');
+    const wideController = mount(wide);
+    const wideButton = byTestId(wide, 'settings-manual');
+    expect(wideButton).toBeTruthy();
+    await wideButton.click();
+
+    expect(events).toEqual([
+      { target: 'settings_help', source: 'settings' },
+      { target: 'settings_help', source: 'settings' }
+    ]);
+    portraitController.unmount();
+    wideController.unmount();
+    off();
   });
 });
 
