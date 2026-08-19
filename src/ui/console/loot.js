@@ -1,4 +1,4 @@
-import { createButton, createEquipmentCard, createScrollArea } from '../components.js';
+import { createButton, createEquipmentCard, createManualLink, createRarityTag, createScrollArea } from '../components.js';
 import { deriveStats } from '../../rules/attributes.js';
 import { describeItem, describeItemStats, itemDisplayName, resolveLoadout } from '../../rules/equipment.js';
 import { generateLoot } from '../../rules/loot.js';
@@ -187,6 +187,7 @@ function requestJunkAll(context) {
 }
 
 function renderContainerItems(container, context, lootContainer, items) {
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const list = createScrollArea({ label: 'Container contents', focusable: true });
   list.className = 'loot-items scroll-area';
   list.dataset.testid = 'loot-items';
@@ -197,7 +198,15 @@ function renderContainerItems(container, context, lootContainer, items) {
     row.className = 'loot-item-row item-card console-row';
     row.dataset.testid = `loot-item-${item.id}`;
     row.appendChild(createEquipmentCard(displayItem(item, context.data || {}), { stats: itemStats(item, context.data || {}) }));
-    row.appendChild(text('loot-detail', itemDetail(item, context.data || {}), `loot-detail-${item.id}`));
+    const detail = text('loot-detail', itemDetail(item, context.data || {}), `loot-detail-${item.id}`);
+    if (item.rarity) {
+      const rarityLink = createRarityTag(item.rarity, {
+        manualLink: { source: 'loot-rarity', dispatch }
+      });
+      rarityLink.dataset.testid = `loot-rarity-link-${item.id}`;
+      detail.appendChild(rarityLink);
+    }
+    row.appendChild(detail);
     row.appendChild(text('loot-compare', comparisonLine(item, context), `loot-compare-${item.id}`));
     const result = addItem(context.runState?.inventory || [], item);
     const reason = inventoryFull || !result.success ? 'Inventory full; pickup blocked until space is freed.' : '';
@@ -263,7 +272,14 @@ export function render(container, context = {}) {
   openButton.dataset.testid = 'loot-open';
   container.appendChild(openButton);
   container.appendChild(text('mode-indicator', '◈ CONTENTS', 'loot-contents-heading'));
-  if (getInventoryCount(runState.inventory || []) >= INVENTORY_CAP) container.appendChild(text('loot-warning console-row', 'Inventory full; pickup blocked until space is freed.', 'loot-cap-warning'));
+  if (getInventoryCount(runState.inventory || []) >= INVENTORY_CAP) {
+    const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
+    const warning = text('loot-warning console-row', 'Inventory full; pickup blocked until space is freed.', 'loot-cap-warning');
+    warning.appendChild(createManualLink('loot_and_salvage', {
+      variant: 'chip', source: 'loot-cap', dispatch, testid: 'loot-cap-link'
+    }));
+    container.appendChild(warning);
+  }
   renderContainerItems(container, { ...context, lootState }, lootContainer, items);
   renderInventoryJunk(container, context, state);
   if (state.notice) container.appendChild(text('loot-notice console-row', state.notice, 'loot-notice'));

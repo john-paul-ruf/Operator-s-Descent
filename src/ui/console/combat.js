@@ -1,4 +1,4 @@
-import { createButton, createHPBar, createChargeBar, createSigilToken, createConditionTag, createProtocolCard } from '../components.js';
+import { createButton, createHPBar, createChargeBar, createSigilToken, createConditionTag, createManualLink, createProtocolCard } from '../components.js';
 
 const MOVE_RANGE = 5;
 const ACTIONS = [
@@ -95,7 +95,7 @@ function humanizeActorNames(actors) {
   return map;
 }
 
-function activeSummary(container, active) {
+function activeSummary(container, active, dispatch) {
   if (!active) return;
   const panel = document.createElement('div');
   panel.className = 'combat-active-panel panel-elevated console-row';
@@ -104,8 +104,16 @@ function activeSummary(container, active) {
   appendText(panel, 'combat-active-name', `${humanizeActorName(active)} · ${active.side?.toUpperCase() || 'ACTOR'}`);
   panel.appendChild(createHPBar(active.hp ?? active.currentHP ?? 0, active.hpMax ?? active.maxHP ?? active.hp ?? active.currentHP ?? 0));
   panel.appendChild(createChargeBar(active.charge ?? active.currentCHARGE ?? 0, active.chargeMax ?? active.maxCHARGE ?? active.charge ?? active.currentCHARGE ?? 0));
-  appendText(panel, 'combat-ap', `AP ${active.ap ?? 0} · ${active.moveAvailable ? 'MOVE READY' : 'MOVE SPENT'}`);
-  for (const condition of active.conditions || []) panel.appendChild(createConditionTag(condition.id || condition.conditionId || condition, condition.duration));
+  const apLine = appendText(panel, 'combat-ap', `AP ${active.ap ?? 0} · ${active.moveAvailable ? 'MOVE READY' : 'MOVE SPENT'}`);
+  apLine.appendChild(createManualLink('ap_and_initiative', {
+    variant: 'chip', source: 'combat-ap', dispatch, testid: 'combat-ap-link'
+  }));
+  for (const condition of active.conditions || []) {
+    const conditionId = condition.id || condition.conditionId || condition;
+    panel.appendChild(createConditionTag(conditionId, condition.duration, {
+      manualLink: { source: 'combat-condition', dispatch }
+    }));
+  }
   container.appendChild(panel);
 }
 
@@ -232,6 +240,7 @@ function previewText(preview) {
 
 function renderTargets(container, context) {
   const selection = context.selection || {};
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const targets = context.combatGetTargets?.() || [];
   const nameMap = humanizeActorNames(targets);
   const nameOf = (actor) => nameMap.get(actor?.id) ?? humanizeActorName(actor);
@@ -250,10 +259,16 @@ function renderTargets(container, context) {
       const detail = document.createElement('div');
       detail.className = 'target-detail';
       detail.textContent = previewText(context.combatGetPreview?.(selected.id));
+      detail.appendChild(createManualLink('cover_and_range', {
+        variant: 'chip', source: 'combat-cover', dispatch, testid: 'combat-cover-link'
+      }));
       info.append(name, detail);
       list.appendChild(info);
     } else {
-      appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${nameOf(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
+      const preview = appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${nameOf(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
+      preview.appendChild(createManualLink('cover_and_range', {
+        variant: 'chip', source: 'combat-cover', dispatch, testid: 'combat-cover-link'
+      }));
     }
   }
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
@@ -297,10 +312,11 @@ export function render(container, context = {}) {
     return;
   }
   const selection = context.selection || {};
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const active = context.combatGetActiveActor?.() || null;
   appendText(container, 'mode-indicator', `COMBAT · ${selection.phase || 'choose-action'}`, 'combat-indicator');
   initiativeRail(container, combatState);
-  activeSummary(container, active);
+  activeSummary(container, active, dispatch);
   if (combatState.ended) {
     appendText(container, 'combat-terminal console-row', `COMBAT ${String(combatState.result || 'ENDED').toUpperCase()}`, 'combat-terminal');
     return;

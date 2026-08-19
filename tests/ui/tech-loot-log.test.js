@@ -85,6 +85,29 @@ function collectByTestIdPrefix(root, prefix, matches = []) {
   return matches;
 }
 
+function collectAll(root, predicate, matches = []) {
+  if (predicate(root)) matches.push(root);
+  for (const child of root.children || []) collectAll(child, predicate, matches);
+  return matches;
+}
+
+function hasNestedButtonInButton(root) {
+  const buttons = collectAll(root, (el) => el?.tagName === 'BUTTON');
+  for (const outer of buttons) {
+    const nested = collectAll(outer, (el) => el !== outer && el?.tagName === 'BUTTON');
+    if (nested.length) return true;
+  }
+  return false;
+}
+
+function recordingBus() {
+  const events = [];
+  return {
+    events,
+    bus: { dispatch: (event, payload) => events.push([event, payload]) }
+  };
+}
+
 function textOf(root) {
   if (!root) return '';
   return [root.textContent, root.value, ...(root.children || []).flatMap((child) => textOf(child))].filter(Boolean).join(' ');
@@ -171,6 +194,51 @@ describe('TECH mode', () => {
     expect(runState.party[0].currentCHARGE).toBe(8);
     expect(enemy.hp).toBe(3);
     expect(logs.some(([type]) => type === 'ui:log-entry')).toBe(true);
+  });
+
+  it('opens the manual for the CHARGE header chip and each protocol school chip', () => {
+    const runState = run();
+    const { bus, events } = recordingBus();
+    const { container } = renderTechWith(runState, { bus });
+
+    const chargeLink = byTestId(container, 'tech-charge-link');
+    expect(chargeLink).toBeTruthy();
+    expect(chargeLink.tagName).toBe('BUTTON');
+    chargeLink.click();
+
+    const schoolLink = byTestId(container, 'tech-school-link-disrupt-1');
+    expect(schoolLink).toBeTruthy();
+    expect(schoolLink.tagName).toBe('BUTTON');
+    schoolLink.click();
+
+    expect(events).toContainEqual(['ui:manual-open', { target: 'charge_and_overclock', source: 'tech-charge' }]);
+    expect(events).toContainEqual(['ui:manual-open', { target: 'disrupt', source: 'tech-school' }]);
+  });
+
+  it('opens the manual for the overclock risk preview chip only when overclocking', () => {
+    const runState = run();
+    const actor = { id: 'operator', side: 'party', ap: 2, charge: 10, chargeMax: 10, hp: 30, hpMax: 30, attributes: runState.party[0].attributes, protocols: runState.party[0].protocolDeck, conditions: [], position: { x: 0, y: 0 } };
+    const enemy = { id: 'enemy', side: 'enemy', hp: 10, hpMax: 10, protocolDefense: 5, attributes: { foc: 5 }, conditions: [], position: { x: 2, y: 0 } };
+    const combatState = { turnOrder: ['operator'], currentTurn: 0, combatants: new Map([['operator', actor], ['enemy', enemy]]) };
+    const { bus, events } = recordingBus();
+    const { container } = renderTechWith(runState, { combatState, bus, rngCursor: cursor([0, 19]) });
+
+    // Enter overclock preview and select target
+    byTestId(container, 'tech-overclock-disrupt-1').click();
+    byTestId(container, 'tech-target-enemy').click();
+
+    const overclockLink = byTestId(container, 'tech-overclock-link');
+    expect(overclockLink).toBeTruthy();
+    expect(overclockLink.tagName).toBe('BUTTON');
+    overclockLink.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'charge_and_overclock', source: 'tech-overclock' }]);
+  });
+
+  it('never nests a button inside another button in TECH mode', () => {
+    const runState = run();
+    const { bus } = recordingBus();
+    const { container } = renderTechWith(runState, { bus });
+    expect(hasNestedButtonInButton(container)).toBe(false);
   });
 
   it('previews overclock risk without consuming RNG, then records failed corruption once', () => {
@@ -264,6 +332,43 @@ describe('LOOT mode', () => {
     expect(textOf(detail)).toContain('scrap 1');
   });
 
+  it('opens the manual for the rarity chip in the container item detail', () => {
+    const runState = run([]);
+    const tuned = item('loot-sidearm', 'sidearm', { rarity: 'tuned' });
+    const lootState = { container: { id: 4, x: 1, y: 1 }, items: [tuned] };
+    const { bus, events } = recordingBus();
+    const { container } = renderLootWith(runState, lootState, { bus });
+
+    const link = byTestId(container, 'loot-rarity-link-loot-sidearm');
+    expect(link).toBeTruthy();
+    expect(link.tagName).toBe('BUTTON');
+    expect(link.className).toContain('rarity-tag');
+    link.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'rarity_tuned', source: 'loot-rarity' }]);
+  });
+
+  it('opens the manual from the inventory-cap warning chip when the pack is full', () => {
+    const runState = run([consumable('patches', 100)]);
+    const lootState = { container: { id: 5, x: 1, y: 1 }, items: [item('loot-sidearm')] };
+    const { bus, events } = recordingBus();
+    const { container } = renderLootWith(runState, lootState, { bus });
+
+    const link = byTestId(container, 'loot-cap-link');
+    expect(link).toBeTruthy();
+    expect(link.tagName).toBe('BUTTON');
+    link.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'loot_and_salvage', source: 'loot-cap' }]);
+  });
+
+  it('never nests a button inside another button in LOOT mode', () => {
+    const runState = run([consumable('patches', 100)]);
+    const tuned = item('loot-sidearm', 'sidearm', { rarity: 'tuned' });
+    const lootState = { container: { id: 6, x: 1, y: 1 }, items: [tuned] };
+    const { bus } = recordingBus();
+    const { container } = renderLootWith(runState, lootState, { bus });
+    expect(hasNestedButtonInButton(container)).toBe(false);
+  });
+
   it('renders dice/stat chips on loot cards; affix accuracy folds into the ATK chip', () => {
     const runState = run([]);
     const precise = item('loot-precise', 'light_ranged', { rarity: 'tuned', affixes: ['precise'] });
@@ -293,6 +398,78 @@ describe('COMBAT mode', () => {
 
     expect(byTestId(container, 'combat-action-attack').className).toContain('action-btn');
     expect(textOf(byTestId(container, 'combat-selected-preview'))).toContain('Range: Short 3 · Cover: +2');
+  });
+
+  it('opens the manual from the active-actor AP chip, active-actor condition tag, and cover chip', () => {
+    const active = { id: 'operator', name: 'Operator', side: 'party', sigilCodepoint: 0xE028, hp: 30, hpMax: 30, charge: 8, chargeMax: 10, ap: 2, moveAvailable: true, conditions: [{ id: 'shielded', duration: 2 }] };
+    const enemy = { id: 'enemy', name: 'Drone', side: 'enemy', hp: 10, hpMax: 10 };
+    const container = new FakeElement('div');
+    const { bus, events } = recordingBus();
+    renderCombat(container, {
+      combatState: { combatants: new Map([['operator', active], ['enemy', enemy]]), turnOrder: ['operator', 'enemy'], currentTurn: 0 },
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: 'enemy' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack', 'retreat'], legalMoveDirections: ['s'] }),
+      combatGetTargets: () => [enemy],
+      combatGetPreview: () => ({ distance: 3, range: { band: 'short', legal: true }, coverBonus: 2, flanked: false }),
+      bus
+    });
+
+    const apLink = byTestId(container, 'combat-ap-link');
+    expect(apLink).toBeTruthy();
+    expect(apLink.tagName).toBe('BUTTON');
+    apLink.click();
+    const conditionLink = byTestId(container, 'manual-link-shielded');
+    expect(conditionLink).toBeTruthy();
+    expect(conditionLink.tagName).toBe('BUTTON');
+    conditionLink.click();
+    const coverLink = byTestId(container, 'combat-cover-link');
+    expect(coverLink).toBeTruthy();
+    expect(coverLink.tagName).toBe('BUTTON');
+    coverLink.click();
+
+    expect(events).toContainEqual(['ui:manual-open', { target: 'ap_and_initiative', source: 'combat-ap' }]);
+    expect(events).toContainEqual(['ui:manual-open', { target: 'shielded', source: 'combat-condition' }]);
+    expect(events).toContainEqual(['ui:manual-open', { target: 'cover_and_range', source: 'combat-cover' }]);
+  });
+
+  it('places the cover manual chip inside the wide-layout target-info detail area', () => {
+    const active = { id: 'operator', name: 'Operator', side: 'party', sigilCodepoint: 0xE028, hp: 30, hpMax: 30, charge: 8, chargeMax: 10, ap: 2, moveAvailable: true, conditions: [] };
+    const enemy = { id: 'enemy', name: 'Drone', side: 'enemy', hp: 10, hpMax: 10 };
+    const container = new FakeElement('div');
+    const { bus, events } = recordingBus();
+    renderCombat(container, {
+      combatState: { combatants: new Map([['operator', active], ['enemy', enemy]]), turnOrder: ['operator', 'enemy'], currentTurn: 0 },
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: 'enemy' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack'], legalMoveDirections: [] }),
+      combatGetTargets: () => [enemy],
+      combatGetPreview: () => ({ distance: 2, range: { band: 'short', legal: true }, coverBonus: 0, flanked: false }),
+      bus,
+      layout: 'wide'
+    });
+
+    const link = byTestId(container, 'combat-cover-link');
+    expect(link).toBeTruthy();
+    link.click();
+    expect(events).toContainEqual(['ui:manual-open', { target: 'cover_and_range', source: 'combat-cover' }]);
+  });
+
+  it('never nests a button inside another button in COMBAT mode', () => {
+    const active = { id: 'operator', name: 'Operator', side: 'party', sigilCodepoint: 0xE028, hp: 30, hpMax: 30, charge: 8, chargeMax: 10, ap: 2, moveAvailable: true, conditions: [{ id: 'burning', duration: 1 }] };
+    const enemy = { id: 'enemy', name: 'Drone', side: 'enemy', hp: 10, hpMax: 10 };
+    const container = new FakeElement('div');
+    const { bus } = recordingBus();
+    renderCombat(container, {
+      combatState: { combatants: new Map([['operator', active], ['enemy', enemy]]), turnOrder: ['operator', 'enemy'], currentTurn: 0 },
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: 'enemy' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack', 'retreat'], legalMoveDirections: ['s'] }),
+      combatGetTargets: () => [enemy],
+      combatGetPreview: () => ({ distance: 3, range: { band: 'short', legal: true }, coverBonus: 2, flanked: false }),
+      bus
+    });
+    expect(hasNestedButtonInButton(container)).toBe(false);
   });
 
   it('never lets the combat-target- prefix match the non-interactive selected-target preview', () => {

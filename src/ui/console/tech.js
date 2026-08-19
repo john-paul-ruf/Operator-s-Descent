@@ -1,4 +1,4 @@
-import { createButton, createProtocolCard, createChargeBar, createScrollArea } from '../components.js';
+import { createButton, createProtocolCard, createChargeBar, createManualLink, createScrollArea } from '../components.js';
 import { modifier, overclockTarget } from '../../rules/attributes.js';
 import { getSignatureCapabilities } from '../../rules/classes.js';
 import { applyProtocolEffect, deckSlotCapacity, deckSlotCost, protocolChargeCost, resolveProtocolAction, validateProtocolDeck } from '../../rules/protocols.js';
@@ -272,6 +272,7 @@ function renderCharacters(container, context, ui, activeActor) {
 
 function renderProtocolRow(list, context, character, caster, protocol) {
   const data = context.data || {};
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const resolved = protocolDataFor(data, protocol);
   const classData = classDataFor(data, character);
   const capabilities = getSignatureCapabilities(character, classData);
@@ -282,7 +283,12 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   row.dataset.testid = `tech-protocol-${protocolKey(protocol)}`;
   const castReason = availabilityReason(context, character, caster, protocol, false);
   row.appendChild(createProtocolCard({ ...protocol, name: protocolName(data, protocol), chargeCost: normalCost }, { insufficient: Boolean(castReason) }));
-  row.appendChild(text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`));
+  const detail = text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`);
+  detail.appendChild(createManualLink(protocol.school, {
+    variant: 'chip', source: 'tech-school', dispatch,
+    testid: `tech-school-link-${protocolKey(protocol)}`
+  }));
+  row.appendChild(detail);
   const btnWrap = document.createElement('div');
   btnWrap.className = 'protocol-buttons';
   const cast = createButton(castReason ? 'CAST BLOCKED' : 'CAST', { disabled: Boolean(castReason), description: castReason, onClick: () => beginProtocol(context, protocol, false) });
@@ -321,12 +327,19 @@ function renderTargets(container, context, ui, caster) {
 function renderConfirm(container, context, ui, character) {
   if (!ui.protocol || !['select-target', 'confirm'].includes(ui.phase)) return;
   const data = context.data || {};
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const resolved = protocolDataFor(data, ui.protocol);
   const overclock = overclockPreview(character, data, ui.protocol);
   const preview = ui.overclocked
     ? `OVERCLOCK: cost ${overclock.cost} CHARGE, effective T${overclock.effectiveTier}, d20+FOC ${modifier(character?.attributes?.foc)} vs ${overclock.threshold}, corruption risk +${overclock.corruptionRisk.toFixed(2)}.`
     : `CAST: cost ${protocolChargeCost(ui.protocol.tier)} CHARGE, range ${resolved?.range || '—'}, effect ${resolved?.effect || '—'}.`;
-  container.appendChild(text('tech-preview console-row', preview, 'tech-preview'));
+  const previewNode = text('tech-preview console-row', preview, 'tech-preview');
+  if (ui.overclocked) {
+    previewNode.appendChild(createManualLink('charge_and_overclock', {
+      variant: 'chip', source: 'tech-overclock', dispatch, testid: 'tech-overclock-link'
+    }));
+  }
+  container.appendChild(previewNode);
   const row = document.createElement('div');
   row.className = 'tech-confirm-row';
   const confirm = createButton('CONFIRM', { primary: true, disabled: ui.phase !== 'confirm', onClick: () => confirmProtocol(context) });
@@ -372,12 +385,17 @@ export function render(container, context = {}) {
   const deck = caster.protocolDeck || [];
   const deckStatus = validateProtocolDeck(character || caster, classData, data.protocols);
 
+  const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   renderCharacters(container, context, ui, activeActor);
   const chargePanel = document.createElement('div');
   chargePanel.className = 'tech-charge-panel panel-elevated';
   chargePanel.dataset.testid = 'tech-charge-panel';
+  const chargeHeading = text('mode-indicator', '◈ CHARGE POOL');
+  chargeHeading.appendChild(createManualLink('charge_and_overclock', {
+    variant: 'chip', source: 'tech-charge', dispatch, testid: 'tech-charge-link'
+  }));
   chargePanel.append(
-    text('mode-indicator', '◈ CHARGE POOL'),
+    chargeHeading,
     createChargeBar(chargeOf(caster), chargeMaxOf(caster)),
     text('tech-charge-regen', `Regen ${Math.max(0, Math.floor((character?.attributes?.res || 0) / 3))} per floor descent`)
   );
