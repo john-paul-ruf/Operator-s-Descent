@@ -55,7 +55,10 @@ test('native semantics, focus, status text, and no-playfield-input contracts hol
 
 test('portrait frame keeps fixed ratio and centered letterbox without tab reordering', async ({ page }) => {
   await installStableStorage(page);
-  await page.setViewportSize({ width: 1600, height: 900 });
+  // Adaptive layouts (Custom Rule 8): wide requires width ≥ 900 AND aspect ≥ 1.
+  // Use 1600×2000 (aspect 0.8 → portrait) so the frame renders letterboxed with
+  // room to verify horizontal centering.
+  await page.setViewportSize({ width: 1600, height: 2000 });
   await createExploration(page);
 
   const frame = await page.locator('#portrait-frame').boundingBox();
