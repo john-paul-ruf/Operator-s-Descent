@@ -1,9 +1,12 @@
+import { createIcon } from './icon.js';
+
 const PLAYER_BANK_START = 0xE000;
 const PLAYER_BANK_END = 0xE030;
 const BESTIARY_BANK_START = 0xE030;
 const BESTIARY_BANK_END = 0xE048;
 const SIGIL_SIZES = new Set([34, 72, 108, 220]);
 const SIGIL_ROLES = new Set(['player', 'enemy', 'echo']);
+const ICON_SIZES = new Set([14, 16, 20, 24]);
 
 const RARITY_COLORS = {
   Stock: '#7ec8e3',
@@ -11,6 +14,21 @@ const RARITY_COLORS = {
   Custom: '#e8c63a',
   Prototype: '#c63ae8',
   CORRUPT: '#e83a3a'
+};
+
+// Condition-id → lucide icon glyph. Kept internal to components.js so
+// createConditionTag can prefix a tone-agnostic icon without callers passing
+// per-tag icons. Unknown conditions fall through with no icon.
+const CONDITION_ICONS = {
+  burning: 'flame',
+  jammed: 'zap',
+  shielded: 'shield',
+  marked: 'target',
+  panicked: 'circle-help',
+  immobilized: 'hand-metal',
+  overloaded: 'gauge',
+  drained: 'battery',
+  blinded: 'eye-off'
 };
 
 let nextControlId = 0;
@@ -41,6 +59,27 @@ function applyControlState(element, opts) {
   }
 }
 
+// Best-effort prefix an icon child on any control that took a label first.
+// When document lacks createElementNS (some FakeDocuments in tests), or the
+// sprite lookup throws, we silently skip the icon AND the has-icon class so
+// the marker never lies about what actually rendered.
+function prefixIcon(host, iconId, iconSize, iconTone) {
+  if (!iconId) return;
+  if (typeof document?.createElementNS !== 'function') return;
+  let icon;
+  try {
+    icon = createIcon(iconId, {
+      size: ICON_SIZES.has(iconSize) ? iconSize : 16,
+      tone: iconTone
+    });
+  } catch {
+    return;
+  }
+  host.classList.add('has-icon');
+  if (typeof host.prepend === 'function') host.prepend(icon);
+  else host.appendChild(icon);
+}
+
 export function createButton(label, opts = {}) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -50,6 +89,7 @@ export function createButton(label, opts = {}) {
   if (opts.selected) button.classList.add('selected');
   button.classList.add('is-interactive');
   applyControlState(button, opts);
+  prefixIcon(button, opts.icon, opts.iconSize, opts.iconTone);
   return withCleanup(button, opts.onClick ? listen(button, 'click', opts.onClick) : undefined);
 }
 
@@ -216,17 +256,20 @@ export function createAffixTag(affix, isMajor, opts = {}) {
 
 export function createConditionTag(conditionId, duration, opts = {}) {
   const text = duration != null ? `${conditionId} (${duration})` : String(conditionId);
+  const iconId = CONDITION_ICONS[conditionId] || null;
   if (opts && opts.manualLink) {
     const link = createManualLink(
       opts.manualLink.target ?? conditionId,
       { label: text, source: opts.manualLink.source, dispatch: opts.manualLink.dispatch }
     );
     link.classList.add('condition-tag', `cond-${conditionId}`);
+    prefixIcon(link, iconId, 14, null);
     return link;
   }
   const tag = document.createElement('span');
   tag.className = `condition-tag cond-${conditionId}`;
   tag.textContent = text;
+  prefixIcon(tag, iconId, 14, null);
   return tag;
 }
 
@@ -417,6 +460,7 @@ export function createManualLink(target, opts = {}) {
         });
       })
     : undefined;
+  prefixIcon(button, opts.icon, opts.iconSize, opts.iconTone);
   return withCleanup(button, cleanup);
 }
 

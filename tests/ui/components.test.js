@@ -14,8 +14,9 @@ class FakeClassList {
 }
 
 class FakeElement {
-  constructor(tagName) {
+  constructor(tagName, namespaceURI = null) {
     this.tagName = tagName.toUpperCase();
+    this.namespaceURI = namespaceURI;
     this.children = [];
     this.attributes = new Map();
     this.listeners = new Map();
@@ -26,10 +27,16 @@ class FakeElement {
     this.textContent = '';
   }
   set className(value) { this._className = value; this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
-  get className() { return this._className; }
+  // SVG sprites created via createElementNS set their `class` attribute
+  // through setAttribute (not the className setter). Read from attributes
+  // when _className is empty so both paths agree.
+  get className() { return this._className || this.attributes.get('class') || ''; }
   appendChild(child) { this.children.push(child); return child; }
   append(...children) { for (const child of children) this.appendChild(child); }
+  // Prepend added for SESSION-06 icon support (createButton with opts.icon).
+  prepend(...children) { this.children = [...children, ...this.children]; }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  setAttributeNS(_ns, name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
   removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((candidate) => candidate !== listener)); }
@@ -41,7 +48,10 @@ class FakeElement {
 }
 
 function installFakeDocument() {
-  globalThis.document = { createElement: (tagName) => new FakeElement(tagName) };
+  globalThis.document = {
+    createElement: (tagName) => new FakeElement(tagName),
+    createElementNS: (ns, tagName) => new FakeElement(tagName, ns)
+  };
 }
 
 beforeEach(() => installFakeDocument());
@@ -286,15 +296,20 @@ describe('semantic components', () => {
     }).not.toThrow();
   });
 
-  test('createConditionTag without opts renders the byte-identical plain span', () => {
+  test('createConditionTag without opts renders a plain span carrying condition classes', () => {
+    // SESSION-06 amended this factory to prepend a lucide icon for known
+    // condition ids — text, tagName, and cond-<id> class remain stable so
+    // downstream selectors still resolve. See has-icon coverage below.
     const tag = createConditionTag('burning', 3);
     expect(tag.tagName).toBe('SPAN');
-    expect(tag.className).toBe('condition-tag cond-burning');
+    expect(tag.classList.values.has('condition-tag')).toBe(true);
+    expect(tag.classList.values.has('cond-burning')).toBe(true);
     expect(tag.textContent).toBe('burning (3)');
 
     const noDuration = createConditionTag('jammed');
     expect(noDuration.tagName).toBe('SPAN');
-    expect(noDuration.className).toBe('condition-tag cond-jammed');
+    expect(noDuration.classList.values.has('condition-tag')).toBe(true);
+    expect(noDuration.classList.values.has('cond-jammed')).toBe(true);
     expect(noDuration.textContent).toBe('jammed');
   });
 
@@ -429,6 +444,124 @@ describe('semantic components', () => {
     for (const child of protocolCard.children) {
       expect(child.tagName).not.toBe('BUTTON');
     }
+  });
+
+  // combat-and-overworld-clarity-pass SESSION-06 — icon prefix API on
+  // createButton, createManualLink, and createConditionTag. Backwards-
+  // compatible defaults: opts.icon absent → DOM identical to prior sessions.
+  test('createButton without opts.icon renders identical DOM to prior sessions (no icon child, no has-icon class)', () => {
+    const bare = createButton('Start');
+    expect(bare.children).toEqual([]);
+    expect(bare.classList.values.has('has-icon')).toBe(false);
+    expect(bare.className).toBe('btn-crt is-interactive');
+  });
+
+  test('createButton with opts.icon prepends a <svg class="icon icon-16"> child and adds has-icon', () => {
+    const button = createButton('Confirm', { icon: 'sword' });
+    expect(button.classList.values.has('has-icon')).toBe(true);
+    expect(button.children).toHaveLength(1);
+    const svg = button.children[0];
+    expect(svg.tagName).toBe('SVG');
+    expect(svg.className).toBe('icon icon-16');
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+    // The label survives on the button; textContent is set before the icon
+    // prepend, so the fake-DOM assertion mirrors the real-DOM text-node order.
+    expect(button.textContent).toBe('Confirm');
+  });
+
+  test('createButton opts.iconSize and opts.iconTone are reflected on the sprite classes', () => {
+    const button = createButton('Attack', { icon: 'sword', iconSize: 20, iconTone: 'danger' });
+    const svg = button.children[0];
+    expect(svg.className).toBe('icon icon-20 icon-danger');
+  });
+
+  test('createButton clamps unknown iconSize back to the 16px default and drops unknown tones', () => {
+    const button = createButton('Attack', { icon: 'sword', iconSize: 99, iconTone: 'rainbow' });
+    expect(button.children[0].className).toBe('icon icon-16');
+  });
+
+  test('createButton with opts.icon still fires onClick and cleans up its listener', () => {
+    let clicks = 0;
+    const button = createButton('Fire', { icon: 'zap', onClick: () => { clicks += 1; } });
+    button.click();
+    expect(clicks).toBe(1);
+    button.cleanup();
+    button.click();
+    expect(clicks).toBe(1);
+  });
+
+  test('createButton with opts.icon plus opts.disabled retains disabled semantics: click does not fire', () => {
+    let clicks = 0;
+    const button = createButton('Fire', { icon: 'zap', onClick: () => { clicks += 1; }, disabled: true });
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    button.click(); // FakeElement.click() no-ops when disabled, mirroring native <button>
+    expect(clicks).toBe(0);
+  });
+
+  test('createManualLink with opts.icon prepends the sprite before the label', () => {
+    const link = createManualLink('burning', { icon: 'flame', dispatch: () => {} });
+    expect(link.classList.values.has('has-icon')).toBe(true);
+    expect(link.children).toHaveLength(1);
+    expect(link.children[0].tagName).toBe('SVG');
+    expect(link.children[0].className).toBe('icon icon-16');
+  });
+
+  test('createManualLink without opts.icon has no sprite child (byte-identical prior behaviour)', () => {
+    const link = createManualLink('burning', { dispatch: () => {} });
+    expect(link.children).toEqual([]);
+    expect(link.classList.values.has('has-icon')).toBe(false);
+  });
+
+  test('createConditionTag prepends the mapped sprite for known conditions and adds has-icon', () => {
+    const tag = createConditionTag('burning', 3);
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag.classList.values.has('has-icon')).toBe(true);
+    expect(tag.children).toHaveLength(1);
+    expect(tag.children[0].tagName).toBe('SVG');
+    expect(tag.children[0].className).toBe('icon icon-14');
+    // Text still reads exactly as before the prefix.
+    expect(tag.textContent).toBe('burning (3)');
+  });
+
+  test('createConditionTag for unmapped conditions renders no icon child (safe fallthrough)', () => {
+    const tag = createConditionTag('unknown-condition');
+    expect(tag.classList.values.has('has-icon')).toBe(false);
+    expect(tag.children).toEqual([]);
+  });
+
+  test('createConditionTag icon map covers every session-06 condition id', () => {
+    const cases = [
+      ['burning', 'icon-14'],
+      ['jammed', 'icon-14'],
+      ['shielded', 'icon-14'],
+      ['marked', 'icon-14'],
+      ['panicked', 'icon-14'],
+      ['immobilized', 'icon-14'],
+      ['overloaded', 'icon-14'],
+      ['drained', 'icon-14'],
+      ['blinded', 'icon-14']
+    ];
+    for (const [id] of cases) {
+      const tag = createConditionTag(id);
+      expect(tag.classList.values.has('has-icon'), `${id} has-icon`).toBe(true);
+      expect(tag.children[0].tagName).toBe('SVG');
+    }
+  });
+
+  test('createConditionTag with opts.manualLink returns a dispatching button that keeps its icon prefix', () => {
+    const dispatched = [];
+    const tag = createConditionTag('shielded', 2, {
+      manualLink: { source: 'party-condition', dispatch: (event, payload) => dispatched.push([event, payload]) }
+    });
+    expect(tag.tagName).toBe('BUTTON');
+    expect(tag.classList.values.has('condition-tag')).toBe(true);
+    expect(tag.classList.values.has('cond-shielded')).toBe(true);
+    expect(tag.classList.values.has('manual-term-link')).toBe(true);
+    expect(tag.classList.values.has('has-icon')).toBe(true);
+    expect(tag.children[0].tagName).toBe('SVG');
+    tag.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'shielded', source: 'party-condition' }]]);
   });
 
   test('disabled controls carry aria-disabled and .is-interactive simultaneously', () => {

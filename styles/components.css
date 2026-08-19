@@ -8,6 +8,48 @@
   border: 1px solid var(--interactive-border);
   cursor: pointer;
 }
+
+/* Icon-prefixed buttons (combat-and-overworld-clarity-pass SESSION-06).
+   `prefixIcon()` in components.js adds `.has-icon` when it actually prepends
+   a sprite <svg>. Row layout + gap replace the button's default centering so
+   icon and label sit shoulder-to-shoulder without wrapping. */
+.btn-crt.has-icon,
+.manual-term-link.has-icon,
+.condition-tag.has-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-crt.has-icon { padding-left: 12px; padding-right: 12px; }
+.btn-crt.has-icon > .icon,
+.manual-term-link.has-icon > .icon,
+.condition-tag.has-icon > .icon { flex-shrink: 0; }
+
+/* Wide-layout density pass — the console dock and telemetry dock are narrow;
+   share tighter row minimums and prevent shared portrait rows from wrapping.
+   Portrait keeps its 96px `.console-row` floor (defined below via the shared
+   `min-height: 48px` rule + the creation override), so this only relaxes rows
+   in wide mode. */
+:root[data-layout="wide"] .console-row,
+:root[data-layout="wide"] .action-btn,
+:root[data-layout="wide"] .item-card,
+:root[data-layout="wide"] .equipment-card,
+:root[data-layout="wide"] .protocol-card { min-height: 48px; }
+:root[data-layout="wide"] .combat-active-panel,
+:root[data-layout="wide"] .loot-container-header,
+:root[data-layout="wide"] .gear-slot-row { flex-wrap: nowrap; min-width: 0; }
+:root[data-layout="wide"] .combat-active-panel .combat-active-name,
+:root[data-layout="wide"] .loot-container-header,
+:root[data-layout="wide"] .gear-slot-row {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Disabled illegal target rows — SESSION-05 emits `.is-illegal` on the combat
+   target row when the currently-selected action would be out of range; the
+   session's density pass leaves the reason chip legible while dimming the row. */
+.combat-target.is-illegal { opacity: 0.5; }
 .is-interactive:hover:not([disabled]):not([aria-disabled="true"]) {
   border-color: var(--accent);
   box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 35%, transparent);
