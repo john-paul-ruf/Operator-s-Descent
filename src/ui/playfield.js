@@ -378,7 +378,11 @@ export function createPlayfield(canvas) {
     const width = lattice?.getWidth?.() || grid[0]?.length || COMBAT_GRID_W;
     const height = lattice?.getHeight?.() || grid.length || COMBAT_GRID_H;
     const combatants = getCombatants(combatState);
-    const activeId = combatState?.turnOrder?.[combatState?.currentTurn];
+    // Log-replay playback (M71): callers may override which actor draws the ACTIVE frame
+    // (turnOrder has already advanced past the enemy the log entry belongs to).
+    const activeId = options.activeOverrideId != null
+      ? options.activeOverrideId
+      : combatState?.turnOrder?.[combatState?.currentTurn];
     applyViewTransform(ctx, options.viewTransform);
     setCanvasDescription(canvas, `Combat map, window ${width}x${height}, round ${combatState?.round || 1}.`);
 
@@ -415,8 +419,12 @@ export function createPlayfield(canvas) {
 
     for (const actor of combatants) {
       if (!actor.position) continue;
-      const px = actor.position.x * COMBAT_CELL_SIZE;
-      const py = actor.position.y * COMBAT_CELL_SIZE;
+      // Log-replay playback (M71): positionOverrides shifts an actor's drawn cell without
+      // mutating combatState — the engine has already advanced positions to their final values.
+      const override = options.positionOverrides?.get?.(actor.id);
+      const pos = override || actor.position;
+      const px = pos.x * COMBAT_CELL_SIZE;
+      const py = pos.y * COMBAT_CELL_SIZE;
       const role = actorRole(actor);
       const isDead = actor.hp <= 0;
       const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
@@ -487,6 +495,8 @@ function drawOverlay(ctx, px, py, options, gx, gy, accentColor) {
   if (options.pathCells?.has?.(key)) drawMark(ctx, px, py, PATH_COLOR, 'P');
   if (options.validTargets?.has?.(key)) drawFrame(ctx, px, py, DANGER_COLOR, 'VALID', 7);
   if (options.confirmCell === key) drawFrame(ctx, px, py, PATH_COLOR, 'GO', 4);
+  // Log-replay playback (M71): danger-colored impact frame on cells taking a hit/effect.
+  if (options.flashCells?.has?.(key)) drawFrame(ctx, px, py, DANGER_COLOR, 'FLASH', 3);
 }
 
 function drawFrame(ctx, px, py, color, label, inset = 2) {

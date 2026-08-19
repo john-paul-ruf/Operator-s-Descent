@@ -523,4 +523,101 @@ describe('playfield rendering', () => {
       if (originalRaf) globalThis.requestAnimationFrame = originalRaf; else delete globalThis.requestAnimationFrame;
     }
   });
+
+  test('renderCombat positionOverrides shift an actor to the override cell without touching combatState', () => {
+    // Log-replay playback (M71): the engine has already moved the enemy to its final cell;
+    // the override redirects the drawn sigil/frame to an intermediate cell mid-animation.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const enemy = { id: 'e1', side: 'enemy', position: { x: 4, y: 4 }, sigilCodepoint: 0xE030 };
+    const combatants = new Map([['e1', enemy]]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+
+    playfield.renderCombat({ combatants, turnOrder: ['e1'], currentTurn: 0, round: 1 }, lattice(), {
+      viewTransform,
+      positionOverrides: new Map([['e1', { x: 2, y: 2 }]])
+    });
+
+    // combatState is untouched — actor.position stays at (4,4); the drawn sigil lands at override.
+    expect(enemy.position).toEqual({ x: 4, y: 4 });
+    const sigilAt = (x, y) => canvas.context.calls.some(
+      (c) => c[0] === 'fillText' && c[3] === x + 48 / 2 && c[4] === y + 48 / 2
+    );
+    expect(sigilAt(2 * 48, 2 * 48)).toBe(true);
+    expect(sigilAt(4 * 48, 4 * 48)).toBe(false);
+    // Omitting the override renders at the true cell (baseline).
+    const canvas2 = new FakeCanvas();
+    const playfield2 = createPlayfield(canvas2);
+    playfield2.renderCombat({ combatants, turnOrder: ['e1'], currentTurn: 0, round: 1 }, lattice(), { viewTransform });
+    const sigilAt2 = (x, y) => canvas2.context.calls.some(
+      (c) => c[0] === 'fillText' && c[3] === x + 48 / 2 && c[4] === y + 48 / 2
+    );
+    expect(sigilAt2(4 * 48, 4 * 48)).toBe(true);
+  });
+
+  test('renderCombat activeOverrideId draws the ACTIVE frame on that actor instead of turnOrder[currentTurn]', () => {
+    // During playback, turnOrder has already advanced back to the party; the override
+    // pins the ACTIVE frame on the enemy whose log entry is currently animating.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', position: { x: 1, y: 1 }, sigilCodepoint: 0xE000 }],
+      ['e1', { id: 'e1', side: 'enemy', position: { x: 3, y: 3 }, sigilCodepoint: 0xE030 }]
+    ]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+
+    playfield.renderCombat({ combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 }, lattice(), {
+      viewTransform,
+      activeOverrideId: 'e1'
+    });
+
+    // ACTIVE strokeRect is drawn at the enemy's cell (3,3) with the accent color, inset=2 (48-4=44).
+    const strokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#7ec8e3');
+    expect(strokes.some((c) => c[2] === 3 * 48 + 2 && c[3] === 3 * 48 + 2 && c[4] === 44 && c[5] === 44)).toBe(true);
+    // The party actor at (1,1) does NOT get the ACTIVE frame while the override is in effect.
+    expect(strokes.some((c) => c[2] === 1 * 48 + 2 && c[3] === 1 * 48 + 2 && c[4] === 44 && c[5] === 44)).toBe(false);
+  });
+
+  test('renderCombat flashCells paints a danger-colored FLASH frame on impact cells', () => {
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', position: { x: 1, y: 1 }, sigilCodepoint: 0xE000 }]
+    ]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+
+    playfield.renderCombat({ combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 }, lattice(), {
+      viewTransform,
+      flashCells: new Set(['1,1'])
+    });
+
+    // FLASH frame uses DANGER_COLOR strokeRect at inset=3 → (48+3, 48+3, 48-6, 48-6).
+    const strokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#e83a3a');
+    expect(strokes.some((c) => c[2] === 1 * 48 + 3 && c[3] === 1 * 48 + 3 && c[4] === 42 && c[5] === 42)).toBe(true);
+    // FLASH label emitted alongside the frame.
+    const labels = canvas.context.calls.filter(([n]) => n === 'fillText').map((c) => c[2]);
+    expect(labels).toContain('FLASH');
+  });
+
+  test('renderCombat with no playback options (positionOverrides/activeOverrideId/flashCells) is pixel-identical to today', () => {
+    // Confirms overrides default cleanly — omitting them leaves every existing caller unchanged.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', position: { x: 1, y: 1 }, sigilCodepoint: 0xE000 }],
+      ['e1', { id: 'e1', side: 'enemy', position: { x: 4, y: 4 }, sigilCodepoint: 0xE030 }]
+    ]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+    playfield.renderCombat({ combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 1 }, lattice(), {
+      viewTransform
+    });
+
+    // ACTIVE frame is on the party actor (turnOrder[currentTurn]), never on the enemy.
+    const accentStrokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#7ec8e3');
+    expect(accentStrokes.some((c) => c[2] === 1 * 48 + 2 && c[3] === 1 * 48 + 2)).toBe(true);
+    expect(accentStrokes.some((c) => c[2] === 4 * 48 + 2 && c[3] === 4 * 48 + 2)).toBe(false);
+    // No FLASH label is ever drawn without a flashCells option.
+    const labels = canvas.context.calls.filter(([n]) => n === 'fillText').map((c) => c[2]);
+    expect(labels).not.toContain('FLASH');
+  });
 });
