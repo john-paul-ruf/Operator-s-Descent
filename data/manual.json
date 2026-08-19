@@ -188,6 +188,186 @@
         ]
       ],
       "seeAlso": ["log_mode", "status_strip", "console_overview"]
+    },
+    {
+      "id": "character_creation",
+      "chapter": "systems",
+      "group": null,
+      "title": "Character Creation",
+      "body": [
+        [
+          ["text", "You build a three-character party from a shared 80-point pool. Every attribute starts at rank 3; ranks 3→6 cost 1 point each, ranks 7→8 cost 2 points each, and ranks 9→10 cost 3 points each. No attribute may exceed rank 10 at creation."]
+        ],
+        [
+          ["text", "Each class designates one primary attribute — its calibration upgrades cost 1 fewer point (minimum 1). Classes also gate weapons, armor, and protocol schools. Points buy protocols at tier × 2 points each, subject to your class's school gates and max tier."]
+        ]
+      ],
+      "seeAlso": ["calibration", "party_mode", "gear_mode", "tech_mode"]
+    },
+    {
+      "id": "d20_resolution",
+      "chapter": "systems",
+      "group": null,
+      "title": "d20 Resolution",
+      "body": [
+        [
+          ["text", "Every attack, save, and contested check rolls a d20 and adds an attribute modifier equal to (rank − 5). Melee attacks add MGT modifier plus weapon accuracy; ranged attacks add FIN modifier plus accuracy, modified by range band; protocol attacks add FOC modifier."]
+        ],
+        [
+          ["text", "A natural 20 is an automatic hit that deals maximum weapon damage. A natural 1 is an automatic miss and triggers an opportunity attack from any adjacent enemy. Defense equals 10 + FIN modifier + armor + shield + cover + condition modifiers. Every roll uses the run's deterministic PRNG — the same state produces the same sequence."]
+        ]
+      ],
+      "seeAlso": ["cover_and_range", "ap_and_initiative", "charge_and_overclock"]
+    },
+    {
+      "id": "cover_and_range",
+      "chapter": "systems",
+      "group": null,
+      "title": "Cover, Range, and Flanking",
+      "body": [
+        [
+          ["text", "Cover is edge-based: a line from attacker to target crossing one covered edge grants +2 (half cover) to the target's Defense; crossing two or more grants +4 (full cover). Flanking adds +2 to the attacker's roll when two allies stand on opposite sides of the target."]
+        ],
+        [
+          ["text", "Weapons operate in range bands — adjacent, short, medium, long, and blast — with per-band accuracy modifiers and, in the case of Sniper, a minimum range. Melee attacks require adjacency; ranged attacks are subject to their band's accuracy adjustment out to the weapon's max range."]
+        ]
+      ],
+      "seeAlso": ["d20_resolution", "ap_and_initiative", "combat_mode"]
+    },
+    {
+      "id": "ap_and_initiative",
+      "chapter": "systems",
+      "group": null,
+      "title": "AP and Initiative",
+      "body": [
+        [
+          ["text", "Combat rolls initiative once at encounter start: d20 + FIN modifier. Each character gets one move action per turn plus 2 AP. Attack, cast, use item, overclock, and begin-retreat each cost 1 AP; a weapon swap through GEAR is free (once per turn) and class signature free actions cost 0 AP."]
+        ],
+        [
+          ["text", "Unspent AP does not carry over between turns. A move action covers one 8-directional cell and cannot be exchanged for AP or vice versa. Combat ends when one side is entirely down."]
+        ]
+      ],
+      "seeAlso": ["d20_resolution", "cover_and_range", "combat_mode"]
+    },
+    {
+      "id": "charge_and_overclock",
+      "chapter": "systems",
+      "group": null,
+      "title": "CHARGE and Overclock",
+      "body": [
+        [
+          ["text", "Each character's CHARGE pool equals (RES × 3) + the class's charge base. CHARGE regen restores floor(RES / 3) on every floor descent — never mid-combat — and cannot exceed the pool maximum. Casting a protocol spends its listed CHARGE plus 1 AP."]
+        ],
+        [
+          ["text", "Overclocking doubles the CHARGE cost, adds one tier of effect, and requires a d20 + FOC modifier roll against 11 + (2 × tier). A success grants the extra tier for free; a failure keeps the base effect and adds 0.05 to the run's corruption. Compiler's signature progressively softens this cost — see the class entry."]
+        ]
+      ],
+      "seeAlso": ["ap_and_initiative", "corruption", "calibration", "tech_mode"]
+    },
+    {
+      "id": "calibration",
+      "chapter": "systems",
+      "group": null,
+      "title": "Calibration",
+      "body": [
+        [
+          ["text", "Every third floor (3, 6, 9, …) each living character selects one calibration option from their class: raise an attribute rank, add a deck slot, gain a proficiency, or gain HP equal to the class's hit die base ÷ 2 (minimum 2). Current HP is not restored — calibration raises the maximum only."]
+        ],
+        [
+          ["text", "Calibration count replaces level throughout the system: effective level for scaling is (calibration count + 1). The class signature upgrades at calibration counts 2 and 4, so each class has three signature tiers reached across the run."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "descent_and_scoring", "party_mode"]
+    },
+    {
+      "id": "corruption",
+      "chapter": "systems",
+      "group": null,
+      "title": "Corruption",
+      "body": [
+        [
+          ["text", "Corruption is a single run-wide number that accumulates from two sources: each failed overclock adds 0.05, and each first-time equip of a CORRUPT implant adds 0.1. It never decays and never resets during a run."]
+        ],
+        [
+          ["text", "The value additively raises the danger clock's rate at (corruption × 0.003) per exploration step, so higher totals draw hunts sooner. Corruption is the permanent cost of pushing tech and gear past their safe envelope."]
+        ]
+      ],
+      "seeAlso": ["charge_and_overclock", "danger_clock", "corrupt_items"]
+    },
+    {
+      "id": "danger_clock",
+      "chapter": "systems",
+      "group": null,
+      "title": "Danger Clock",
+      "body": [
+        [
+          ["text", "During exploration the danger clock advances by (0.01 + depth × 0.002) + (corruption × 0.003) per step. Reaching 1.0 triggers a hunt: an ambush drawn from the current theme's enemy mix, always including at least one higher-tier enemy (Stalker, Choir, Null, or Construct)."]
+        ],
+        [
+          ["text", "The clock never advances during combat, and it resets to 0 after the hunt resolves — victory or retreat. If a threshold is reached mid-combat, the hunt is deferred until exploration resumes."]
+        ]
+      ],
+      "seeAlso": ["corruption", "combat_mode", "move_mode", "status_strip"]
+    },
+    {
+      "id": "echoes",
+      "chapter": "systems",
+      "group": null,
+      "title": "Echoes",
+      "body": [
+        [
+          ["text", "When a single character dies and the rest of the party survives, an Echo is queued in the run state. Two to four floors deeper the dead character reappears as a hostile, wearing their sigil in red, carrying the equipment they died with, and using their class signature."]
+        ],
+        [
+          ["text", "Killing the Echo reclaims that equipment. Echoes are the only enemies that draw from the player sigil bank. At most two Echoes may be queued at once; the queue is deterministic from run state, so the same save reconstructs the same appearances."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "loot_and_salvage", "descent_and_scoring"]
+    },
+    {
+      "id": "loot_and_salvage",
+      "chapter": "systems",
+      "group": null,
+      "title": "Loot and Salvage",
+      "body": [
+        [
+          ["text", "Loot is deterministic per container: hash(worldSeed, depth, floorId, containerId) drives every rarity and affix roll, so the same run produces the same drops. Party inventory caps at 100 items — a hard ceiling; a full pack blocks pickup rather than dropping older items."]
+        ],
+        [
+          ["text", "Tag surplus items as junk in LOOT or GEAR; the Junk-All-Tagged action destroys them and adds each item's salvageValue to the run's scrap counter. Scrap contributes to the run-end scorecard as Scrap Recovered."]
+        ]
+      ],
+      "seeAlso": ["loot_mode", "gear_mode", "corrupt_items", "descent_and_scoring"]
+    },
+    {
+      "id": "corrupt_items",
+      "chapter": "systems",
+      "group": null,
+      "title": "CORRUPT Items",
+      "body": [
+        [
+          ["text", "CORRUPT is the highest rarity tier: exactly three major affixes drawn from the major pool only. The first equip of a CORRUPT implant adds 0.1 to the run's corruption, and while any CORRUPT item is equipped the danger clock rate is permanently elevated for the rest of the run."]
+        ],
+        [
+          ["text", "The trade is direct — strictly the strongest gear in exchange for an ongoing tax on how fast hunts arrive. Consent is explicit in GEAR before an equip commits."]
+        ]
+      ],
+      "seeAlso": ["corruption", "danger_clock", "loot_and_salvage", "gear_mode"]
+    },
+    {
+      "id": "descent_and_scoring",
+      "chapter": "systems",
+      "group": null,
+      "title": "Descent and Scoring",
+      "body": [
+        [
+          ["text", "There is no win condition. Depth is the score, and a run ends exactly one way: party wipe. Depth is infinite; there is no final floor."]
+        ],
+        [
+          ["text", "Threshold floors arrive every tenth level (10, 20, 30, …) and guarantee at least one elite enemy, one high-value vault, and a theme not yet seen this run (the last is waived once all twelve themes have appeared). The scorecard reports final depth, roster with sigils, cause of death, seed, and scrap; it offers a share-the-world link and the option to restart with the same seed."]
+        ]
+      ],
+      "seeAlso": ["calibration", "echoes", "loot_and_salvage", "seed_links"]
     }
   ]
 }
