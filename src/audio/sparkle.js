@@ -1,48 +1,50 @@
+import { playNote } from './chip.js';
+
 const MAX_DIST = 10;
-const ARPEGGIO = [0, 7, 12, 19, 24];
 
 function clampDistance(value) {
   return Number.isFinite(value) ? Math.max(0, Math.min(MAX_DIST, value)) : MAX_DIST;
 }
 
-export function createSparkle(ctx, dest) {
+export function createSparkle(ctx, dest, conductor, echoInput) {
   let gain = null;
   let filter = null;
-  let schedulerId = null;
-  let nextBeatTime = 0;
+  let unsubscribe = null;
   let nearestDist = MAX_DIST;
-  let step = 0;
   let volume = 0.75;
+  let arpIndex = 0;
 
   function pressure() { return 1 - nearestDist / MAX_DIST; }
   function cutoff() { return 400 + pressure() * 3000; }
-  function beatInterval() { return 0.3 - pressure() * 0.22; }
 
-  function playNote(time) {
-    const degree = ARPEGGIO[step++ % ARPEGGIO.length];
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = 880 * Math.pow(2, degree / 12);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0, time);
-    env.gain.linearRampToValueAtTime(0.06 * volume, time + 0.005);
-    env.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-    osc.connect(env);
-    env.connect(filter);
-    osc.start(time);
-    osc.stop(time + 0.35);
+  function strideFor(sparkleAmount) {
+    if (sparkleAmount < 0.35) return 8;
+    if (sparkleAmount < 0.7) return 4;
+    return 2;
   }
 
-  function scheduler() {
-    while (nextBeatTime < ctx.currentTime + 0.2) {
-      if (pressure() > 0) playNote(nextBeatTime);
-      nextBeatTime += beatInterval();
+  function onTick(tick) {
+    if (!filter) return;
+    const sparkleAmount = tick.sparkle;
+    if (sparkleAmount <= 0) return;
+    const stride = strideFor(sparkleAmount);
+    if (tick.pos.step % stride !== 0) return;
+    const semis = tick.chord?.semis ?? [0, 4, 7];
+    const arp = [semis[0], semis[1], semis[2], semis[0] + 12];
+    const semi = arp[arpIndex % arp.length];
+    arpIndex++;
+    const freq = tick.rootFreq * 4 * Math.pow(2, semi / 12);
+    const duration = tick.secondsPerSixteenth;
+    const velocity = 0.3 * volume;
+    playNote(ctx, filter, { wave: 'pulse25', time: tick.time, freq, duration, velocity });
+    if (echoInput) {
+      playNote(ctx, echoInput, { wave: 'pulse25', time: tick.time, freq, duration, velocity: velocity * 0.5 });
     }
   }
 
   return {
     start() {
-      if (schedulerId) return;
+      if (gain) return;
       gain = ctx.createGain();
       gain.gain.value = 0.08 * volume;
       gain.connect(dest);
@@ -51,16 +53,23 @@ export function createSparkle(ctx, dest) {
       filter.frequency.value = cutoff();
       filter.Q.value = 0.5;
       filter.connect(gain);
-      nextBeatTime = ctx.currentTime + 0.1;
-      schedulerId = setInterval(scheduler, 50);
+      arpIndex = 0;
+      unsubscribe = conductor?.subscribe?.(onTick) ?? null;
     },
-    stop() { if (schedulerId) clearInterval(schedulerId); schedulerId = null; filter?.disconnect?.(); gain?.disconnect?.(); },
+    stop() {
+      unsubscribe?.();
+      unsubscribe = null;
+      filter?.disconnect?.();
+      gain?.disconnect?.();
+      filter = null;
+      gain = null;
+    },
     destroy() { this.stop(); },
     setVolume(v) { volume = v; if (gain) gain.gain.value = v * 0.08; },
     updateState(state) {
       nearestDist = clampDistance(state?.proximity?.container ?? state?.nearestContainerDistance);
       filter?.frequency?.linearRampToValueAtTime?.(cutoff(), ctx.currentTime + 0.1);
     },
-    getState() { return { nearestDist, cutoff: cutoff(), interval: beatInterval() }; }
+    getState() { return { nearestDist, cutoff: cutoff() }; }
   };
 }

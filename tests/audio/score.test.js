@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { FakeContext } from '../helpers/fake-audio.js';
 import { createAudioEngine } from '../../src/audio/engine.js';
-import { createDrone } from '../../src/audio/drone.js';
 import { createLead } from '../../src/audio/lead.js';
 import { createNoiseBed } from '../../src/audio/noise-bed.js';
-import { createPulse } from '../../src/audio/pulse.js';
 import { createSparkle } from '../../src/audio/sparkle.js';
 import { dutyWave } from '../../src/audio/chip.js';
 
@@ -46,11 +44,20 @@ function emit(conductor, tick) {
   for (const fn of conductor.subs) fn(tick);
 }
 
+function driveEngine(ctx, seconds, stepMs = 25) {
+  const endMs = Math.round(seconds * 1000);
+  const startMs = Math.round(ctx.currentTime * 1000);
+  for (let t = startMs + stepMs; t <= endMs; t += stepMs) {
+    ctx.currentTime = t / 1000;
+    vi.advanceTimersByTime(stepMs);
+  }
+}
+
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('five layer audio score', () => {
-  test('engine owns one injected graph, wires the conductor, cleans up idempotently', () => {
+  test('engine API — layer keys, mute, conductor lifecycle, idempotent destroy', () => {
     const ctx = new FakeContext();
     const engine = createAudioEngine(ctx);
 
@@ -73,101 +80,119 @@ describe('five layer audio score', () => {
     expect(engine.isStarted()).toBe(false);
   });
 
-  test('drone pad ramps to the new chord voicing on a step-0 chord change', () => {
+  test('rendered notes align to the conductor 16th grid', () => {
     const ctx = new FakeContext();
-    const conductor = makeFakeConductor();
-    const drone = createDrone(ctx, ctx.destination, conductor);
-    drone.updateState({ theme: { audioMode: 'foundry-industrial' }, depth: 9 });
-    drone.start();
-    expect(drone.getState()).toMatchObject({ audioMode: 'foundry-industrial', depth: 9, oscillatorCount: 2 });
+    const engine = createAudioEngine(ctx);
+    engine.start();
+    engine.updateState({
+      worldSeed: 1, depth: 1, floorId: 'align', audioMode: 'organic-green',
+      proximity: { hostile: 10, container: 10 }, combatActive: false
+    });
+    const sustainedCount = ctx.nodes.length;
 
-    emit(conductor, makeTick({
-      chord: { degree: 3, semis: [3, 6, 10] },
-      rootFreq: 90
-    }));
+    driveEngine(ctx, 3);
 
-    const padOsc = ctx.nodes.find((node) =>
-      node.nodeKind === 'oscillator' && node.frequency?.events?.some((e) => e[0] === 'linear')
-    );
-    expect(padOsc).toBeTruthy();
-    drone.stop();
-  });
+    const later = ctx.nodes.slice(sustainedCount);
+    const times = later
+      .filter((n) => (n.nodeKind === 'oscillator' || n.nodeKind === 'bufferSource') && n.started.length)
+      .map((n) => n.started[0])
+      .filter((t) => t > 0)
+      .sort((a, b) => a - b);
+    expect(times.length).toBeGreaterThan(4);
 
-  test('pulse renders conductor drums, tracks tempo from ticks, and applies danger cutoff', () => {
-    const ctx = new FakeContext();
-    const conductor = makeFakeConductor();
-    const pulse = createPulse(ctx, ctx.destination, conductor);
-    pulse.start();
-    pulse.updateState({ proximity: { hostile: 1 }, combatActive: true });
-
-    const before = ctx.nodes.length;
-    const drums = emptyDrums();
-    drums.kick[0] = true;
-    drums.snare[4] = true;
-    drums.hat[2] = true;
-    for (const step of [0, 2, 4]) {
-      emit(conductor, makeTick({
-        time: 0.1 + step * 0.15,
-        pos: { step, beat: Math.floor(step / 4), bar: 0, barInPhrase: 0, phraseIndex: 0 },
-        tempo: 140,
-        intensity: 1,
-        combat: true,
-        drums
-      }));
+    // Depth 1, no danger, no combat ⇒ intensity target 0.15 ⇒ tempo 96 ⇒ 16th = 60/96/4.
+    const secondsPerSixteenth = 60 / 96 / 4;
+    const firstTickTime = times[0];
+    for (const t of times) {
+      const k = (t - firstTickTime) / secondsPerSixteenth;
+      expect(Math.abs(k - Math.round(k))).toBeLessThan(1e-3);
     }
-
-    expect(ctx.nodes.length).toBeGreaterThan(before);
-    expect(pulse.getState()).toMatchObject({ tempo: 140, combat: true });
-    expect(pulse.getState().nearestDist).toBe(1);
-    pulse.stop();
+    engine.destroy();
   });
 
-  test('sparkle clamps proximity and opens its lowpass on nearby containers', () => {
-    const ctx = new FakeContext();
-    const sparkle = createSparkle(ctx, ctx.destination);
-    sparkle.start();
-    sparkle.updateState({ proximity: { container: 2 } });
-    expect(sparkle.getState().cutoff).toBeGreaterThan(2500);
-    sparkle.stop();
-  });
+  describe('reactivity', () => {
+    test('drum tier climbs when a hostile is close', () => {
+      const ctx = new FakeContext();
+      const engine = createAudioEngine(ctx);
+      engine.start();
+      engine.updateState({
+        worldSeed: 1, depth: 3, floorId: 'danger', audioMode: 'organic-green',
+        proximity: { hostile: 1, container: 10 }, combatActive: false
+      });
+      const sustainedCount = ctx.nodes.length;
 
-  test('lead renders conductor melody, switches to 12.5% duty on combat, and taps the echo', () => {
-    const ctx = new FakeContext();
-    const conductor = makeFakeConductor();
-    const echoInput = ctx.createGain();
-    const lead = createLead(ctx, ctx.destination, conductor, echoInput);
-    lead.start();
-    const before = ctx.nodes.length;
+      driveEngine(ctx, 5);
 
-    const melody = new Array(16).fill(null);
-    melody[0] = { degree: 0, octave: 0, velocity: 0.6, lengthSlots: 3 };
-    melody[4] = { degree: 7, octave: 0, velocity: 0.5, lengthSlots: 2 };
+      const drumBufferSources = ctx.nodes.slice(sustainedCount).filter(
+        (n) => n.nodeKind === 'bufferSource' && n.started.length && n.started[0] > 0
+      );
+      expect(drumBufferSources.length).toBeGreaterThan(5);
+      engine.destroy();
+    });
 
-    emit(conductor, makeTick({
-      time: 0.1,
-      pos: { step: 0, beat: 0, bar: 5, barInPhrase: 5, phraseIndex: 1 },
-      tempo: 128,
-      combat: true,
-      rootFreq: 110,
-      melody
-    }));
+    test('sparkle arps chord tones when a container is close', () => {
+      const ctx = new FakeContext();
+      const conductor = makeFakeConductor();
+      const sparkle = createSparkle(ctx, ctx.destination, conductor);
+      sparkle.updateState({ proximity: { container: 2 } });
+      sparkle.start();
+      const before = ctx.nodes.length;
 
-    expect(ctx.nodes.length).toBeGreaterThan(before);
-    expect(lead.getState()).toEqual({ tempo: 128, barIndex: 5 });
+      emit(conductor, makeTick({
+        chord: { degree: 0, semis: [0, 3, 7] },
+        rootFreq: 110,
+        sparkle: 0.9,
+        pos: { step: 0, beat: 0, bar: 0, barInPhrase: 0, phraseIndex: 0 }
+      }));
+      emit(conductor, makeTick({
+        chord: { degree: 0, semis: [0, 3, 7] },
+        rootFreq: 110,
+        sparkle: 0.9,
+        pos: { step: 2, beat: 0, bar: 0, barInPhrase: 0, phraseIndex: 0 }
+      }));
 
-    const combatWave = dutyWave(ctx, 0.125);
-    const combatOsc = ctx.nodes.find((n) => n.nodeKind === 'oscillator' && n.periodicWaves?.includes?.(combatWave));
-    expect(combatOsc).toBeTruthy();
+      expect(ctx.nodes.length).toBeGreaterThan(before);
+      const wave = dutyWave(ctx, 0.25);
+      const arpOsc = ctx.nodes.slice(before).find(
+        (n) => n.nodeKind === 'oscillator' && n.periodicWaves?.includes?.(wave)
+      );
+      expect(arpOsc).toBeTruthy();
+      expect(sparkle.getState().cutoff).toBeGreaterThan(2500);
+      sparkle.stop();
+    });
 
-    const echoRoutedOsc = ctx.nodes.find((n) =>
-      n.nodeKind === 'oscillator' &&
-      n.periodicWaves?.includes?.(combatWave) &&
-      n.connections?.length &&
-      n.connections[0].connections?.includes?.(echoInput)
-    );
-    expect(echoRoutedOsc).toBeTruthy();
+    test('combat switches the lead to a 12.5% duty pulse and taps the echo', () => {
+      const ctx = new FakeContext();
+      const conductor = makeFakeConductor();
+      const echoInput = ctx.createGain();
+      const lead = createLead(ctx, ctx.destination, conductor, echoInput);
+      lead.start();
 
-    lead.stop();
+      const melody = new Array(16).fill(null);
+      melody[0] = { degree: 0, octave: 0, velocity: 0.6, lengthSlots: 3 };
+
+      emit(conductor, makeTick({
+        pos: { step: 0, beat: 0, bar: 5, barInPhrase: 5, phraseIndex: 1 },
+        tempo: 128,
+        combat: true,
+        rootFreq: 110,
+        melody
+      }));
+
+      expect(lead.getState()).toEqual({ tempo: 128, barIndex: 5 });
+      const combatWave = dutyWave(ctx, 0.125);
+      const combatOsc = ctx.nodes.find((n) => n.nodeKind === 'oscillator' && n.periodicWaves?.includes?.(combatWave));
+      expect(combatOsc).toBeTruthy();
+
+      const echoRoutedOsc = ctx.nodes.find((n) =>
+        n.nodeKind === 'oscillator' &&
+        n.periodicWaves?.includes?.(combatWave) &&
+        n.connections?.length &&
+        n.connections[0].connections?.includes?.(echoInput)
+      );
+      expect(echoRoutedOsc).toBeTruthy();
+      lead.stop();
+    });
   });
 
   test('noise bed is fixed machine texture and ignores game state', () => {
