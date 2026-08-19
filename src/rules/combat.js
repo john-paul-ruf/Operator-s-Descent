@@ -5,7 +5,7 @@ import { castProtocol, overclockProtocol } from './protocols.js';
 import { applyConsumable } from './consumables.js';
 import { evaluateRange } from './equipment.js';
 import { getSignatureCapabilities, applySignatureModifier } from './classes.js';
-import { distanceCells, getEdgeCoverBonus, isFlanked, getOpportunityAttackers, FLANK_ATTACK_BONUS } from './combat-geometry.js';
+import { distanceCells, getEdgeCoverBonus, isFlanked, getOpportunityAttackers, FLANK_ATTACK_BONUS, findApproachPath } from './combat-geometry.js';
 
 const AP_PER_TURN = 2;
 export const MOVE_RANGE = 5;
@@ -199,58 +199,20 @@ function fleeDirection(combatState, actor) {
   return best;
 }
 
-// Greedy single-step chooser: from `origin` pick the legal direction that strictly reduces
-// Chebyshev distance to `targetPos`, applying the same walls / corner-rule / occupancy checks
-// as any other move step. Occupancy ignores `movingActorId` — the actor's own true current cell
-// doesn't block a simulated step through it, and greedy path building never revisits the origin
-// (each step strictly closes distance) so simulated-vacated cells never need explicit tracking.
-// Returns null when no legal step improves distance (fully blocked, or already at closest cell).
-function stepFrom(combatState, origin, targetPos, movingActorId) {
-  let best = null;
-  let bestDistance = distanceCells(origin, targetPos);
-  for (const name of DIRECTION_ORDER) {
-    const delta = DIRECTIONS[name];
-    if (!legalStep(combatState.window, origin, delta)) continue;
-    const dest = { x: origin.x + delta.dx, y: origin.y + delta.dy };
-    if (cellOccupied(combatState.combatants, dest.x, dest.y, movingActorId)) continue;
-    const distance = distanceCells(dest, targetPos);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = name;
-    }
-  }
-  return best;
-}
-
-// AI convenience: greedily steps toward a target instead of requiring an explicit direction.
-function stepToward(combatState, actor, targetId) {
-  const target = combatState.combatants.get(targetId);
-  if (!target || !target.position || !actor.position) return null;
-  return stepFrom(combatState, actor.position, target.position, actor.id);
-}
-
-// Builds a greedy geometric path of up to `maxSteps` legal steps toward `targetId`, stopping
-// early once the simulated position is within Chebyshev `desiredRange` of the target. Uses the
-// same walls / corner-rule / occupancy checks as any other move — pathing consumes no RNG, so
-// determinism is preserved. Returns null when no forward progress is possible from the origin
-// (already within range, blocked, missing target/positions), matching `stepToward`'s legacy
-// "no move" contract so the targetId fallback in `executeMove` still routes to `invalid-direction`.
+// Delegates to findApproachPath (BFS shortest, RNG-free) so enemies can hunt around walls
+// instead of wedging at a local minimum. The BFS result is truncated to `maxSteps` — a
+// truncated path that makes progress but does not reach `desiredRange` is still returned
+// (that IS hunting). Returns null when no forward progress is possible from the origin
+// (already within range, unreachable, missing window/target/positions), matching the legacy
+// contract so the targetId fallback in `executeMove` still routes to `invalid-direction`.
 export function pathToward(combatState, actor, targetId, maxSteps, desiredRange) {
   const target = combatState.combatants.get(targetId);
-  if (!target?.position || !actor?.position) return null;
-  const path = [];
-  const sim = { x: actor.position.x, y: actor.position.y };
-  while (path.length < maxSteps) {
-    const distance = distanceCells(sim, target.position);
-    if (distance === null || distance <= desiredRange) break;
-    const step = stepFrom(combatState, sim, target.position, actor.id);
-    if (!step) break;
-    const delta = DIRECTIONS[step];
-    sim.x += delta.dx;
-    sim.y += delta.dy;
-    path.push(step);
-  }
-  return path.length ? path : null;
+  if (!target?.position || !actor?.position || !combatState?.window) return null;
+  const isOccupied = (x, y) => cellOccupied(combatState.combatants, x, y, actor.id);
+  const path = findApproachPath(combatState.window, isOccupied, actor.position, target.position, desiredRange);
+  if (!path || path.length === 0) return null;
+  const capped = path.slice(0, Math.max(0, Math.floor(maxSteps)));
+  return capped.length ? capped : null;
 }
 
 export function getLegalActions(combatState, actorId, context = {}) {
@@ -337,9 +299,9 @@ export function endTurn(combatState, actorId, context = {}) {
 
 // Move up to MOVE_RANGE cells along an ordered `path` of direction names. Callers may pass
 // `path` (array, length 1..MOVE_RANGE), a lone `direction` (wrapped to `[direction]`, back-compat
-// with pre-path AI), or a `targetId` fallback (`pathToward` → greedy path up to MOVE_RANGE steps,
-// stopping when within Chebyshev `desiredRange` of the target; `desiredRange` defaults to 1 =
-// adjacent when the action doesn't declare one). Panicked always overrides with a single
+// with pre-path AI), or a `targetId` fallback (`pathToward` → BFS shortest path up to
+// MOVE_RANGE steps, stopping when within Chebyshev `desiredRange` of the target;
+// `desiredRange` defaults to 1 = adjacent when the action doesn't declare one). Panicked always overrides with a single
 // fleeDirection step. The whole path is pre-validated (walls, corner rule, occupancy); a single
 // illegal step rejects the entire request without moving. On success the walk executes
 // step-by-step, resolving opportunity attacks per threatened departure; a lethal OA stops the
@@ -671,7 +633,14 @@ export function resolveTurn(combatState, rngCursor, context = {}) {
       while (actor.ap > 0 && actor.hp > 0 && !combatState.ended) {
         const action = enemyAI(actor, combatState, rngCursor, context);
         const actionResult = executeAction(combatState, action, rngCursor, context);
-        if (!actionResult.success) actor.ap = 0;
+        if (!actionResult.success) {
+          // A blocked AI intent (fully walled off, no legal target, etc.) used to silently
+          // consume the turn — the LOG feed showed nothing while enemies just skipped their
+          // action. Emit an explicit wait so the log reflects what happened; the standalone
+          // `wait` action already logs itself, so we only synthesize one for a failure.
+          pushLog(combatState, { type: 'wait', actorId: actor.id, reason: actionResult.reason });
+          actor.ap = 0;
+        }
         const end = checkCombatEnd(combatState);
         if (end.ended) return end;
       }

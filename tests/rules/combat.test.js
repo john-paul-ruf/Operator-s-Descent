@@ -683,6 +683,27 @@ describe('resolveTurn', () => {
     expect(result.ended).toBe(true);
     expect(result.result).toBe('wipe');
   });
+
+  it('blocked AI action logs a synthetic wait so the LOG feed reflects the failure', () => {
+    // Enemy is fully boxed by walls on every side — every move it could try is illegal, so
+    // executeAction returns success:false. Before this session the engine silently zeroed AP;
+    // now it must push a wait log with the failure reason so the LOG feed shows what happened.
+    const window = openCombatWindow();
+    // Wall every neighbor of the enemy at (5,3).
+    for (const [x, y] of [[4, 2], [5, 2], [6, 2], [4, 3], [6, 3], [4, 4], [5, 4], [6, 4]]) {
+      window.cells[y][x] = 0;
+    }
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, hp: 100, hpMax: 100 })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 3 }, hp: 100, hpMax: 100, behavior: 'aggressive' });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'enemy_1');
+    state.window = window;
+    state.turnStarted = false;
+    resolveTurn(state, cursor, baseContext);
+    const waitLog = state.log.find(entry => entry.type === 'wait' && entry.actorId === 'enemy_1');
+    expect(waitLog).toBeDefined();
+    expect(waitLog.reason).toBeDefined();
+    expect(state.combatants.get('enemy_1').ap).toBe(0);
+  });
 });
 
 describe('checkCombatEnd', () => {
@@ -1125,32 +1146,61 @@ describe('executeAction — move (targetId + desiredRange fallback)', () => {
     expect(finalDistance).toBe(3);
   });
 
-  it('partial path: greedy walk succeeds with the shorter walk when no direction reduces distance further', () => {
+  it('BFS routes around a wall column when a gap exists (Custom Rule 11: strengthened — greedy path used to wedge here and log nothing; BFS makes the enemy hunt through)', () => {
     const window = openCombatWindow();
-    // Wall the entire vertical column x=2 between actor and target. Actor pinned to the top edge
-    // (y=0) so `ne`/`n` are out of bounds — only `e` and downward directions are candidates. From
-    // (1,0) all of {e, se} are blocked or don't reduce Chebyshev distance to (7,0), so the walk
-    // succeeds with 1 step.
-    for (let y = 0; y < window.height; y++) window.cells[y][2] = 0;
+    // Wall x=2 column from y=0 to y=14 with a gap at y=15 so BFS must route south through
+    // (0,y)→…→(2,15)→(3,15)→… before turning back toward the target on the far side.
+    for (let y = 0; y < window.height - 1; y++) window.cells[y][2] = 0;
     const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 } })];
     const enemy = makeEnemy({ id: 'enemy_1', position: { x: 7, y: 0 } });
     const { state, cursor } = startCombat(party, [enemy], 1, 'a');
     state.window = window;
     const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
     expect(result.success).toBe(true);
-    // First step east closes distance to 6; from (1,0) every legal step yields distance 6 or worse.
-    expect(result.position).toEqual({ x: 1, y: 0 });
+    // BFS emits a MOVE_RANGE-truncated walk toward the gap — the shortest path is longer than
+    // one action, but the walker still makes real progress instead of wedging at x=1.
+    const actor = state.combatants.get('a');
+    expect(actor.position).not.toEqual({ x: 0, y: 0 });
+    // The walk never crosses the wall column mid-path — every visited cell is passable.
     const moveLog = state.log.find(entry => entry.type === 'move');
-    expect(moveLog.steps).toBe(1);
-    expect(moveLog.path).toEqual(['e']);
+    const DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+    let sim = { x: 0, y: 0 };
+    for (const dir of moveLog.path) {
+      sim = { x: sim.x + DELTAS[dir][0], y: sim.y + DELTAS[dir][1] };
+      expect(window.cells[sim.y][sim.x]).not.toBe(0);
+    }
+    expect(moveLog.steps).toBe(moveLog.path.length);
+    expect(moveLog.steps).toBeLessThanOrEqual(MOVE_RANGE);
   });
 
-  it('fully blocked from the origin: no step reduces distance → invalid-direction, no move, moveAvailable preserved', () => {
+  it('BFS reaches the target within 3 rounds behind an L-wall that greedy pathing wedged against forever (Custom Rule 11)', () => {
     const window = openCombatWindow();
-    // Wall every neighbor that would close distance from (3,3) to (5,3): e, ne, se blocked.
-    window.cells[3][4] = 0;
+    // L-wall: three cells at x=4, y=2..4 block every direct east step from (3,3) to (5,3).
     window.cells[2][4] = 0;
+    window.cells[3][4] = 0;
     window.cells[4][4] = 0;
+    const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 3 } });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    // Under a single move action the walker routes around: (3,3)→(3,2)→(4,1)→(5,2), stopping
+    // at Chebyshev 1 of (5,3). Greedy stepFrom used to return null here and log nothing.
+    const result = executeAction(state, { type: 'move', actorId: 'a', targetId: 'enemy_1', desiredRange: 1 }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    const finalDistance = Math.max(
+      Math.abs(state.combatants.get('a').position.x - 5),
+      Math.abs(state.combatants.get('a').position.y - 3)
+    );
+    expect(finalDistance).toBeLessThanOrEqual(1);
+  });
+
+  it('fully walled-off target (enclosed): BFS returns null → invalid-direction, no move, moveAvailable preserved', () => {
+    const window = openCombatWindow();
+    // Enclose target at (5,3) with walls on every adjacent side. BFS has no reachable cell
+    // within Chebyshev 1 — the only remaining test of the null-return contract.
+    for (const [x, y] of [[4, 2], [5, 2], [6, 2], [4, 3], [6, 3], [4, 4], [5, 4], [6, 4]]) {
+      window.cells[y][x] = 0;
+    }
     const party = [makeCharacter({ id: 'a', position: { x: 3, y: 3 } })];
     const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 3 } });
     const { state, cursor } = startCombat(party, [enemy], 1, 'a');
