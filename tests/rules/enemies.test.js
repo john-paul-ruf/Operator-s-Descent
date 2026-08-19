@@ -248,24 +248,18 @@ describe('enemyAI — move toward optimal range then attack once in range', () =
   });
 });
 
-describe('enemyAI — move action carries desiredRange from behavior', () => {
-  // OPTIMAL_RANGE in enemies.js is the source of truth. Each behavior below must produce the
-  // matching desiredRange on move actions so the executor's greedy walk stops at the right band.
-  const OPTIMAL_RANGE_BY_BEHAVIOR = {
-    aggressive: 1,
-    defensive: 1,
-    flanking: 2,
-    artillery: 3,
-    controller: 2,
-    phasing: 2,
-    'multi-action': 1,
-  };
+describe('enemyAI — move action carries capability-based desiredRange (Custom Rule 11: strengthened)', () => {
+  // Old behavior scaled desiredRange by archetype behavior string (aggressive→1, flanking→2,
+  // artillery→3, …). But every enemy attack in the game is melee via UNARMED_WEAPON in
+  // combat.js:12 — so flanking/artillery/controller/phasing archetypes without CHARGE stood
+  // off at Chebyshev 2 or 3 and auto-missed forever. The new rule: engage range depends on
+  // the archetype's actually-usable range attack. Choir with CHARGE ≥ 2 → 3, Null off
+  // cooldown → 2, everyone else (including a drained Choir or a Null on cooldown) → 1.
+  const WEAPONLESS_BEHAVIORS = ['aggressive', 'defensive', 'flanking', 'artillery', 'controller', 'phasing', 'multi-action'];
 
-  for (const [behavior, expected] of Object.entries(OPTIMAL_RANGE_BY_BEHAVIOR)) {
-    it(`behavior ${behavior} → desiredRange ${expected}`, () => {
+  for (const behavior of WEAPONLESS_BEHAVIORS) {
+    it(`weaponless enemy with behavior ${behavior} → desiredRange 1 (melee)`, () => {
       const cursor = createRNGCursorForRun(1);
-      // Synthesized enemy — createEnemy would route choir/null through their special-case
-      // branches and never emit a move action. This isolates the move branch under test.
       const enemy = {
         id: `mover_${behavior}`,
         side: 'enemy',
@@ -278,23 +272,47 @@ describe('enemyAI — move action carries desiredRange from behavior', () => {
       };
       const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
       const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
-      expect(action.type).toBe('move');
-      expect(action.desiredRange).toBe(expected);
-      expect(action.targetId).toBe('p1');
-      expect(action.actorId).toBe(enemy.id);
+      expect(action).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 1, actorId: enemy.id });
     });
   }
 
-  it('unknown behavior falls back to desiredRange 1', () => {
+  it('choir with CHARGE ≥ 2 → desiredRange 3 (casting band)', () => {
     const cursor = createRNGCursorForRun(1);
-    const enemy = {
-      id: 'mystery', side: 'enemy', hp: 30, hpMax: 30, behavior: 'unknown-behavior-key',
-      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
-      position: { x: 0, y: 0 }, retreats: false,
-    };
+    const enemy = createEnemy('choir', 3, cursor, enemiesData);
+    enemy.charge = 4;
+    enemy.position = { x: 0, y: 0 };
     const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
     const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
-    expect(action).toMatchObject({ type: 'move', desiredRange: 1 });
+    expect(action).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 3 });
+  });
+
+  it('drained choir (CHARGE < 2) → desiredRange 1 — closes to melee per FR-43', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('choir', 3, cursor, enemiesData);
+    enemy.charge = 1;
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
+    const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
+    expect(action).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 1 });
+  });
+
+  it('null off cooldown → desiredRange 2 (condition band)', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('null', 3, cursor, enemiesData);
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
+    const action = enemyAI(enemy, mockCombatState([enemy, target], 1), cursor);
+    expect(action).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 2 });
+  });
+
+  it('null on cooldown → desiredRange 1 — uses its melee attack per FR-43', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('null', 3, cursor, enemiesData);
+    enemy.position = { x: 0, y: 0 };
+    enemy.nullCooldownRound = 2;
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 7, y: 0 } };
+    const action = enemyAI(enemy, mockCombatState([enemy, target], 2), cursor);
+    expect(action).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 1 });
   });
 
   it('pathing consumes no RNG — cursor unchanged across an AI call that emits a move action', () => {
@@ -311,38 +329,38 @@ describe('enemyAI — move action carries desiredRange from behavior', () => {
   });
 });
 
-describe('enemyAI — Choir casts the highest affordable tier of DISRUPT, else melee', () => {
-  it('charge 6 → tier 3', () => {
+describe('enemyAI — Choir casts the highest affordable tier of DISRUPT, else melee (Custom Rule 11: targets placed within engage range — the old tests wrongly asserted cast intent from stand-off distance where the caster should first close)', () => {
+  it('charge 6 within band → tier 3', () => {
     const cursor = createRNGCursorForRun(1);
     const enemy = createEnemy('choir', 5, cursor, enemiesData);
     enemy.charge = 6;
     enemy.position = { x: 0, y: 0 };
-    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } }]);
+    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 3, y: 0 } }]);
     const action = enemyAI(enemy, state, cursor);
     expect(action).toMatchObject({ type: 'cast', school: 'disrupt', tier: 3, targetId: 'p1' });
   });
-  it('charge 5 → tier 2', () => {
+  it('charge 5 within band → tier 2', () => {
     const cursor = createRNGCursorForRun(1);
     const enemy = createEnemy('choir', 5, cursor, enemiesData);
     enemy.charge = 5;
     enemy.position = { x: 0, y: 0 };
-    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } }]);
+    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 3, y: 0 } }]);
     expect(enemyAI(enemy, state, cursor)).toMatchObject({ type: 'cast', tier: 2 });
   });
-  it('charge 3 → tier 1', () => {
+  it('charge 3 within band → tier 1', () => {
     const cursor = createRNGCursorForRun(1);
     const enemy = createEnemy('choir', 5, cursor, enemiesData);
     enemy.charge = 3;
     enemy.position = { x: 0, y: 0 };
-    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } }]);
+    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 3, y: 0 } }]);
     expect(enemyAI(enemy, state, cursor)).toMatchObject({ type: 'cast', tier: 1 });
   });
-  it('charge 1 → melee fallback', () => {
+  it('charge 1 adjacent → melee attack (drained caster falls back to melee)', () => {
     const cursor = createRNGCursorForRun(1);
     const enemy = createEnemy('choir', 5, cursor, enemiesData);
     enemy.charge = 1;
     enemy.position = { x: 0, y: 0 };
-    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } }]);
+    const state = mockCombatState([enemy, { id: 'p1', side: 'party', hp: 30, position: { x: 1, y: 0 } }]);
     expect(enemyAI(enemy, state, cursor).type).toBe('attack');
   });
 });
@@ -371,6 +389,77 @@ describe('enemyAI — Null applies a weighted condition, then cooldowns to melee
     expect(enemyAI(enemy, round2, cursor).type).toBe('attack');
     const round3 = mockCombatState([enemy, target], 3);
     expect(enemyAI(enemy, round3, cursor).type).toBe('condition');
+  });
+});
+
+describe('enemyAI — stalker (behavior: flanking) attacks adjacent instead of standing at Chebyshev 2', () => {
+  // Regression for the engage-range bug this session fixes. Stalker's old OPTIMAL_RANGE was 2,
+  // but no enemy has a weapon → UNARMED_WEAPON caps at maxRange 1 → the attack was forced to
+  // range.legal:false and hit was always false. Adjacent stalkers must attack.
+  it('adjacent stalker emits attack, not a stand-off move', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('stalker', 1, cursor, enemiesData);
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 1, y: 0 } };
+    const action = enemyAI(enemy, mockCombatState([enemy, target]), cursor);
+    expect(action).toEqual({ type: 'attack', actorId: enemy.id, targetId: 'p1' });
+  });
+});
+
+describe('enemyAI — flank preference (deterministic path emission)', () => {
+  // A melee enemy with a target within MOVE_RANGE+1 tries flankStepCandidates first: an
+  // opposite-side ally + the moving enemy's future position = flanked target. The path
+  // returned must be legal, deterministic, and end at a cell that isFlanked(target)==true.
+  function windowWithWalls() {
+    // 8x16 open combat window matching createStandardEncounter's fixed size.
+    const cells = Array.from({ length: 16 }, () => Array(8).fill(1));
+    return { originX: 0, originY: 0, width: 8, height: 16, cells };
+  }
+
+  function makeMock(actors, window, round = 1) {
+    const combatants = new Map();
+    for (const a of actors) combatants.set(a.id, a);
+    return { combatants, round, window, turnOrder: actors.map(a => a.id) };
+  }
+
+  it('flanks with an existing side-mate on the opposite side', () => {
+    const cursor = createRNGCursorForRun(1);
+    const window = windowWithWalls();
+    const attacker = { id: 'atk', side: 'enemy', hp: 30, hpMax: 30, behavior: 'aggressive',
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 }, position: { x: 5, y: 3 },
+      retreats: false, moveAvailable: true };
+    const ally = { id: 'ally', side: 'enemy', hp: 30, hpMax: 30, position: { x: 2, y: 3 } };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 3, y: 3 } };
+    const state = makeMock([attacker, ally, target], window);
+    const action = enemyAI(attacker, state, cursor);
+    expect(action.type).toBe('move');
+    expect(Array.isArray(action.path)).toBe(true);
+    // Walking the path from (5,3) must land on a cell that flanks the target with the ally.
+    const DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+    let final = { x: 5, y: 3 };
+    for (const dir of action.path) final = { x: final.x + DELTAS[dir][0], y: final.y + DELTAS[dir][1] };
+    // Landing cell is adjacent to target and opposite the ally (ally at (2,3), target at (3,3)
+    // → opposite adjacent is (4,3)).
+    expect(final).toEqual({ x: 4, y: 3 });
+  });
+
+  it('two identical AI calls emit byte-identical flank paths (determinism)', () => {
+    const window = windowWithWalls();
+    const build = () => {
+      const attacker = { id: 'atk', side: 'enemy', hp: 30, hpMax: 30, behavior: 'aggressive',
+        attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 }, position: { x: 5, y: 3 },
+        retreats: false, moveAvailable: true };
+      const ally = { id: 'ally', side: 'enemy', hp: 30, hpMax: 30, position: { x: 2, y: 3 } };
+      const target = { id: 'p1', side: 'party', hp: 30, position: { x: 3, y: 3 } };
+      return { attacker, state: makeMock([attacker, ally, target], window) };
+    };
+    const a = build();
+    const b = build();
+    const cursorA = createRNGCursorForRun(1);
+    const cursorB = createRNGCursorForRun(1);
+    const actionA = enemyAI(a.attacker, a.state, cursorA);
+    const actionB = enemyAI(b.attacker, b.state, cursorB);
+    expect(actionA).toEqual(actionB);
   });
 });
 

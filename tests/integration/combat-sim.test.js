@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { initiateCombat, executeAction, resolveTurn, checkCombatEnd } from '../../src/rules/combat.js';
 import { createEnemy } from '../../src/rules/enemies.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
-import { makeCharacter, makeParty } from '../helpers/fixtures.js';
+import { makeCharacter, makeParty, makeWeapon } from '../helpers/fixtures.js';
 import { deriveStats } from '../../src/rules/attributes.js';
 import { loadData } from '../helpers/data.js';
+import { openCombatWindow } from '../helpers/grids.js';
 
 const protocolsData = loadData('protocols');
 const conditionsData = loadData('conditions');
@@ -143,6 +144,98 @@ describe('combat simulation — determinism', () => {
     const r2 = simulate(mkParty(), mkEnemies(), seed, baseContext);
     expect(r1.state.log).toEqual(r2.state.log);
     expect(r1.state.result).toBe(r2.state.result);
+  });
+});
+
+describe('combat simulation — closed-loop 4v4 on a walled window (SESSION-01 hunt/engage-range fix)', () => {
+  // Party in the top band, enemies in the bottom band, an interior wall column with a gap
+  // forces enemies to route rather than wedge greedily. FR-43 mandates that every enemy
+  // either damages a party member, retreats, or explicitly waits — never silently loses
+  // its turn to a broken pathing wedge.
+  function wallColumnWindow() {
+    const window = openCombatWindow(); // 8x16 open
+    // Wall x=3 from y=4..12 with a gap at y=8 so BFS can pass through.
+    for (let y = 4; y <= 12; y++) window.cells[y][3] = 0;
+    window.cells[8][3] = 1;
+    return window;
+  }
+
+  function build4v4(seed) {
+    const cursor = createRNGCursorForRun(seed);
+    const partyPositions = [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 5, y: 1 }, { x: 6, y: 1 }];
+    const party = partyPositions.map((pos, i) => makeFighter(`p${i + 1}`, { position: pos, hp: 60, hpMax: 60 }));
+    const enemyPositions = [{ x: 1, y: 14 }, { x: 2, y: 14 }, { x: 5, y: 14 }, { x: 6, y: 14 }];
+    const enemies = [
+      { arch: 'drone', pos: enemyPositions[0] },
+      { arch: 'warden', pos: enemyPositions[1] },
+      { arch: 'stalker', pos: enemyPositions[2] },
+      { arch: 'null', pos: enemyPositions[3] },
+    ].map(({ arch, pos }) => {
+      const e = createEnemy(arch, 2, cursor, enemiesData, { position: pos });
+      return e;
+    });
+    return { party, enemies };
+  }
+
+  function runWalled(seed, maxRounds = 6) {
+    const { party, enemies } = build4v4(seed);
+    const window = wallColumnWindow();
+    const cursor = createRNGCursorForRun(seed);
+    const state = initiateCombat(party, enemies, cursor);
+    state.window = window;
+    // Fresh combatants (from initiateCombat) still need the positions we set up.
+    for (const src of [...party, ...enemies]) {
+      const actor = state.combatants.get(src.id);
+      if (actor && src.position) actor.position = { ...src.position };
+    }
+    let turns = 0;
+    const cap = maxRounds * state.turnOrder.length + 8;
+    while (!state.ended && turns++ < cap) {
+      const end = resolveTurn(state, cursor, baseContext);
+      if (end.ended) break;
+      const actorId = state.turnOrder[state.currentTurn];
+      const actor = state.combatants.get(actorId);
+      if (actor?.side === 'party' && actor.hp > 0 && actor.ap > 0) {
+        const enemiesLive = [...state.combatants.values()].filter(c => c.side === 'enemy' && c.hp > 0);
+        if (enemiesLive.length === 0) break;
+        const action = { type: 'attack', actorId: actor.id, targetId: enemiesLive[0].id };
+        const r = executeAction(state, action, cursor, baseContext);
+        if (!r.success) actor.ap = 0;
+      }
+    }
+    return state;
+  }
+
+  it('within 6 rounds, every enemy either damages a party member OR logs retreat/wait — no silent stalls', () => {
+    const state = runWalled(7);
+    const perEnemyProof = new Map();
+    for (const [id, actor] of state.combatants) {
+      if (actor.side !== 'enemy') continue;
+      perEnemyProof.set(id, false);
+    }
+    for (const entry of state.log) {
+      if (entry.type === 'attack' && entry.hit && perEnemyProof.has(entry.actorId)) {
+        // Attacker landed a hit on a party member.
+        const target = state.combatants.get(entry.targetId);
+        if (target?.side === 'party') perEnemyProof.set(entry.actorId, true);
+      }
+      if (entry.type === 'condition' && entry.applied && perEnemyProof.has(entry.actorId)) {
+        perEnemyProof.set(entry.actorId, true);
+      }
+      if ((entry.type === 'retreat' || entry.type === 'wait') && perEnemyProof.has(entry.actorId)) {
+        perEnemyProof.set(entry.actorId, true);
+      }
+    }
+    for (const [id, proved] of perEnemyProof) {
+      expect(proved, `enemy ${id} did nothing visible in 6 rounds`).toBe(true);
+    }
+  });
+
+  it('same seed → byte-identical combat logs (determinism preserved through BFS pathing)', () => {
+    const a = runWalled(11);
+    const b = runWalled(11);
+    expect(a.log).toEqual(b.log);
+    expect(a.result).toBe(b.result);
   });
 });
 
