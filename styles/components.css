@@ -800,6 +800,11 @@ input[type="range"]::-moz-range-thumb {
   font-family: 'DESCENT SIGIL';
 }
 
+.creature-sigil.sigil-role-enemy {
+  color: var(--sigil-enemy);
+  text-shadow: 0 0 8px var(--sigil-enemy);
+}
+
 .sigil-placeholder.large {
   width: 56px;
   height: 56px;
