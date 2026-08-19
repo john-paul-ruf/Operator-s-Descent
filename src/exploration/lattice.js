@@ -33,8 +33,11 @@ export function createLattice(floor, savedDiff = null) {
     partyPos = findFirstOpenCell(grid, width, height) || { ...entryPoint };
   }
 
-  const openedContainers = savedDiff?.openedContainers ?? 0n;
-  const defeatedEnemies = savedDiff?.defeatedEnemies ?? 0n;
+  // openedContainers / defeatedEnemies are read LIVE from savedDiff on every
+  // call. Callers (exploration.js, combat.js) pass runState itself, which is
+  // mutated in-place by markContainerOpened / markEnemyDefeated. Snapshotting
+  // the BigInts here would freeze the map at createLattice() time and leave
+  // opened containers rendering forever.
 
   // Session-scoped overlays populated by movement.stepHunters + movement.pruneEmptyCaches.
   // NOT persisted to the save (Custom Rule 13 requires a schema bump to persist hunter
@@ -45,11 +48,13 @@ export function createLattice(floor, savedDiff = null) {
   const culledEnemies = new Set(); // spawn.id values
 
   function isContainerOpened(id) {
-    return (openedContainers & (1n << BigInt(id))) !== 0n;
+    const opened = savedDiff?.openedContainers ?? 0n;
+    return (opened & (1n << BigInt(id))) !== 0n;
   }
 
   function isEnemyDefeated(id) {
-    return (defeatedEnemies & (1n << BigInt(id))) !== 0n;
+    const defeated = savedDiff?.defeatedEnemies ?? 0n;
+    return (defeated & (1n << BigInt(id))) !== 0n;
   }
 
   function setHunterPosition(id, position) {

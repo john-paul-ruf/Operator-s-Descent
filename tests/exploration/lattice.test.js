@@ -106,6 +106,46 @@ describe('createLattice — saved diff restoration', () => {
     expect(lat.isEnemyDefeated(0)).toBe(false);
     expect(lat.isEnemyDefeated(1)).toBe(true);
   });
+
+  // Regression (ui-clarity-polish HOTFIX-03): opened containers used to be
+  // snapshotted at createLattice() time, so mutating runState.openedContainers
+  // after construction left opened containers rendering on the map forever.
+  // The map (playfield.getActiveContainers) MUST reflect the live runState
+  // without re-creating the lattice.
+  it('getActiveContainers reflects savedDiff.openedContainers mutations without re-invoking createLattice', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const runState = { openedContainers: 0n, defeatedEnemies: 0n };
+    const lat = createLattice({
+      cells: grid,
+      containers: [{ id: 0, x: 3, y: 3 }, { id: 1, x: 5, y: 5 }]
+    }, runState);
+    expect(lat.getActiveContainers().length).toBe(2);
+    expect(lat.isContainerOpened(0)).toBe(false);
+    // Simulate the loot flow: runState is mutated in place.
+    runState.openedContainers |= 1n << 0n;
+    const active = lat.getActiveContainers();
+    expect(active.length).toBe(1);
+    expect(active[0].id).toBe(1);
+    expect(lat.isContainerOpened(0)).toBe(true);
+  });
+
+  it('getActiveEnemySpawns reflects savedDiff.defeatedEnemies mutations without re-invoking createLattice', () => {
+    const grid = makeGrid(20, 32, 0);
+    carve(grid, 1, 0, 18, 30, 1);
+    const runState = { openedContainers: 0n, defeatedEnemies: 0n };
+    const lat = createLattice({
+      cells: grid,
+      enemySpawns: [{ id: 0, x: 3, y: 3 }, { id: 1, x: 5, y: 5 }]
+    }, runState);
+    expect(lat.getActiveEnemySpawns().length).toBe(2);
+    expect(lat.isEnemyDefeated(1)).toBe(false);
+    runState.defeatedEnemies |= 1n << 1n;
+    const active = lat.getActiveEnemySpawns();
+    expect(active.length).toBe(1);
+    expect(active[0].id).toBe(0);
+    expect(lat.isEnemyDefeated(1)).toBe(true);
+  });
 });
 
 describe('createLattice — getCell', () => {
