@@ -179,25 +179,54 @@ function createMeter(textValue, current, max, className) {
   return container;
 }
 
-export function createRarityTag(rarity) {
+export function createRarityTag(rarity, opts = {}) {
+  const color = RARITY_COLORS[rarity] || RARITY_COLORS.Stock;
+  if (opts && opts.manualLink) {
+    const link = createManualLink(
+      opts.manualLink.target ?? `rarity_${String(rarity).toLowerCase()}`,
+      { label: String(rarity), source: opts.manualLink.source, dispatch: opts.manualLink.dispatch }
+    );
+    link.classList.add('rarity-tag');
+    link.style.color = color;
+    return link;
+  }
   const tag = document.createElement('span');
   tag.className = 'rarity-tag';
   tag.textContent = rarity;
-  tag.style.color = RARITY_COLORS[rarity] || RARITY_COLORS.Stock;
+  tag.style.color = color;
   return tag;
 }
 
-export function createAffixTag(affix, isMajor) {
+export function createAffixTag(affix, isMajor, opts = {}) {
+  const text = affix.name || affix.id || '';
+  if (opts && opts.manualLink) {
+    const link = createManualLink(
+      opts.manualLink.target ?? 'affixes',
+      { label: text, source: opts.manualLink.source, dispatch: opts.manualLink.dispatch }
+    );
+    link.classList.add('affix-tag');
+    if (isMajor) link.classList.add('affix-major');
+    return link;
+  }
   const tag = document.createElement('span');
   tag.className = `affix-tag${isMajor ? ' affix-major' : ''}`;
-  tag.textContent = affix.name || affix.id || '';
+  tag.textContent = text;
   return tag;
 }
 
-export function createConditionTag(conditionId, duration) {
+export function createConditionTag(conditionId, duration, opts = {}) {
+  const text = duration != null ? `${conditionId} (${duration})` : String(conditionId);
+  if (opts && opts.manualLink) {
+    const link = createManualLink(
+      opts.manualLink.target ?? conditionId,
+      { label: text, source: opts.manualLink.source, dispatch: opts.manualLink.dispatch }
+    );
+    link.classList.add('condition-tag', `cond-${conditionId}`);
+    return link;
+  }
   const tag = document.createElement('span');
   tag.className = `condition-tag cond-${conditionId}`;
-  tag.textContent = duration != null ? `${conditionId} (${duration})` : conditionId;
+  tag.textContent = text;
   return tag;
 }
 

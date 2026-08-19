@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createButton, createChargeBar, createEquipmentCard, createHPBar, createManualLink, createProtocolCard, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
+import { createAffixTag, createButton, createChargeBar, createConditionTag, createEquipmentCard, createHPBar, createManualLink, createProtocolCard, createRarityTag, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -280,6 +280,116 @@ describe('semantic components', () => {
       const link = createManualLink(null, { variant: 'chip', dispatch: () => {} });
       link.cleanup?.();
     }).not.toThrow();
+  });
+
+  test('createConditionTag without opts renders the byte-identical plain span', () => {
+    const tag = createConditionTag('burning', 3);
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag.className).toBe('condition-tag cond-burning');
+    expect(tag.textContent).toBe('burning (3)');
+
+    const noDuration = createConditionTag('jammed');
+    expect(noDuration.tagName).toBe('SPAN');
+    expect(noDuration.className).toBe('condition-tag cond-jammed');
+    expect(noDuration.textContent).toBe('jammed');
+  });
+
+  test('createConditionTag with opts.manualLink returns a dispatching button and keeps existing classes', () => {
+    const dispatched = [];
+    const tag = createConditionTag('burning', 3, {
+      manualLink: { source: 'party', dispatch: (event, payload) => dispatched.push([event, payload]) }
+    });
+    expect(tag.tagName).toBe('BUTTON');
+    expect(tag.type).toBe('button');
+    expect(tag.classList.values.has('condition-tag')).toBe(true);
+    expect(tag.classList.values.has('cond-burning')).toBe(true);
+    expect(tag.classList.values.has('manual-term-link')).toBe(true);
+    expect(tag.classList.values.has('is-interactive')).toBe(true);
+    expect(tag.textContent).toBe('burning (3)');
+    expect(tag.dataset.testid).toBe('manual-link-burning');
+    expect(tag.getAttribute('data-manual-target')).toBe('burning');
+    tag.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'burning', source: 'party' }]]);
+  });
+
+  test('createRarityTag without opts renders the byte-identical plain span', () => {
+    const tag = createRarityTag('Tuned');
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag.className).toBe('rarity-tag');
+    expect(tag.textContent).toBe('Tuned');
+    expect(tag.style.color).toBe('#2ed4c1');
+  });
+
+  test('createRarityTag with opts.manualLink defaults its target to rarity_<lower> and preserves the color style', () => {
+    const dispatched = [];
+    const tag = createRarityTag('Custom', {
+      manualLink: { source: 'loot', dispatch: (event, payload) => dispatched.push([event, payload]) }
+    });
+    expect(tag.tagName).toBe('BUTTON');
+    expect(tag.classList.values.has('rarity-tag')).toBe(true);
+    expect(tag.classList.values.has('manual-term-link')).toBe(true);
+    expect(tag.textContent).toBe('Custom');
+    expect(tag.style.color).toBe('#e8c63a');
+    expect(tag.dataset.testid).toBe('manual-link-rarity_custom');
+    tag.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'rarity_custom', source: 'loot' }]]);
+  });
+
+  test('createAffixTag without opts renders the byte-identical plain span', () => {
+    const minor = createAffixTag({ id: 'sharp', name: 'Sharp' }, false);
+    expect(minor.tagName).toBe('SPAN');
+    expect(minor.className).toBe('affix-tag');
+    expect(minor.textContent).toBe('Sharp');
+
+    const major = createAffixTag({ id: 'lucky', name: 'Lucky' }, true);
+    expect(major.tagName).toBe('SPAN');
+    expect(major.className).toBe('affix-tag affix-major');
+  });
+
+  test('createAffixTag with opts.manualLink defaults its target to "affixes" and preserves major class', () => {
+    const dispatched = [];
+    const tag = createAffixTag({ id: 'lucky', name: 'Lucky' }, true, {
+      manualLink: { source: 'gear', dispatch: (event, payload) => dispatched.push([event, payload]) }
+    });
+    expect(tag.tagName).toBe('BUTTON');
+    expect(tag.classList.values.has('affix-tag')).toBe(true);
+    expect(tag.classList.values.has('affix-major')).toBe(true);
+    expect(tag.classList.values.has('manual-term-link')).toBe(true);
+    expect(tag.dataset.testid).toBe('manual-link-affixes');
+    tag.dispatch('click');
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'affixes', source: 'gear' }]]);
+  });
+
+  test('nested-interactive rule: equipment cards embed only <span> tags — no manual link inside the button host', () => {
+    const equipCard = createEquipmentCard(
+      {
+        id: 'sidearm-1',
+        name: 'Sidearm',
+        rarity: 'Tuned',
+        affixes: [{ id: 'sharp', name: 'Sharp', category: 'minor' }, { id: 'lucky', name: 'Lucky', category: 'major' }]
+      },
+      { onClick: () => {} }
+    );
+    expect(equipCard.tagName).toBe('BUTTON');
+    for (const child of equipCard.children) {
+      expect(child.tagName).not.toBe('BUTTON');
+    }
+    const rarity = equipCard.children.find((child) => child.className === 'rarity-tag');
+    expect(rarity?.tagName).toBe('SPAN');
+    const affixes = equipCard.children.filter((child) => String(child.className).includes('affix-tag'));
+    expect(affixes.length).toBe(2);
+    for (const affix of affixes) expect(affix.tagName).toBe('SPAN');
+  });
+
+  test('nested-interactive rule: protocol cards embed only <span>/<div> tags — no manual link inside the button host', () => {
+    const protocolCard = createProtocolCard(
+      { id: 'purge', name: 'PURGE', school: 'disrupt', chargeCost: 2 },
+      { onClick: () => {} }
+    );
+    expect(protocolCard.tagName).toBe('BUTTON');
+    for (const child of protocolCard.children) {
+      expect(child.tagName).not.toBe('BUTTON');
+    }
   });
 
   test('disabled controls carry aria-disabled and .is-interactive simultaneously', () => {
