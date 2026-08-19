@@ -2078,3 +2078,33 @@ the release-budget gate passes:
 
 Nothing new from SESSION-02 — the fork touches existing shipped files only,
 no new source under `src/**`.
+
+<!-- SESSION-01 enemy-ai-and-initiative -->
+### M24 Combat Rules — BFS pathing + flank primitives (SESSION-01, enemy-ai-and-initiative)
+
+**New public exports in `src/rules/combat-geometry.js`** (BFS + flank primitives shared by
+the AI decision layer and any future consumer that needs deterministic movement search):
+
+- `findApproachPath(window, isOccupied, from, targetPos, desiredRange)` — BFS shortest path
+  to the nearest cell within Chebyshev `desiredRange` of `targetPos`. Uses the same
+  walls / diagonal-corner-rule / occupancy checks as the movement engine; ties broken by a
+  fixed direction order (`n, ne, e, se, s, sw, w, nw`) to preserve FR-43's
+  "identical AI behavior from a loaded save" guarantee. Bounded by `window.width *
+  window.height` expansions. `isOccupied(x, y)` is a caller-supplied predicate (typically a
+  closure over `cellOccupied` in `combat.js`, with the moving actor excluded). Returns an
+  ordered array of direction names (may exceed a single-turn move — callers truncate to
+  `MOVE_RANGE`), or `null` when the origin is already within range or no cell is reachable.
+  Consumes zero RNG.
+
+- `flankStepCandidates(window, isOccupied, target, allies)` — cells adjacent to `target` (all
+  eight neighbors) where placing the moving actor would satisfy `isFlanked(target,
+  [...allies, probe], window)`. `allies` is the moving actor's living side-mates (the moving
+  actor is excluded). Corner rule and occupancy predicate are respected. Returned in
+  NEIGHBOR_STEPS order for determinism. Empty array when no ally can complete a flank.
+
+**AI-facing contract change in `src/rules/combat.js`:** `pathToward` now delegates to
+`findApproachPath` — the exported signature and null-return contract are unchanged
+(`executeMove`'s `targetId` fallback still routes to `invalid-direction` on null), but
+enemies now route around walls instead of wedging at a local minimum. `resolveTurn` also
+pushes a synthetic `{ type: 'wait', actorId, reason }` log entry whenever an AI action
+fails, so a blocked enemy is visible in the LOG feed instead of silently losing its turn.
