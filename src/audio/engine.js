@@ -3,6 +3,8 @@ import { createPulse } from './pulse.js';
 import { createSparkle } from './sparkle.js';
 import { createLead } from './lead.js';
 import { createNoiseBed } from './noise-bed.js';
+import { createConductor } from './conductor.js';
+import { createEchoSend } from './chip.js';
 
 const LAYER_FACTORIES = {
   drone: createDrone,
@@ -15,6 +17,8 @@ const LAYER_FACTORIES = {
 export function createAudioEngine(initialAudioContext = null) {
   let audioContext = initialAudioContext;
   let masterGain = null;
+  let conductor = null;
+  let echo = null;
   const layerBuses = {};
   const layers = {};
   let started = false;
@@ -42,11 +46,14 @@ export function createAudioEngine(initialAudioContext = null) {
     masterGain = audioContext.createGain();
     masterGain.connect(audioContext.destination);
     applyMaster();
+    conductor = createConductor(audioContext);
+    echo = createEchoSend(audioContext);
+    echo.connect(masterGain);
     for (const [name, factory] of Object.entries(LAYER_FACTORIES)) {
       const bus = audioContext.createGain();
       bus.connect(masterGain);
       layerBuses[name] = bus;
-      layers[name] = factory(audioContext, bus);
+      layers[name] = factory(audioContext, bus, conductor, echo.input);
       layers[name].setVolume?.((pendingVolumes[name] ?? 75) / 100);
     }
   }
@@ -57,6 +64,7 @@ export function createAudioEngine(initialAudioContext = null) {
       if (!audioContext) return false;
       buildGraph();
       for (const layer of Object.values(layers)) layer.start?.();
+      conductor.start();
       started = true;
       return true;
     },
@@ -65,13 +73,17 @@ export function createAudioEngine(initialAudioContext = null) {
       return Promise.resolve();
     },
     stop() {
+      conductor?.stop?.();
       for (const layer of Object.values(layers)) layer.stop?.();
       for (const layer of Object.values(layers)) layer.destroy?.();
       for (const bus of Object.values(layerBuses)) bus.disconnect?.();
       masterGain?.disconnect?.();
+      echo?.disconnect?.();
       for (const key of Object.keys(layers)) delete layers[key];
       for (const key of Object.keys(layerBuses)) delete layerBuses[key];
       masterGain = null;
+      conductor = null;
+      echo = null;
       started = false;
     },
     destroy() {
@@ -106,9 +118,19 @@ export function createAudioEngine(initialAudioContext = null) {
       applyMaster();
     },
     updateState(gameState) {
+      conductor?.updateState?.(gameState || {});
       for (const layer of Object.values(layers)) layer.updateState?.(gameState || {});
     },
     isStarted() { return started; },
-    getGraphState() { return { started, muted, masterVolume, layers: Object.keys(layers), pendingVolumes: { ...pendingVolumes } }; }
+    getGraphState() {
+      return {
+        started,
+        muted,
+        masterVolume,
+        layers: Object.keys(layers),
+        pendingVolumes: { ...pendingVolumes },
+        conductor: conductor?.getState?.() ?? null
+      };
+    }
   };
 }

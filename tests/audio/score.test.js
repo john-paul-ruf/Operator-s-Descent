@@ -1,68 +1,64 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { FakeContext } from '../helpers/fake-audio.js';
 import { createAudioEngine } from '../../src/audio/engine.js';
 import { createDrone } from '../../src/audio/drone.js';
-import { createLead, generateLeadBar } from '../../src/audio/lead.js';
+import { createLead } from '../../src/audio/lead.js';
 import { createNoiseBed } from '../../src/audio/noise-bed.js';
 import { createPulse } from '../../src/audio/pulse.js';
 import { createSparkle } from '../../src/audio/sparkle.js';
 
-class Param {
-  constructor(value = 0) { this.value = value; this.events = []; }
-  setValueAtTime(value, time) { this.value = value; this.events.push(['set', value, time]); }
-  linearRampToValueAtTime(value, time) { this.value = value; this.events.push(['linear', value, time]); }
-  exponentialRampToValueAtTime(value, time) { this.value = value; this.events.push(['exp', value, time]); }
-  cancelScheduledValues(time) { this.events.push(['cancel', time]); }
+function makeFakeConductor() {
+  const subs = new Set();
+  return {
+    subs,
+    subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
+    start() {},
+    stop() {},
+    updateState() {},
+    getState() { return { tempo: 96, pos: { step: 0, beat: 0, bar: 0, barInPhrase: 0, phraseIndex: 0 }, intensity: 0, sparkle: 0, combat: false, audioMode: 'cold-ambient', phraseKey: null, ledgerSize: 0 }; }
+  };
 }
 
-class Node {
-  constructor(type) {
-    this.type = type;
-    this.connections = [];
-    this.started = [];
-    this.stopped = [];
-    this.gain = new Param(1);
-    this.frequency = new Param(440);
-    this.detune = new Param(0);
-    this.Q = new Param(0);
-  }
-  connect(dest) { this.connections.push(dest); return dest; }
-  disconnect() { this.disconnected = true; }
-  start(time = 0) { this.started.push(time); }
-  stop(time = 0) { this.stopped.push(time); }
+function emptyDrums() {
+  return { kick: new Array(16).fill(false), snare: new Array(16).fill(false), hat: new Array(16).fill(false) };
 }
 
-class FakeContext {
-  constructor() {
-    this.currentTime = 0;
-    this.sampleRate = 100;
-    this.destination = new Node('destination');
-    this.nodes = [];
-  }
-  make(type) { const node = new Node(type); this.nodes.push(node); return node; }
-  createGain() { return this.make('gain'); }
-  createOscillator() { return this.make('oscillator'); }
-  createBiquadFilter() { return this.make('filter'); }
-  createBufferSource() { return this.make('bufferSource'); }
-  createBuffer(channels, length) { return { channels, length, sampleRate: this.sampleRate, data: new Float32Array(length), getChannelData(index) { return this.data; } }; }
-  suspend() { this.suspended = true; return Promise.resolve(); }
+function makeTick(overrides = {}) {
+  return {
+    time: 0.05,
+    pos: { step: 0, beat: 0, bar: 0, barInPhrase: 0, phraseIndex: 0 },
+    tempo: 100,
+    secondsPerSixteenth: 0.15,
+    chord: { degree: 0, semis: [0, 4, 7] },
+    scale: [0, 2, 4, 5, 7, 9, 11],
+    rootFreq: 110,
+    intensity: 0.3,
+    sparkle: 0,
+    combat: false,
+    melody: new Array(16).fill(null),
+    drums: emptyDrums(),
+    ...overrides
+  };
 }
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('five layer audio score', () => {
-  test('engine owns one injected graph and cleans it up idempotently', () => {
+  test('engine owns one injected graph, wires the conductor, cleans up idempotently', () => {
     const ctx = new FakeContext();
     const engine = createAudioEngine(ctx);
 
     expect(engine.start()).toBe(true);
     expect(engine.start()).toBe(false);
     expect(engine.getGraphState().layers.sort()).toEqual(['drone', 'lead', 'noiseBed', 'pulse', 'sparkle']);
+    expect(engine.getGraphState().conductor).not.toBeNull();
     engine.applySettings({ masterMute: true, layerVolumes: { drone: 25, pulse: 0, sparkle: 50, lead: 75, noiseBed: 100 } });
     expect(engine.getGraphState().muted).toBe(true);
     engine.destroy();
     engine.destroy();
     expect(engine.isStarted()).toBe(false);
+    expect(engine.getGraphState().conductor).toBeNull();
     expect(ctx.nodes.some((node) => node.disconnected)).toBe(true);
   });
 
@@ -72,15 +68,24 @@ describe('five layer audio score', () => {
     expect(engine.isStarted()).toBe(false);
   });
 
-  test('drone maps theme and depth with a 1.2s retune glide', () => {
+  test('drone pad ramps to the new chord voicing on a step-0 chord change', () => {
     const ctx = new FakeContext();
-    const drone = createDrone(ctx, ctx.destination);
-    drone.start();
+    const conductor = makeFakeConductor();
+    const drone = createDrone(ctx, ctx.destination, conductor);
     drone.updateState({ theme: { audioMode: 'foundry-industrial' }, depth: 9 });
+    drone.start();
+    expect(drone.getState()).toMatchObject({ audioMode: 'foundry-industrial', depth: 9, oscillatorCount: 2 });
 
-    expect(drone.getState()).toMatchObject({ audioMode: 'foundry-industrial', depth: 9, oscillatorCount: 6 });
-    const oscillator = ctx.nodes.find((node) => node.frequency?.events?.some((event) => event[0] === 'linear' && event[2] === 1.2));
-    expect(oscillator).toBeTruthy();
+    for (const fn of conductor.subs) fn(makeTick({
+      chord: { degree: 3, semis: [3, 6, 10] },
+      rootFreq: 90
+    }));
+
+    const padOsc = ctx.nodes.find((node) =>
+      node.nodeKind === 'oscillator' && node.frequency?.events?.some((e) => e[0] === 'linear')
+    );
+    expect(padOsc).toBeTruthy();
+    drone.stop();
   });
 
   test('pulse and sparkle clamp proximity and transform density without game coupling', () => {
@@ -99,7 +104,8 @@ describe('five layer audio score', () => {
     sparkle.stop();
   });
 
-  test('lead bars are deterministic and avoid rolling ledger repeats', () => {
+  test('lead ledger stays unique and combat raises tempo', async () => {
+    const { generateLeadBar } = await import('../../src/audio/lead.js');
     const a = generateLeadBar({ worldSeed: 7, depth: 3, floorId: 'f1', barIndex: 2, audioMode: 'organic-green' });
     const b = generateLeadBar({ worldSeed: 7, depth: 3, floorId: 'f1', barIndex: 2, audioMode: 'organic-green' });
     expect(b).toEqual(a);
