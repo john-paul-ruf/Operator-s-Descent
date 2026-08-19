@@ -3,8 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, it, expect } from 'vitest';
 import { initCondenser } from '../../src/state/condense.js';
 import { decodeRun } from '../../src/state/save-decode.js';
-import { decodeRunPayload, encodeRunPayload } from '../../src/state/save-schema.js';
+import { encodeRunPayload } from '../../src/state/save-schema.js';
 import { readV3Payload } from '../../src/state/versions/read-v3.js';
+import { readV4Payload } from '../../src/state/versions/read-v4.js';
 import { loadData } from '../helpers/data.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 
@@ -19,25 +20,27 @@ function readCorpus(prefix) {
     .map((name) => ({ name, fragment: readFileSync(`${FIXTURES_DIR}${name}`, 'utf8').trim() }));
 }
 
-describe('frozen v3 reader parity', () => {
-  it('readV3Payload decodes a live-encoded v3 payload identically to decodeRunPayload', () => {
-    for (const seed of [1, 7, 42, 99]) {
-      const state = buildRealisticRun(seed, { depth: (seed % 20) + 1, inventoryItems: seed % 5, echoes: seed % 3 });
-      const payload = encodeRunPayload(state);
-      const live = decodeRunPayload(payload.bytes, payload.bitLength);
-      const frozen = readV3Payload(payload.bytes, payload.bitLength);
-      expect(frozen.worldSeed).toBe(live.worldSeed);
-      expect(frozen.tableVersion).toBe(live.tableVersion);
-      expect(frozen.runState.serialize()).toEqual(live.runState.serialize());
-    }
-  });
-
+// Live-encoder parity used to be tested here, but live now emits v4 and the
+// frozen v3 reader is pinned to schemaVersion 3 — the frozen-vs-live parity
+// question is a category error at this point. End-to-end coverage lives in
+// tests/state/save-migration-corpus.test.js, which drives every frozen reader
+// through real captured fragments. What survives here: the durable rejection
+// twin per frozen reader, guarding against silent schemaVersion drift.
+describe('frozen reader schema guards', () => {
   it('readV3Payload rejects a non-v3 schemaVersion with version_mismatch', () => {
     const state = buildRealisticRun(3, { depth: 4 });
     const payload = encodeRunPayload(state);
     const mutated = payload.bytes.slice();
     mutated[0] = 4;
     expect(() => readV3Payload(mutated, payload.bitLength)).toThrow('version_mismatch');
+  });
+
+  it('readV4Payload rejects a non-v4 schemaVersion with version_mismatch', () => {
+    const state = buildRealisticRun(3, { depth: 4 });
+    const payload = encodeRunPayload(state);
+    const mutated = payload.bytes.slice();
+    mutated[0] = 3;
+    expect(() => readV4Payload(mutated, payload.bitLength)).toThrow('version_mismatch');
   });
 });
 
