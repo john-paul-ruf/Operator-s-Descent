@@ -18,7 +18,7 @@
       min-height: 100vh;
     }
     .audition-root {
-      max-width: 640px;
+      max-width: 960px;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
@@ -67,6 +67,14 @@
       padding: 32px 0;
     }
     .start-gate[hidden] { display: none; }
+    .panels {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(320px, 2fr);
+      gap: 20px;
+    }
+    @media (max-width: 720px) {
+      .panels { grid-template-columns: 1fr; }
+    }
     .panel-card {
       background: var(--bg-panel);
       border: 1px solid var(--border-dim);
@@ -85,7 +93,7 @@
     }
     .control-row {
       display: grid;
-      grid-template-columns: 100px 1fr 48px;
+      grid-template-columns: 100px 1fr 64px;
       gap: 10px;
       align-items: center;
     }
@@ -100,16 +108,54 @@
       color: var(--accent);
       text-align: right;
       font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .control-row input[type="range"] {
       width: 100%;
       accent-color: var(--accent);
+    }
+    .control-row input[type="number"],
+    .control-row select {
+      width: 100%;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      border: 1px solid var(--border-dim);
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 2px;
     }
     .control-row input[type="checkbox"] {
       justify-self: start;
       width: 18px;
       height: 18px;
       accent-color: var(--accent);
+    }
+    .demo-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .demo-timer {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .readout {
+      background: #000;
+      border: 1px solid var(--border-dim);
+      border-radius: 4px;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 11px;
+      color: var(--heal);
+      max-height: 260px;
+      overflow: auto;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .controls[hidden] { display: none; }
     .rig-note {
@@ -130,8 +176,9 @@
 
     <p class="rig-note">
       Boots the real <code>createAudioEngine</code> against the pre-rewrite audio layers.
-      Master + five layer sliders route through <code>setMasterVolume</code>/<code>setLayerVolume</code>.
-      Game-state controls arrive in checkpoint&nbsp;2.
+      Master + five layer sliders route through <code>setMasterVolume</code>/<code>setLayerVolume</code>;
+      seed/theme/depth/proximity/combat controls fan out via <code>updateState</code> using the
+      exact payload shape <code>src/ui/screens/exploration.js</code> ships to <code>audio:update-state</code>.
     </p>
 
     <div class="start-gate" data-testid="start-gate">
@@ -139,43 +186,89 @@
     </div>
 
     <div class="controls" data-testid="controls" hidden>
-      <section class="panel-card" aria-label="Mixer">
-        <h2>Mixer</h2>
-        <div class="control-row">
-          <label for="master-volume">Master</label>
-          <input type="range" id="master-volume" min="0" max="100" step="1" value="100" />
-          <span class="value" data-value-for="master-volume">100</span>
-        </div>
-        <div class="control-row">
-          <label for="master-mute">Mute</label>
-          <input type="checkbox" id="master-mute" />
-          <span class="value" data-value-for="master-mute">off</span>
-        </div>
-        <div class="control-row">
-          <label for="layer-drone">Drone</label>
-          <input type="range" id="layer-drone" data-layer="drone" min="0" max="100" step="1" value="75" />
-          <span class="value" data-value-for="layer-drone">75</span>
-        </div>
-        <div class="control-row">
-          <label for="layer-pulse">Pulse</label>
-          <input type="range" id="layer-pulse" data-layer="pulse" min="0" max="100" step="1" value="75" />
-          <span class="value" data-value-for="layer-pulse">75</span>
-        </div>
-        <div class="control-row">
-          <label for="layer-sparkle">Sparkle</label>
-          <input type="range" id="layer-sparkle" data-layer="sparkle" min="0" max="100" step="1" value="75" />
-          <span class="value" data-value-for="layer-sparkle">75</span>
-        </div>
-        <div class="control-row">
-          <label for="layer-lead">Lead</label>
-          <input type="range" id="layer-lead" data-layer="lead" min="0" max="100" step="1" value="75" />
-          <span class="value" data-value-for="layer-lead">75</span>
-        </div>
-        <div class="control-row">
-          <label for="layer-noiseBed">Noise&nbsp;Bed</label>
-          <input type="range" id="layer-noiseBed" data-layer="noiseBed" min="0" max="100" step="1" value="75" />
-          <span class="value" data-value-for="layer-noiseBed">75</span>
-        </div>
+      <div class="panels">
+        <section class="panel-card" aria-label="Mixer">
+          <h2>Mixer</h2>
+          <div class="control-row">
+            <label for="master-volume">Master</label>
+            <input type="range" id="master-volume" min="0" max="100" step="1" value="100" />
+            <span class="value" data-value-for="master-volume">100</span>
+          </div>
+          <div class="control-row">
+            <label for="master-mute">Mute</label>
+            <input type="checkbox" id="master-mute" />
+            <span class="value" data-value-for="master-mute">off</span>
+          </div>
+          <div class="control-row">
+            <label for="layer-drone">Drone</label>
+            <input type="range" id="layer-drone" data-layer="drone" min="0" max="100" step="1" value="75" />
+            <span class="value" data-value-for="layer-drone">75</span>
+          </div>
+          <div class="control-row">
+            <label for="layer-pulse">Pulse</label>
+            <input type="range" id="layer-pulse" data-layer="pulse" min="0" max="100" step="1" value="75" />
+            <span class="value" data-value-for="layer-pulse">75</span>
+          </div>
+          <div class="control-row">
+            <label for="layer-sparkle">Sparkle</label>
+            <input type="range" id="layer-sparkle" data-layer="sparkle" min="0" max="100" step="1" value="75" />
+            <span class="value" data-value-for="layer-sparkle">75</span>
+          </div>
+          <div class="control-row">
+            <label for="layer-lead">Lead</label>
+            <input type="range" id="layer-lead" data-layer="lead" min="0" max="100" step="1" value="75" />
+            <span class="value" data-value-for="layer-lead">75</span>
+          </div>
+          <div class="control-row">
+            <label for="layer-noiseBed">Noise&nbsp;Bed</label>
+            <input type="range" id="layer-noiseBed" data-layer="noiseBed" min="0" max="100" step="1" value="75" />
+            <span class="value" data-value-for="layer-noiseBed">75</span>
+          </div>
+        </section>
+
+        <section class="panel-card" aria-label="Game state">
+          <h2>Game State</h2>
+          <div class="control-row">
+            <label for="seed">Seed</label>
+            <input type="number" id="seed" min="0" step="1" value="7" />
+            <span class="value" data-value-for="seed">7</span>
+          </div>
+          <div class="control-row">
+            <label for="theme">Theme</label>
+            <select id="theme"></select>
+            <span class="value" data-value-for="theme">—</span>
+          </div>
+          <div class="control-row">
+            <label for="depth">Depth</label>
+            <input type="range" id="depth" min="1" max="30" step="1" value="1" />
+            <span class="value" data-value-for="depth">1</span>
+          </div>
+          <div class="control-row">
+            <label for="hostile-dist">Hostile</label>
+            <input type="range" id="hostile-dist" min="0" max="10" step="1" value="10" />
+            <span class="value" data-value-for="hostile-dist">10</span>
+          </div>
+          <div class="control-row">
+            <label for="container-dist">Container</label>
+            <input type="range" id="container-dist" min="0" max="10" step="1" value="10" />
+            <span class="value" data-value-for="container-dist">10</span>
+          </div>
+          <div class="control-row">
+            <label for="combat">Combat</label>
+            <input type="checkbox" id="combat" />
+            <span class="value" data-value-for="combat">off</span>
+          </div>
+
+          <div class="demo-row">
+            <button class="btn-crt" type="button" data-testid="descend-demo">DESCEND DEMO (60s)</button>
+            <span class="demo-timer" data-testid="demo-timer">idle</span>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel-card" aria-label="Graph state">
+        <h2>engine.getGraphState()</h2>
+        <pre class="readout" data-testid="graph-readout">—</pre>
       </section>
     </div>
   </div>
