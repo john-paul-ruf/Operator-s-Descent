@@ -25,45 +25,53 @@ import { encodeRun } from '../../src/state/save-encode.js';
 import { listMigrations } from '../../src/state/save-migrate.js';
 import { RUN_SCHEMA_VERSION } from '../../src/state/save-schema.js';
 import { V3_SCHEMA_VERSION } from '../../src/state/versions/read-v3.js';
+import { V4_SCHEMA_VERSION } from '../../src/state/versions/read-v4.js';
 import { validateRunState } from '../../src/state/run-state.js';
 import { loadData } from '../helpers/data.js';
 
-const CORPUS_DIR = fileURLToPath(new URL('../fixtures/saves/v3/', import.meta.url));
+const CORPUS_ROOT = fileURLToPath(new URL('../fixtures/saves/', import.meta.url));
+const CORPUS_DIRS = [
+  { label: 'v3', dir: 'v3/' },
+  { label: 'v4', dir: 'v4/' }
+];
 const BUDGET = 1500;
 const OLDEST_SUPPORTED_SCHEMA = V3_SCHEMA_VERSION;
 
 beforeAll(() => initCondenser(loadData('symbol-table')));
 
-function readCorpus() {
-  return readdirSync(CORPUS_DIR)
+function readCorpus(dir) {
+  const path = `${CORPUS_ROOT}${dir}`;
+  return readdirSync(path)
     .filter((name) => name.endsWith('.txt'))
     .sort()
-    .map((name) => ({ name, fragment: readFileSync(`${CORPUS_DIR}${name}`, 'utf8').trim() }));
+    .map((name) => ({ name, fragment: readFileSync(`${path}${name}`, 'utf8').trim() }));
 }
 
-describe('golden v3 corpus (Custom Rule 13)', () => {
-  const corpus = readCorpus();
+for (const { label, dir } of CORPUS_DIRS) {
+  describe(`golden ${label} corpus (Custom Rule 13)`, () => {
+    const corpus = readCorpus(dir);
 
-  it('captures at least five representative v3 fixtures', () => {
-    expect(corpus.length).toBeGreaterThanOrEqual(5);
+    it(`captures at least five representative ${label} fixtures`, () => {
+      expect(corpus.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it.each(corpus.map(({ name, fragment }) => [name, fragment]))(
+      '%s decodes → validates → re-encodes under the 1500-char URL budget',
+      (_name, fragment) => {
+        const decoded = decodeRun(fragment);
+        expect(decoded.success).toBe(true);
+        expect(decoded.mode).not.toBe('seed');
+        expect(decoded.runState).toBeTruthy();
+        expect(validateRunState(decoded.runState.serialize()).valid).toBe(true);
+        expect(decoded.runState.party.length).toBeGreaterThan(0);
+        expect(decoded.runState.party.some((character) => (character.currentHP ?? character.hp ?? 0) > 0)).toBe(true);
+        const reencoded = encodeRun(decoded.runState);
+        expect(reencoded.success).toBe(true);
+        expect(reencoded.length).toBeLessThan(BUDGET);
+      }
+    );
   });
-
-  it.each(corpus.map(({ name, fragment }) => [name, fragment]))(
-    '%s decodes → validates → re-encodes under the 1500-char URL budget',
-    (_name, fragment) => {
-      const decoded = decodeRun(fragment);
-      expect(decoded.success).toBe(true);
-      expect(decoded.mode).not.toBe('seed');
-      expect(decoded.runState).toBeTruthy();
-      expect(validateRunState(decoded.runState.serialize()).valid).toBe(true);
-      expect(decoded.runState.party.length).toBeGreaterThan(0);
-      expect(decoded.runState.party.some((character) => (character.currentHP ?? character.hp ?? 0) > 0)).toBe(true);
-      const reencoded = encodeRun(decoded.runState);
-      expect(reencoded.success).toBe(true);
-      expect(reencoded.length).toBeLessThan(BUDGET);
-    }
-  );
-});
+}
 
 describe('migration chain completeness (Custom Rule 13)', () => {
   it('registers a contiguous chain from the oldest supported schemaVersion to RUN_SCHEMA_VERSION', () => {
@@ -78,7 +86,7 @@ describe('migration chain completeness (Custom Rule 13)', () => {
     // Duplicates the (1)-style check above for the specific frozen readers we
     // ship. If a future session adds a v4 frozen reader without a v4 → v5 step,
     // this test blocks the merge.
-    const frozenVersions = [V3_SCHEMA_VERSION];
+    const frozenVersions = [V3_SCHEMA_VERSION, V4_SCHEMA_VERSION];
     const steps = listMigrations();
     const byFrom = new Map(steps.map((step) => [step.from, step.to]));
     for (const start of frozenVersions) {
