@@ -112,6 +112,23 @@ describe('status strip', () => {
     expect(findByClass(strip, 'init-rail').children).toHaveLength(2);
     expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');
   });
+
+  test('marks enemy initiative slots with the enemy class and stacks it with active', () => {
+    const combatants = new Map([
+      ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }],
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 0, maxCHARGE: 6, ap: 2, moveAvailable: true }],
+      ['e2', { id: 'e2', side: 'enemy', sigilCodepoint: 0xE031, hp: 4, hpMax: 4 }]
+    ]);
+    const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['e1', 'p1', 'e2'], currentTurn: 0, round: 1 });
+    const slots = findByClass(strip, 'init-rail').children;
+
+    expect(slots).toHaveLength(3);
+    expect(slots[0].classList.contains('enemy')).toBe(true);
+    expect(slots[0].classList.contains('active')).toBe(true);
+    expect(slots[1].classList.contains('enemy')).toBe(false);
+    expect(slots[2].classList.contains('enemy')).toBe(true);
+    expect(slots[2].classList.contains('active')).toBe(false);
+  });
 });
 
 describe('telemetry dock (wide)', () => {
@@ -192,5 +209,28 @@ describe('telemetry dock (wide)', () => {
     dock.cleanup();
     bus.dispatch('ui:log-entry', { sequence: 3, type: 'combat', message: 'Should not append' });
     expect(feed.children).toHaveLength(2);
+  });
+
+  test('marks wide telemetry enemy slots with the enemy class and stacks it with active', () => {
+    const combatants = new Map([
+      ['e1', { id: 'e1', name: 'Drone', side: 'enemy', sigilCodepoint: 0xE030, hp: 4, hpMax: 9 }],
+      ['p1', { id: 'p1', name: 'Breacher', side: 'party', sigilCodepoint: 0xE000, hp: 24, hpMax: 36, charge: 0, chargeMax: 9, ap: 2, moveAvailable: true }],
+      ['e2', { id: 'e2', name: 'Ghost', side: 'enemy', sigilCodepoint: 0xE031, hp: 3, hpMax: 6 }]
+    ]);
+    const combatState = { combatants, turnOrder: ['e1', 'p1', 'e2'], currentTurn: 0, round: 1 };
+    const runState = { depth: 7, worldSeed: 'A4F29C1E', dangerClockProgress: 0.32, corruption: 0.1, party: [] };
+    const dock = createTelemetryDock(runState, combatState);
+
+    const e1Slot = byTestId(dock, 'telemetry-init-e1');
+    const p1Slot = byTestId(dock, 'telemetry-init-p1');
+    const e2Slot = byTestId(dock, 'telemetry-init-e2');
+
+    expect(e1Slot.classList.contains('enemy')).toBe(true);
+    expect(e1Slot.classList.contains('active')).toBe(true);
+    expect(p1Slot.classList.contains('enemy')).toBe(false);
+    expect(p1Slot.classList.contains('active')).toBe(false);
+    expect(e2Slot.classList.contains('enemy')).toBe(true);
+    expect(e2Slot.classList.contains('active')).toBe(false);
+    dock.cleanup();
   });
 });
