@@ -969,7 +969,7 @@ export function mount(container, params = {}) {
     }
     const entry = playback.entries[playback.index++];
     dispatchLogEntry(entry);
-    logCursor = Math.max(logCursor, Math.min(combatState.log.length, logCursor + 1));
+    if (logCursor < combatState.log.length) logCursor++;
 
     if (!shouldPlayEntry(entry)) {
       // Party-side entries (OA attacks provoked by enemy moves) dispatch to the log feed but
@@ -1056,6 +1056,7 @@ export function mount(container, params = {}) {
     clearPlaybackTimer();
     while (playback.index < playback.entries.length) {
       dispatchLogEntry(playback.entries[playback.index++]);
+      if (logCursor < combatState.log.length) logCursor++;
     }
     finishPlayback();
   }
@@ -1189,8 +1190,17 @@ export function mount(container, params = {}) {
   return {
     unmount() {
       if (!mounted) return;
-      mounted = false;
+      // Flush any log entries still queued by an in-progress playback BEFORE tearing down —
+      // logCursor must end equal to combatState.log.length on every path so LOG mode stays whole.
+      // Runs before listeners detach so the telemetry feed still receives them.
       clearPlaybackTimer();
+      if (playback.active && playback.entries) {
+        while (playback.index < playback.entries.length) {
+          dispatchLogEntry(playback.entries[playback.index++]);
+        }
+      }
+      logCursor = combatState.log.length;
+      mounted = false;
       playback.active = false;
       playback.entries = null;
       playback.onComplete = null;

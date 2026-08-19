@@ -800,6 +800,33 @@ describe('combat screen controller', () => {
     }
   });
 
+  it('unmount mid-playback flushes remaining log entries so the LOG feed stays complete', async () => {
+    vi.useFakeTimers();
+    try {
+      const combat = combatState([
+        partyActor({ id: 'hero', hp: 1, hpMax: 30 }),
+        enemyActor({ id: 0, position: { x: 2, y: 1 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 40 }) })
+      ], ['hero', 0]);
+      const state = runState(1, [makeCharacter({ id: 'hero', hp: 1, hpMax: 30 })]);
+      const logEvents = [];
+      const off = bus.on('ui:log-entry', (payload) => logEvents.push(payload));
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      // At least one enemy log entry is now in combatState.log (attack, and probably death).
+      const totalEntries = combat.log.length;
+      expect(totalEntries).toBeGreaterThan(0);
+      // Unmount BEFORE the timer queue drains — remaining entries must still hit the bus.
+      controller.unmount();
+      const distinct = new Set(logEvents.map((e) => e.sequence));
+      expect(distinct.size).toBe(totalEntries);
+      off();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('log-entry bus events dispatch progressively during playback, then flush on completion', async () => {
     vi.useFakeTimers();
     try {
