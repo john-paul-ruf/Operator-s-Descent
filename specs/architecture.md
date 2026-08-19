@@ -2240,3 +2240,120 @@ The FORGE-CONFIG conventions line reads "Module IDs: M01–M103" — after this 
 **Follow-up (SESSION-04)**
 
 - **Full M75 retirement** — a follow-up session should own `src/ui/screens/tutorial.js` (delete), `service-worker.js` manifest (remove entry + cache bump), `scripts/design-scan/check-screen-inventory.js` (drop `tutorial.html` from `SCREEN_MAP`), `tests/tooling/check-screen-inventory.test.js` + `tests/tooling/scan-design-compliance.test.js` (regenerate fixtures), and `styles/wide.css` (drop `wide-tutorial-*` block once `mocks/tutorial.html` and `mocks/wide/tutorial.html` are also retired). SESSION-07's e2e sweep will already touch some of these tests.
+
+<!-- SESSION-01 (dynamic-chiptune, 2026-08-19 — appended by Jikijitsu) -->
+
+## M109 — Chip Voices (`src/audio/chip.js`)
+
+NES-constraint synth kit. Pure WebAudio, zero imports. Every helper is self-contained: it wires
+its own oscillator/gain/filter subgraph, schedules its own envelope, and lets the caller decide
+where the signal terminates via `dest`. All PeriodicWaves are cached per (context, duty) in a
+module-level `WeakMap` so repeated calls share nodes.
+
+### Exports
+
+- `dutyWave(ctx, duty) → PeriodicWave` — 32-harmonic pulse PeriodicWave with
+  `real[n] = 0`, `imag[n] = (2 / (n·π)) · sin(n·π·duty)` for n = 1..32. Cached.
+- `buildLFSRBuffer(ctx, { short = false } = {}) → AudioBuffer` — 15-bit LFSR (feedback
+  `bit0 ^ bit1` long / `bit0 ^ bit6` short), seed 1, one channel, `floor(sampleRate · 0.5)`
+  samples, values ±0.5. Deterministic; short and long modes differ.
+- `playNote(ctx, dest, { wave, time, freq, duration, velocity, decay = 0.9, vibrato = null, slideTo = null })` —
+  fire-and-forget voice. `wave` is `'pulse125' | 'pulse25' | 'pulse50'` (via `dutyWave`) or
+  `'triangle'` (native). Envelope: `setValueAtTime(0, time)` → linear ramp to `velocity` at
+  `time + 0.005` → exponential ramp to 0.001 at `time + duration · decay`. `slideTo` schedules a
+  linear frequency ramp; `vibrato = { rate, depth }` wires a sine LFO into `osc.frequency`.
+  `osc.start(time)` / `osc.stop(time + duration + 0.05)`.
+- `playKick(ctx, dest, { time, velocity })` — triangle with frequency exp-ramp 110 → 38 Hz over
+  0.09s and gain envelope over 0.12s.
+- `playSnare(ctx, dest, { time, velocity, noiseBuffer })` — 0.12s noise burst (buffer supplied by
+  caller, typically long-mode LFSR) plus a 0.06s 180 Hz triangle thump.
+- `playHat(ctx, dest, { time, velocity, shortBuffer })` — 0.03s short-mode noise burst through a
+  6 kHz highpass.
+- `createEchoSend(ctx, { delayTime = 0.27, feedback = 0.25, level = 0.18 } = {}) → { input, connect(dest), disconnect() }` —
+  shared feedback echo bus. Graph: `input → delay → lowpass(2200 Hz) → feedbackGain → delay`
+  (feedback loop), plus `delay → levelGain → dest`. Callers hand nodes into `input`; `connect`
+  attaches the wet tap to the master bus; `disconnect` tears everything down.
+
+## M110 — Conductor (`src/audio/conductor.js`)
+
+Single lookahead musical clock plus pure composers. Imports `hash` from `../core/hash.js` and
+nothing else. No `Math.random`, no `Date.now`, no DOM APIs.
+
+### Exports
+
+- `SCALES` — 12 audioMode → 7-degree scale arrays, verbatim mirror of `src/audio/lead.js` `MODES`.
+- `ROOTS` — 12 audioMode → semitone offset from A (110 Hz), as specified in the session prompt.
+- `chordFor(scale, degree) → { degree, semis: [root, third, fifth] }` — stacks scale degrees
+  d, d+2, d+4 with `+12` per octave wrap.
+- `progressionFor({ worldSeed, depth, floorId, phraseIndex, audioMode, avoid = [] }) → { key, chords[4] }` —
+  picks from DARK / BRIGHT pools using `darkness = min(depth, 30) / 30` as threshold on a
+  hash-derived roll. Skips entries whose key is in `avoid` (bumps perturb up to 24 times, then
+  falls through to a safe pool selection).
+- `melodyBar({ worldSeed, depth, floorId, phraseIndex, barInPhrase, chord, scale, intensity, perturb = 0 }) → Array<Slot | null>[16]` —
+  three rhythm-mask bands by intensity (`< 0.35 | < 0.7 | ≥ 0.7`), three masks each, hash-picks
+  one and flips up to 2 zero slots. Onsets at steps 0/4/8/12 draw from chord tones, others from
+  scale tones. When `barInPhrase ≥ 6`, the final onset's degree is forced to `chord.semis[0]`
+  (cadence). Each slot is `{ degree, octave (0|1), velocity, lengthSlots }` where
+  `lengthSlots = min(4, nextOnset - i)`.
+- `drumPattern({ tier, barInPhrase, h }) → { kick[16], snare[16], hat[16] }` (booleans) — tier 0
+  is a two-hit heartbeat kick, tier 1 adds hats and moves the second kick to step 8, tier 2 adds
+  a snare-on-8 and eighth-note hats, tier 3 hash-picks between two kick patterns with sixteenth
+  hats. `tier ≥ 2 && barInPhrase === 7` triggers a snare fill on [12..15]. Up to 2 hat slots are
+  toggled via `h`.
+- `directorTargets({ depth, proximity, combatActive, combatState }) → { intensity, sparkle, tempo, combat }` —
+  `danger = 1 - min(hostileDist ?? 10, 10) / 10`, `sparkle = 1 - min(containerDist ?? 10, 10) / 10`,
+  `floorBase = 0.15 + min(depth - 1, 30)/30 · 0.25`, `intensity = combat ? 1 : max(floorBase, danger · 0.9)`,
+  `tempo = clamp(round(92 + min(depth - 1, 30) + intensity · 26 + (combat ? 18 : 0)), 92, 176)`.
+- `createConductor(ctx) → { start(), stop(), subscribe(fn) → unsubscribe, updateState(gameState), getState() }` —
+  single `setInterval(25 ms)` lookahead scheduler with a 120 ms horizon. Every tick payload:
+
+  ```
+  {
+    time,                       // audio-context time of this 16th-note
+    pos: {                      // musical position
+      step: 0..15,              //   16th-note within the bar
+      beat,                     //   Math.floor(step / 4)
+      bar,                      //   absolute bar counter since start
+      barInPhrase: 0..7,        //   position within the 8-bar phrase
+      phraseIndex               //   absolute phrase counter since start (or last floor reset)
+    },
+    tempo,                      // BPM held constant across the bar (updates only at step === 0)
+    secondsPerSixteenth,        // (60 / tempo) / 4
+    chord,                      // { degree, semis: [root, third, fifth] } for this bar
+    scale,                      // SCALES[audioMode]
+    rootFreq,                   // 110 · 2^(ROOTS[audioMode]/12) · 2^(-floor(min(depth,24)/12))
+    intensity,                  // smoothed intensity in [0, 1] (attack 0.35, release 0.06)
+    sparkle,                    // smoothed sparkle in [0, 1] (same smoothing)
+    combat,                     // boolean (immediate)
+    melody,                     // Array<Slot|null>[16] for the current bar (carried every tick)
+    drums                       // { kick[16], snare[16], hat[16] } for the current bar
+  }
+  ```
+
+  Bar-quantized updates: `updateState` stages a pending snapshot; `active.worldSeed`,
+  `active.depth`, `active.floorId`, `active.audioMode`, and the bar-scoped `tempo` all apply at
+  the next `step === 0`. A changed `floorId` at that boundary resets `phraseIndex`,
+  `barInPhrase`, both no-repeat ledgers (progression cap 4, melody cap 64), and forces a fresh
+  `progressionFor` call. `intensity` and `sparkle` smooth per tick via
+  `v += (target - v) · (target > v ? 0.35 : 0.06)`. Subscriber callbacks are wrapped in
+  `try/catch` so an exception in one subscriber never stalls the clock or the others.
+
+### Determinism contract
+
+All composition is derived from `hash(worldSeed, depth, floorId, phraseIndex, …)`. Same
+`(worldSeed, depth, floorId)` under the same tick sequence produces byte-identical `pos`,
+`chord`, `melody`, and `drums` streams. This is enforced by a unit test that runs two
+conductors on two contexts with mirrored `currentTime` advances and asserts deep equality on
+the captured payload sequence.
+
+### Module Registry deltas
+
+| ID | Module | Path | Owns | Imports From | Key Files |
+|----|--------|------|------|-------------|-----------|
+| M109 | Chip Voices | `src/audio/chip.js` | Duty-cycle PeriodicWaves, 15-bit LFSR noise buffers, note/kick/snare/hat players, feedback-echo send bus | (none) | `chip.js` |
+| M110 | Conductor | `src/audio/conductor.js` | Single lookahead musical clock (25 ms / 120 ms), SCALES + ROOTS per audioMode, hash-generated progressions/melody bars/drum patterns, game-state director (intensity/sparkle/tempo), bar-quantized changes, no-repeat ledgers, deterministic per (worldSeed, depth, floorId) | M02 | `conductor.js` |
+
+### Dependency Flow addition
+
+`core (hash) → audio/conductor → (SESSION-02) audio/{drone,pulse,sparkle,lead,engine}`. `audio/chip`
+is a leaf helper module — imported by SESSION-02's layers, not by the conductor.
