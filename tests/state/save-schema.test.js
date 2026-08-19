@@ -17,7 +17,7 @@ function roundTrip(state) {
 
 describe('RunState v2 binary schema', () => {
   it('defines a fixed ordered schema and round-trips a property sweep', () => {
-    expect(RUN_SCHEMA_VERSION).toBe(4);
+    expect(RUN_SCHEMA_VERSION).toBe(5);
     expect(RUN_SCHEMA_FIELDS).toEqual([
       'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',
       'partyPosition', 'fogOfWar', 'openedContainers', 'defeatedEnemies', 'dangerClockProgress',

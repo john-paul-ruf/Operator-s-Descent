@@ -263,11 +263,15 @@ export function combatContext(harness) {
   };
 }
 
-export function startStandardCombat(harness, { archetypeId = 'drone', enemyCount = 1, enemyHP = 3, partyOverrides = [] } = {}) {
+export function startStandardCombat(harness, { archetypeId = 'drone', archetypes = null, enemyCount = 1, enemyHP = 3, partyOverrides = [] } = {}) {
+  const cycle = Array.isArray(archetypes) && archetypes.length > 0 ? archetypes : null;
   const enemies = Array.from({ length: enemyCount }, (_, index) => {
-    const enemy = createEnemy(archetypeId, harness.runState.depth, harness.cursor, harness.data.enemies);
-    enemy.hp = Math.min(enemy.hp, enemyHP + index);
-    enemy.hpMax = Math.max(enemy.hp, enemyHP + index);
+    const chosen = cycle ? cycle[index % cycle.length] : archetypeId;
+    const enemy = createEnemy(chosen, harness.runState.depth, harness.cursor, harness.data.enemies);
+    if (enemyHP !== 'natural') {
+      enemy.hp = Math.min(enemy.hp, enemyHP + index);
+      enemy.hpMax = Math.max(enemy.hp, enemyHP + index);
+    }
     return enemy;
   });
   const party = harness.runState.party.map((character, index) => combatActorFromCharacter(character, harness.data, partyOverrides[index] || {}));
