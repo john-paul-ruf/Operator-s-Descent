@@ -2215,3 +2215,28 @@ The FORGE-CONFIG conventions line reads "Module IDs: M01–M103" — after this 
 - **Data is lazy.** `getManualData()` is read on every `open()`, so the modal can be created before `gameData` is validated. If `manual` is null the view renders a `MANUAL DATA UNAVAILABLE` notice — no throw.
 - **Internal navigation does not round-trip the bus.** Links inside the modal (TOC entries, inline body links, see-also chips) receive a local `dispatch = (event, { target }) => showSection(target)` so navigating within the manual is a pure render.
 - **Testids landed (SESSION-04/05/06/07 build against these):** `manual-backdrop`, `manual-modal`, `manual-title-slot`, `manual-back`, `manual-contents`, `manual-close`, `manual-body`, `manual-toc`, `manual-chapter-{interface|systems|glossary}`, `manual-group-{conditions|schools|classes|attributes|consumables|rarities|affixes|entities}`, `manual-section`, `manual-section-title`, `manual-see-also`, `manual-notice`. Manual link testids follow the SESSION-02 convention (`manual-link-{target}` or `manual-link-toc`).
+
+<!-- SESSION-04 the-manual -->
+### Access Points & Tutorial Retirement (SESSION-04, the-manual)
+
+**Module deltas**
+
+- **M59 Status Strip** (`src/ui/status-strip.js`) — persistent `?` manual chip added to the portrait `.status-strip` (absolute top-right) and the wide `.wide-telemetry-header` (via `.wide-telemetry-manual-chip` in `styles/wide.css`). Chip is `createManualLink(null, { variant: 'chip', label: '?', source: 'status-strip', ... })`; click dispatches `ui:manual-open {target: null, source: 'status-strip'}`. Testid: `status-manual`. New import from `./components.js`: `createManualLink`.
+- **M68 Title Screen** (`src/ui/screens/title.js`) — `SECONDARY_BRANCHES` swaps `['TUTORIAL','tutorial','title-tutorial']` for `['MANUAL','manual','title-manual','manual']`; the `action === 'manual'` branch dispatches `ui:manual-open {target: null, source: 'title'}` instead of `ui:navigate`. Applied to both `mountPortrait` and `mountWide`.
+- **M76 Settings Screen** (`src/ui/screens/settings.js`) — adds an `OPERATOR'S MANUAL` button (testid `settings-manual`) that dispatches `ui:manual-open {target: 'settings_help', source: 'settings'}`. Placed after the info panel in portrait; at the tail of the visual column in wide.
+- **M86 Hot Runtime** (`src/runtime.js`) — retires the tutorial screen route:
+  - `resolveParsedFragment`: `route === 'tutorial'` → `mountScreen('title')` + `bus.dispatch('ui:manual-open', {target: null, source: 'route-tutorial'})`.
+  - `handleNavigation`: `screen === 'tutorial'` handled identically at the top of the function so no dynamic import of `./ui/screens/tutorial.js` ever fires.
+  - `ROUTES` is unchanged (`'tutorial'` still present) — the router still parses `#a=tutorial` fragments so shipped links never dead-end.
+- **M81 Service Worker** (`service-worker.js`) — `CACHE_VERSION` bumped to `2026-08-19-the-manual-access-v1`. Manifest unchanged.
+- **M75 Tutorial Screen** (`src/ui/screens/tutorial.js`) — status: **runtime-unreachable orphan**. Physical deletion is DEFERRED pending a follow-up session with a wider lease: `scripts/design-scan/check-screen-inventory.js` hard-codes `'tutorial.html': 'src/ui/screens/tutorial.js'` in `SCREEN_MAP`, and `tests/tooling/{check-screen-inventory,scan-design-compliance}.test.js` fail if the module goes missing. All three files are outside SESSION-04's Owns. Every runtime path now redirects; the module is not imported anywhere in production.
+- **M101 Wide CSS** (`styles/wide.css`) — added `.wide-telemetry-manual-chip` (position: absolute; top: 8px; right: 12px; z-index: 1) inside the wide media block. `wide-tutorial-*` rules retained because `mocks/wide/tutorial.html` (outside lease) still references them; the M97 mock-class-parity scanner would otherwise flip them from unused to error-level.
+
+**Design record (SESSION-04)**
+
+- `specs/design.md` Screen Inventory: `Tutorial` row → `Manual (modal)` pointing at the Manual Modal component row.
+- `specs/design.md` User Flows §4: paginated tutorial flow replaced with the four manual access points (title MANUAL / status-strip `?` chip / settings row) + the `#a=tutorial` back-compat note.
+
+**Follow-up (SESSION-04)**
+
+- **Full M75 retirement** — a follow-up session should own `src/ui/screens/tutorial.js` (delete), `service-worker.js` manifest (remove entry + cache bump), `scripts/design-scan/check-screen-inventory.js` (drop `tutorial.html` from `SCREEN_MAP`), `tests/tooling/check-screen-inventory.test.js` + `tests/tooling/scan-design-compliance.test.js` (regenerate fixtures), and `styles/wide.css` (drop `wide-tutorial-*` block once `mocks/tutorial.html` and `mocks/wide/tutorial.html` are also retired). SESSION-07's e2e sweep will already touch some of these tests.
