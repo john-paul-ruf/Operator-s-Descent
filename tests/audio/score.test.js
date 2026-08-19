@@ -6,6 +6,7 @@ import { createLead } from '../../src/audio/lead.js';
 import { createNoiseBed } from '../../src/audio/noise-bed.js';
 import { createPulse } from '../../src/audio/pulse.js';
 import { createSparkle } from '../../src/audio/sparkle.js';
+import { dutyWave } from '../../src/audio/chip.js';
 
 function makeFakeConductor() {
   const subs = new Set();
@@ -39,6 +40,10 @@ function makeTick(overrides = {}) {
     drums: emptyDrums(),
     ...overrides
   };
+}
+
+function emit(conductor, tick) {
+  for (const fn of conductor.subs) fn(tick);
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -76,7 +81,7 @@ describe('five layer audio score', () => {
     drone.start();
     expect(drone.getState()).toMatchObject({ audioMode: 'foundry-industrial', depth: 9, oscillatorCount: 2 });
 
-    for (const fn of conductor.subs) fn(makeTick({
+    emit(conductor, makeTick({
       chord: { degree: 3, semis: [3, 6, 10] },
       rootFreq: 90
     }));
@@ -88,36 +93,80 @@ describe('five layer audio score', () => {
     drone.stop();
   });
 
-  test('pulse and sparkle clamp proximity and transform density without game coupling', () => {
+  test('pulse renders conductor drums, tracks tempo from ticks, and applies danger cutoff', () => {
     const ctx = new FakeContext();
-    const pulse = createPulse(ctx, ctx.destination);
-    const sparkle = createSparkle(ctx, ctx.destination);
+    const conductor = makeFakeConductor();
+    const pulse = createPulse(ctx, ctx.destination, conductor);
     pulse.start();
-    sparkle.start();
     pulse.updateState({ proximity: { hostile: 1 }, combatActive: true });
-    sparkle.updateState({ proximity: { container: 2 } });
 
-    expect(pulse.getState().tempo).toBeGreaterThan(180);
-    expect(pulse.getState().combat).toBe(true);
-    expect(sparkle.getState().cutoff).toBeGreaterThan(2500);
+    const before = ctx.nodes.length;
+    const drums = emptyDrums();
+    drums.kick[0] = true;
+    drums.snare[4] = true;
+    drums.hat[2] = true;
+    for (const step of [0, 2, 4]) {
+      emit(conductor, makeTick({
+        time: 0.1 + step * 0.15,
+        pos: { step, beat: Math.floor(step / 4), bar: 0, barInPhrase: 0, phraseIndex: 0 },
+        tempo: 140,
+        intensity: 1,
+        combat: true,
+        drums
+      }));
+    }
+
+    expect(ctx.nodes.length).toBeGreaterThan(before);
+    expect(pulse.getState()).toMatchObject({ tempo: 140, combat: true });
+    expect(pulse.getState().nearestDist).toBe(1);
     pulse.stop();
+  });
+
+  test('sparkle clamps proximity and opens its lowpass on nearby containers', () => {
+    const ctx = new FakeContext();
+    const sparkle = createSparkle(ctx, ctx.destination);
+    sparkle.start();
+    sparkle.updateState({ proximity: { container: 2 } });
+    expect(sparkle.getState().cutoff).toBeGreaterThan(2500);
     sparkle.stop();
   });
 
-  test('lead ledger stays unique and combat raises tempo', async () => {
-    const { generateLeadBar } = await import('../../src/audio/lead.js');
-    const a = generateLeadBar({ worldSeed: 7, depth: 3, floorId: 'f1', barIndex: 2, audioMode: 'organic-green' });
-    const b = generateLeadBar({ worldSeed: 7, depth: 3, floorId: 'f1', barIndex: 2, audioMode: 'organic-green' });
-    expect(b).toEqual(a);
-
+  test('lead renders conductor melody, switches to 12.5% duty on combat, and taps the echo', () => {
     const ctx = new FakeContext();
-    const lead = createLead(ctx, ctx.destination);
-    lead.updateState({ worldSeed: 7, depth: 3, floorId: 'f1', audioMode: 'organic-green' });
+    const conductor = makeFakeConductor();
+    const echoInput = ctx.createGain();
+    const lead = createLead(ctx, ctx.destination, conductor, echoInput);
     lead.start();
-    vi.advanceTimersByTime(100);
-    expect(new Set(lead.getLedger()).size).toBe(lead.getLedger().length);
-    lead.updateState({ combatActive: true });
-    expect(lead.getState().tempo).toBeGreaterThan(72);
+    const before = ctx.nodes.length;
+
+    const melody = new Array(16).fill(null);
+    melody[0] = { degree: 0, octave: 0, velocity: 0.6, lengthSlots: 3 };
+    melody[4] = { degree: 7, octave: 0, velocity: 0.5, lengthSlots: 2 };
+
+    emit(conductor, makeTick({
+      time: 0.1,
+      pos: { step: 0, beat: 0, bar: 5, barInPhrase: 5, phraseIndex: 1 },
+      tempo: 128,
+      combat: true,
+      rootFreq: 110,
+      melody
+    }));
+
+    expect(ctx.nodes.length).toBeGreaterThan(before);
+    expect(lead.getState()).toEqual({ tempo: 128, barIndex: 5 });
+
+    const combatWave = dutyWave(ctx, 0.125);
+    const combatOsc = ctx.nodes.find((n) => n.nodeKind === 'oscillator' && n.periodicWaves?.includes?.(combatWave));
+    expect(combatOsc).toBeTruthy();
+
+    const echoRoutedOsc = ctx.nodes.find((n) =>
+      n.nodeKind === 'oscillator' &&
+      n.periodicWaves?.includes?.(combatWave) &&
+      n.connections?.length &&
+      n.connections[0].connections?.includes?.(echoInput)
+    );
+    expect(echoRoutedOsc).toBeTruthy();
+
     lead.stop();
   });
 
