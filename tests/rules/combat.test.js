@@ -817,13 +817,59 @@ describe('getLegalActions', () => {
   });
 
   it('active actor with full AP → includes attack/cast/overclock/item/move/swap/retreat/wait/end-turn', () => {
-    const party = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } })];
+    // Custom Rule 11: strengthened per AUDIT-6 — swap now requires an adjacent living ally
+    // before it appears in the legal-action list. Fixture places an ally at Chebyshev-1 so the
+    // full-menu assertion still holds; the prior single-actor fixture would trip AUDIT-6 today.
+    const party = [
+      makeCharacter({ id: 'a', position: { x: 1, y: 1 } }),
+      makeCharacter({ id: 'b', position: { x: 2, y: 1 } })
+    ];
     const { state } = startCombat(party, [makeEnemy()], 1, 'a');
     const legal = getLegalActions(state, 'a');
     expect(legal.canAct).toBe(true);
     for (const action of ['attack', 'cast', 'overclock', 'item', 'move', 'swap', 'retreat', 'wait', 'end-turn']) {
       expect(legal.actions).toContain(action);
     }
+  });
+
+  it('AUDIT-4: 0-AP actor drops retreat from the legal-action list', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const { state } = startCombat(party, [makeEnemy()], 1, 'a');
+    state.combatants.get('a').ap = 0;
+    expect(getLegalActions(state, 'a').actions).not.toContain('retreat');
+    // 'wait' and 'end-turn' stay legal at 0 AP — the actor still needs a way off the turn.
+    expect(getLegalActions(state, 'a').actions).toEqual(expect.arrayContaining(['wait', 'end-turn']));
+  });
+
+  it('AUDIT-6: swap requires an adjacent living side-mate (Chebyshev 1)', () => {
+    // Solo actor → no swap.
+    const solo = [makeCharacter({ id: 'a', position: { x: 1, y: 1 } })];
+    const { state: soloState } = startCombat(solo, [makeEnemy()], 1, 'a');
+    expect(getLegalActions(soloState, 'a').actions).not.toContain('swap');
+
+    // Ally too far → no swap.
+    const far = [
+      makeCharacter({ id: 'a', position: { x: 1, y: 1 } }),
+      makeCharacter({ id: 'b', position: { x: 5, y: 5 } })
+    ];
+    const { state: farState } = startCombat(far, [makeEnemy()], 1, 'a');
+    expect(getLegalActions(farState, 'a').actions).not.toContain('swap');
+
+    // Adjacent living ally → swap available.
+    const adjacent = [
+      makeCharacter({ id: 'a', position: { x: 1, y: 1 } }),
+      makeCharacter({ id: 'b', position: { x: 2, y: 2 } })
+    ];
+    const { state: adjState } = startCombat(adjacent, [makeEnemy()], 1, 'a');
+    expect(getLegalActions(adjState, 'a').actions).toContain('swap');
+
+    // Adjacent but dead ally → no swap (executeSwap would reject with invalid-target).
+    const deadNeighbor = [
+      makeCharacter({ id: 'a', position: { x: 1, y: 1 } }),
+      makeCharacter({ id: 'b', position: { x: 2, y: 1 }, hp: 0 })
+    ];
+    const { state: deadState } = startCombat(deadNeighbor, [makeEnemy()], 1, 'a');
+    expect(getLegalActions(deadState, 'a').actions).not.toContain('swap');
   });
 
   it('panicked actor → attack excluded from legal actions', () => {

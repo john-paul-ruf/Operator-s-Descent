@@ -215,6 +215,19 @@ export function pathToward(combatState, actor, targetId, maxSteps, desiredRange)
   return capped.length ? capped : null;
 }
 
+// True when at least one living side-mate sits Chebyshev-1 from `actor`. The rules-level
+// executeSwap already rejects the bad case with `not-adjacent`, but the UI reads this list
+// to enable/disable the SWAP button — advertising a swap that can't complete confused players.
+// AUDIT-6 fix: gate the legal-action list on real adjacency before the button ever renders.
+function hasAdjacentSwapPartner(combatState, actor) {
+  if (!actor?.position) return false;
+  for (const other of combatState.combatants.values()) {
+    if (other.id === actor.id || other.side !== actor.side || other.hp <= 0 || !other.position) continue;
+    if (distanceCells(actor.position, other.position) === 1) return true;
+  }
+  return false;
+}
+
 export function getLegalActions(combatState, actorId, context = {}) {
   const actor = combatState.combatants.get(actorId);
   if (!actor || actor.hp <= 0) return { canAct: false, actions: [], legalMoveDirections: [] };
@@ -226,8 +239,13 @@ export function getLegalActions(combatState, actorId, context = {}) {
     actions.push('item');
   }
   if (isTurn && actor.moveAvailable && !hasCondition(actor, 'immobilized')) actions.push('move');
-  if (isTurn && actor.swapAvailable) actions.push('swap');
-  if (isTurn) actions.push('retreat', 'wait', 'end-turn');
+  // AUDIT-6: only offer swap when a legal partner is actually adjacent.
+  if (isTurn && actor.swapAvailable && hasAdjacentSwapPartner(combatState, actor)) actions.push('swap');
+  // AUDIT-4: retreat costs 1 AP; do not advertise it when the actor has none left. The
+  // rules-level guard at combat.js:243 already returns `no-ap` for the execution path, but
+  // the UI reads this list to enable/disable the RETREAT button.
+  if (isTurn && actor.ap > 0) actions.push('retreat');
+  if (isTurn) actions.push('wait', 'end-turn');
   return { canAct: isTurn, actions, legalMoveDirections: isTurn ? legalDirectionsFrom(combatState, actor) : [], moveRange: MOVE_RANGE };
 }
 
@@ -562,6 +580,18 @@ function executeProtocol(combatState, actor, school, tier, targetId, overclock, 
   const target = targetId == null ? null : combatState.combatants.get(targetId);
   if (targetId != null && (!target || target.hp <= 0)) {
     return { success: false, reason: 'invalid-target' };
+  }
+
+  // AUDIT-2: honor a numeric protocol range when present. Every shipped protocol in
+  // data/protocols.json today declares `range` as a human-readable string ("SIG×2",
+  // "adjacent", "5 cells"), so `Number.isFinite` is false for every current data row and
+  // this gate is a no-op for shipped content. When a future protocol adopts a numeric
+  // range, this check enforces it. Skips when either side lacks placed geometry — same
+  // rule performAttackRoll uses for the attack range gate.
+  if (target && Number.isFinite(protocolData.range) && actor.position && target.position) {
+    if (distanceCells(actor.position, target.position) > protocolData.range) {
+      return { success: false, reason: 'out-of-range' };
+    }
   }
 
   const conditionsData = context.conditionsData?.conditions || context.conditionsData;
