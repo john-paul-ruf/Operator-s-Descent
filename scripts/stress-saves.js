@@ -44,6 +44,24 @@ function duplicateSecondEcho(runState) {
   runState.echoQueue.push(echo);
 }
 
+function pointCurrentIndexAtParty(runState) {
+  const partyTurn = runState.activeCombat?.initiativeOrder?.findIndex((id) => String(id).startsWith('operator_'));
+  if (partyTurn >= 0) runState.activeCombat.currentIndex = partyTurn;
+}
+
+function ceilingHarness(seed, archetypes) {
+  const harness = createGameHarness({ seed, partySize: 4, depth: 100 });
+  harness.runState.inventory = [capStack()];
+  markDenseRun(harness.runState);
+  addPartyPressure(harness.runState);
+  harness.runState.flags.calibrationFloorsReached = Array.from({ length: 16 }, (_, index) => (index + 1) * 3);
+  queueSingleDeathEcho(harness);
+  duplicateSecondEcho(harness.runState);
+  startStandardCombat(harness, { archetypes, enemyCount: 20, enemyHP: 'natural' });
+  pointCurrentIndexAtParty(harness.runState);
+  return harness.runState;
+}
+
 function fixtures() {
   loadGameDataFixture();
   const minimum = createGameHarness({ seed: 101, partySize: 1, depth: 1 });
@@ -77,8 +95,10 @@ function fixtures() {
     enemyHP: 24,
     partyOverrides: activeCombat.runState.party.map(() => ({ weapon: { damageDie: 'd4', rangeBand: 'short', maxRange: 16, minRange: 0, accuracyBonus: 20 } }))
   });
-  const partyTurn = activeCombat.runState.activeCombat?.initiativeOrder?.findIndex((id) => String(id).startsWith('operator_'));
-  if (partyTurn >= 0) activeCombat.runState.activeCombat.currentIndex = partyTurn;
+  pointCurrentIndexAtParty(activeCombat.runState);
+
+  const casterCeiling = ceilingHarness(707, ['choir', 'null']);
+  const apexCeiling = ceilingHarness(808, ['choir', 'null', 'construct', 'apex']);
 
   return [
     ['legal-minimum', minimum.runState],
@@ -86,7 +106,9 @@ function fixtures() {
     ['stack-aware-100-item-cap', inventoryCap.runState],
     ['four-operator-deep-dense', deepParty.runState],
     ['two-echo-queue', echoes.runState],
-    ['deep-active-combat-boundary', activeCombat.runState]
+    ['deep-active-combat-boundary', activeCombat.runState],
+    ['caster-pack-ceiling', casterCeiling],
+    ['apex-pack-ceiling', apexCeiling]
   ];
 }
 
