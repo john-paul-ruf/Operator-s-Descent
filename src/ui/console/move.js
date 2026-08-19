@@ -64,7 +64,13 @@ export function render(container, context = {}) {
   const confirmAria = canDescend ? 'Confirm descent' : 'Wait; no descent point underfoot';
   for (const entry of DIRECTIONS) {
     const isConfirm = entry.action === 'confirm';
-    const label = isConfirm ? confirmLabel : entry.label;
+    // Direction buttons carry a lucide sprite (via opts.icon) AND, historically,
+    // an arrow character label — the sprite already communicates the direction, so
+    // the character stripe on top of it double-painted every cell. Drop the visible
+    // label when an icon is present; the aria-label (opts.label = entry.name) keeps
+    // the direction name available to screen readers. CONFIRM has no icon, so its
+    // textual WAIT/DESCEND label is preserved.
+    const label = isConfirm ? confirmLabel : (entry.icon ? '' : entry.label);
     const button = createButton(label, {
       label: isConfirm ? confirmAria : entry.name,
       disabled: isConfirm && !canDescend,

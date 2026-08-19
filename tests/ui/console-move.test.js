@@ -85,6 +85,24 @@ describe('MOVE mode — SESSION-06 icon coverage', () => {
     }
   });
 
+  it('SESSION-02 — direction buttons render exactly one arrow (icon) with no arrow character in text', () => {
+    // Regression guard for Issue G (2026-08-19): the D-pad used to paint the
+    // arrow character AND the lucide sprite side-by-side, so every cell showed
+    // two arrows. Fix: strip the arrow character from `label` when an `icon` is
+    // present. The aria-label (opts.label = direction name) still reaches AT.
+    const container = new FakeElement('div');
+    renderMove(container, {});
+    for (const id of DIR_IDS) {
+      const button = byTestId(container, id);
+      // Exactly one lucide sprite prefixed.
+      expect(button.children.filter((c) => c.tagName === 'SVG').length).toBe(1);
+      // No arrow character anywhere in the button's text content.
+      expect(button.textContent.trim()).not.toMatch(/[↑↓←→↖↗↙↘]/);
+      // aria-label carries the human-readable direction name.
+      expect(button.getAttribute('aria-label')).toBeTruthy();
+    }
+  });
+
   it('CONFIRM/DESCEND does not gain an icon (spec assigns none) — DOM structure preserved', () => {
     const container = new FakeElement('div');
     renderMove(container, { canDescend: () => true });
