@@ -1,14 +1,28 @@
 import { createButton, createHPBar, createChargeBar, createSigilToken, createConditionTag, createManualLink, createProtocolCard } from '../components.js';
+import { createIcon } from '../icon.js';
+
+// Mirror src/ui/console/party.js:safeCreateIcon — tests and older runtimes may render
+// through a document that lacks `createElementNS` (createIcon builds SVG through it). The
+// production DOM always exposes it; the guard degrades icon-less rendering to a plain
+// button label instead of throwing, keeping the console usable in every environment.
+function safeCreateIcon(id, opts = {}) {
+  if (!id) return null;
+  if (typeof document?.createElementNS !== 'function') return null;
+  try { return createIcon(id, opts); } catch { return null; }
+}
 
 const MOVE_RANGE = 5;
+// Icon ids come from the sprite compiled at dev time (assets/icons.svg) — see
+// tools/icons/subset.json + src/ui/icon.js ICON_IDS. Adding a new action icon here
+// requires updating both, which the icon.test.js lockstep assertion enforces.
 const ACTIONS = [
-  { id: 'move', label: 'Move', needs: `up to ${MOVE_RANGE} cells` },
-  { id: 'attack', label: 'Attack', needs: '1 AP' },
-  { id: 'cast', label: 'Protocol', needs: '1 AP + CHARGE' },
-  { id: 'overclock', label: 'Overclock', needs: '1 AP + overclock CHARGE' },
-  { id: 'item', label: 'Item', needs: '1 AP' },
-  { id: 'retreat', label: 'Retreat', needs: '1 AP' },
-  { id: 'end-turn', label: 'End Turn', needs: 'explicit' }
+  { id: 'move', label: 'Move', needs: `up to ${MOVE_RANGE} cells`, icon: 'arrow-down-right' },
+  { id: 'attack', label: 'Attack', needs: '1 AP', icon: 'sword' },
+  { id: 'cast', label: 'Protocol', needs: '1 AP + CHARGE', icon: 'wand-sparkles' },
+  { id: 'overclock', label: 'Overclock', needs: '1 AP + overclock CHARGE', icon: 'zap' },
+  { id: 'item', label: 'Item', needs: '1 AP', icon: 'flame' },
+  { id: 'retreat', label: 'Retreat', needs: '1 AP', icon: 'arrow-up-right' },
+  { id: 'end-turn', label: 'End Turn', needs: 'explicit', icon: 'clock' }
 ];
 const DIRECTION_GRID = [
   ['nw', '↖'], ['n', '↑'], ['ne', '↗'],
@@ -53,6 +67,10 @@ function selectedClass(base, selected) {
 const REASON_LABEL = {
   not_a_weapon: 'no weapon equipped',
   out_of_range: 'out of range',
+  // evaluateRange (src/rules/equipment.js) returns 'beyond_maximum' for out-of-range weapons;
+  // the range gate for protocols uses the same reason. Map both here so the reason chip reads
+  // as "OUT OF RANGE" instead of falling through to the generic 'illegal' text.
+  beyond_maximum: 'out of range',
   no_line_of_sight: 'no line of sight',
   blocked: 'blocked'
 };
@@ -146,6 +164,12 @@ function renderActions(container, context, legalActions) {
     });
     button.className = selectedClass(`combat-action action-btn console-row${action.id === 'retreat' ? ' danger' : ''}`, selection.actionType === action.id);
     button.dataset.testid = `combat-action-${action.id}`;
+    // Prepend the action's icon (SESSION-01's createIcon returns an <svg> element with class
+    // "icon"). Uses prepend() so the sprite sits before the button's textContent, giving the
+    // "◈ ATTACK · 1 AP" glyph-then-label rhythm the mocks establish. safeCreateIcon returns
+    // null in test envs without createElementNS — the button still renders, minus the sprite.
+    const icon = safeCreateIcon(action.icon, { size: 16 });
+    if (icon) button.prepend(icon);
     list.appendChild(button);
   }
   container.appendChild(list);
@@ -274,12 +298,28 @@ function renderTargets(container, context) {
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);
-    const label = `${nameOf(target)} · HP ${target.hp ?? 0}/${target.hpMax ?? target.hp ?? 0} · ${previewText(preview)}`;
+    // Range-gate integration (SESSION-05 checkpoint 4). preview.targetLegal is authored by
+    // src/ui/screens/combat.js:previewForTarget. `illegal` is only ever true for attack + cast +
+    // overclock — item targeting always returns targetLegal:true because item consumers are the
+    // party itself. Illegal rows: disabled, is-illegal class hook (SESSION-06 styles it),
+    // circle-x icon prefix with a tone-danger label so the reason is readable to assistive tech.
+    const illegal = preview && preview.targetLegal === false;
+    const reason = illegal ? (REASON_LABEL[preview.range?.reason] || 'out of range') : null;
+    const label = `${nameOf(target)} · HP ${target.hp ?? 0}/${target.hpMax ?? target.hp ?? 0} · ${previewText(preview)}${illegal ? ` · ${reason.toUpperCase()}` : ''}`;
+    // A keyboard cycle can land the internal selection on an illegal target — the row still
+    // reads as `selected` so the player sees which target they're on, but the disabled +
+    // is-illegal state (and the OUT OF RANGE reason) explains why CONFIRM is refusing.
+    const isSelected = selection.targetId === target.id;
     const button = createButton(label, {
-      selected: selection.targetId === target.id,
-      onClick: () => context.combatSelectTarget?.(target.id)
+      selected: isSelected,
+      disabled: illegal,
+      onClick: illegal ? undefined : () => context.combatSelectTarget?.(target.id)
     });
-    button.className = selectedClass('combat-target console-row', selection.targetId === target.id);
+    if (illegal) {
+      const chip = safeCreateIcon('circle-x', { size: 14, tone: 'danger', label: reason });
+      if (chip) button.prepend(chip);
+    }
+    button.className = selectedClass(`combat-target console-row${illegal ? ' is-illegal' : ''}`, isSelected);
     button.dataset.testid = `combat-target-${target.id}`;
     list.appendChild(button);
   }

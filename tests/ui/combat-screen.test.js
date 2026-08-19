@@ -23,8 +23,9 @@ class FakeClassList {
 }
 
 class FakeElement {
-  constructor(tagName) {
+  constructor(tagName, namespace = null) {
     this.tagName = tagName.toUpperCase();
+    this.namespace = namespace;
     this.children = [];
     this.attributes = new Map();
     this.listeners = new Map();
@@ -39,11 +40,14 @@ class FakeElement {
     this.parentNode = null;
     this.innerHTML = '';
   }
-  set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
-  get className() { return this._className; }
+  set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); this.attributes.set('class', this._className); }
+  // SVG factories (createIcon) write class via setAttribute — fall back to that source so both
+  // the string-set and attribute-set paths read the same class string.
+  get className() { return this._className || this.attributes.get('class') || ''; }
   get firstChild() { return this.children[0] || null; }
   appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
   append(...children) { for (const child of children) this.appendChild(child); }
+  prepend(...children) { for (const child of children.reverse()) { child.parentNode = this; this.children.unshift(child); } }
   removeChild(child) { this.children = this.children.filter((entry) => entry !== child); child.parentNode = null; return child; }
   replaceChildren(...children) { this.children = []; for (const child of children) this.appendChild(child); }
   replaceWith(child) {
@@ -103,6 +107,10 @@ function installDocument() {
   globalThis.document = {
     documentElement: new FakeElement('html'),
     createElement: (tagName) => tagName === 'canvas' ? new FakeCanvas() : new FakeElement(tagName),
+    // createIcon() (src/ui/icon.js) builds its SVG elements through createElementNS. The console
+    // combat renderer prepends action icons on every render, so the fake document must expose
+    // createElementNS or every combat mount throws.
+    createElementNS: (namespace, tagName) => new FakeElement(tagName, namespace),
     createTextNode: (value) => { const node = new FakeElement('#text'); node.textContent = value; return node; }
   };
 }
@@ -864,11 +872,11 @@ describe('combat screen controller', () => {
     }
   });
 
-  // Range gate (SESSION-05 checkpoint 3). Adjacent (maxRange 1) melee weapon; enemy placed at
-  // Chebyshev distance ≥ 2 so evaluateRange returns legal:false. The console captures
-  // previewForTarget.targetLegal via context.combatGetPreview, refuses selectTarget, and
-  // returns 'OUT OF RANGE — MOVE OR RETARGET' from validationError.
-  it('previewForTarget returns targetLegal:false when the attack target is beyond weapon range', async () => {
+  // Range gate (SESSION-05 checkpoint 3+4). Adjacent (maxRange 1) melee weapon; enemy placed at
+  // Chebyshev distance ≥ 2 so evaluateRange returns legal:false. previewForTarget carries
+  // targetLegal:false; the console disables the row so a click is a no-op; keyboard cycle
+  // that lands the selection on the illegal target trips validationError.
+  it('previewForTarget returns targetLegal:false and the console disables the row for an out-of-range target', async () => {
     const combat = combatState([
       partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
       enemyActor({ id: 0, position: { x: 6, y: 6 }, hp: 10, hpMax: 10 })
@@ -876,30 +884,19 @@ describe('combat screen controller', () => {
     const { container, controller } = await mountCombat({ combat });
 
     byTestId(container, 'combat-action-attack').click();
-    // Grab the preview accessor from the view state: the console reads it via combatGetPreview.
-    // We assert its shape by pulling it off the container's own combat controller via the
-    // console dataset — but the easier path is the button attribute the console renders.
     const targetRow = byTestId(container, 'combat-target-0');
-    // Illegal target row must render with disabled attribute set (checkpoint 4 wires this via the
-    // console). But even before the console-level wiring lands, selectTarget itself must refuse
-    // the click and set the error. Click and verify the refusal.
+    expect(targetRow.disabled).toBe(true);
+    expect(targetRow.className).toContain('is-illegal');
+    // Clicking a disabled row must not advance selection into confirm phase — no CONFIRM renders.
     targetRow.click();
-
-    // Selection did NOT advance to confirm: no successful target commit means no confirm button.
-    // (confirm renders only in `selection.phase === 'confirm'` — an illegal selectTarget leaves
-    // the phase at `choose-target`.)
-    const confirm = byTestId(container, 'combat-confirm');
-    expect(confirm).toBe(null);
-    // The error message from selectTarget surfaces via the error notice element in the console.
-    expect(byTestId(container, 'combat-error').textContent).toBe('OUT OF RANGE — MOVE OR RETARGET');
-
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
     controller.unmount();
   });
 
-  it('combatConfirm refuses when the currently-selected target is out of range', async () => {
-    // Two enemies: 0 at (2,1) is legal (distance 1), 1 at (6,6) is illegal (distance 5). Select
-    // 0 first via click, then reach into the selection via keyboard cycle to switch to 1 —
-    // validationError must then trip OUT OF RANGE.
+  it('combatConfirm refuses when a range-gated action lands the selection on an out-of-range target via keyboard cycle', async () => {
+    // Two enemies: 0 at (2,1) is legal (distance 1), 1 at (6,6) is illegal (distance 5). Attack
+    // action selects the first target automatically; Tab cycles to the illegal one. Confirm
+    // must refuse and surface the OUT OF RANGE message via the error notice.
     const combat = combatState([
       partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
       enemyActor({ id: 0, position: { x: 2, y: 1 }, hp: 10, hpMax: 10 }),
@@ -908,14 +905,19 @@ describe('combat screen controller', () => {
     const { container, controller } = await mountCombat({ combat });
 
     byTestId(container, 'combat-action-attack').click();
-    // Legal target 0 selected via click → confirm enabled.
-    byTestId(container, 'combat-target-0').click();
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
-
-    // Clicking the illegal target 1 must refuse (selection stays on 0).
-    byTestId(container, 'combat-target-1').click();
-    expect(byTestId(container, 'combat-target-0').getAttribute('aria-selected')).toBe('true');
-    expect(byTestId(container, 'combat-error').textContent).toBe('OUT OF RANGE — MOVE OR RETARGET');
+    // Legal target 0 is auto-selected; the console shows a 'confirm' element only after a
+    // successful selectTarget → phase advance. Auto-target starts in choose-target phase, so
+    // keyboard Enter is the confirm path here (per handleInput → combatConfirm → readyFromKeyboard).
+    container.dispatch('keydown', keyEvent('Tab'));
+    expect(byTestId(container, 'combat-target-1').getAttribute('aria-selected')).toBe('true');
+    // No combat log entries land before Enter — the enemy is still alive.
+    const beforeEntries = combat.log.filter((entry) => entry.type === 'attack').length;
+    // Keyboard confirm attempts to fire — validationError trips OUT OF RANGE, no attack lands.
+    container.dispatch('keydown', keyEvent('Enter'));
+    const afterEntries = combat.log.filter((entry) => entry.type === 'attack').length;
+    expect(afterEntries).toBe(beforeEntries);
+    // The error notice surfaces OUT OF RANGE.
+    expect(byTestId(container, 'combat-error').textContent).toContain('OUT OF RANGE');
 
     controller.unmount();
   });

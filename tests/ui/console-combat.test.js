@@ -1,0 +1,261 @@
+// Focused tests for src/ui/console/combat.js — covers SESSION-05 checkpoint 4 changes:
+// icon prefixes on every combat-action button, and disabled + is-illegal target rows for
+// out-of-range candidates. Broader COMBAT-mode integration lives in
+// tests/ui/tech-loot-log.test.js and tests/ui/combat-screen.test.js; this file exists so the
+// console-specific icon/illegal wiring has a stable home inside SESSION-05's lease.
+
+import { beforeEach, describe, expect, it } from 'vitest';
+import { render as renderCombat } from '../../src/ui/console/combat.js';
+
+class FakeClassList {
+  constructor(element) { this.element = element; this.values = new Set(); }
+  add(...names) { for (const name of names) if (name) this.values.add(name); this.sync(); }
+  remove(...names) { for (const name of names) this.values.delete(name); this.sync(); }
+  toggle(name, force) { const next = force == null ? !this.values.has(name) : Boolean(force); if (next) this.values.add(name); else this.values.delete(name); this.sync(); return next; }
+  contains(name) { return this.values.has(name); }
+  sync() { this.element._className = [...this.values].join(' '); }
+}
+
+class FakeElement {
+  constructor(tagName, namespace = null) {
+    this.tagName = tagName.toUpperCase();
+    this.namespace = namespace;
+    this.children = [];
+    this.attributes = new Map();
+    this.listeners = new Map();
+    this.dataset = {};
+    this.style = { properties: {}, setProperty(name, value) { this.properties[name] = value; } };
+    this.classList = new FakeClassList(this);
+    this._className = '';
+    this.textContent = '';
+    this.value = '';
+    this.disabled = false;
+    this.tabIndex = -1;
+    this.hidden = false;
+    this.parentNode = null;
+    this.innerHTML = '';
+  }
+  set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); this.attributes.set('class', this._className); }
+  // createIcon() writes to the class attribute via setAttribute (not className) because it
+  // operates on SVG elements. Fall back to the attribute so both APIs read the same string.
+  get className() { return this._className || this.attributes.get('class') || ''; }
+  get firstChild() { return this.children[0] || null; }
+  appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
+  append(...children) { for (const child of children) this.appendChild(child); }
+  prepend(...children) { for (const child of children.reverse()) { child.parentNode = this; this.children.unshift(child); } }
+  removeChild(child) { this.children = this.children.filter((entry) => entry !== child); child.parentNode = null; return child; }
+  replaceChildren(...children) { this.children = []; for (const child of children) this.appendChild(child); }
+  remove() { this.parentNode?.removeChild(this); }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name) ?? null; }
+  addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
+  removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((candidate) => candidate !== listener)); }
+  dispatch(type, event = {}) { for (const listener of this.listeners.get(type) || []) listener({ type, target: this, preventDefault() { this.prevented = true; }, ...event }); }
+  click() { if (!this.disabled) this.dispatch('click'); }
+  focus() { this.focused = true; }
+}
+
+function installDocument() {
+  globalThis.document = {
+    createElement: (tagName) => new FakeElement(tagName),
+    createElementNS: (namespace, tagName) => new FakeElement(tagName, namespace),
+    createTextNode: (value) => { const node = new FakeElement('#text'); node.textContent = value; return node; }
+  };
+}
+
+function byTestId(root, testid) {
+  if (root.dataset?.testid === testid) return root;
+  for (const child of root.children || []) {
+    const found = byTestId(child, testid);
+    if (found) return found;
+  }
+  return null;
+}
+
+function collectAll(root, predicate, matches = []) {
+  if (predicate(root)) matches.push(root);
+  for (const child of root.children || []) collectAll(child, predicate, matches);
+  return matches;
+}
+
+function svgChild(button) {
+  return (button.children || []).find((child) => child.tagName === 'SVG');
+}
+
+function makeActive(overrides = {}) {
+  return {
+    id: 'operator', name: 'Operator', side: 'party', sigilCodepoint: 0xE028,
+    hp: 30, hpMax: 30, charge: 8, chargeMax: 10, ap: 2, moveAvailable: true,
+    conditions: [], ...overrides
+  };
+}
+
+function makeEnemy(overrides = {}) {
+  return { id: 'enemy', name: 'Drone', side: 'enemy', hp: 10, hpMax: 10, ...overrides };
+}
+
+function renderContext({ active, enemies, selection, previewFor }) {
+  const combatants = new Map();
+  combatants.set(active.id, active);
+  for (const enemy of enemies) combatants.set(enemy.id, enemy);
+  return {
+    combatState: { combatants, turnOrder: [active.id, ...enemies.map((e) => e.id)], currentTurn: 0 },
+    selection,
+    combatGetActiveActor: () => active,
+    combatGetLegalActions: () => ({ actions: ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'wait', 'end-turn'], legalMoveDirections: ['s'] }),
+    combatGetTargets: () => enemies,
+    combatGetPreview: previewFor
+  };
+}
+
+beforeEach(() => installDocument());
+
+describe('console/combat.js — action button icons (SESSION-05 checkpoint 4)', () => {
+  it('every combat-action button contains an <svg> icon child with the icon class', () => {
+    const active = makeActive();
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+
+    for (const id of ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'end-turn']) {
+      const button = byTestId(container, `combat-action-${id}`);
+      expect(button, `combat-action-${id} exists`).toBeTruthy();
+      const icon = svgChild(button);
+      expect(icon, `combat-action-${id} has an svg icon`).toBeTruthy();
+      expect(icon.className).toContain('icon');
+    }
+  });
+
+  it('each action icon uses the id declared in ACTIONS and links to the sprite via <use href>', () => {
+    const expectedIcons = {
+      move: 'arrow-down-right',
+      attack: 'sword',
+      cast: 'wand-sparkles',
+      overclock: 'zap',
+      item: 'flame',
+      retreat: 'arrow-up-right',
+      'end-turn': 'clock'
+    };
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action' },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+
+    for (const [actionId, iconId] of Object.entries(expectedIcons)) {
+      const button = byTestId(container, `combat-action-${actionId}`);
+      const svg = svgChild(button);
+      const useEl = (svg.children || []).find((c) => c.tagName === 'USE');
+      expect(useEl, `combat-action-${actionId} has <use>`).toBeTruthy();
+      expect(useEl.getAttribute('href')).toBe(`assets/icons.svg#${iconId}`);
+    }
+  });
+});
+
+describe('console/combat.js — out-of-range target rows (SESSION-05 checkpoint 4)', () => {
+  it('an illegal (targetLegal:false) target row is disabled and carries the is-illegal class', () => {
+    const active = makeActive();
+    const legalEnemy = makeEnemy({ id: 'near', name: 'Near' });
+    const illegalEnemy = makeEnemy({ id: 'far', name: 'Far' });
+    const previews = {
+      near: { distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true },
+      far: { distance: 5, range: { band: 'adjacent', legal: false, reason: 'beyond_maximum' }, coverBonus: 0, flanked: false, targetLegal: false }
+    };
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [legalEnemy, illegalEnemy],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: 'near' },
+      previewFor: (id) => previews[id]
+    }));
+
+    const illegalRow = byTestId(container, 'combat-target-far');
+    expect(illegalRow.disabled).toBe(true);
+    expect(illegalRow.className).toContain('is-illegal');
+    // The legal sibling stays interactive.
+    const legalRow = byTestId(container, 'combat-target-near');
+    expect(legalRow.disabled).toBe(false);
+    expect(legalRow.className).not.toContain('is-illegal');
+  });
+
+  it('illegal target row shows a circle-x tone-danger icon with the reason as accessible label', () => {
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'far' })],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: null },
+      previewFor: () => ({ distance: 6, range: { band: 'adjacent', legal: false, reason: 'beyond_maximum' }, coverBonus: 0, flanked: false, targetLegal: false })
+    }));
+
+    const row = byTestId(container, 'combat-target-far');
+    const icon = svgChild(row);
+    expect(icon).toBeTruthy();
+    expect(icon.className).toContain('icon-14');
+    expect(icon.className).toContain('icon-danger');
+    // aria-label is set when the caller passes `label` (createIcon writes role="img" + aria-label).
+    expect(icon.getAttribute('aria-label')).toBe('out of range');
+    // Row text mentions the reason for sighted users.
+    expect(row.textContent).toContain('OUT OF RANGE');
+  });
+
+  it('clicking a disabled illegal target row does NOT invoke combatSelectTarget', () => {
+    const calls = [];
+    const container = new FakeElement('div');
+    const context = renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'far' })],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: null },
+      previewFor: () => ({ distance: 6, range: { band: 'adjacent', legal: false, reason: 'beyond_maximum' }, coverBonus: 0, flanked: false, targetLegal: false })
+    });
+    context.combatSelectTarget = (id) => calls.push(id);
+    renderCombat(container, context);
+
+    const row = byTestId(container, 'combat-target-far');
+    row.click();
+    expect(calls).toEqual([]);
+  });
+
+  it('legal target row still invokes combatSelectTarget on click', () => {
+    const calls = [];
+    const container = new FakeElement('div');
+    const context = renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'near' })],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+    context.combatSelectTarget = (id) => calls.push(id);
+    renderCombat(container, context);
+
+    byTestId(container, 'combat-target-near').click();
+    expect(calls).toEqual(['near']);
+  });
+
+  it('item action does not gate targets by range (targetLegal is always true)', () => {
+    // Item targets are always party members and never carry a range restriction — the range
+    // gate is scoped to attack/cast/overclock only. This test guards the boundary so a future
+    // change doesn't accidentally disable a party-heal button.
+    const active = makeActive({ id: 'operator' });
+    const ally = { id: 'ally', name: 'Ally', side: 'party', hp: 5, hpMax: 30, sigilCodepoint: 0xE001, conditions: [] };
+    const container = new FakeElement('div');
+    const combatants = new Map([[active.id, active], [ally.id, ally]]);
+    renderCombat(container, {
+      combatState: { combatants, turnOrder: [active.id, ally.id], currentTurn: 0 },
+      selection: { phase: 'choose-target', actionType: 'item', targetId: 'ally', itemId: 'repair_patch' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack', 'item'], legalMoveDirections: [] }),
+      combatGetTargets: () => [ally],
+      combatGetPreview: () => ({ distance: 4, range: { band: 'self-or-adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+
+    const row = byTestId(container, 'combat-target-ally');
+    expect(row.disabled).toBe(false);
+    expect(row.className).not.toContain('is-illegal');
+  });
+});
