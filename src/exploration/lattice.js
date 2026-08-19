@@ -36,6 +36,14 @@ export function createLattice(floor, savedDiff = null) {
   const openedContainers = savedDiff?.openedContainers ?? 0n;
   const defeatedEnemies = savedDiff?.defeatedEnemies ?? 0n;
 
+  // Session-scoped overlays populated by movement.stepHunters + movement.pruneEmptyCaches.
+  // NOT persisted to the save (Custom Rule 13 requires a schema bump to persist hunter
+  // positions; save-restore returns enemies to their spawn cells and the hunt loop
+  // re-engages from there).
+  const hunterOverrides = new Map(); // spawn.id → { x, y }
+  const culledContainers = new Set(); // container.id values
+  const culledEnemies = new Set(); // spawn.id values
+
   function isContainerOpened(id) {
     return (openedContainers & (1n << BigInt(id))) !== 0n;
   }
@@ -44,12 +52,42 @@ export function createLattice(floor, savedDiff = null) {
     return (defeatedEnemies & (1n << BigInt(id))) !== 0n;
   }
 
+  function setHunterPosition(id, position) {
+    if (!Number.isInteger(id)) return false;
+    if (!position || !Number.isInteger(position.x) || !Number.isInteger(position.y)) return false;
+    hunterOverrides.set(id, { x: position.x, y: position.y });
+    return true;
+  }
+
+  function getHunterPosition(id) {
+    const value = hunterOverrides.get(id);
+    return value ? { x: value.x, y: value.y } : null;
+  }
+
+  function markCulled(kind, id) {
+    if (kind === 'container') culledContainers.add(id);
+    else if (kind === 'enemy') culledEnemies.add(id);
+    else return false;
+    return true;
+  }
+
+  function isCulled(kind, id) {
+    if (kind === 'container') return culledContainers.has(id);
+    if (kind === 'enemy') return culledEnemies.has(id);
+    return false;
+  }
+
   function getActiveContainers() {
-    return containers.filter(c => !isContainerOpened(c.id));
+    return containers.filter(c => !isContainerOpened(c.id) && !culledContainers.has(c.id));
   }
 
   function getActiveEnemySpawns() {
-    return enemySpawns.filter(e => !isEnemyDefeated(e.id));
+    return enemySpawns
+      .filter(e => !isEnemyDefeated(e.id) && !culledEnemies.has(e.id))
+      .map(e => {
+        const override = hunterOverrides.get(e.id);
+        return override ? { ...e, x: override.x, y: override.y } : e;
+      });
   }
 
   return {
@@ -87,6 +125,10 @@ export function createLattice(floor, savedDiff = null) {
     getDescentPoint() { return descentPoint; },
     getEntryPoint() { return entryPoint; },
     isContainerOpened,
-    isEnemyDefeated
+    isEnemyDefeated,
+    setHunterPosition,
+    getHunterPosition,
+    markCulled,
+    isCulled
   };
 }

@@ -234,3 +234,94 @@ describe('createLattice — position & accessors', () => {
     expect(lat.getHeight()).toBe(25);
   });
 });
+
+describe('createLattice — hunter overrides (session-scoped)', () => {
+  it('setHunterPosition changes what getActiveEnemySpawns reports without mutating base spawn', () => {
+    const grid = makeGrid(20, 32, 1);
+    const spawns = [{ id: 0, x: 3, y: 3, archetypeId: 'drone' }, { id: 1, x: 5, y: 5, archetypeId: 'drone' }];
+    const lat = createLattice({ cells: grid, enemySpawns: spawns });
+    expect(lat.setHunterPosition(0, { x: 4, y: 3 })).toBe(true);
+    const active = lat.getActiveEnemySpawns();
+    expect(active.find(e => e.id === 0)).toMatchObject({ id: 0, x: 4, y: 3, archetypeId: 'drone' });
+    expect(active.find(e => e.id === 1)).toMatchObject({ id: 1, x: 5, y: 5 });
+    // Base spawn is untouched — the caller's spawn objects must not mutate.
+    expect(spawns[0]).toEqual({ id: 0, x: 3, y: 3, archetypeId: 'drone' });
+    // getEnemySpawns still returns the raw list.
+    expect(lat.getEnemySpawns()[0]).toEqual({ id: 0, x: 3, y: 3, archetypeId: 'drone' });
+  });
+
+  it('getHunterPosition returns null when no override is set and a copy when set', () => {
+    const grid = makeGrid(20, 32, 1);
+    const lat = createLattice({ cells: grid, enemySpawns: [{ id: 7, x: 2, y: 2, archetypeId: 'drone' }] });
+    expect(lat.getHunterPosition(7)).toBeNull();
+    lat.setHunterPosition(7, { x: 3, y: 2 });
+    const pos = lat.getHunterPosition(7);
+    expect(pos).toEqual({ x: 3, y: 2 });
+    pos.x = 999;
+    expect(lat.getHunterPosition(7)).toEqual({ x: 3, y: 2 });
+  });
+
+  it('setHunterPosition rejects invalid input', () => {
+    const grid = makeGrid(20, 32, 1);
+    const lat = createLattice({ cells: grid });
+    expect(lat.setHunterPosition('not-an-id', { x: 1, y: 1 })).toBe(false);
+    expect(lat.setHunterPosition(0, null)).toBe(false);
+    expect(lat.setHunterPosition(0, { x: 'a', y: 1 })).toBe(false);
+    expect(lat.setHunterPosition(0, { x: 1 })).toBe(false);
+  });
+
+  it('isOccupied honors the hunter override position, not the spawn cell', () => {
+    const grid = makeGrid(20, 32, 1);
+    const lat = createLattice({
+      cells: grid,
+      entryPoint: { x: 0, y: 0 },
+      enemySpawns: [{ id: 0, x: 3, y: 3, archetypeId: 'drone' }]
+    });
+    expect(lat.isOccupied(3, 3)).toBe(true);
+    expect(lat.isOccupied(4, 3)).toBe(false);
+    lat.setHunterPosition(0, { x: 4, y: 3 });
+    expect(lat.isOccupied(3, 3)).toBe(false);
+    expect(lat.isOccupied(4, 3)).toBe(true);
+  });
+});
+
+describe('createLattice — culling (session-scoped)', () => {
+  it('markCulled("container", id) removes the container from getActiveContainers', () => {
+    const grid = makeGrid(20, 32, 1);
+    const containers = [{ id: 0, x: 3, y: 3 }, { id: 1, x: 5, y: 5 }];
+    const lat = createLattice({ cells: grid, containers });
+    expect(lat.getActiveContainers().length).toBe(2);
+    expect(lat.markCulled('container', 0)).toBe(true);
+    expect(lat.isCulled('container', 0)).toBe(true);
+    expect(lat.isCulled('container', 1)).toBe(false);
+    const active = lat.getActiveContainers();
+    expect(active.length).toBe(1);
+    expect(active[0].id).toBe(1);
+    // Raw containers still exposed via getContainers.
+    expect(lat.getContainers().length).toBe(2);
+  });
+
+  it('markCulled("enemy", id) removes the spawn from getActiveEnemySpawns', () => {
+    const grid = makeGrid(20, 32, 1);
+    const lat = createLattice({
+      cells: grid,
+      enemySpawns: [{ id: 0, x: 3, y: 3, archetypeId: 'drone' }, { id: 1, x: 5, y: 5, archetypeId: 'drone' }]
+    });
+    expect(lat.markCulled('enemy', 1)).toBe(true);
+    expect(lat.isCulled('enemy', 1)).toBe(true);
+    const active = lat.getActiveEnemySpawns();
+    expect(active.length).toBe(1);
+    expect(active[0].id).toBe(0);
+  });
+
+  it('markCulled with unknown kind returns false and no state changes', () => {
+    const grid = makeGrid(20, 32, 1);
+    const lat = createLattice({
+      cells: grid,
+      containers: [{ id: 0, x: 3, y: 3 }]
+    });
+    expect(lat.markCulled('mystery', 0)).toBe(false);
+    expect(lat.getActiveContainers().length).toBe(1);
+    expect(lat.isCulled('mystery', 0)).toBe(false);
+  });
+});
