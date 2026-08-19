@@ -13,6 +13,32 @@ function makeFloor() {
   return generateFloor(42, 1, {}, themesData);
 }
 
+// 20x32 floor whose upper 16 rows are wide open and lower 16 rows are walled except a
+// two-column strip on the left edge. Picking a window centered on (contact.x-4, contact.y-8)
+// slices the wall; shifting UP by several rows yields far more open cells.
+function makeLeftEdgeAsymmetricFloor() {
+  const cells = Array.from({ length: 32 }, () => new Array(20).fill(1));
+  for (let y = 16; y < 32; y++) {
+    for (let x = 2; x < 20; x++) cells[y][x] = 0;
+  }
+  return cells;
+}
+
+// 20x32 floor with two wide-open rooms connected by a single 1-cell corridor running through
+// the middle. A contact inside that corridor gives an initial window dominated by walls; the
+// scoring loop should still pick the best-open slice available before widening runs.
+function makeCorridorSpotFloor() {
+  const cells = Array.from({ length: 32 }, () => new Array(20).fill(0));
+  for (let y = 4; y < 13; y++) {
+    for (let x = 2; x < 18; x++) cells[y][x] = 1;
+  }
+  for (let y = 20; y < 29; y++) {
+    for (let x = 2; x < 18; x++) cells[y][x] = 1;
+  }
+  for (let y = 12; y < 21; y++) cells[y][10] = 1;
+  return cells;
+}
+
 describe('createHuntEncounter — basic structure', () => {
   it('returns a hunt encounter with kind: "hunt"', () => {
     const floor = makeFloor();
@@ -193,6 +219,71 @@ describe('injectEcho — placement', () => {
     const echo = { character: makeCharacter({ id: 'dead_1' }) };
     const spawn = injectEcho(floor, echo, prng, []);
     expect(spawn).toBeNull();
+  });
+});
+
+describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkpoint 1)', () => {
+  const cursor = createRNGCursorForRun(1);
+  const party = [makeCharacter({ id: 'a' })];
+  const enemy = [{ id: 'e1', archetypeId: 'drone' }];
+
+  it('left-edge contact clamps originX to 0 but the picked window shifts DOWN for openness', () => {
+    const floor = { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' };
+    const encounter = createStandardEncounter(floor, { x: 0, y: 16 }, party, enemy, cursor);
+    expect(encounter.window.originX).toBe(0);
+    // The old deterministic origin would be y = max(0, 16-8) = 8. The scoring loop must NOT
+    // pick that when a shifted-up origin yields substantially more open cells.
+    expect(encounter.window.originY).not.toBe(8);
+    expect(encounter.window.originY).toBeLessThan(8);
+    expect(encounter.window.width).toBe(8);
+    expect(encounter.window.height).toBe(16);
+  });
+
+  it('corner contact never yields a negative origin', () => {
+    const floor = { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' };
+    const encounter = createStandardEncounter(floor, { x: 0, y: 0 }, party, enemy, cursor);
+    expect(encounter.window.originX).toBeGreaterThanOrEqual(0);
+    expect(encounter.window.originY).toBeGreaterThanOrEqual(0);
+    expect(encounter.window.width).toBe(8);
+    expect(encounter.window.height).toBe(16);
+  });
+
+  it('contact against the far bottom-right edge clamps origin to grid maxima', () => {
+    const floor = { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' };
+    const encounter = createStandardEncounter(floor, { x: 19, y: 31 }, party, enemy, cursor);
+    // Floor is 20x32; window 8x16 → maxOX = 12, maxOY = 16. Every candidate origin clamps here.
+    expect(encounter.window.originX).toBe(12);
+    expect(encounter.window.originY).toBe(16);
+    expect(encounter.window.width).toBe(8);
+    expect(encounter.window.height).toBe(16);
+  });
+
+  it('same (floorCells, contact) inputs produce byte-identical output on repeat calls', () => {
+    const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
+    const c1 = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
+    const c2 = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
+    expect(JSON.stringify(c1.window.cells)).toBe(JSON.stringify(c2.window.cells));
+    expect(c1.window.originX).toBe(c2.window.originX);
+    expect(c1.window.originY).toBe(c2.window.originY);
+  });
+
+  it('window dimensions are always 8x16', () => {
+    const floors = [
+      { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' },
+      { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' }
+    ];
+    const contacts = [
+      { x: 0, y: 0 }, { x: 0, y: 16 }, { x: 10, y: 16 }, { x: 19, y: 31 }, { x: 5, y: 5 }
+    ];
+    for (const floor of floors) {
+      for (const contact of contacts) {
+        const e = createStandardEncounter(floor, contact, party, enemy, cursor);
+        expect(e.window.width).toBe(8);
+        expect(e.window.height).toBe(16);
+        expect(e.window.cells.length).toBe(16);
+        for (const row of e.window.cells) expect(row.length).toBe(8);
+      }
+    }
   });
 });
 

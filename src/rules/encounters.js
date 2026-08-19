@@ -1,15 +1,16 @@
 const WINDOW_WIDTH = 8;
 const WINDOW_HEIGHT = 16;
+const CANDIDATE_RING_RADIUS = 2;
 
 function isOpenFloorCell(floorCells, x, y) {
   return floorCells[y]?.[x] !== undefined && floorCells[y][x] !== 0;
 }
 
-function carveWindow(floorCells, contact) {
-  const floorHeight = floorCells.length;
-  const floorWidth = floorCells[0]?.length || 0;
-  const originX = Math.max(0, Math.min(floorWidth - WINDOW_WIDTH, contact.x - Math.floor(WINDOW_WIDTH / 2)));
-  const originY = Math.max(0, Math.min(floorHeight - WINDOW_HEIGHT, contact.y - Math.floor(WINDOW_HEIGHT / 2)));
+function isOpenWindowCell(cells, x, y) {
+  return y >= 0 && y < WINDOW_HEIGHT && x >= 0 && x < WINDOW_WIDTH && cells[y][x] !== 0;
+}
+
+function buildWindowCells(floorCells, originX, originY) {
   const cells = [];
   for (let y = 0; y < WINDOW_HEIGHT; y++) {
     const row = [];
@@ -18,6 +19,125 @@ function carveWindow(floorCells, contact) {
     }
     cells.push(row);
   }
+  return cells;
+}
+
+function countOpenCellsIn(cells) {
+  let n = 0;
+  for (let y = 0; y < WINDOW_HEIGHT; y++) {
+    for (let x = 0; x < WINDOW_WIDTH; x++) {
+      if (cells[y][x] !== 0) n++;
+    }
+  }
+  return n;
+}
+
+// Mirror of src/floor/validator.js:countOneWideCorridors (SESSION-02); both must stay in sync.
+// A "1-wide corridor cell" is an open cell whose only two open orthogonal neighbors are collinear
+// (N+S or E+W). Inlined here because the rules layer must not import from the floor layer.
+function countOneWideCorridorsIn(cells) {
+  let n = 0;
+  for (let y = 0; y < WINDOW_HEIGHT; y++) {
+    for (let x = 0; x < WINDOW_WIDTH; x++) {
+      if (cells[y][x] === 0) continue;
+      const north = isOpenWindowCell(cells, x, y - 1);
+      const south = isOpenWindowCell(cells, x, y + 1);
+      const east = isOpenWindowCell(cells, x + 1, y);
+      const west = isOpenWindowCell(cells, x - 1, y);
+      const open = (north ? 1 : 0) + (south ? 1 : 0) + (east ? 1 : 0) + (west ? 1 : 0);
+      if (open === 2 && ((north && south) || (east && west))) n++;
+    }
+  }
+  return n;
+}
+
+// Greedy disjoint 2x2 all-open blocks: top-to-bottom, left-to-right sweep. Each matched
+// block marks its four cells as claimed so overlapping blocks are not double-counted.
+function countTwoByTwoRegionsIn(cells) {
+  const claimed = Array.from({ length: WINDOW_HEIGHT }, () => new Array(WINDOW_WIDTH).fill(false));
+  let n = 0;
+  for (let y = 0; y <= WINDOW_HEIGHT - 2; y++) {
+    for (let x = 0; x <= WINDOW_WIDTH - 2; x++) {
+      if (claimed[y][x] || claimed[y][x + 1] || claimed[y + 1][x] || claimed[y + 1][x + 1]) continue;
+      if (cells[y][x] === 0 || cells[y][x + 1] === 0 || cells[y + 1][x] === 0 || cells[y + 1][x + 1] === 0) continue;
+      claimed[y][x] = true;
+      claimed[y][x + 1] = true;
+      claimed[y + 1][x] = true;
+      claimed[y + 1][x + 1] = true;
+      n++;
+    }
+  }
+  return n;
+}
+
+// Pure — no PRNG. Metrics for scoring plus the fully-built 8x16 cells grid so callers
+// don't recarve. { openCells, oneWideCorridors, twoByTwoRegions, cells }.
+export function windowMetrics(floorCells, originX, originY) {
+  const cells = buildWindowCells(floorCells, originX, originY);
+  return {
+    openCells: countOpenCellsIn(cells),
+    oneWideCorridors: countOneWideCorridorsIn(cells),
+    twoByTwoRegions: countTwoByTwoRegionsIn(cells),
+    cells
+  };
+}
+
+// Enumerate up to 25 candidate origins in a Chebyshev-2 ring around the contact-centered
+// origin, clamp each to grid bounds, deduplicate, and pick the best by:
+//   score = openCells * 4 - oneWideCorridors * 3 + min(2, twoByTwoRegions) * 8
+// Ties broken by closer-to-center Chebyshev distance, then (originY, originX) lex.
+function pickBestWindow(floorCells, contact) {
+  const floorHeight = floorCells.length;
+  const floorWidth = floorCells[0]?.length || 0;
+  const baseX = contact.x - Math.floor(WINDOW_WIDTH / 2);
+  const baseY = contact.y - Math.floor(WINDOW_HEIGHT / 2);
+  const maxOX = Math.max(0, floorWidth - WINDOW_WIDTH);
+  const maxOY = Math.max(0, floorHeight - WINDOW_HEIGHT);
+
+  // Deduplicate clamped origins; each unique origin remembers its smallest Chebyshev distance
+  // to the base (unclamped) offset so tiebreaks favor candidates that started near the center.
+  const seen = new Map();
+  for (let dy = -CANDIDATE_RING_RADIUS; dy <= CANDIDATE_RING_RADIUS; dy++) {
+    for (let dx = -CANDIDATE_RING_RADIUS; dx <= CANDIDATE_RING_RADIUS; dx++) {
+      const oX = Math.max(0, Math.min(maxOX, baseX + dx));
+      const oY = Math.max(0, Math.min(maxOY, baseY + dy));
+      const cheb = Math.max(Math.abs(dx), Math.abs(dy));
+      const key = `${oX},${oY}`;
+      const existing = seen.get(key);
+      if (!existing || existing.cheb > cheb) {
+        seen.set(key, { originX: oX, originY: oY, cheb });
+      }
+    }
+  }
+
+  let best = null;
+  for (const cand of seen.values()) {
+    const m = windowMetrics(floorCells, cand.originX, cand.originY);
+    const twos = Math.min(2, m.twoByTwoRegions);
+    const score = m.openCells * 4 - m.oneWideCorridors * 3 + twos * 8;
+    const entry = { originX: cand.originX, originY: cand.originY, cheb: cand.cheb, cells: m.cells, score };
+    if (!best) { best = entry; continue; }
+    if (entry.score > best.score) { best = entry; continue; }
+    if (entry.score < best.score) continue;
+    if (entry.cheb < best.cheb) { best = entry; continue; }
+    if (entry.cheb > best.cheb) continue;
+    if (entry.originY < best.originY) { best = entry; continue; }
+    if (entry.originY > best.originY) continue;
+    if (entry.originX < best.originX) { best = entry; }
+  }
+
+  return best;
+}
+
+// Pure — no PRNG, no side effects on floorCells. Picks the best of ~25 candidate origins
+// in a Chebyshev-2 ring. Returns { originX, originY, width: 8, height: 16, cells }. If
+// floorCells collapses to `[[1]]` the smallest legal window is returned with just (0,0) open.
+// Checkpoint 2 will add post-carve widening when countOpenCellsIn(cells) < OPEN_CELL_TARGET.
+function carveWindow(floorCells, contact) {
+  const best = pickBestWindow(floorCells, contact);
+  const cells = best ? best.cells : buildWindowCells(floorCells, 0, 0);
+  const originX = best ? best.originX : 0;
+  const originY = best ? best.originY : 0;
   return { originX, originY, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, cells };
 }
 
