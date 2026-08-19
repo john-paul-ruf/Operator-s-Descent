@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-18-save-codec-v5-v1';
+const CACHE_VERSION = '2026-08-18-the-manual-v1';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -103,6 +103,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './data/consumables.json',
   './data/enemies.json',
   './data/equipment.json',
+  './data/manual.json',
   './data/protocols.json',
   './data/sigils.json',
   './data/symbol-table.json',

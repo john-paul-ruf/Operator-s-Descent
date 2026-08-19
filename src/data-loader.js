@@ -15,6 +15,13 @@ const DATA_FILES = [
 const MANUAL_CHAPTERS = new Set(['interface', 'systems', 'glossary']);
 const MANUAL_GROUPS = new Set(['conditions', 'schools', 'classes', 'attributes', 'consumables', 'rarities', 'affixes', 'entities']);
 
+// Data keys that loadGameData always fetches, but that partial-registry validators
+// (fixture harnesses that build a subset for rules-only tests) may legitimately omit.
+// The keys still run their per-file validator when present; only the missing-file gate
+// tolerates absence. loadGameData itself always fetches these — a missing file there
+// surfaces as fetch_failed before validation runs.
+const OPTIONAL_DATA_KEYS = new Set(['manual']);
+
 const ATTRIBUTES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
 const ARCHETYPES = ['chambers', 'caves', 'mazes', 'cathedrals', 'spines', 'fractured', 'rings', 'shards'];
 const MODIFIERS = ['none', 'dense', 'sparse', 'dangerous'];
@@ -77,7 +84,7 @@ function hasExactIds(ids, expected) {
 function validateVersions(registry, errors) {
   for (const [key, file] of DATA_FILES) {
     if (!isObject(registry?.[key])) {
-      addError(errors, 'missing_file', file, 'Expected a JSON object.');
+      if (!OPTIONAL_DATA_KEYS.has(key)) addError(errors, 'missing_file', file, 'Expected a JSON object.');
     } else if (registry[key].version !== 1) {
       addError(errors, 'version_mismatch', file, 'Expected integer version 1.');
     }
@@ -308,6 +315,7 @@ function validateSymbolTable(data, errors, registry) {
 
 function validateManual(data, errors) {
   const file = 'data/manual.json';
+  if (!isObject(data)) return; // optional per OPTIONAL_DATA_KEYS; partial registries may omit it
   if (!Array.isArray(data?.sections) || data.sections.length === 0) {
     addError(errors, 'invalid_schema', file, 'Expected non-empty sections array.');
     return;

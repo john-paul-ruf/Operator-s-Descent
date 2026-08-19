@@ -456,6 +456,113 @@ describe('sigils.json', () => {
   });
 });
 
+describe('manual.json', () => {
+  const EXPECTED_INTERFACE_IDS = [
+    'console_overview', 'move_mode', 'the_map', 'combat_mode', 'party_mode',
+    'gear_mode', 'tech_mode', 'loot_mode', 'log_mode', 'status_strip',
+    'settings_help', 'seed_links'
+  ];
+  const EXPECTED_SYSTEMS_IDS = [
+    'character_creation', 'd20_resolution', 'cover_and_range', 'ap_and_initiative',
+    'charge_and_overclock', 'calibration', 'corruption', 'danger_clock', 'echoes',
+    'loot_and_salvage', 'corrupt_items', 'descent_and_scoring'
+  ];
+  const EXPECTED_GLOSSARY_IDS = [
+    'jammed', 'overloaded', 'shielded', 'blinded', 'immobilized', 'corroded', 'marked', 'panicked', 'burning',
+    'disrupt', 'ward', 'scry', 'rewrite',
+    'breacher', 'ghost', 'compiler', 'anchor', 'oracle', 'operator',
+    'mgt', 'fin', 'vit', 'res', 'foc', 'sig',
+    'repair_patch', 'med_kit', 'charge_cell', 'boost_cell', 'purge_spike', 'shield_capacitor', 'adrenal_injector',
+    'rarity_stock', 'rarity_tuned', 'rarity_custom', 'rarity_prototype', 'rarity_corrupt',
+    'affixes'
+  ];
+  const EXPECTED_GROUPS = {
+    conditions: 9, schools: 4, classes: 6, attributes: 6, consumables: 7, rarities: 5, affixes: 1
+  };
+  const VALID_RUN_KINDS = new Set(['text', 'link']);
+  const VALID_GROUP_NAMES = new Set(['conditions', 'schools', 'classes', 'attributes', 'consumables', 'rarities', 'affixes', 'entities']);
+
+  function idsIn(chapter) {
+    return manual.sections.filter(s => s.chapter === chapter).map(s => s.id);
+  }
+
+  it('version is 1', () => {
+    expect(manual.version).toBe(1);
+  });
+
+  it('has exactly 62 sections (12 interface + 12 systems + 38 glossary)', () => {
+    expect(manual.sections).toHaveLength(62);
+    expect(idsIn('interface')).toHaveLength(12);
+    expect(idsIn('systems')).toHaveLength(12);
+    expect(idsIn('glossary')).toHaveLength(38);
+  });
+
+  it('interface ids match the fixed inventory', () => {
+    expect(idsIn('interface').sort()).toEqual([...EXPECTED_INTERFACE_IDS].sort());
+  });
+
+  it('systems ids match the fixed inventory', () => {
+    expect(idsIn('systems').sort()).toEqual([...EXPECTED_SYSTEMS_IDS].sort());
+  });
+
+  it('glossary ids match the fixed inventory', () => {
+    expect(idsIn('glossary').sort()).toEqual([...EXPECTED_GLOSSARY_IDS].sort());
+  });
+
+  it('glossary sections partition into the expected groups', () => {
+    const counts = {};
+    for (const section of manual.sections) {
+      if (section.chapter !== 'glossary') continue;
+      counts[section.group] = (counts[section.group] || 0) + 1;
+    }
+    expect(counts).toEqual(EXPECTED_GROUPS);
+  });
+
+  it('every section is well-formed (id, chapter, group, title, body, seeAlso)', () => {
+    const ids = new Set();
+    for (const section of manual.sections) {
+      expect(/^[a-z][a-z0-9_]*$/.test(section.id)).toBe(true);
+      expect(ids.has(section.id)).toBe(false);
+      ids.add(section.id);
+      expect(['interface', 'systems', 'glossary']).toContain(section.chapter);
+      if (section.chapter === 'glossary') {
+        expect(typeof section.group).toBe('string');
+        expect(VALID_GROUP_NAMES.has(section.group)).toBe(true);
+      } else {
+        expect(section.group).toBeNull();
+      }
+      expect(typeof section.title).toBe('string');
+      expect(section.title.length).toBeGreaterThan(0);
+      expect(Array.isArray(section.body)).toBe(true);
+      expect(section.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(section.seeAlso)).toBe(true);
+    }
+  });
+
+  it('every run is either a valid text run or a valid link run', () => {
+    for (const section of manual.sections) {
+      for (const paragraph of section.body) {
+        expect(Array.isArray(paragraph)).toBe(true);
+        expect(paragraph.length).toBeGreaterThan(0);
+        for (const run of paragraph) {
+          expect(Array.isArray(run)).toBe(true);
+          expect(VALID_RUN_KINDS.has(run[0])).toBe(true);
+          if (run[0] === 'text') {
+            expect(run).toHaveLength(2);
+            expect(typeof run[1]).toBe('string');
+            expect(run[1].length).toBeGreaterThan(0);
+          } else {
+            expect(run).toHaveLength(3);
+            expect(/^[a-z][a-z0-9_]*$/.test(run[1])).toBe(true);
+            expect(typeof run[2]).toBe('string');
+            expect(run[2].length).toBeGreaterThan(0);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe('symbol-table.json', () => {
   it('version is 1', () => {
     expect(symbolTable.version).toBe(1);
