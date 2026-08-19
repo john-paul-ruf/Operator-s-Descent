@@ -1783,8 +1783,7 @@ button.protocol-card[aria-selected="true"],
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: auto;
-  min-height: 44px;
+  height: 44px;
   min-width: 44px;
   padding: 4px 10px;
   border: 1px solid var(--accent);
