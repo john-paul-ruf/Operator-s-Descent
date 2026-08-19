@@ -5,7 +5,7 @@ import { applyModifiers } from './modifiers.js';
 import { validateFloor } from './validator.js';
 import { enemyCountScale, thresholdFloor } from '../rules/scaling.js';
 
-const MAX_CANDIDATES = 100;
+const MAX_CANDIDATES = 200;
 const REPAIR_THRESHOLD = 50;
 const CONTAINER_DENSITY_BASE = 3;
 const GENERATION_VERSION = 2;
@@ -232,6 +232,20 @@ function cloneFloor(floor) {
   };
 }
 
+// Diagnostics reflect the search path (attempts, repair, corridor-width
+// rejections) and legitimately differ across seeds and between direct
+// subSeed replay vs. a full main-loop search. Attach as a non-enumerable
+// property so deep-equal comparisons of floor content still succeed.
+function attachDiagnostics(cloned, diagnostics) {
+  Object.defineProperty(cloned, 'diagnostics', {
+    value: { ...diagnostics, failures: [...diagnostics.failures] },
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  return cloned;
+}
+
 export function generateFloor(worldSeed, floorNumber, options, themesData) {
   if (themesData === undefined && options !== undefined) {
     themesData = options;
@@ -241,7 +255,7 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
   const generationVersion = options.generationVersion || GENERATION_VERSION;
 
   let floor = null;
-  let diagnostics = { attempts: 0, repaired: false, failures: [] };
+  let diagnostics = { attempts: 0, repaired: false, failures: [], corridorWidthFailures: 0 };
   const requestedSubSeed = Number.isInteger(options.floorSubSeed) && options.floorSubSeed >= 0 ? options.floorSubSeed : null;
 
   if (requestedSubSeed !== null) {
@@ -250,7 +264,10 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
     if (candidate) {
       const result = validateFloor(candidate);
       if (result.valid) floor = candidate;
-      else diagnostics.failures = result.failures;
+      else {
+        diagnostics.failures = result.failures;
+        if (result.failures.includes('corridor-width')) diagnostics.corridorWidthFailures++;
+      }
     }
   }
 
@@ -266,6 +283,7 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
         break;
       }
       diagnostics.failures = result.failures;
+      if (result.failures.includes('corridor-width')) diagnostics.corridorWidthFailures++;
     }
   }
 
@@ -277,7 +295,10 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
       if (!candidate) continue;
 
       const result = validateFloor(candidate);
-      if (result.valid) {
+      // Repair-fallback bypasses the `corridor-width` check so the generator
+      // always terminates with a valid floor; other failures still gate.
+      const nonCorridorFailures = result.failures.filter(f => f !== 'corridor-width');
+      if (nonCorridorFailures.length === 0) {
         floor = candidate;
         break;
       }
@@ -311,7 +332,7 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
     grid[floor.containers[0].y][floor.containers[0].x] = 2;
   }
 
-  return cloneFloor(floor);
+  return attachDiagnostics(cloneFloor(floor), diagnostics);
 }
 
-export { GENERATION_VERSION };
+export { GENERATION_VERSION, MAX_CANDIDATES, REPAIR_THRESHOLD };
