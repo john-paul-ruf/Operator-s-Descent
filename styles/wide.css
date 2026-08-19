@@ -66,6 +66,18 @@
   .wide-shell[data-pane-right="collapsed"] .wide-console-content { display: none; }
   .wide-shell[data-pane-right="collapsed"] .wide-console-dock { grid-template-columns: 96px 0; }
 
+  /* Map-only view (Issue H) — when a dock is collapsed, dissolve its dark
+     panel background into the playfield so the shell reads as one continuous
+     surface instead of three coloured columns. The collapse chevron keeps
+     its own bg-panel-elevated background (line ~106) for contrast. */
+  .wide-shell[data-pane-left="collapsed"] .wide-telemetry-dock,
+  .wide-shell[data-pane-right="collapsed"] .wide-console-dock {
+    background: var(--bg-base);
+    border-left-color: transparent;
+    border-right-color: transparent;
+    box-shadow: none;
+  }
+
   /* Resize handle: 8px hit strip straddling the gap between docks and the playfield. */
   .pane-resize-handle {
     position: absolute;
@@ -350,13 +362,21 @@
   .wide-console-content-body {
     flex: 1;
     /* SESSION-06 density pass — 20 → 12 padding + systematic 8px rhythm on
-       every direct child to reclaim vertical space in the narrow dock. */
-    padding: 12px;
+       every direct child to reclaim vertical space in the narrow dock.
+       SESSION-05 (Issue D) added padding-bottom: 24px so the last row of
+       long gear/inventory scroll content clears the CRT scanline overlay. */
+    padding: 12px 12px 24px;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
   }
   .wide-console-content-body > * + * { margin-top: 8px; }
+  /* SESSION-05 (Issue D) — tighten gear stack spacing so the extra
+     padding-bottom lands as visible clearance, not compound margin. */
+  .wide-console-content-body .equipped-section,
+  .wide-console-content-body .inventory-list {
+    margin-bottom: 8px;
+  }
   /* Combat actions ship as a 2-column grid in the wide dock so seven actions
      fit in four rows instead of a seven-tall stack. SESSION-05's combat pane
      emits `.combat-action-list` regardless of layout — this scope keeps
@@ -404,7 +424,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border-dim);
     font-size: 11px;
-    color: var(--text-secondary);
+    color: var(--text-primary);
   }
   .target-info .target-name {
     color: var(--danger);
@@ -412,9 +432,10 @@
     text-shadow: 0 0 6px var(--danger);
   }
   .target-info .target-detail {
-    color: var(--text-dim);
+    color: var(--text-primary);
     font-size: 10px;
     margin-top: 2px;
+    opacity: 0.9;
   }
   .btn-confirm {
     background: transparent;
