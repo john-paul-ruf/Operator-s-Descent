@@ -34,6 +34,10 @@ class FakeElement {
   addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
   removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((candidate) => candidate !== listener)); }
   dispatch(type, event = {}) { for (const listener of this.listeners.get(type) || []) listener({ type, target: this, ...event }); }
+  // Models the DOM `HTMLElement.click()` API, which browsers invoke when the
+  // user activates a focused <button> via Enter/Space. Fires click listeners
+  // unless the element is disabled — matches native semantics.
+  click() { if (this.disabled) return; this.dispatch('click'); }
 }
 
 function installFakeDocument() {
@@ -379,6 +383,41 @@ describe('semantic components', () => {
     const affixes = equipCard.children.filter((child) => String(child.className).includes('affix-tag'));
     expect(affixes.length).toBe(2);
     for (const affix of affixes) expect(affix.tagName).toBe('SPAN');
+  });
+
+  test('createManualLink keyboard activation: browser-invoked .click() fires the dispatch handler', () => {
+    // Native <button> elements fire click when the focused user presses Enter
+    // or Space — the browser routes that keypress through element.click().
+    // This test models that path by calling .click() directly.
+    const dispatched = [];
+    const link = createManualLink('mgt', { dispatch: (event, payload) => dispatched.push([event, payload]) });
+    link.click();
+    expect(dispatched).toEqual([['ui:manual-open', { target: 'mgt', source: 'ui' }]]);
+
+    const inertLink = createManualLink('mgt', { dispatch: () => {}, disabled: true });
+    inertLink.click();  // native disabled buttons swallow the click
+    expect(inertLink.disabled).toBe(true);
+  });
+
+  test('createManualLink aria-label shape covers every (label, target) combination', () => {
+    const withLabelAndTarget = createManualLink('burning', { label: 'Burning', dispatch: () => {} });
+    expect(withLabelAndTarget.getAttribute('aria-label')).toBe('Open manual: Burning');
+
+    const targetOnly = createManualLink('burning', { dispatch: () => {} });
+    expect(targetOnly.getAttribute('aria-label')).toBe('Open manual: burning');
+
+    const labelOnly = createManualLink(null, { label: 'Manual', dispatch: () => {} });
+    expect(labelOnly.getAttribute('aria-label')).toBe('Open manual: Manual');
+
+    const neither = createManualLink(null, { dispatch: () => {} });
+    expect(neither.getAttribute('aria-label')).toBe('Open manual: contents');
+  });
+
+  test('createManualLink chip variant exposes the hit-target class for CSS sizing', () => {
+    const chip = createManualLink('affixes', { variant: 'chip', dispatch: () => {} });
+    expect(chip.classList.values.has('manual-term-link')).toBe(true);
+    expect(chip.classList.values.has('manual-term-link--chip')).toBe(true);
+    expect(chip.classList.values.has('is-interactive')).toBe(true);
   });
 
   test('nested-interactive rule: protocol cards embed only <span>/<div> tags — no manual link inside the button host', () => {
