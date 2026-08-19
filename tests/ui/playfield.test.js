@@ -706,4 +706,114 @@ describe('playfield rendering', () => {
     const labels = canvas.context.calls.filter(([n]) => n === 'fillText').map((c) => c[2]);
     expect(labels).not.toContain('FLASH');
   });
+
+  // ── SESSION-01 (ui-clarity-polish) Issue L — party / enemy / wall color contract ──
+
+  test('SESSION-01 Issue L: party token falls back to PARTY_FALLBACK_COLOR when the theme accent collides with hostile red', () => {
+    // Warm-orange accent (Foundry theme = #e8632a) has max-component distance 41 from
+    // HOSTILE_COLOR #e83a3a, well under the 96-threshold → the party must render in the
+    // cool cyan fallback #7ec8e3 so the two rings stay visually distinct.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    playfield.setAccent('#e8632a');
+    const fog = new Uint8Array(20 * 32).fill(2);
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    // drawToken sets strokeStyle = color then stroke(); the recorded stroke arg is that color.
+    // Party stroke color must be the fallback cyan, not the raw accent.
+    const strokes = canvas.context.calls.filter(([n]) => n === 'stroke').map((c) => c[1]);
+    expect(strokes).toContain('#7ec8e3');
+    expect(strokes).not.toContain('#e8632a');
+    // Enemy stroke color stays HOSTILE_COLOR #e83a3a — never derived from the accent.
+    expect(strokes).toContain('#e83a3a');
+  });
+
+  test('SESSION-01 Issue L: party token keeps the raw accent when accent does not collide with hostile red', () => {
+    // Default accent #7ec8e3 (Cold Storage) is nowhere near HOSTILE_COLOR — party renders in it.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    playfield.setAccent('#7ec8e3');
+    const fog = new Uint8Array(20 * 32).fill(2);
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    const strokes = canvas.context.calls.filter(([n]) => n === 'stroke').map((c) => c[1]);
+    // Party stroke = accent = #7ec8e3. Enemy stroke = HOSTILE_COLOR = #e83a3a.
+    expect(strokes).toContain('#7ec8e3');
+    expect(strokes).toContain('#e83a3a');
+  });
+
+  test('SESSION-01 Issue L: enemy tokens always render HOSTILE_COLOR even when accent is exotic', () => {
+    // Cover every shipped theme accent — from cyan (#7ec8e3) through purple (#6a2eb8) — the
+    // enemy stroke stays fixed at HOSTILE_COLOR. The prompt calls this "documentary": an enemy's
+    // color never derives from accentColor, full stop.
+    for (const accent of ['#7ec8e3', '#b026d4', '#e8d23a', '#8ec44a', '#e83a3a']) {
+      const canvas = new FakeCanvas();
+      const playfield = createPlayfield(canvas);
+      playfield.setAccent(accent);
+      const fog = new Uint8Array(20 * 32).fill(2);
+      playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+      const strokes = canvas.context.calls.filter(([n]) => n === 'stroke').map((c) => c[1]);
+      expect(strokes).toContain('#e83a3a');
+    }
+  });
+
+  test('SESSION-01 walls follow the theme accent — non-colliding accent tints the wall lines', () => {
+    // Hive accent #8ec44a is well clear of HOSTILE_COLOR (distance = 138) → walls tint green.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    playfield.setAccent('#8ec44a');
+    const fog = new Uint8Array(20 * 32).fill(2);
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    const themedWallFills = fills.filter((c) => c[1] === '#8ec44a');
+    // At least one wall strip must render in the themed accent color.
+    expect(themedWallFills.length).toBeGreaterThan(0);
+    // No fills use the legacy hardcoded WALL_LINE_COLOR that wouldn't tint with the theme.
+    // (WALL_LINE_COLOR still equals '#7ec8e3'; when accent is #8ec44a it must NOT appear.)
+    const rawWallLine = fills.filter((c) => c[1] === '#7ec8e3');
+    // No cyan fills — the wall pass is fully re-tinted.
+    expect(rawWallLine.length).toBe(0);
+  });
+
+  test('SESSION-01 walls fall back to PARTY_FALLBACK_COLOR when the accent collides with hostile red', () => {
+    // Foundry accent #e8632a collides → walls render in the fallback cool cyan (PARTY_FALLBACK_COLOR).
+    // Assertion is against partyColor(accent) so the meaning stays coupled to the helper's contract.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    playfield.setAccent('#e8632a');
+    const fog = new Uint8Array(20 * 32).fill(2);
+
+    playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
+
+    const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
+    // Walls do NOT tint to the raw warm-orange accent under fallback.
+    expect(fills.some((c) => c[1] === '#e8632a')).toBe(false);
+    // Walls render in the fallback cool cyan (PARTY_FALLBACK_COLOR === '#7ec8e3').
+    const fallbackWallFills = fills.filter((c) => c[1] === '#7ec8e3');
+    expect(fallbackWallFills.length).toBeGreaterThan(0);
+  });
+
+  test('SESSION-01 Issue L: combat active-frame color tracks the party fallback when accent collides', () => {
+    // Terminal accent #e83a3a IS the hostile color — ACTIVE frame stroke must be the fallback,
+    // not the accent, so the player's frame stays legible against enemy chrome.
+    const canvas = new FakeCanvas();
+    const playfield = createPlayfield(canvas);
+    playfield.setAccent('#e83a3a');
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', position: { x: 1, y: 1 }, sigilCodepoint: 0xE000 }]
+    ]);
+    const viewTransform = { scale: 1, dx: 0, dy: 0 };
+
+    playfield.renderCombat({ combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 }, lattice(), {
+      viewTransform
+    });
+
+    // ACTIVE strokeRect uses the fallback #7ec8e3, not the raw accent #e83a3a.
+    const cyanStrokes = canvas.context.calls.filter(([n, style]) => n === 'strokeRect' && style === '#7ec8e3');
+    expect(cyanStrokes.some((c) => c[2] === 1 * 48 + 2 && c[3] === 1 * 48 + 2 && c[4] === 44 && c[5] === 44)).toBe(true);
+  });
 });

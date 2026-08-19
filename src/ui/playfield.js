@@ -17,7 +17,16 @@ export const WALL_PULSE_FPS = 30;
 export const WALL_GLOW_BLUR = [4, 12];
 export const WALL_GLOW_ALPHA = [0.7, 1];
 const WALL_STATIC_GLOW = 0.7;
-const DANGER_COLOR = '#e83a3a';
+// SESSION-01 (ui-clarity-polish): enemies never derive color from the theme accent.
+// HOSTILE_COLOR is the fixed hostile red for enemy tokens and danger frames.
+// DANGER_COLOR stays as an internal alias so existing frame call sites (TARGET / FLASH / VALID)
+// keep their original signature.
+const HOSTILE_COLOR = '#e83a3a';
+const DANGER_COLOR = HOSTILE_COLOR;
+// Party fallback used when the theme accent collides visually with HOSTILE_COLOR
+// (max RGB-component distance below COLLISION_THRESHOLD). Matches the default cool cyan accent.
+const PARTY_FALLBACK_COLOR = '#7ec8e3';
+const COLLISION_THRESHOLD = 96;
 const DESCENT_COLOR = '#3ae8a8';
 const CONTAINER_COLOR = '#e8d23a';
 const COVER_COLOR = '#e8c63a';
@@ -27,6 +36,24 @@ const ECHO_COLOR = '#b026d4';
 
 function lerp(range, t) {
   return range[0] + t * (range[1] - range[0]);
+}
+
+function componentDistance(a, b) {
+  const parse = (hex) => {
+    const n = Number.parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+  };
+  const [ar, ag, ab] = parse(a);
+  const [br, bg, bb] = parse(b);
+  return Math.max(Math.abs(ar - br), Math.abs(ag - bg), Math.abs(ab - bb));
+}
+
+function colorsCollide(a, b) {
+  return componentDistance(a, b) < COLLISION_THRESHOLD;
+}
+
+function partyColor(accent) {
+  return colorsCollide(accent, HOSTILE_COLOR) ? PARTY_FALLBACK_COLOR : accent;
 }
 
 export function wallThickness(size) {
@@ -119,12 +146,12 @@ function drawGridTicks(ctx, { isFloor, isRevealed, isDim, colStart, rowStart, co
   }
 }
 
-function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, cols, rows, size, glow = WALL_STATIC_GLOW }) {
+function drawWallLines(ctx, { isTraversable, isRevealed, colStart, rowStart, cols, rows, size, glow = WALL_STATIC_GLOW, wallColor = WALL_LINE_COLOR }) {
   const t = wallThickness(size);
   const blur = lerp(WALL_GLOW_BLUR, glow);
   const alpha = lerp(WALL_GLOW_ALPHA, glow);
-  ctx.fillStyle = WALL_LINE_COLOR;
-  ctx.shadowColor = WALL_LINE_COLOR;
+  ctx.fillStyle = wallColor;
+  ctx.shadowColor = wallColor;
   ctx.shadowBlur = blur;
   ctx.globalAlpha = alpha;
   for (let ry = 0; ry < rows; ry++) {
@@ -293,7 +320,8 @@ export function createPlayfield(canvas) {
       isTraversable: isFloor,
       isRevealed,
       colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE,
-      glow: glowLevel()
+      glow: glowLevel(),
+      wallColor: partyColor(accentColor)
     });
 
     for (let y = 0; y < h; y++) {
@@ -333,7 +361,7 @@ export function createPlayfield(canvas) {
         x: e.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
         y: e.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
         radius: EXPLORATION_CELL_SIZE * 0.35,
-        color: DANGER_COLOR
+        color: HOSTILE_COLOR
       });
     }
     const stagedPath = Array.isArray(options.stagedPath) ? options.stagedPath : null;
@@ -368,7 +396,7 @@ export function createPlayfield(canvas) {
         x: partyPos.x * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
         y: partyPos.y * EXPLORATION_CELL_SIZE + EXPLORATION_CELL_SIZE / 2,
         radius: EXPLORATION_CELL_SIZE * 0.39,
-        color: accentColor
+        color: partyColor(accentColor)
       });
     }
     resetTransform(ctx);
@@ -409,7 +437,8 @@ export function createPlayfield(canvas) {
       isTraversable: combatIsFloor,
       isRevealed: () => true,
       colStart: 0, rowStart: 0, cols: width, rows: height, size: COMBAT_CELL_SIZE,
-      glow: glowLevel()
+      glow: glowLevel(),
+      wallColor: partyColor(accentColor)
     });
 
     for (let gy = 0; gy < height; gy++) {
@@ -430,9 +459,12 @@ export function createPlayfield(canvas) {
       const py = pos.y * COMBAT_CELL_SIZE;
       const role = actorRole(actor);
       const isDead = actor.hp <= 0;
-      const roleColor = role === 'player' ? accentColor : role === 'echo' ? ECHO_COLOR : DANGER_COLOR;
+      const partyDisplayColor = partyColor(accentColor);
+      const roleColor = role === 'player'
+        ? partyDisplayColor
+        : role === 'echo' ? ECHO_COLOR : HOSTILE_COLOR;
       const tokenColor = isDead ? 'rgba(40,40,40,0.6)' : roleColor;
-      if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, accentColor, 'ACTIVE');
+      if (!isDead && actor.id === activeId) drawFrame(ctx, px, py, partyDisplayColor, 'ACTIVE');
       if (!isDead && actor.id === options.selectedTargetId) drawFrame(ctx, px, py, DANGER_COLOR, 'TARGET', 4);
       drawCreatureSigil(ctx, {
         codepoint: actorSigil(actor),
