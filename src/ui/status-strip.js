@@ -1,6 +1,21 @@
 import { bus } from '../state/bus.js';
-import { createSigilToken, createHPBar, createChargeBar } from './components.js';
+import { createSigilToken, createHPBar, createChargeBar, createManualLink } from './components.js';
 import { createLogEntryElement, collectLogEntries } from './console/log.js';
+
+// the-manual SESSION-04 — `?` manual chip is the exploration/combat access point.
+// Kept as a lightweight helper so both the portrait strip and the wide telemetry
+// dock render an identical, testable affordance.
+function appendManualChip(parent, source) {
+  const chip = createManualLink(null, {
+    variant: 'chip',
+    label: '?',
+    source,
+    dispatch: (event, payload) => bus.dispatch(event, payload),
+    testid: 'status-manual'
+  });
+  parent.appendChild(chip);
+  return chip;
+}
 
 function actorList(combatState) {
   return combatState?.combatants instanceof Map
@@ -103,6 +118,7 @@ export function createStatusBar(runState, combatState = null) {
   strip.setAttribute('role', 'status');
   strip.setAttribute('aria-live', 'polite');
   strip.setAttribute('aria-atomic', 'true');
+  strip.style.position = 'relative';
   const cleanups = [];
 
   if (combatState) {
@@ -114,6 +130,16 @@ export function createStatusBar(runState, combatState = null) {
   } else {
     cleanups.push(renderExplorationStatus(strip, runState));
   }
+
+  // Manual `?` chip — absolute-positioned so it never disturbs the strip's
+  // flex/grid layout in either mode. Registered for cleanup via listen()
+  // in createManualLink itself.
+  const chip = appendManualChip(strip, 'status-strip');
+  chip.style.position = 'absolute';
+  chip.style.top = '4px';
+  chip.style.right = '4px';
+  chip.style.zIndex = '1';
+  cleanups.push(() => chip.cleanup?.());
 
   strip.cleanup = () => cleanups.forEach((cleanup) => cleanup?.());
   return strip;
@@ -345,7 +371,14 @@ export function createTelemetryDock(runState, combatState = null) {
 
   const header = document.createElement('div');
   header.className = 'wide-telemetry-header';
+  header.style.position = 'relative';
   dock.appendChild(header);
+
+  // Manual `?` chip — pinned to the top-right of the telemetry dock header.
+  // Positioned via styles/wide.css `.wide-telemetry-manual-chip` (SESSION-04).
+  const chip = appendManualChip(header, 'status-strip');
+  chip.classList.add('wide-telemetry-manual-chip');
+  cleanups.push(() => chip.cleanup?.());
 
   appendDockField(header, 'Depth', () => textSpan('', String(runState?.depth ?? 0).padStart(2, '0'), `Depth ${runState?.depth ?? 0}`));
   if (combatState) {

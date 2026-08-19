@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { bus } from '../../src/state/bus.js';
 import { createStatusBar, createTelemetryDock } from '../../src/ui/status-strip.js';
 
@@ -23,6 +23,8 @@ class FakeElement {
     this.textContent = '';
     this.scrollTop = 0;
     this.scrollHeight = 0;
+    this.listeners = new Map();
+    this.disabled = false;
   }
   set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
   get className() { return this._className; }
@@ -32,6 +34,12 @@ class FakeElement {
   removeChild(child) { this.children = this.children.filter((entry) => entry !== child); return child; }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
+  addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
+  removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((candidate) => candidate !== listener)); }
+  dispatchEvent(type, event = {}) {
+    for (const listener of this.listeners.get(type) || []) listener({ type, target: this, ...event });
+  }
+  click() { this.dispatchEvent('click'); }
 }
 
 function installDocument() {
@@ -111,6 +119,37 @@ describe('status strip', () => {
     expect(findByClass(strip, 'status-active-sigil')).not.toBe(null);
     expect(findByClass(strip, 'init-rail').children).toHaveLength(2);
     expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');
+  });
+
+  test('renders the manual `?` chip in exploration and combat portrait strips and dispatches ui:manual-open on click', () => {
+    const explorationStrip = createStatusBar({ depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] });
+    const explorationChip = byTestId(explorationStrip, 'status-manual');
+    expect(explorationChip).not.toBe(null);
+    expect(explorationChip.tagName).toBe('BUTTON');
+    expect(explorationChip.textContent).toBe('?');
+    expect(explorationChip.classList.contains('manual-term-link--chip')).toBe(true);
+    // Absolute positioning keeps the chip out of the flex/grid layout
+    expect(explorationChip.style.position).toBe('absolute');
+
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }]
+    ]);
+    const combatStrip = createStatusBar({ depth: 1 }, { combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 });
+    const combatChip = byTestId(combatStrip, 'status-manual');
+    expect(combatChip).not.toBe(null);
+    expect(combatChip.classList.contains('manual-term-link--chip')).toBe(true);
+
+    const events = [];
+    const off = bus.on('ui:manual-open', (payload) => events.push(payload));
+    explorationChip.click();
+    combatChip.click();
+    expect(events).toEqual([
+      { target: null, source: 'status-strip' },
+      { target: null, source: 'status-strip' }
+    ]);
+    off();
+    explorationStrip.cleanup();
+    combatStrip.cleanup();
   });
 
   test('marks enemy initiative slots with the enemy class and stacks it with active', () => {
@@ -209,6 +248,23 @@ describe('telemetry dock (wide)', () => {
     dock.cleanup();
     bus.dispatch('ui:log-entry', { sequence: 3, type: 'combat', message: 'Should not append' });
     expect(feed.children).toHaveLength(2);
+  });
+
+  test('renders the manual `?` chip in the telemetry dock header and dispatches ui:manual-open on click', () => {
+    const events = [];
+    const off = bus.on('ui:manual-open', (payload) => events.push(payload));
+    const dock = createTelemetryDock({ depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] });
+    const chip = byTestId(dock, 'status-manual');
+    expect(chip).not.toBe(null);
+    expect(chip.tagName).toBe('BUTTON');
+    expect(chip.classList.contains('wide-telemetry-manual-chip')).toBe(true);
+    expect(chip.classList.contains('manual-term-link--chip')).toBe(true);
+    expect(chip.textContent).toBe('?');
+    expect(chip.getAttribute('data-manual-target')).toBe('');
+    chip.click();
+    expect(events).toEqual([{ target: null, source: 'status-strip' }]);
+    off();
+    dock.cleanup();
   });
 
   test('marks wide telemetry enemy slots with the enemy class and stacks it with active', () => {
