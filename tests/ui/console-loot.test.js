@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
 import { render as renderLoot } from '../../src/ui/console/loot.js';
+import { describeItem } from '../../src/rules/equipment.js';
 import { loadData } from '../helpers/data.js';
 
 const data = {
@@ -84,6 +85,23 @@ function collectSvgs(root, out = []) {
   return out;
 }
 
+function collectText(root, out = []) {
+  if (typeof root.textContent === 'string' && root.textContent) out.push(root.textContent);
+  for (const c of root.children || []) collectText(c, out);
+  return out;
+}
+
+function countStringOccurrences(text, needle) {
+  if (!needle) return 0;
+  let count = 0;
+  let index = 0;
+  while ((index = text.indexOf(needle, index)) !== -1) {
+    count += 1;
+    index += needle.length;
+  }
+  return count;
+}
+
 function item(id, baseType = 'sidearm', overrides = {}) {
   return { id, category: 'weapon', baseType, rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false, ...overrides };
 }
@@ -126,6 +144,24 @@ describe('LOOT mode — SESSION-06 icon coverage', () => {
     // Same shape: glyph first, then lucide icon.
     expect(vaultHeader.children[0].className.split(/\s+/)).toContain('container-icon');
     expect(vaultHeader.children[1].tagName).toBe('SVG');
+  });
+
+  it('SESSION-03 — container row renders the item description exactly once, keeps the rarity link, and drops loot-detail', () => {
+    const runState = run();
+    const weapon = item('loot-polearm', 'polearm');
+    const lootState = { container: { id: 4, kind: 'standard', x: 1, y: 1 }, items: [weapon] };
+    const container = new FakeElement('div');
+    renderLoot(container, { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+
+    const row = byTestId(container, 'loot-item-loot-polearm');
+    expect(row).toBeTruthy();
+    const description = describeItem(weapon, data);
+    expect(description).toBeTruthy();
+    const combined = collectText(row).join('\n');
+    expect(countStringOccurrences(combined, description)).toBe(1);
+
+    expect(byTestId(container, 'loot-rarity-link-loot-polearm')).toBeTruthy();
+    expect(byTestId(container, 'loot-detail-loot-polearm')).toBeNull();
   });
 
   it('TAKE / OPEN CONTAINER / JUNK buttons expose lucide sprites and disabled TAKE is inert on click', () => {
