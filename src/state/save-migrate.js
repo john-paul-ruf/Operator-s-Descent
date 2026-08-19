@@ -12,6 +12,7 @@
 // short-circuits on duplicate_migration and the chain stays intact.
 
 import { v3ToV4 } from './migrations/v3-to-v4.js';
+import { v4ToV5 } from './migrations/v4-to-v5.js';
 
 const STEPS = [];
 
@@ -51,6 +52,12 @@ export function migrateState(state, from, to) {
 
 try {
   registerMigration(v3ToV4);
+} catch (error) {
+  if (error?.code !== 'duplicate_migration') throw error;
+}
+
+try {
+  registerMigration(v4ToV5);
 } catch (error) {
   if (error?.code !== 'duplicate_migration') throw error;
 }
