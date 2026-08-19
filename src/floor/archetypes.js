@@ -34,27 +34,91 @@ function carveRoom(grid, x, y, w, h, value = 1) {
   }
 }
 
-function carveCorridor(grid, x1, y1, x2, y2, value = 1) {
+// Paint one cell to `value`, but leave already-placed features (values > value) intact.
+// Silently no-ops outside grid bounds.
+function paintOpen(grid, x, y, value) {
+  if (y < 0 || y >= GRID_H || x < 0 || x >= GRID_W) return;
+  if (grid[y][x] > value) return;
+  grid[y][x] = value;
+}
+
+// Walk a Bresenham-style axis-aligned path from (x1,y1) to (x2,y2). At each stepped
+// cell paint the primary cell plus, when width >= 2, a `+1` sibling on the axis the
+// walk is NOT currently advancing on — so X-legs are 2 rows tall and Y-legs are 2
+// cols wide. At the destination, fill a 2x2 landing patch so room↔corridor
+// junctions are never a one-wide throat. width=1 reproduces legacy behavior.
+export function carveCorridor(grid, x1, y1, x2, y2, value = 1, width = 2) {
   let x = x1, y = y1;
   while (x !== x2 || y !== y2) {
-    if (y >= 0 && y < GRID_H && x >= 0 && x < GRID_W) grid[y][x] = value;
+    paintOpen(grid, x, y, value);
+    if (width >= 2) {
+      if (x !== x2) {
+        // advancing along X → paint (x, y+1)
+        paintOpen(grid, x, y + 1, value);
+      } else {
+        // advancing along Y → paint (x+1, y)
+        paintOpen(grid, x + 1, y, value);
+      }
+    }
     if (x === x2) {
       y += y2 > y ? 1 : -1;
     } else {
       x += x2 > x ? 1 : -1;
     }
   }
-  if (y >= 0 && y < GRID_H && x >= 0 && x < GRID_W) grid[y][x] = value;
+  paintOpen(grid, x, y, value);
+  if (width >= 2) {
+    paintOpen(grid, x + 1, y, value);
+    paintOpen(grid, x, y + 1, value);
+    paintOpen(grid, x + 1, y + 1, value);
+  }
+}
+
+function isCellOpen(v) {
+  return v === 1 || v === 2 || v === 3;
+}
+
+// One-shot dilation pass: any open cell whose only two open ortho-neighbors are
+// collinear (N+S or E+W) is a "1-wide corridor tile". Deterministically open one
+// perpendicular neighbor per such tile (prefer west for N/S-collinear, north for
+// E/W-collinear; fall back to the opposite side if the preferred one is OOB).
+// Computes the widen-set upfront so cascade effects can't chain.
+export function widenOneWideCorridors(grid) {
+  const h = grid.length;
+  const w = grid[0].length;
+  const toOpen = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!isCellOpen(grid[y][x])) continue;
+      const openN = isCellOpen(grid[y - 1]?.[x]);
+      const openS = isCellOpen(grid[y + 1]?.[x]);
+      const openW = isCellOpen(grid[y]?.[x - 1]);
+      const openE = isCellOpen(grid[y]?.[x + 1]);
+      const count = (openN ? 1 : 0) + (openS ? 1 : 0) + (openW ? 1 : 0) + (openE ? 1 : 0);
+      if (count !== 2) continue;
+      if (openN && openS) {
+        if (x - 1 >= 0 && !isCellOpen(grid[y][x - 1])) toOpen.push([y, x - 1]);
+        else if (x + 1 < w && !isCellOpen(grid[y][x + 1])) toOpen.push([y, x + 1]);
+      } else if (openE && openW) {
+        if (y - 1 >= 0 && !isCellOpen(grid[y - 1]?.[x])) toOpen.push([y - 1, x]);
+        else if (y + 1 < h && !isCellOpen(grid[y + 1]?.[x])) toOpen.push([y + 1, x]);
+      }
+    }
+  }
+  for (const [y, x] of toOpen) {
+    if (grid[y][x] === 0) grid[y][x] = 1;
+  }
+  return grid;
 }
 
 export function generateChambers(prng) {
   const grid = createGrid();
-  const numRooms = 5 + prng.nextInt(4);
+  const numRooms = 5 + prng.nextInt(3);
   const rooms = [];
 
   for (let i = 0; i < numRooms; i++) {
-    const w = 3 + prng.nextInt(4);
-    const h = 3 + prng.nextInt(4);
+    const w = 4 + prng.nextInt(4);
+    const h = 4 + prng.nextInt(4);
     const x = prng.nextInt(GRID_W - w);
     const y = prng.nextInt(GRID_H - h);
     carveRoom(grid, x, y, w, h);
@@ -86,7 +150,7 @@ export function generateCaves(prng) {
             if (grid[y + dy][x + dx] === 1) neighbors++;
           }
         }
-        next[y][x] = neighbors >= 5 ? 1 : 0;
+        next[y][x] = neighbors >= 4 ? 1 : 0;
       }
     }
     grid = next;
@@ -99,7 +163,7 @@ export function generateMazes(prng) {
   const numRegions = 2 + prng.nextInt(2);
   const regions = [];
   for (let r = 0; r < numRegions; r++) {
-    const regionW = 6 + prng.nextInt(6);
+    const regionW = 8 + prng.nextInt(6);
     const regionH = 8 + prng.nextInt(8);
     const rx = prng.nextInt(GRID_W - regionW);
     const ry = prng.nextInt(GRID_H - regionH);
@@ -143,6 +207,7 @@ export function generateMazes(prng) {
     const by = b.ry + Math.floor(b.regionH / 2);
     carveCorridor(grid, ax, ay, bx, by);
   }
+  widenOneWideCorridors(grid);
   return grid;
 }
 
@@ -155,8 +220,8 @@ export function generateCathedrals(prng) {
     for (let col = 0; col < 2; col++) {
       const xPadding = 2 + prng.nextInt(2);
       const yPadding = 2 + prng.nextInt(2);
-      const w = roomW - xPadding - 3 - prng.nextInt(2);
-      const h = roomH - yPadding - 3 - prng.nextInt(2);
+      const w = roomW - xPadding - 2 - prng.nextInt(2);
+      const h = roomH - yPadding - 2 - prng.nextInt(2);
       if (w < 2 || h < 1) continue;
       const xStart = col * roomW + xPadding;
       const yStart = row * roomH + yPadding;
@@ -195,6 +260,7 @@ export function generateSpines(prng) {
     let y = 1;
     while (y < GRID_H - 1) {
       grid[y][x] = 1;
+      if (x + 1 < GRID_W) grid[y][x + 1] = 1;
       spineCells.push({ x, y });
       const drift = prng.nextInt(3) - 1;
       const nx = Math.max(1, Math.min(GRID_W - 2, x + drift));
@@ -202,6 +268,7 @@ export function generateSpines(prng) {
         const step = nx > x ? 1 : -1;
         for (let cx = x + step; cx !== nx + step; cx += step) {
           grid[y][cx] = 1;
+          if (cx + 1 < GRID_W) grid[y][cx + 1] = 1;
           spineCells.push({ x: cx, y });
         }
       }
@@ -220,7 +287,7 @@ export function generateSpines(prng) {
   const numRooms = 4 + prng.nextInt(4);
   const roomCenters = [];
   for (let i = 0; i < numRooms; i++) {
-    const w = 3 + prng.nextInt(3);
+    const w = 4 + prng.nextInt(3);
     const h = 3 + prng.nextInt(3);
     const x = prng.nextInt(GRID_W - w);
     const y = prng.nextInt(GRID_H - h);
@@ -249,7 +316,7 @@ export function generateFractured(prng) {
   const leftCenters = [];
   const rightCenters = [];
   for (let i = 0; i < leftRooms; i++) {
-    const w = 2 + prng.nextInt(3);
+    const w = 3 + prng.nextInt(3);
     const h = 3 + prng.nextInt(4);
     const x = prng.nextInt(Math.max(1, splitX - 2 - w));
     const y = prng.nextInt(GRID_H - h);
@@ -257,7 +324,7 @@ export function generateFractured(prng) {
     leftCenters.push({ x: x + Math.floor(w / 2), y: y + Math.floor(h / 2) });
   }
   for (let i = 0; i < rightRooms; i++) {
-    const w = 2 + prng.nextInt(3);
+    const w = 3 + prng.nextInt(3);
     const h = 3 + prng.nextInt(4);
     const x = splitX + 2 + prng.nextInt(Math.max(1, GRID_W - splitX - 3 - w));
     const y = prng.nextInt(GRID_H - h);
@@ -282,14 +349,13 @@ export function generateFractured(prng) {
 
 export function generateRings(prng) {
   const grid = createGrid();
-  const centerY = Math.floor(GRID_H / 2);
   const numRings = 3 + prng.nextInt(2);
   const ringSpacing = Math.floor(GRID_H / (numRings + 1));
   const ringCenters = [];
   for (let r = 0; r < numRings; r++) {
     const ry = ringSpacing * (r + 1);
     ringCenters.push({ y: ry, x: Math.floor(GRID_W / 2) });
-    const width = 5 + prng.nextInt(4);
+    const width = 6 + prng.nextInt(4);
     const height = 1;
     const xStart = Math.floor((GRID_W - width) / 2);
     carveRoom(grid, xStart, ry, width, height);
@@ -304,7 +370,7 @@ export function generateRings(prng) {
   const numRooms = 3 + prng.nextInt(4);
   const roomCenters = [];
   for (let i = 0; i < numRooms; i++) {
-    const w = 3 + prng.nextInt(3);
+    const w = 4 + prng.nextInt(3);
     const h = 3 + prng.nextInt(3);
     const x = prng.nextInt(GRID_W - w);
     const y = prng.nextInt(GRID_H - h);
@@ -330,8 +396,8 @@ export function generateShards(prng) {
   for (let i = 0; i < numShards; i++) {
     const cx = 1 + prng.nextInt(GRID_W - 2);
     const cy = 1 + prng.nextInt(GRID_H - 2);
-    const w = 2 + prng.nextInt(2);
-    const h = 2 + prng.nextInt(2);
+    const w = 3 + prng.nextInt(2);
+    const h = 3 + prng.nextInt(2);
     carveRoom(grid, cx, cy, Math.min(w, GRID_W - cx), Math.min(h, GRID_H - cy));
     shardCenters.push({ x: cx + Math.floor(w / 2), y: cy + Math.floor(h / 2) });
   }
