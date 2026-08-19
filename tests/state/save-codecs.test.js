@@ -64,6 +64,42 @@ describe('save codecs', () => {
     expect(roundTrip(writeEcho, readEcho, { character, deathFloor: 4, appearanceFloor: 7 })).toEqual({ character, deathFloor: 4, appearanceFloor: 7 });
   });
 
+  it('writeEcho strips ephemeral combat-actor extension keys but preserves canonical extensions', () => {
+    // Echoes queued from combat inherit combat-actor artifacts through the
+    // spread in getCharacterDeaths → queueEcho → normalizeCharacter's
+    // unknown-key fallback. Those keys (side, position, hpMax, defense, …)
+    // are transient — createEcho computes them fresh at summon time. v5
+    // sanitizes them at the wire boundary; canonical progression-driven
+    // keys (deckSlotBonus, proficiencies) survive.
+    const character = structuredClone(buildRealisticRun(21).party[0]);
+    character.extensions = {
+      deckSlotBonus: 2,
+      proficiencies: ['sword'],
+      side: 'party',
+      hpMax: 24,
+      defense: 12,
+      chargeMax: 4,
+      position: { x: 3, y: 4 },
+      ap: 2,
+      moveAvailable: true,
+      _deathRecorded: true
+    };
+    const roundTripped = roundTrip(writeEcho, readEcho, { character, deathFloor: 4, appearanceFloor: 7 });
+    expect(roundTripped.character.extensions).toEqual({ deckSlotBonus: 2, proficiencies: ['sword'] });
+    expect(roundTripped.character.id).toBe(character.id);
+    expect(roundTripped.character.attributes).toEqual(character.attributes);
+  });
+
+  it('writeEcho drops the extensions block entirely when only ephemeral keys are present', () => {
+    // Round-trips of a purely ephemeral extensions bag emit no extensions
+    // block on read — the read-side character has undefined extensions,
+    // matching what a freshly-created character record looks like.
+    const character = structuredClone(buildRealisticRun(22).party[0]);
+    character.extensions = { side: 'party', hpMax: 20, moveAvailable: true, _deathRecorded: true };
+    const roundTripped = roundTrip(writeEcho, readEcho, { character, deathFloor: 3, appearanceFloor: 6 });
+    expect(roundTripped.character.extensions).toBeUndefined();
+  });
+
   it('round-trips the compact active-combat state without floor geometry', () => {
     expect(roundTrip(writeCombatSnapshot, readCombatSnapshot, combat())).toEqual(combat());
   });

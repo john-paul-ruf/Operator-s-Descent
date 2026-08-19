@@ -13,6 +13,48 @@ const ENCOUNTER_TYPES = ['standard', 'hunt'];
 // unknown ids fall through to the string escape path so future non-shipped
 // conditions still decode without a schema bump wound.
 export const CONDITION_IDS = ['blinded', 'burning', 'corroded', 'immobilized', 'jammed', 'marked', 'overloaded', 'panicked', 'shielded'];
+
+// Pinned v5 enemy-hp baselines — a codec-side snapshot of the
+// (vit * 4 + hpBonus) formula that createEnemy / deriveEnemyStats apply for
+// every shipped archetype (data/enemies.json). Kept as a plain table so the
+// decode path does NOT import data/enemies.json (data-independent decode —
+// the same design rule that governs ENEMY_STAT_SIGIL_POOLS above). The
+// codec-drift-guards test locks this table against the live data file at
+// every build. Choir chargeMax uses a separate baseline (res * 2 + depth)
+// captured via ENEMY_CHOIR_CHARGE_RES below.
+export const ENEMY_HP_BASELINES = Object.freeze({
+  drone: 8,       // vit 2 * 4 + hpBonus 0
+  warden: 28,     // vit 6 * 4 + hpBonus 4
+  stalker: 14,    // vit 3 * 4 + hpBonus 2
+  choir: 12,      // vit 3 * 4 + hpBonus 0
+  null: 18,       // vit 4 * 4 + hpBonus 2
+  construct: 40,  // vit 8 * 4 + hpBonus 8
+  phantom: 14,    // vit 3 * 4 + hpBonus 2
+  apex: 40        // vit 7 * 4 + hpBonus 12
+});
+// Choir is the only shipped archetype with a non-zero chargeMax; the value
+// is `attributes.res * 2 + depth` per createEnemy. Every other archetype has
+// chargeMax === 0 regardless of depth.
+export const ENEMY_CHOIR_CHARGE_RES = 7;
+
+// Frozen copy of enemyStatScale (mirrors src/rules/scaling.js). Duplicated
+// intentionally so decode stays pure and data-independent (Custom Rule 13
+// standing pattern — the sigil-pool table follows the same rule). The
+// codec-drift-guards test pins this against the live formula at test depths.
+function enemyStatScaleFrozen(baseStat, depth) {
+  const multiplier = 0.15 + 0.10 * Math.floor(depth / 10);
+  return Math.floor(baseStat * (1 + depth * multiplier));
+}
+
+function baselineHpMax(archetypeId, depth) {
+  const base = ENEMY_HP_BASELINES[archetypeId];
+  if (base === undefined) return null;
+  return enemyStatScaleFrozen(base, depth);
+}
+
+function baselineChargeMax(archetypeId, depth) {
+  return archetypeId === 'choir' ? ENEMY_CHOIR_CHARGE_RES * 2 + depth : 0;
+}
 const MAX_ID = 96;
 const MAX_CONDITIONS = 9;
 const MAX_AFFIXES = 8;
@@ -369,9 +411,38 @@ export function readCharacter(reader, symbols) {
   return { id, classId, sigilId, attributes, currentHP, currentCHARGE, calibrationCount, calibrationChoices, signatureTier, equipment, protocolDeck, conditions, ...(extensions === undefined ? {} : { extensions }) };
 }
 
+// v5: echo characters carry ephemeral combat-actor artifacts in their
+// extensions bucket (populated by run-state.js normalizeCharacter's
+// unknown-key fallback when queueEcho spreads a combat actor). None of these
+// fields are needed to rehydrate the echo — createEcho computes hpMax /
+// defense / etc. fresh from the character's canonical fields when the echo
+// summons. Stripping them at the wire boundary saves ~150-200 bytes per
+// echo without touching production semantics. Non-ephemeral keys (e.g.
+// deckSlotBonus, proficiencies from progression.js) stay intact.
+const EPHEMERAL_ECHO_EXTENSION_KEYS = new Set([
+  'side', 'position', 'hp', 'hpMax', 'charge', 'chargeMax',
+  'defense', 'protocolDefense', 'behavior', 'retreats', 'protocolAccess',
+  'ap', 'moveAvailable', 'swapAvailable', 'freeActions', 'initiative',
+  'sigilCodepoint', 'archetypeId', 'weapon', 'armor', 'offhand',
+  'protocols', 'currentHP', 'currentCHARGE', 'isEcho', '_deathRecorded'
+]);
+
+function sanitizedEchoCharacter(character) {
+  if (!isObject(character) || !isObject(character.extensions)) return character;
+  const keptExtensions = {};
+  for (const [key, value] of Object.entries(character.extensions)) {
+    if (EPHEMERAL_ECHO_EXTENSION_KEYS.has(key)) continue;
+    keptExtensions[key] = value;
+  }
+  const sanitized = { ...character };
+  if (Object.keys(keptExtensions).length > 0) sanitized.extensions = keptExtensions;
+  else delete sanitized.extensions;
+  return sanitized;
+}
+
 export function writeEcho(writer, echo, symbols) {
   if (!isObject(echo)) fail('invalid_echo');
-  writeCharacter(writer, echo.character, symbols);
+  writeCharacter(writer, sanitizedEchoCharacter(echo.character), symbols);
   writer.writeVarUint(requireInteger(echo.deathFloor, 1, 255, 'invalid_echo'));
   writer.writeVarUint(requireInteger(echo.appearanceFloor, echo.deathFloor + 2, echo.deathFloor + 4, 'invalid_echo'));
 }
@@ -482,17 +553,28 @@ function readEnemyStatsTemplate(reader) {
 // its complexity. Caller state is passed through unchanged.
 // v5: per-enemy alignToByte pair dropped — the block-level align in
 // writeCombatSnapshot / readCombatSnapshot is the only alignment that fires
-// now, and the per-enemy padding was pure overhead.
-function writeEnemyStats(writer, stats, previous) {
+// now, and the per-enemy padding was pure overhead. hpMax / chargeMax encode
+// as a 1-bit natural flag (equals archetype baseline at this depth) + optional
+// signed varInt delta — natural spawns write 1 bit instead of a varUint,
+// which is the common case for a fresh combat snapshot. Unknown archetypes
+// fall through to raw signed varInt from baseline 0 (worst-case slightly
+// larger than a varUint by 1 bit, but only fires for out-of-schema data).
+function writeEnemyStats(writer, stats, previous, depth) {
   const hasStats = isObject(stats);
   writer.writeBool(hasStats);
   if (!hasStats) return previous;
   writeEnemyArchetypeId(writer, stats.archetypeId);
   if (stats.archetypeId === 'echo') writeEnemyStatsTemplate(writer, stats);
-  writer.writeVarUint(requireInteger(stats.hpMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor'));
+  const hpMax = requireInteger(stats.hpMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
+  const hpBaseline = baselineHpMax(stats.archetypeId, depth) ?? 0;
+  const hpNatural = hpMax === hpBaseline;
+  writer.writeBool(hpNatural);
+  if (!hpNatural) writer.writeVarInt(hpMax - hpBaseline);
   const chargeMax = requireInteger(stats.chargeMax ?? 0, 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
-  writer.writeBool(chargeMax > 0);
-  if (chargeMax > 0) writer.writeVarUint(chargeMax);
+  const chargeBaseline = baselineChargeMax(stats.archetypeId, depth);
+  const chargeNatural = chargeMax === chargeBaseline;
+  writer.writeBool(chargeNatural);
+  if (!chargeNatural) writer.writeVarInt(chargeMax - chargeBaseline);
   const sigilCodepoint = requireInteger(stats.sigilCodepoint ?? 0, 0, MAX_SIGIL_CODEPOINT, 'invalid_actor');
   const pool = ENEMY_STAT_SIGIL_POOLS[stats.archetypeId];
   const variant = pool ? pool.indexOf(sigilCodepoint) : -1;
@@ -503,12 +585,14 @@ function writeEnemyStats(writer, stats, previous) {
   return stats;
 }
 
-function readEnemyStats(reader, previous) {
+function readEnemyStats(reader, previous, depth) {
   if (!reader.readBool()) return { stats: undefined, previous };
   const archetypeId = readEnemyArchetypeId(reader);
   const template = archetypeId === 'echo' ? readEnemyStatsTemplate(reader) : {};
-  const hpMax = requireInteger(reader.readVarUint(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
-  const chargeMax = reader.readBool() ? requireInteger(reader.readVarUint(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor') : 0;
+  const hpBaseline = baselineHpMax(archetypeId, depth) ?? 0;
+  const hpMax = reader.readBool() ? hpBaseline : requireInteger(hpBaseline + reader.readVarInt(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
+  const chargeBaseline = baselineChargeMax(archetypeId, depth);
+  const chargeMax = reader.readBool() ? chargeBaseline : requireInteger(chargeBaseline + reader.readVarInt(), 0, MAX_ENEMY_HP_MAX, 'invalid_actor');
   let sigilCodepoint;
   if (reader.readBool()) {
     const variant = reader.readUint(2);
@@ -627,6 +711,7 @@ function readActor(reader, enemyContext) {
 
 export function writeCombatSnapshot(writer, combat, options = {}) {
   if (!isObject(combat) || !isObject(combat.arena) || !Array.isArray(combat.actors) || combat.actors.length < 1 || combat.actors.length > MAX_ACTORS || !Array.isArray(combat.initiativeOrder) || !Array.isArray(combat.pendingEffects)) fail('invalid_combat');
+  const depth = Number.isInteger(options.depth) && options.depth >= 1 && options.depth <= 255 ? options.depth : 1;
   writer.writeUint(requireInteger(combat.arena.originX, 0, 31, 'invalid_combat'), 5);
   writer.writeUint(requireInteger(combat.arena.originY, 0, 31, 'invalid_combat'), 5);
   writeEncounterId(writer, combat.arena.contactId);
@@ -646,7 +731,7 @@ export function writeCombatSnapshot(writer, combat, options = {}) {
   writer.alignToByte();
   let previousStats = null;
   for (const actor of combat.actors) {
-    if (actor.side !== 'party') previousStats = writeEnemyStats(writer, actor.stats, previousStats);
+    if (actor.side !== 'party') previousStats = writeEnemyStats(writer, actor.stats, previousStats, depth);
   }
   // v5: initiativeOrder is written as 5-bit indices into actors[] (6-bit length
   // prefix, MAX_INITIATIVE = 2×MAX_ACTORS = 48 to accommodate apex two-slot
@@ -680,6 +765,7 @@ export function writeCombatSnapshot(writer, combat, options = {}) {
 }
 
 export function readCombatSnapshot(reader, options = {}) {
+  const depth = Number.isInteger(options.depth) && options.depth >= 1 && options.depth <= 255 ? options.depth : 1;
   const arena = { originX: reader.readUint(5), originY: reader.readUint(5), contactId: readEncounterId(reader) };
   const actorLength = reader.readUint(5);
   if (actorLength < 1 || actorLength > MAX_ACTORS) fail('invalid_combat');
@@ -691,7 +777,7 @@ export function readCombatSnapshot(reader, options = {}) {
   let previousStats = null;
   for (const actor of actors) {
     if (actor.side === 'party') continue;
-    const { stats, previous } = readEnemyStats(reader, previousStats);
+    const { stats, previous } = readEnemyStats(reader, previousStats, depth);
     if (stats !== undefined) actor.stats = stats;
     previousStats = previous;
   }
