@@ -26,6 +26,26 @@ const ACTION_PHASES = {
 const DEFAULT_WINDOW = { originX: 0, originY: 0, width: 8, height: 16, cells: Array.from({ length: 16 }, () => Array(8).fill(1)) };
 const UNARMED = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 0 };
 const DIRECTION_DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+// Playback pacing (M71 log-replay). Move cells step at MOVE_STEP_MS each; a whole path renders
+// path.length × MOVE_STEP_MS. Reaction-heavy entries (attack/protocol/condition/item) hold their
+// flash frame for ACTION_STEP_MS. Notice-only entries (wait/end-turn/retreat/death) tick at NOTICE_STEP_MS.
+const MOVE_STEP_MS = 140;
+const ACTION_STEP_MS = 320;
+const NOTICE_STEP_MS = 240;
+
+// Duplicated from status-strip.js (sibling-import boundary). Keep the two in lockstep.
+function titleCasePlayback(value) {
+  return String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+function humanizeActorName(actor) {
+  if (!actor) return 'Actor';
+  if (actor.name) return actor.name;
+  if (actor.classId) return titleCasePlayback(actor.classId);
+  if (actor.archetypeId) return titleCasePlayback(actor.archetypeId);
+  const match = String(actor.id ?? '').match(/^enemy_\d+_([a-z][a-z0-9]*)(?:_.+)?$/);
+  if (match) return titleCasePlayback(match[1]);
+  return String(actor.id ?? 'Actor');
+}
 
 function clear(element) {
   if (typeof element.replaceChildren === 'function') element.replaceChildren();
@@ -238,6 +258,20 @@ export function mount(container, params = {}) {
   let logCursor = combatState.log.length;
   let userAdjusted = false;
   let currentDpr = 1;
+  // Log-replay playback state (M71). While `active`, `selection.resolving` gates input, the
+  // playfield draws with position/active/flash overrides, and the console shows the current
+  // entry's notice. `entries` is the sliced tail of combatState.log we're stepping through;
+  // `index` counts entries already consumed by advancePlayback (dispatched to bus + rendered).
+  const playback = {
+    timerId: null,
+    active: false,
+    entries: null,
+    index: 0,
+    positionOverrides: new Map(),
+    activeOverrideId: null,
+    flashCells: new Set(),
+    onComplete: null
+  };
   const selection = {
     phase: 'choose-action',
     actionType: null,
@@ -384,10 +418,17 @@ export function mount(container, params = {}) {
     resizeObserverInstance.observe(playfieldBody);
   }
 
-  resolveToPartyTurn();
-  syncSelectionActor();
-  renderAll();
-  dispatchTerminal();
+  // Initial pre-party enemy resolution (mid-run reload, enemy-first initiative). Playback runs
+  // exactly like a mid-combat turn: input is gated, state/autosave land immediately, terminal
+  // dispatch waits for playback completion. On the common path (party first in turnOrder),
+  // resolveTurn returns without adding log entries and beginPlayback fires onComplete inline.
+  selection.resolving = true;
+  runResolveWithPlayback(() => {
+    selection.resolving = false;
+    syncSelectionActor();
+    renderAll();
+    dispatchTerminal();
+  });
 
   function syncCameraViewport() {
     const rect = playfieldBody.getBoundingClientRect?.();
@@ -722,18 +763,19 @@ export function mount(container, params = {}) {
 
   function afterAction(result) {
     runState.rngState = rngCursor.getState();
+    // Party-turn log entries stream immediately — the player just saw those actions run live.
     dispatchNewLogs();
     handleCharacterDeaths();
     checkCombatEnd(combatState);
-    if (!combatState.ended) {
-      resolveTurn(combatState, rngCursor, rulesContext);
-      runState.rngState = rngCursor.getState();
-      dispatchNewLogs();
-      handleCharacterDeaths();
-      checkCombatEnd(combatState);
+    if (combatState.ended) {
+      finalizeAfterAction(result);
+      return;
     }
-    syncRunStateFromCombat(runState, combatState, { removeDead: !combatState.ended || combatState.result !== 'wipe' });
-    updateRunCombatSnapshot(runState, combatState);
+    runResolveWithPlayback(() => finalizeAfterAction(result));
+  }
+
+  function finalizeAfterAction(result) {
+    if (!mounted) return;
     selection.resolving = false;
     selection.notice = result?.retreated === false ? 'RETREAT FAILED.' : null;
     syncSelectionActor();
@@ -749,14 +791,25 @@ export function mount(container, params = {}) {
     dispatchTerminal();
   }
 
-  function resolveToPartyTurn() {
+  // Snapshots positions BEFORE calling resolveTurn so playback can start each moved actor at its
+  // pre-resolution cell (the engine has already advanced them to their final cells). State sync
+  // (runState.rngState, syncRunStateFromCombat, updateRunCombatSnapshot) lands immediately —
+  // exactly as before playback existed — so a crash mid-playback still autosaves the final state.
+  // Enemy-side deaths and terminal combat-end fire after playback so the user sees the actions
+  // that caused them.
+  function runResolveWithPlayback(onDone) {
+    const startCursor = logCursor;
+    const preResolvePositions = snapshotPositions();
     resolveTurn(combatState, rngCursor, rulesContext);
     runState.rngState = rngCursor.getState();
-    dispatchNewLogs();
-    handleCharacterDeaths();
     checkCombatEnd(combatState);
     syncRunStateFromCombat(runState, combatState, { removeDead: !combatState.ended || combatState.result !== 'wipe' });
     updateRunCombatSnapshot(runState, combatState);
+    const entries = combatState.log.slice(startCursor);
+    beginPlayback(entries, preResolvePositions, () => {
+      handleCharacterDeaths();
+      onDone?.();
+    });
   }
 
   function handleCharacterDeaths() {
@@ -765,11 +818,246 @@ export function mount(container, params = {}) {
     }
   }
 
+  function dispatchLogEntry(entry) {
+    if (!entry) return;
+    bus.dispatch('ui:log-entry', {
+      type: entry.type || 'combat',
+      message: formatLog(entry),
+      entry,
+      sequence: entry.sequence,
+      timestamp: Date.now()
+    });
+  }
+
   function dispatchNewLogs() {
     while (logCursor < combatState.log.length) {
-      const entry = combatState.log[logCursor++];
-      bus.dispatch('ui:log-entry', { type: entry.type || 'combat', message: formatLog(entry), entry, sequence: entry.sequence, timestamp: Date.now() });
+      dispatchLogEntry(combatState.log[logCursor++]);
     }
+  }
+
+  function snapshotPositions() {
+    const map = new Map();
+    for (const actor of getActors(combatState)) {
+      if (actor.position) map.set(actor.id, { x: actor.position.x, y: actor.position.y });
+    }
+    return map;
+  }
+
+  // Play only enemy-side actor entries, plus death/condition-damage on any side. Party-actor
+  // entries (opportunity attacks the player triggered during an enemy move) already ran live for
+  // the user and are dispatched inline without a paced step.
+  function shouldPlayEntry(entry) {
+    if (!entry) return false;
+    if (entry.type === 'death' || entry.type === 'condition-damage') return true;
+    const actor = entry.actorId != null ? combatState.combatants.get(entry.actorId) : null;
+    return Boolean(actor && actor.side !== 'party');
+  }
+
+  function noticeFor(entry) {
+    if (!entry) return null;
+    const actor = entry.actorId != null ? combatState.combatants.get(entry.actorId) : null;
+    const target = entry.targetId != null ? combatState.combatants.get(entry.targetId) : null;
+    const name = (a) => (humanizeActorName(a) || 'Actor').toUpperCase();
+    switch (entry.type) {
+      case 'attack':
+        return entry.hit
+          ? `${name(actor)} ATTACKS ${name(target)} — ${entry.damage} DMG.`
+          : `${name(actor)} ATTACKS ${name(target)} — MISS.`;
+      case 'protocol':
+        return target
+          ? `${name(actor)} CASTS ${String(entry.school || '').toUpperCase()}-${entry.tier} ON ${name(target)}.`
+          : `${name(actor)} CASTS ${String(entry.school || '').toUpperCase()}-${entry.tier}.`;
+      case 'condition':
+        return entry.applied
+          ? `${name(actor)} APPLIES ${String(entry.conditionId || 'condition').toUpperCase()} TO ${name(target)}.`
+          : `${name(target)} RESISTS ${String(entry.conditionId || 'condition').toUpperCase()}.`;
+      case 'item':
+        return `${name(actor)} USES ${String(entry.consumableId || 'item').toUpperCase()}.`;
+      case 'move':
+        return `${name(actor)} MOVES.`;
+      case 'wait':
+        return `${name(actor)} WAITS.`;
+      case 'end-turn':
+        return `${name(actor)} ENDS TURN.`;
+      case 'retreat':
+        return `${name(actor)} ${entry.success ? 'RETREATS' : 'RETREAT FAILS'}.`;
+      case 'death':
+        return `${name(target || actor)} FALLS.`;
+      case 'condition-damage':
+        return `${name(actor)} — ${String(entry.source || 'condition').toUpperCase()} ${entry.amount}.`;
+      default:
+        return `${String(entry.type || 'event').toUpperCase()}.`;
+    }
+  }
+
+  function flashKeyFor(entry) {
+    const targetId = entry?.targetId ?? entry?.actorId;
+    if (targetId == null) return null;
+    const target = combatState.combatants.get(targetId);
+    if (!target?.position) return null;
+    const override = playback.positionOverrides.get(target.id);
+    const pos = override || target.position;
+    return `${pos.x},${pos.y}`;
+  }
+
+  function centerOnCellIfIdle(cell) {
+    if (!cell || userAdjusted) return;
+    camera.centerOn((cell.x + 0.5) * COMBAT_CELL_SIZE, (cell.y + 0.5) * COMBAT_CELL_SIZE);
+  }
+
+  function scheduleTimeout(fn, ms) {
+    const timerFn = globalThis.setTimeout;
+    return typeof timerFn === 'function' ? timerFn(fn, ms) : null;
+  }
+
+  function clearPlaybackTimer() {
+    if (playback.timerId == null) return;
+    const clearFn = globalThis.clearTimeout;
+    if (typeof clearFn === 'function') clearFn(playback.timerId);
+    playback.timerId = null;
+  }
+
+  // Playfield-only redraw during playback: avoids the full renderAll pass (which rebuilds the
+  // portrait status strip on every call). Console refresh is triggered separately per entry so
+  // the notice slot updates without re-creating the status bar element every 140ms.
+  function renderPlayfieldOnly() {
+    if (!mounted) return;
+    playfield.renderCombat(combatState, combatLattice, {
+      ...overlayOptions(),
+      viewTransform: camera.viewTransform(currentDpr),
+      positionOverrides: playback.positionOverrides.size ? playback.positionOverrides : undefined,
+      activeOverrideId: playback.activeOverrideId ?? undefined,
+      flashCells: playback.flashCells.size ? playback.flashCells : undefined
+    });
+  }
+
+  function beginPlayback(entries, preResolvePositions, onDone) {
+    if (!mounted) { onDone?.(); return; }
+    const hasVisual = entries.some(shouldPlayEntry);
+    // Reduced-motion or no enemy-visible entries → instant path. Dispatches every entry to the
+    // bus immediately (log-feed sync stays intact) and fires onComplete inline.
+    if (reduceMotion || !hasVisual) {
+      for (const entry of entries) dispatchLogEntry(entry);
+      logCursor = combatState.log.length;
+      onDone?.();
+      return;
+    }
+    playback.positionOverrides = new Map();
+    for (const [id, pos] of preResolvePositions) {
+      const actor = combatState.combatants.get(id);
+      if (!actor?.position) continue;
+      if (actor.position.x !== pos.x || actor.position.y !== pos.y) {
+        playback.positionOverrides.set(id, { x: pos.x, y: pos.y });
+      }
+    }
+    playback.flashCells = new Set();
+    playback.activeOverrideId = null;
+    playback.onComplete = onDone;
+    playback.entries = entries;
+    playback.index = 0;
+    playback.active = true;
+    renderPlayfieldOnly();
+    advancePlayback();
+  }
+
+  function advancePlayback() {
+    if (!mounted || !playback.active) return;
+    playback.flashCells = new Set();
+    if (playback.index >= playback.entries.length) {
+      finishPlayback();
+      return;
+    }
+    const entry = playback.entries[playback.index++];
+    dispatchLogEntry(entry);
+    logCursor = Math.max(logCursor, Math.min(combatState.log.length, logCursor + 1));
+
+    if (!shouldPlayEntry(entry)) {
+      // Party-side entries (OA attacks provoked by enemy moves) dispatch to the log feed but
+      // don't consume a visible step — they already ran live for the user.
+      advancePlayback();
+      return;
+    }
+
+    const actor = entry.actorId != null ? combatState.combatants.get(entry.actorId) : null;
+    if (actor && actor.side !== 'party') playback.activeOverrideId = entry.actorId;
+    selection.notice = noticeFor(entry);
+
+    if (entry.type === 'move' && Array.isArray(entry.path) && entry.path.length > 0 && entry.from) {
+      playMoveEntry(entry);
+      return;
+    }
+    if (['attack', 'protocol', 'condition', 'item'].includes(entry.type)) {
+      const key = flashKeyFor(entry);
+      if (key) playback.flashCells.add(key);
+      const cell = playback.positionOverrides.get(actor?.id) || actor?.position;
+      centerOnCellIfIdle(cell);
+      renderPlayfieldOnly();
+      consoleController.refresh();
+      playback.timerId = scheduleTimeout(() => {
+        playback.flashCells = new Set();
+        advancePlayback();
+      }, ACTION_STEP_MS);
+      return;
+    }
+    // Notice-only entries: wait / end-turn / retreat / death / condition-damage.
+    const cell = playback.positionOverrides.get(actor?.id) || actor?.position;
+    centerOnCellIfIdle(cell);
+    renderPlayfieldOnly();
+    consoleController.refresh();
+    playback.timerId = scheduleTimeout(advancePlayback, NOTICE_STEP_MS);
+  }
+
+  function playMoveEntry(entry) {
+    const path = entry.path;
+    let cursor = { x: entry.from.x, y: entry.from.y };
+    let step = 0;
+    playback.positionOverrides.set(entry.actorId, { x: cursor.x, y: cursor.y });
+    centerOnCellIfIdle(cursor);
+    renderPlayfieldOnly();
+    consoleController.refresh();
+    const walk = () => {
+      if (!mounted || !playback.active) return;
+      if (step >= path.length) {
+        // Align override with the engine's final position so subsequent entries see the same cell.
+        if (entry.to) playback.positionOverrides.set(entry.actorId, { x: entry.to.x, y: entry.to.y });
+        advancePlayback();
+        return;
+      }
+      const delta = DIRECTION_DELTAS[path[step++]];
+      if (!delta) { advancePlayback(); return; }
+      cursor = { x: cursor.x + delta[0], y: cursor.y + delta[1] };
+      playback.positionOverrides.set(entry.actorId, { x: cursor.x, y: cursor.y });
+      centerOnCellIfIdle(cursor);
+      renderPlayfieldOnly();
+      playback.timerId = scheduleTimeout(walk, MOVE_STEP_MS);
+    };
+    playback.timerId = scheduleTimeout(walk, MOVE_STEP_MS);
+  }
+
+  function finishPlayback() {
+    clearPlaybackTimer();
+    playback.active = false;
+    playback.entries = null;
+    playback.index = 0;
+    playback.positionOverrides = new Map();
+    playback.activeOverrideId = null;
+    playback.flashCells = new Set();
+    logCursor = combatState.log.length;
+    const done = playback.onComplete;
+    playback.onComplete = null;
+    done?.();
+  }
+
+  // Tap during playback fast-forwards: cancels the current timer, dispatches every not-yet-seen
+  // entry to the bus (log feed catches up), and fires the onComplete callback — same effect as
+  // waiting for every remaining timer to fire, minus the pacing.
+  function fastForwardPlayback() {
+    if (!playback.active) return;
+    clearPlaybackTimer();
+    while (playback.index < playback.entries.length) {
+      dispatchLogEntry(playback.entries[playback.index++]);
+    }
+    finishPlayback();
   }
 
   function dispatchTerminal() {
@@ -841,6 +1129,11 @@ export function mount(container, params = {}) {
 
   function onCanvasTap({ clientX, clientY }) {
     if (!mounted) return;
+    // A tap during enemy playback fast-forwards to completion instead of selecting anything.
+    if (playback.active) {
+      fastForwardPlayback();
+      return;
+    }
     const cell = cellAtPoint({ canvas, cellSize: COMBAT_CELL_SIZE, viewTransform: camera.viewTransform(currentDpr) }, clientX, clientY);
     if (!cell) return;
     if (['attack', 'cast', 'overclock', 'item'].includes(selection.actionType) && ['choose-target', 'confirm'].includes(selection.phase)) {
@@ -876,7 +1169,10 @@ export function mount(container, params = {}) {
     if (!mounted) return;
     playfield.renderCombat(combatState, combatLattice, {
       ...overlayOptions(),
-      viewTransform: camera.viewTransform(currentDpr)
+      viewTransform: camera.viewTransform(currentDpr),
+      positionOverrides: playback.positionOverrides.size ? playback.positionOverrides : undefined,
+      activeOverrideId: playback.activeOverrideId ?? undefined,
+      flashCells: playback.flashCells.size ? playback.flashCells : undefined
     });
     if (!isWide) {
       const nextStatusBar = createStatusBar(runState, combatState);
@@ -894,6 +1190,10 @@ export function mount(container, params = {}) {
     unmount() {
       if (!mounted) return;
       mounted = false;
+      clearPlaybackTimer();
+      playback.active = false;
+      playback.entries = null;
+      playback.onComplete = null;
       gestureCleanup?.();
       resizeObserverInstance?.disconnect?.();
       widePanesCleanup?.();
