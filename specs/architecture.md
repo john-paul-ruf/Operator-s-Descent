@@ -23,7 +23,7 @@
 | State Management | Custom event bus + snapshot | Redux, Zustand, MobX | A roguelike with a single active run and deterministic state doesn't need time-travel debugging or middleware chains. The event bus is ~50 lines. Run state is one object that snapshots on transitions. |
 | PRNG | xorshift128+ (custom implementation) | Math.random, Mersenne Twister, PCG | xorshift128+ is fast (~10ns/call), has a 128-bit state (4 × uint32), seeds deterministically from a single uint32 world seed, and the full state serializes compactly into the URL save. Mersenne Twister's 2.5 KB state is too large for the 1500-char URL budget. |
 | Save Encoding | Field-level exhaustive lookup tables + FNV-1a hash lookup + progressive granularity compressor (1-bit → 4-bit → 8-bit → 16-bit → 32-bit passes) + XOR encryption + base64url. Save state stores only the diff (fog bitmap, opened containers, defeated enemies, party position) + persistent state (party, inventory, corruption, echoes, PRNG) — floor geometry is regenerated from seed + depth on load. | JSON.stringify + base64, Protobuf, MessagePack, single-pass DEFLATE, condensation-only, small fixed dictionary, storing full floor geometry | JSON is too verbose for 1500 chars. Storing full floor geometry wastes hundreds of bytes on data that's deterministic from seed + depth (owner insight: descent is one-way, floors regenerate from hash). Pre-built field-level symbol tables (`data/symbol-table.json`, ~8 KB, ~500 entries, ships with game) provide near-exhaustive coverage of individual state fields — class (100%), sigil (100%), attributes (95%), HP/CHARGE (95%), conditions (90%), item IDs (100%), equipment configs (100%). FNV-1a hash (10 lines, zero deps) provides O(1) lookup per field. Common field values map to short table indices (3–8 bits each); rare values use escape codes + raw bit-packing (lossless). ~90–95% of field values hit the table in typical play. Then a progressive granularity compressor applies lossless compression at increasing word sizes — each pass catches patterns the previous granularity can't see, checks the budget after each, and stops when it fits. An XOR stream cipher (xorshift128+ keystream) obfuscates the payload before base64url encoding. The entire portable state — including fog-of-war bitmap, full inventory, equipment, Echo queue, and dual PRNG states — fits in ~324 base64url characters at worst case (4.6× headroom). Protobuf/MessagePack require build tools or runtime libraries. Single-pass DEFLATE misses bit-level and nibble-level patterns that the finer-granularity passes exploit first. Condensation-only (without progressive compression) can't guarantee the budget for deep, complex saves. A small fixed dictionary (whole-state patterns, ~64 entries) was rejected in favor of field-level tables because the whole-state space (2^77 per character) is too large for exhaustive coverage, while individual fields have small, enumerable value spaces. |
-| Audio | WebAudio API (synthesized) | Howler.js, Tone.js, audio files | Zero audio files and zero third-party libraries are hard constraints. The five-layer synth is custom DSP — no library fits the budget and the API surface is small enough to hand-build. |
+| Audio | WebAudio API (synthesized, conductor-driven chiptune) | Howler.js, Tone.js, audio files | Zero audio files and zero third-party libraries are hard constraints. Five render layers driven by one lookahead clock (M110 conductor) produce bar-quantized generative chiptune with NES-constraint voices (M109 chip helpers). No library fits the budget and the API surface is small enough to hand-build. |
 | Service Worker | Custom (hand-written) | Workbox | Workbox adds ~30 KB+ to the cache and introduces a build dependency. A hand-written service worker is ~100 lines and does exactly one thing: cache-first for the known asset list. |
 | Test Framework | Vitest | Jest, Mocha, Playwright | Vitest supports ES modules natively without transpilation. Jest requires CommonJS or a build step. Playwright is too heavy for unit testing. Tests are dev-only and never shipped. |
 
@@ -108,13 +108,15 @@ src/
 │   ├── playfield.js            — Canvas 2D lattice rendering (exploration + combat zoom)
 │   ├── components.js           — Shared UI: buttons, sliders, toggles, sigil tokens, HP/CHARGE bars
 │   └── input.js                — Unified keyboard + touch input handler with parity guarantee
-├── audio/                      — WebAudio 5-layer synthesis
-│   ├── engine.js               — AudioContext manager, layer mix bus, master/per-layer volume
-│   ├── drone.js                — Drone layer: theme timbre/modal set, depth detune
-│   ├── pulse.js                — Pulse layer: hostile proximity → tempo/density/dissonance
-│   ├── sparkle.js              — Sparkle layer: container proximity → arpeggio density/cutoff
-│   ├── lead.js                 — Lead layer: bar-by-bar melody from hash, no-repeat ledger
-│   └── noise-bed.js            — Noise bed: fixed tape hiss/wow/flutter
+├── audio/                      — WebAudio conductor-driven chiptune (one lookahead clock, 5 render layers)
+│   ├── conductor.js            — M110 lookahead clock, hash-generated progressions/melody/drums, director
+│   ├── chip.js                 — M109 duty PeriodicWaves, LFSR buffers, note/kick/snare/hat, feedback echo send
+│   ├── engine.js               — AudioContext manager, layer mix bus, master/per-layer volume, conductor + echo lifecycle
+│   ├── drone.js                — Drone layer: chord-locked triangle bass + pulse50 pad (chord-quantized retunes)
+│   ├── pulse.js                — Pulse layer: danger-tiered drum kit rendered from tick.drums (heartbeat at tier 0)
+│   ├── sparkle.js              — Sparkle layer: container-proximity chord arps on the conductor grid
+│   ├── lead.js                 — Lead layer: phrase melody renderer, pulse25/pulse125 duty on combat
+│   └── noise-bed.js            — Noise bed: fixed tape hiss/wow/flutter (unchanged, ignores conductor)
 ├── glitch/                     — CRT/VHS visual degradation system
 │   ├── glitch.js               — Timer system, per-element intensity constants, effect dispatcher
 │   ├── grain.js                — Canvas dot-scatter grain (10px grid, 15% fill, 2×2px dots, 1s re-scatter)
@@ -678,21 +680,27 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
   - `InputHandler.bindToElement(el) → void` — Attaches listeners to a DOM element.
 - **Depends on:** None (platform APIs only).
 
+<!-- SESSION-02 (dynamic-chiptune, 2026-08-19) — blocks replaced by Jikijitsu from Mu's arch fragment -->
 ### `audio/engine.js`
-- **Owns:** AudioContext lifecycle (created on START gesture), layer mix bus, master volume, per-layer volume, mute. Coordinates the 5 layers.
+- **Owns:** AudioContext lifecycle (context supplied at construction, resumed on START gesture), layer mix bus, master volume, per-layer volume, mute, and the M110 conductor + M109 echo send lifecycle. Coordinates the 5 layers.
 - **Exports:**
-  - `createAudioEngine() → AudioEngine`
-  - `AudioEngine.start() → void` — Resumes AudioContext (called from START handler).
-  - `AudioEngine.setLayerVolume(layer, volume) → void`
+  - `createAudioEngine(ctx = null) → AudioEngine`
+  - `AudioEngine.start() → boolean` — Builds the graph, starts the layers, then starts the conductor.
+  - `AudioEngine.stop() → void` — Stops the conductor, tears the graph down; safe to call repeatedly.
+  - `AudioEngine.destroy() → void` — Idempotent; calls `stop()` once and latches.
+  - `AudioEngine.updateContext(next) → boolean` — Rebuilds the graph on a new context.
+  - `AudioEngine.applySettings({ masterMute, layerVolumes }) → void`
+  - `AudioEngine.setLayerVolume(layer, volume) → boolean`
   - `AudioEngine.setMasterVolume(volume) → void`
   - `AudioEngine.setMute(muted) → void`
-  - `AudioEngine.updateState(gameState) → void` — Pushes game state to layers for modulation.
-- **Depends on:** `audio/drone.js`, `audio/pulse.js`, `audio/sparkle.js`, `audio/lead.js`, `audio/noise-bed.js`.
+  - `AudioEngine.updateState(gameState) → void` — Forwards to the conductor and to every layer.
+  - `AudioEngine.getGraphState() → { started, muted, masterVolume, layers, pendingVolumes, conductor }`
+- **Depends on:** `audio/drone.js`, `audio/pulse.js`, `audio/sparkle.js`, `audio/lead.js`, `audio/noise-bed.js`, `audio/conductor.js`, `audio/chip.js`.
 
 ### `audio/[layer].js` (×5)
-- **Owns:** One synthesis layer each. Each layer is a self-contained WebAudio node graph that responds to `updateState()` calls.
-- **Exports:** `create[Layer](audioContext, destination) → [Layer]Controller` with `updateState(state)`, `setVolume(v)`, `start()`, `stop()`.
-- **Depends on:** WebAudio API, `data/themes.json` (for audio mode selection), `core/hash.js` (lead layer melody generation).
+- **Owns:** One render layer each. drone/pulse/sparkle/lead subscribe to the M110 conductor's tick stream and render the score for their slot in the mix; noise-bed produces fixed machine texture and ignores game state.
+- **Exports:** `create[Layer](ctx, dest, conductor, echoInput) → LayerController` with `start()`, `stop()`, `destroy()`, `setVolume(v)`, `updateState(state)`, `getState()`. Every subscription is torn down in `stop()`; `destroy()` is idempotent.
+- **Depends on:** WebAudio API, `audio/chip.js` for voices/echo, `audio/conductor.js` for the tick contract. Data files are consumed only via `updateState` payloads coming from the runtime.
 
 ### `glitch/glitch.js`
 - **Owns:** The glitch timer system. Each glitching element registers with a per-element intensity constant and a timer. The dispatcher fires effects (character substitution, chromatic ghosts, VHS events, element jitter, border flicker, frame flash, glitch bars, noise lines) on their own free-running schedules. All timings are the measured constants from FR-23. No game-state input.
@@ -2357,3 +2365,55 @@ the captured payload sequence.
 
 `core (hash) → audio/conductor → (SESSION-02) audio/{drone,pulse,sparkle,lead,engine}`. `audio/chip`
 is a leaf helper module — imported by SESSION-02's layers, not by the conductor.
+
+<!-- SESSION-02 (dynamic-chiptune, 2026-08-19 — appended by Jikijitsu; targeted replacements also applied at the Technology-Choices Audio row, the module-tree audio/ block, and the audio module-details blocks) -->
+
+## SESSION-02 (dynamic-chiptune, 2026-08-19)
+
+Layer factories now render the conductor's tick score instead of running free-scheduled
+loops. Public API of `createAudioEngine(ctx)` and layer keys `drone|pulse|sparkle|lead|noiseBed`
+are unchanged. Engine constructs the M110 conductor and an M109 feedback echo bus once, before
+building the five layers; each layer factory takes `(ctx, dest, conductor, echoInput)` and either
+subscribes to the tick stream (drone/pulse/sparkle/lead) or ignores the extras (noiseBed).
+
+### Reinterpreted layer roles (names unchanged)
+
+- **drone (M47)** — Two sustained pulse50 pad voices (via M109 `dutyWave`) glide the chord
+  root+fifth around `tick.rootFreq` on step-0 chord changes (80 ms `linearRampToValueAtTime`);
+  a triangle bass hits step [0, 8] always, adds step 4 when `tick.intensity > 0.4`, adds
+  steps [10, 14] when `> 0.7`. Bass frequency = `max(27.5, (tick.rootFreq / 2) · 2^(chord-root/12))`.
+  `getState() → { audioMode, depth, oscillatorCount }` (pad count).
+- **pulse (M48)** — Two 15-bit LFSR buffers built once on `start()` (long + short). Per tick,
+  `tick.drums.kick/snare/hat[pos.step]` fire through M109 `playKick`/`playSnare`/`playHat` into
+  the existing lowpass→gain chain. Velocity scales `0.5 → 1.0` with `tick.intensity`. The
+  danger-driven cutoff ramp in `updateState` is preserved verbatim.
+  `getState() → { nearestDist, combat, tempo }` (tempo = last tick's).
+- **sparkle (M49)** — Silent while `tick.sparkle ≤ 0`. Otherwise strides through
+  `[semis[0], semis[1], semis[2], semis[0]+12]` at `tick.rootFreq · 4` in 25% duty; stride =
+  8/4/2 for sparkle < 0.35 / < 0.7 / else. Proximity-driven lowpass cutoff (`400 + pressure·3000`)
+  preserved. Small echo tap via `echoInput`.
+  `getState() → { nearestDist, cutoff }`.
+- **lead (M50)** — Phrase melody renderer. Per tick, if `tick.melody[pos.step]` is a slot,
+  `playNote` at `freq = tick.rootFreq · 2 · 2^((slot.degree + 12·slot.octave)/12)`,
+  `duration = slot.lengthSlots · secondsPerSixteenth`, `wave = tick.combat ? 'pulse125' : 'pulse25'`,
+  `vibrato = slot.lengthSlots ≥ 3 ? { rate: 5.5, depth: 6 } : null`. Half-velocity echo tap.
+  Local scheduler, ledger, `MODES`, and `generateLeadBar` removed — the M110 conductor owns
+  composition and non-repetition.
+  `getState() → { tempo, barIndex }` (from last tick's tempo and `pos.bar`). No `getLedger`.
+- **noiseBed (M51)** — untouched. Fixed tape hiss/wow/flutter; ignores game state and the
+  conductor.
+
+### Engine (M52)
+
+- Depends on M109 (`createEchoSend`) and M110 (`createConductor`) in addition to the five layers.
+- `buildGraph()` order: masterGain → conductor + echo (echo → masterGain) → per-layer bus →
+  layer factory called with `(ctx, bus, conductor, echo.input)` → per-layer volume applied.
+- `start()`: buildGraph → each layer's `start()` → `conductor.start()` last.
+- `stop()`: `conductor.stop()` first, then per-layer `stop()`/`destroy()`, bus/master disconnect,
+  `echo.disconnect()`, null out conductor + echo.
+- `updateState(gameState)`: forwards to conductor first, then per-layer. State pushed before
+  `start()` is a no-op (the conductor is not yet built); runtime calls `updateState` after
+  `start()`, matching production wiring.
+- `getGraphState()` gains `conductor: conductor?.getState() ?? null`.
+- `applySettings`, `setLayerVolume`, `setMasterVolume`, `setMute`, `updateContext`, `isStarted`,
+  `suspend`, `destroy`: byte-for-byte behavior.
