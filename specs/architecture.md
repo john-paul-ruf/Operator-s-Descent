@@ -2189,3 +2189,29 @@ Adds `.manual-term-link` (inline: dotted-underline accent-color text link with `
 ### FORGE-CONFIG note (SESSION-01, the-manual)
 
 The FORGE-CONFIG conventions line reads "Module IDs: M01–M103" — after this run's landings the ceiling should read M01–M109 (M107 lands here; M108/M109 land in SESSION-03).
+
+<!-- SESSION-03 the-manual -->
+### M108 Manual Modal + M109 Manual CSS (new modules, SESSION-03, the-manual)
+
+**New modules**
+
+| ID | Module | Path | Owns | Imports From | Key Files |
+|----|--------|------|------|-------------|-----------|
+| M108 | Manual Modal | `src/ui/manual/manual-modal.js`, `src/ui/manual/manual-view.js` | Blocking overlay controller + TOC/section renderer. Focus trap, `inert` on `#app-root`, Escape/backdrop/close-button dispatch, glitch register/unregister. Renderer owns TOC (chapter/group grouping), section body (text+link runs), back stack (cap 32), scroll-memory keyed `manual:{sectionId}`. Local dispatch inside the modal keeps navigation off the bus; external `dispatch` is the bus `ui:manual-open` / `ui:manual-close`. Mounts as sibling of `#app-root` in `#portrait-frame` (survives route + layout-class remounts). | M56, M103 | `manual-modal.js`, `manual-view.js` |
+| M109 | Manual CSS | `styles/manual.css` | Backdrop (z 50, under CRT 55–62, over console 30), panel shell, portrait header/body layout, wide two-pane grid (`html[data-layout="wide"]`) with 260px TOC rail + scrollable content pane, respects `prefers-reduced-motion`, ≥44px hit targets. Uses only tokens from `styles/base.css` — no new hex literals. | (none) | `manual.css` |
+
+**Registry deltas (existing modules) — SESSION-03**
+
+- **M86 Hot Runtime** — creates a `manualModal` controller in `activateRuntime` after `setupGrain()`, listens to `ui:manual-open` in `setupBus`, destroys the controller in `shutdownRuntime`. Imports `createManualModal` from M108.
+- **M34 Event Bus** — `EVENT_CONTRACTS` gains `'ui:manual-open'` (`{ target: sectionId|null, source: string }`; both required, non-empty) and `'ui:manual-close'` (`{ reason: 'escape'|'close-button'|'backdrop'|'programmatic' }`). Unknown events previously passed through with default `true`; typos now fail validation.
+- **M80 Index HTML** — `<link rel="stylesheet" href="styles/manual.css">` between `components.css` and `wide.css`.
+- **M81 Service Worker** — `PRODUCTION_ASSETS` gains `src/ui/manual/manual-modal.js`, `src/ui/manual/manual-view.js`, `styles/manual.css`. `CACHE_VERSION` bumped to `2026-08-19-the-manual-modal-v2`.
+- **M97 Design Compliance Scanner** — Component Inventory in `specs/design.md` gains a "Manual Modal" row (states: closed, TOC, section, wide two-pane).
+
+**Behavior notes (SESSION-03)**
+
+- **Blocking is structural.** `inert` on `#app-root` (plus `aria-hidden="true"` fallback where `inert` is unsupported) bypasses every screen's per-container keyboard/pointer handlers without touching the screens. Focus is trapped inside the panel; a document-level `focusin` listener pulls escaped focus back. Backdrop click (target === backdrop) closes with `reason: 'backdrop'`; panel click does not close.
+- **z-index chosen: 50.** CRT layers (55–62) render OVER the modal — scanlines, grain, vignette, tracking, glitch bars visibly overlay the manual, keeping the aesthetic. The console (z 30) is fully covered.
+- **Data is lazy.** `getManualData()` is read on every `open()`, so the modal can be created before `gameData` is validated. If `manual` is null the view renders a `MANUAL DATA UNAVAILABLE` notice — no throw.
+- **Internal navigation does not round-trip the bus.** Links inside the modal (TOC entries, inline body links, see-also chips) receive a local `dispatch = (event, { target }) => showSection(target)` so navigating within the manual is a pure render.
+- **Testids landed (SESSION-04/05/06/07 build against these):** `manual-backdrop`, `manual-modal`, `manual-title-slot`, `manual-back`, `manual-contents`, `manual-close`, `manual-body`, `manual-toc`, `manual-chapter-{interface|systems|glossary}`, `manual-group-{conditions|schools|classes|attributes|consumables|rarities|affixes|entities}`, `manual-section`, `manual-section-title`, `manual-see-also`, `manual-notice`. Manual link testids follow the SESSION-02 convention (`manual-link-{target}` or `manual-link-toc`).
