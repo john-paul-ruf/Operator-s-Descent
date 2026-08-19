@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { findExplorationPath, moveParty, tickDangerClock, resetDangerClock, signalMovementDamage } from '../../src/exploration/movement.js';
+import {
+  findExplorationPath,
+  moveParty,
+  tickDangerClock,
+  resetDangerClock,
+  signalMovementDamage,
+  stepHunters,
+  pruneEmptyCaches,
+  HUNT_ACTIVATION_RANGE
+} from '../../src/exploration/movement.js';
 import { createLattice } from '../../src/exploration/lattice.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
@@ -728,6 +737,9 @@ describe('moveParty — hunt triggering', () => {
 
 describe('moveParty — combat contact range', () => {
   it('hostile within 2 connected squares → combatContact true, contactEntity, hostileContactDistance', () => {
+    // Party (10,15), enemy (13,15). Party moves E → (11,15). Hunter (SESSION-04)
+    // steps enemy toward party (deterministic DIRECTION_ORDER tiebreak) so the
+    // contactEntity's position reflects the post-step location, not the spawn cell.
     const floor = makeFloor({
       enemySpawns: [{ id: 0, x: 13, y: 15, archetypeId: 'drone' }],
     });
@@ -738,7 +750,11 @@ describe('moveParty — combat contact range', () => {
     const fog = new Uint8Array(640);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.combatContact).toBe(true);
-    expect(result.contactEntity).toEqual(expect.objectContaining({ id: 0, x: 13, y: 15 }));
+    expect(result.contactEntity).toEqual(expect.objectContaining({ id: 0, archetypeId: 'drone' }));
+    // Enemy is now adjacent to party (Chebyshev-1) after the hunter step.
+    const partyPos = lat.getPartyPosition();
+    const cheb = Math.max(Math.abs(result.contactEntity.x - partyPos.x), Math.abs(result.contactEntity.y - partyPos.y));
+    expect(cheb).toBe(1);
     expect(result.hostileContactDistance).toBeLessThanOrEqual(2);
     expect(result.hostileContactDistance).toBeGreaterThan(0);
   });
@@ -790,6 +806,9 @@ describe('moveParty — combat contact range', () => {
   });
 
   it('approaching a known enemy: first sight far, later move within range → combatContact true on the later move', () => {
+    // Party (10,15), enemy at (17,15). Party first sees the enemy on move 1 (LOS
+    // radius 10) but is not within HOSTILE_CONTACT_RANGE=2. Under SESSION-04's
+    // hunt, the enemy also closes each move; contact fires when the gap collapses.
     const floor = makeFloor({
       enemySpawns: [{ id: 0, x: 17, y: 15, archetypeId: 'drone' }],
     });
@@ -801,15 +820,19 @@ describe('moveParty — combat contact range', () => {
     const first = moveParty(lat, fog, 'e', cursor, rs);
     expect(first.interruptType).toBe('hostile');
     expect(first.combatContact).toBe(false);
-    // Walk up to the enemy: (12,15) → (13,15) → (14,15) → (15,15).
-    for (const step of ['e', 'e', 'e']) {
-      const intermediate = moveParty(lat, fog, step, cursor, rs);
-      expect(intermediate.combatContact).toBe(false);
+    // Keep stepping east until combat contact fires. Assert contact is reached
+    // in bounded steps (not open-ended) and stays true for the same enemy id.
+    let contactFired = false;
+    let contactResult = null;
+    for (let i = 0; i < 6 && !contactFired; i++) {
+      const result = moveParty(lat, fog, 'e', cursor, rs);
+      if (result.combatContact) {
+        contactFired = true;
+        contactResult = result;
+      }
     }
-    const contact = moveParty(lat, fog, 'e', cursor, rs);
-    expect(lat.getPartyPosition()).toEqual({ x: 15, y: 15 });
-    expect(contact.combatContact).toBe(true);
-    expect(contact.contactEntity).toEqual(expect.objectContaining({ id: 0, x: 17, y: 15 }));
+    expect(contactFired).toBe(true);
+    expect(contactResult.contactEntity).toEqual(expect.objectContaining({ id: 0, archetypeId: 'drone' }));
   });
 
   it('dedup: once contacted, a further in-range move for the same enemy → combatContact false', () => {

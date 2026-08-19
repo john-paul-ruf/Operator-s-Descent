@@ -1,4 +1,5 @@
 import { computeLOS, updateFogOfWar, syncVisitedBitmap } from './shadowcast.js';
+import { generateLoot } from '../rules/loot.js';
 
 const DIRECTIONS = {
   n: { dx: 0, dy: -1 },
@@ -11,7 +12,16 @@ const DIRECTIONS = {
   nw: { dx: -1, dy: -1 }
 };
 
-const DEFAULT_LOS_RADIUS = 8;
+// LOS radius bumped 8 → 10 (combat-and-overworld-clarity-pass SESSION-04) so
+// the wider corridors and spacious overworld read at a glance. The sig-driven
+// override in moveParty (sig * 2) is unchanged.
+const DEFAULT_LOS_RADIUS = 10;
+
+// Overworld hunter activation: an enemy within this Chebyshev range of the
+// party takes one BFS-shortest step toward the party per party move. Kept at
+// 8 (the historical LOS default) so a hunter activates roughly when it becomes
+// visible under the new radius-10 LOS.
+export const HUNT_ACTIVATION_RANGE = 8;
 
 const DIRECTION_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 const DEFAULT_PATH_MAX_STEPS = 64;
@@ -23,10 +33,13 @@ export const HOSTILE_CONTACT_RANGE = 2;
 // closed-corner rule; fog-INDEPENDENT (traversability, not what's revealed) but
 // the hostile itself must be in visibleCells (we only auto-engage what we can
 // see). RNG-free. Returns { distance, entity } or { distance: null, entity: null }.
+// Uses getActiveEnemySpawns so hunter-moved positions (SESSION-04) are seen,
+// then additionally filters by runState.defeatedEnemies because the lattice's
+// snapshot may lag behind runtime combat updates.
 function nearestConnectedHostile(lattice, visibleCells, runState, maxSteps = HOSTILE_CONTACT_RANGE) {
   const defeated = runState?.defeatedEnemies || 0n;
   const hostileAt = new Map();
-  for (const spawn of lattice.getEnemySpawns()) {
+  for (const spawn of lattice.getActiveEnemySpawns()) {
     if ((defeated & (1n << BigInt(spawn.id))) !== 0n) continue;
     if (!visibleCells.has(`${spawn.x},${spawn.y}`)) continue;
     hostileAt.set(`${spawn.x},${spawn.y}`, spawn);
@@ -181,6 +194,15 @@ export function moveParty(lattice, fogState, direction, rngCursor, runState, opt
     syncVisitedBitmap(fogState, runState.fogOfWar);
   }
 
+  // Ordering (SESSION-04): party moves → LOS refresh → hunters move → discovery
+  // + contact detection run against the NEW state. This lets a hunter that
+  // closes to Chebyshev-1 on the same tick as the party's step trigger combat
+  // before the tick ends.
+  let hunterStep = { moved: [], contactSpawnId: null };
+  if (!options.combatActive) {
+    hunterStep = stepHunters(lattice, runState);
+  }
+
   const discoveries = findDiscoveries(lattice, visibleCells, runState, options);
   const interrupt = pickInterrupt(discoveries, options);
   const proximity = computeExplorationProximity(lattice, visibleCells, runState);
@@ -192,12 +214,26 @@ export function moveParty(lattice, fogState, direction, rngCursor, runState, opt
     if (!runState._contactedHostiles) runState._contactedHostiles = new Set();
     const near = nearestConnectedHostile(lattice, visibleCells, runState, HOSTILE_CONTACT_RANGE);
     if (near.entity) {
-      const key = `${near.entity.x},${near.entity.y}`;
       hostileContactDistance = near.distance;
-      if (!runState._contactedHostiles.has(key)) {
-        runState._contactedHostiles.add(key);
+      // Dedup by spawn.id (SESSION-04): hunter movement changes positions,
+      // so keying by (x,y) would re-fire combatContact every time an enemy
+      // stepped. spawn.id is the stable identity of a given enemy.
+      if (!runState._contactedHostiles.has(near.entity.id)) {
+        runState._contactedHostiles.add(near.entity.id);
         combatContact = true;
         contactEntity = near.entity;
+      }
+    }
+    // Hunter-triggered contact fallback: if the hunter closes to Chebyshev-1
+    // and shadowcast LOS still doesn't include its new cell (rare wall geometry),
+    // ensure combatContact still fires from the hunter step result.
+    if (!combatContact && hunterStep.contactSpawnId != null) {
+      const spawn = lattice.getActiveEnemySpawns().find(e => e.id === hunterStep.contactSpawnId);
+      if (spawn && !runState._contactedHostiles.has(spawn.id)) {
+        runState._contactedHostiles.add(spawn.id);
+        combatContact = true;
+        contactEntity = spawn;
+        hostileContactDistance = 1;
       }
     }
   }
@@ -282,19 +318,20 @@ function findDiscoveries(lattice, visibleCells, runState, options = {}) {
   if (!runState?._knownHostiles) runState._knownHostiles = new Set();
   if (!runState?._knownContainers) runState._knownContainers = new Set();
 
-  for (const spawn of lattice.getEnemySpawns()) {
+  // Hostile discoveries iterate the active (culled-filtered, hunter-position-
+  // adjusted) spawns and key by spawn.id — otherwise a hunter moving each turn
+  // would count as a fresh discovery on every step. The lattice's defeat
+  // snapshot lags runtime combat, so we additionally filter by runState.
+  for (const spawn of lattice.getActiveEnemySpawns()) {
+    if ((defeated & (1n << BigInt(spawn.id))) !== 0n) continue;
     if (visibleCells.has(`${spawn.x},${spawn.y}`)) {
-      const enemyBit = BigInt(spawn.id);
-      if ((defeated & (1n << enemyBit)) === 0n) {
-        const key = `${spawn.x},${spawn.y}`;
-        const newlyDiscovered = !runState._knownHostiles.has(key);
-        discoveries.push({ type: 'hostile', entity: spawn, newlyDiscovered });
-        if (newlyDiscovered) runState._knownHostiles.add(key);
-      }
+      const newlyDiscovered = !runState._knownHostiles.has(spawn.id);
+      discoveries.push({ type: 'hostile', entity: spawn, newlyDiscovered });
+      if (newlyDiscovered) runState._knownHostiles.add(spawn.id);
     }
   }
 
-  for (const container of lattice.getContainers()) {
+  for (const container of lattice.getActiveContainers()) {
     if (visibleCells.has(`${container.x},${container.y}`)) {
       const containerBit = BigInt(container.id);
       if ((opened & (1n << containerBit)) === 0n) {
@@ -358,18 +395,16 @@ export function computeExplorationProximity(lattice, visibleCells, runState) {
   const pos = lattice.getPartyPosition();
 
   let nearestHostile = Infinity;
-  for (const spawn of lattice.getEnemySpawns()) {
-    const bit = BigInt(spawn.id);
-    if ((defeated & (1n << bit)) !== 0n) continue;
+  for (const spawn of lattice.getActiveEnemySpawns()) {
+    if ((defeated & (1n << BigInt(spawn.id))) !== 0n) continue;
     if (!visibleCells.has(`${spawn.x},${spawn.y}`)) continue;
     const dist = Math.max(Math.abs(spawn.x - pos.x), Math.abs(spawn.y - pos.y));
     if (dist < nearestHostile) nearestHostile = dist;
   }
 
   let nearestContainer = Infinity;
-  for (const c of lattice.getContainers()) {
-    const bit = BigInt(c.id);
-    if ((opened & (1n << bit)) !== 0n) continue;
+  for (const c of lattice.getActiveContainers()) {
+    if ((opened & (1n << BigInt(c.id))) !== 0n) continue;
     if (!visibleCells.has(`${c.x},${c.y}`)) continue;
     const dist = Math.max(Math.abs(c.x - pos.x), Math.abs(c.y - pos.y));
     if (dist < nearestContainer) nearestContainer = dist;
@@ -385,4 +420,157 @@ moveParty._damageFlag = false;
 
 export function signalMovementDamage() {
   moveParty._damageFlag = true;
+}
+
+// Overworld hunt (SESSION-04). After every party move, each active enemy within
+// HUNT_ACTIVATION_RANGE (Chebyshev, default 8) takes ONE BFS-shortest step
+// toward the party over the exploration lattice. Ordering is deterministic:
+// spawn.id ascending, NEIGHBOR_STEPS via DIRECTION_ORDER for ties. RNG-free.
+// Walls, closed-corner rule, the party cell, and other hunter cells all block
+// a step; a blocked hunter simply stays put. Positions live in the lattice's
+// session-scoped hunter override map — NOT persisted to the save (Custom
+// Rule 13). Returns { moved: [{id, from, to}], contactSpawnId } — the caller
+// treats a contactSpawnId (any hunter that ends adjacent to the party) as an
+// immediate combat contact.
+export function stepHunters(lattice, runState) {
+  const moved = [];
+  let contactSpawnId = null;
+  if (!lattice) return { moved, contactSpawnId };
+  const party = lattice.getPartyPosition();
+  if (!party) return { moved, contactSpawnId };
+  const w = lattice.getWidth();
+  const h = lattice.getHeight();
+
+  const defeated = runState?.defeatedEnemies || 0n;
+  const activeEnemies = lattice.getActiveEnemySpawns()
+    .filter(spawn => (defeated & (1n << BigInt(spawn.id))) === 0n);
+  if (activeEnemies.length === 0) return { moved, contactSpawnId };
+  const sortedEnemies = [...activeEnemies].sort((a, b) => a.id - b.id);
+
+  const occupied = new Map(); // "x,y" → 'party' | spawn.id
+  occupied.set(`${party.x},${party.y}`, 'party');
+  for (const spawn of sortedEnemies) occupied.set(`${spawn.x},${spawn.y}`, spawn.id);
+
+  // BFS from party outward over walkable + corner-rule cells. Distance map is
+  // reused for every hunter so the whole pass is O(cells) not O(hunters × cells).
+  // Occupancy is checked per-hunter at step-selection time so id-order conflicts
+  // resolve correctly (the id-lower hunter takes the shared step; others stall).
+  const distFromParty = new Map();
+  distFromParty.set(`${party.x},${party.y}`, 0);
+  const queue = [{ x: party.x, y: party.y }];
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head++];
+    const d = distFromParty.get(`${cur.x},${cur.y}`);
+    for (const name of DIRECTION_ORDER) {
+      const delta = DIRECTIONS[name];
+      const nx = cur.x + delta.dx;
+      const ny = cur.y + delta.dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nk = `${nx},${ny}`;
+      if (distFromParty.has(nk)) continue;
+      if (!lattice.isWalkable(nx, ny)) continue;
+      if (delta.dx !== 0 && delta.dy !== 0) {
+        const hOpen = lattice.isWalkable(cur.x + delta.dx, cur.y);
+        const vOpen = lattice.isWalkable(cur.x, cur.y + delta.dy);
+        if (!hOpen && !vOpen) continue;
+      }
+      distFromParty.set(nk, d + 1);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  for (const enemy of sortedEnemies) {
+    const chebDist = Math.max(Math.abs(enemy.x - party.x), Math.abs(enemy.y - party.y));
+    if (chebDist > HUNT_ACTIVATION_RANGE) continue;
+    if (chebDist === 1) {
+      if (contactSpawnId == null) contactSpawnId = enemy.id;
+      continue;
+    }
+    const myDist = distFromParty.get(`${enemy.x},${enemy.y}`);
+    if (myDist == null || myDist <= 1) {
+      if (myDist === 1 && contactSpawnId == null) contactSpawnId = enemy.id;
+      continue;
+    }
+    let bestStep = null;
+    for (const name of DIRECTION_ORDER) {
+      const delta = DIRECTIONS[name];
+      const nx = enemy.x + delta.dx;
+      const ny = enemy.y + delta.dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nk = `${nx},${ny}`;
+      const nDist = distFromParty.get(nk);
+      if (nDist !== myDist - 1) continue;
+      if (delta.dx !== 0 && delta.dy !== 0) {
+        const hOpen = lattice.isWalkable(enemy.x + delta.dx, enemy.y);
+        const vOpen = lattice.isWalkable(enemy.x, enemy.y + delta.dy);
+        if (!hOpen && !vOpen) continue;
+      }
+      if (nx === party.x && ny === party.y) continue; // never step onto the party
+      const occ = occupied.get(nk);
+      if (occ !== undefined && occ !== enemy.id) continue;
+      bestStep = { x: nx, y: ny };
+      break;
+    }
+    if (!bestStep) continue;
+    occupied.delete(`${enemy.x},${enemy.y}`);
+    occupied.set(`${bestStep.x},${bestStep.y}`, enemy.id);
+    lattice.setHunterPosition(enemy.id, bestStep);
+    moved.push({ id: enemy.id, from: { x: enemy.x, y: enemy.y }, to: bestStep });
+    const newCheb = Math.max(Math.abs(bestStep.x - party.x), Math.abs(bestStep.y - party.y));
+    if (newCheb === 1 && contactSpawnId == null) contactSpawnId = enemy.id;
+  }
+
+  return { moved, contactSpawnId };
+}
+
+// Empty-cache cull (SESSION-04). Called ONCE at exploration mount per floor
+// entry. For each container, run generateLoot() against its stable seed; if
+// the projected item count is 0, mark the container culled on the lattice —
+// it never renders, never triggers a container interrupt. Enemies reserve a
+// hook via spawn.hasDrop for a future enemy-drops feature (today no enemy
+// culls for loot reasons). `data` is the game-data registry (equipment,
+// affixes, consumables, themes); `floor` supplies floorSubSeed + themeId.
+export function pruneEmptyCaches(lattice, runState, floor, data) {
+  const pruned = { containers: [], enemies: [] };
+  if (!lattice || !runState || !floor || !data) return pruned;
+  const equipmentData = data.equipment;
+  const affixesData = data.affixes;
+  const consumablesData = data.consumables;
+  if (!equipmentData || !affixesData || !consumablesData) return pruned;
+  const themes = data.themes?.themes || [];
+  const theme = themes.find((t) => t.id === floor.themeId) || null;
+  const themeLootBias = theme?.lootBias || null;
+  const floorId = `${runState.worldSeed}:${runState.depth}:${floor.floorSubSeed ?? 0}`;
+  for (const container of lattice.getContainers()) {
+    if (lattice.isContainerOpened(container.id)) continue;
+    if (lattice.isCulled('container', container.id)) continue;
+    const items = generateLoot(
+      runState.worldSeed,
+      runState.depth,
+      floorId,
+      container.id,
+      themeLootBias,
+      equipmentData,
+      affixesData,
+      consumablesData,
+      { containerType: container.kind }
+    );
+    if (Array.isArray(items) && items.length === 0) {
+      lattice.markCulled('container', container.id);
+      pruned.containers.push(container.id);
+    }
+  }
+  for (const spawn of lattice.getEnemySpawns()) {
+    if (lattice.isEnemyDefeated(spawn.id)) continue;
+    if (lattice.isCulled('enemy', spawn.id)) continue;
+    if (spawn.hasDrop === false) {
+      // Reserved hook. Today no enemy sets hasDrop === false explicitly; this
+      // branch stays inert until a future feature ships enemy loot with the
+      // hasDrop toggle.
+      lattice.markCulled('enemy', spawn.id);
+      pruned.enemies.push(spawn.id);
+    }
+  }
+  return pruned;
 }
