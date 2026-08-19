@@ -376,6 +376,72 @@ describe('creation screen — manual links (portrait)', () => {
     off();
   });
 
+  it('tech pane school inline links dispatch school ids', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 1010 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    byTestId(container, 'tab-tech').click();
+    const strip = byTestId(container, 'tech-manual-strip');
+    expect(strip).not.toBeNull();
+    // Breacher's only gated school is disrupt.
+    const disruptLink = byTestId(container, 'manual-link-disrupt');
+    expect(disruptLink).not.toBeNull();
+    disruptLink.click();
+    expect(seen).toContainEqual({ target: 'disrupt', source: 'creation' });
+    off();
+  });
+
+  it('tech pane CHARGE chip dispatches charge_and_overclock', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 1111 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    byTestId(container, 'tab-tech').click();
+    const chargeChip = byTestId(container, 'manual-link-charge_and_overclock');
+    expect(chargeChip).not.toBeNull();
+    chargeChip.click();
+    expect(seen).toContainEqual({ target: 'charge_and_overclock', source: 'creation' });
+    off();
+  });
+
+  it('first focusable in the tech pane remains the first protocol card, not a manual link', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 1212 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    byTestId(container, 'tab-tech').click();
+    const pane = byTestId(container, 'panel-tech');
+    const buttons = collectButtons(pane);
+    // Breacher's first gated protocol is disrupt-1.
+    expect(buttons[0]).toBe(byTestId(container, 'protocol-disrupt-1'));
+  });
+
+  it('gear pane loot_and_salvage chip dispatches the section id', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 1313 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    byTestId(container, 'tab-gear').click();
+    const chip = byTestId(container, 'manual-link-loot_and_salvage');
+    expect(chip).not.toBeNull();
+    chip.click();
+    expect(seen).toContainEqual({ target: 'loot_and_salvage', source: 'creation' });
+    off();
+  });
+
+  it('tech pane on a multi-school class exposes all gated schools as inline links', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 1414 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-ghost').click();
+    byTestId(container, 'tab-tech').click();
+    // Ghost gates scry + disrupt (max tier 5).
+    expect(byTestId(container, 'manual-link-scry')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-disrupt')).not.toBeNull();
+    // Non-gated schools have no link on this pane.
+    expect(byTestId(container, 'manual-link-ward')).toBeNull();
+    expect(byTestId(container, 'manual-link-rewrite')).toBeNull();
+  });
+
   it('portrait render never nests manual buttons inside another button (class, attrs, gear, tech)', async () => {
     const { container } = await mountCreation({ preloadedSeed: 555 });
     byTestId(container, 'add-character').click();
@@ -688,6 +754,44 @@ describe('creation screen — wide layout', () => {
       chip.click();
       expect(seen).toContainEqual({ target: key, source: 'creation' });
     }
+    off();
+  });
+
+  it('wide tech section exposes gated school inline links and the CHARGE chip', async () => {
+    installMatchMedia(true);
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 1515 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    const strip = byTestId(container, 'wide-tech-manual-strip');
+    expect(strip).not.toBeNull();
+    byTestId(container, 'manual-link-disrupt').click();
+    expect(seen).toContainEqual({ target: 'disrupt', source: 'creation' });
+    byTestId(container, 'manual-link-charge_and_overclock').click();
+    expect(seen).toContainEqual({ target: 'charge_and_overclock', source: 'creation' });
+    off();
+  });
+
+  it('first focusable in the wide tech section remains the first protocol row', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 1616 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    const section = byTestId(container, 'wide-section-tech');
+    const buttons = collectButtons(section);
+    expect(buttons[0]).toBe(byTestId(container, 'wide-protocol-disrupt-1'));
+  });
+
+  it('wide gear section carries the loot_and_salvage manual chip', async () => {
+    installMatchMedia(true);
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 1717 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    const strip = byTestId(container, 'wide-gear-manual-strip');
+    expect(strip).not.toBeNull();
+    byTestId(container, 'manual-link-loot_and_salvage').click();
+    expect(seen).toContainEqual({ target: 'loot_and_salvage', source: 'creation' });
     off();
   });
 

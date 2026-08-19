@@ -635,6 +635,7 @@ export function mount(container, params = {}) {
       }
       section.appendChild(group);
     }
+    section.appendChild(renderGearManualStrip(true));
     return section;
   }
 
@@ -683,6 +684,7 @@ export function mount(container, params = {}) {
     const gateNote = text('div', 'tech-gate-note', `HIGHER TIERS NOT AVAILABLE FOR ${className} (GATE: TIER ≤ ${maxTier})`);
     gateNote.dataset.testid = 'wide-tech-gate-note';
     section.appendChild(gateNote);
+    section.appendChild(renderTechManualStrip(selected, true));
     return section;
   }
 
@@ -1034,6 +1036,16 @@ export function mount(container, params = {}) {
       group.appendChild(choices);
       panel.appendChild(group);
     }
+    panel.appendChild(renderGearManualStrip(false));
+  }
+
+  function renderGearManualStrip(wide) {
+    const strip = document.createElement('div');
+    strip.className = 'manual-link-strip';
+    strip.dataset.testid = wide ? 'wide-gear-manual-strip' : 'gear-manual-strip';
+    strip.appendChild(text('span', wide ? 'subtitle' : 'creation-note', 'SEE MANUAL:'));
+    strip.appendChild(manualLink('loot_and_salvage', { variant: 'chip' }));
+    return strip;
   }
 
   function renderProtocols(panel, summary) {
@@ -1075,6 +1087,19 @@ export function mount(container, params = {}) {
       grid.appendChild(card);
     }
     panel.appendChild(grid);
+    panel.appendChild(renderTechManualStrip(selected, false));
+  }
+
+  function renderTechManualStrip(selected, wide) {
+    const strip = document.createElement('div');
+    strip.className = 'manual-link-strip';
+    strip.dataset.testid = wide ? 'wide-tech-manual-strip' : 'tech-manual-strip';
+    strip.appendChild(text('span', wide ? 'subtitle' : 'creation-note', 'SEE MANUAL:'));
+    for (const school of selected.classData?.protocolGates?.schools ?? []) {
+      strip.appendChild(manualLink(school, { label: school.toUpperCase() }));
+    }
+    strip.appendChild(manualLink('charge_and_overclock', { variant: 'chip' }));
+    return strip;
   }
 
   function renderBlueprints(panel) {
