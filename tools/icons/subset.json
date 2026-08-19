@@ -1,0 +1,12 @@
+{
+  "combat": ["sword", "shield", "zap", "target", "circle-x", "flame", "hand-metal", "clock"],
+  "move":   ["arrow-up", "arrow-down", "arrow-left", "arrow-right",
+             "arrow-up-left", "arrow-up-right", "arrow-down-left", "arrow-down-right",
+             "corner-down-right", "footprints"],
+  "gear":   ["backpack", "package", "recycle", "star", "sparkles"],
+  "party":  ["users", "user", "heart", "battery"],
+  "tech":   ["flask-conical", "wand-sparkles", "gauge"],
+  "loot":   ["archive", "box", "gem"],
+  "log":    ["scroll-text", "link", "download", "upload"],
+  "ui":     ["menu", "chevron-left", "chevron-right", "x", "check", "circle-help", "info", "triangle-alert", "eye", "eye-off"]
+}
