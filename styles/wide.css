@@ -891,7 +891,22 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     TUTORIAL SCREEN (wide) — two-page spread + appended summary state
+     TELEMETRY DOCK — MANUAL CHIP (the-manual SESSION-04)
+     Pinned to the top-right of `.wide-telemetry-header`. The `?` chip lives
+     inside the header (which is `position: relative` per status-strip.js) so
+     it never disturbs the dock's normal field stack.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .wide-telemetry-manual-chip {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TUTORIAL SCREEN (wide) — two-page spread + appended summary state.
+     Kept as long as `mocks/wide/tutorial.html` still ships these classes and
+     the M75 module lives on disk (see the-manual SESSION-04 handoff).
      ═══════════════════════════════════════════════════════════════════════════ */
   .wide-tutorial-shell {
     position: relative;

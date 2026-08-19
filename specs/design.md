@@ -239,7 +239,7 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 | Settings | `mocks/settings.html` | Audio sliders, glitch toggle, reduced-motion, scanline toggle |
 | Run-End Scorecard | `mocks/scorecard.html` | Final depth, roster, cause of death, seed, share link |
 | Link Import | `mocks/import.html` | Paste link + named failure screens |
-| Tutorial | `mocks/tutorial.html` | Paginated manual on console interaction model |
+| Manual (modal) | see Component Inventory → "Manual Modal" (the-manual SESSION-03/04) | Hyperlinked always-available manual; blocking overlay. Reachable via title MANUAL branch, settings row, in-play status-strip `?` chip. `#a=tutorial` deep-links redirect here. |
 | Prototype Hub | `mocks/index.html` | Index linking all mocks for navigation |
 
 ---
@@ -276,9 +276,10 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 3. → Success: **Floor Exploration** (reconstructed state)
 4. → Failure: **Named failure screen** → fresh run in same world / title
 
-### 4. Tutorial Flow
-1. **Title Screen** → Tutorial (always reachable)
-2. → paginated manual → read → back to title
+### 4. Manual Flow (the-manual SESSION-04 supersedes Tutorial Flow)
+1. **Any surface** → open the manual: title MANUAL branch, settings `OPERATOR'S MANUAL` row, or the persistent `?` status-strip chip (exploration + combat, portrait + wide).
+2. → hyperlinked sections + internal back stack → close (Esc, backdrop, or close button).
+3. `#a=tutorial` deep-links redirect to title + manual open; the retired paginated tutorial screen no longer mounts.
 
 ### 5. Settings Flow
 1. **Title Screen** → Settings, OR during play via console
