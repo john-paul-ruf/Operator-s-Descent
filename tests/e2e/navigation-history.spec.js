@@ -58,17 +58,38 @@ test.describe('navigation history', () => {
     test.skip(testInfo.project.name !== 'chromium-portrait', 'navigation-history covered by chromium-portrait');
   });
 
-  test('title → tutorial → back returns to title', async ({ page }) => {
+  // the-manual SESSION-07 — the tutorial branch is retired. The MANUAL button
+  // opens a blocking modal that is NOT a route: opening/closing it must NOT
+  // push a history entry, so the back-stack behaviour becomes "title → title"
+  // with no navigation in between. Deep-link `#a=tutorial` back-compat lives
+  // in the separate test below.
+  test('title → open manual modal → close → still at title, no history push', async ({ page }) => {
     await reachTitle(page);
     await page.getByTestId('title-start').click();
     await expect(page.getByTestId('title-branches')).toBeVisible();
-    await page.getByTestId('title-tutorial').click();
-    await expect(page.getByTestId('tutorial-page')).toBeVisible();
-    await expect.poll(() => currentHash(page)).toBe('#a=tutorial');
-    await page.goBack();
+    const hashBeforeOpen = await currentHash(page);
+
+    await page.getByTestId('title-manual').click();
+    await expect(page.getByTestId('manual-modal')).toBeVisible();
+    // Modal open must NOT change the fragment.
+    expect(await currentHash(page)).toBe(hashBeforeOpen);
+
+    await page.getByTestId('manual-close').click();
+    await expect(page.getByTestId('manual-modal')).toBeHidden();
+    // Modal close must NOT change the fragment either.
+    expect(await currentHash(page)).toBe(hashBeforeOpen);
+    // Title still mounted.
     await expect(page.getByTestId('title-start')).toBeVisible();
-    const hash = await currentHash(page);
-    expect(hash === '' || hash === '#a=title').toBe(true);
+  });
+
+  test('#a=tutorial back-compat: deep link mounts title AND opens the modal', async ({ page }) => {
+    await installStorage(page);
+    await page.goto('/#a=tutorial');
+    await expect(page.getByTestId('manual-modal')).toBeVisible();
+    await page.getByTestId('manual-close').click();
+    // With the modal closed the reader lands on the title screen — the retired
+    // tutorial route never mounts a screen of its own.
+    await expect(page.getByTestId('title-start')).toBeVisible();
   });
 
   test('title → library → settings → back → library → back → title', async ({ page }) => {

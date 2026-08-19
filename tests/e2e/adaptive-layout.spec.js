@@ -227,7 +227,7 @@ test('live layout switch re-mounts route without page reload', async ({ page }) 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Flow screens — title, library, settings, tutorial, import, creation, scorecard
+// 6. Flow screens — title, library, settings, manual modal, import, creation, scorecard
 // ─────────────────────────────────────────────────────────────────────────────
 test('title screen wide: centered lockup, tagline, branch list with primary + secondary rows', async ({ page }) => {
   await openBranchesFromTitle(page);
@@ -239,7 +239,8 @@ test('title screen wide: centered lockup, tagline, branch list with primary + se
   await expect(page.getByTestId('title-import-link')).toBeVisible();
   const secondary = page.getByTestId('title-secondary-branches');
   await expect(secondary).toBeVisible();
-  await expect(secondary.locator('[data-testid="title-tutorial"]')).toBeVisible();
+  // the-manual SESSION-04 — MANUAL replaces the retired TUTORIAL branch.
+  await expect(secondary.locator('[data-testid="title-manual"]')).toBeVisible();
   await expect(secondary.locator('[data-testid="title-settings"]')).toBeVisible();
 });
 
@@ -290,26 +291,38 @@ test('settings screen wide: two columns with 96px row floor and back returns to 
   await expect(page.getByTestId('title-header')).toBeVisible();
 });
 
-test('tutorial screen wide: two-pane spread, dots track leftmost pages, appended summary state', async ({ page }) => {
+// the-manual SESSION-04 — the tutorial screen is retired; MANUAL opens a
+// blocking modal instead. Wide presentation of the modal is a two-pane grid
+// (persistent TOC rail + scrollable content) rather than a two-page spread.
+// SESSION-07 replaces the tutorial-spread test with modal presentation +
+// live-layout-switch resilience.
+test('manual modal wide: two-pane grid with a persistent TOC rail, survives layout switch', async ({ page }) => {
   await openBranchesFromTitle(page);
-  await page.getByTestId('title-tutorial').click();
+  await page.getByTestId('title-manual').click();
 
-  await expect(page.locator('.wide-tutorial-shell')).toBeVisible();
-  await expect(page.getByTestId('tutorial-spread')).toBeVisible();
-  await expect(page.getByTestId('tutorial-page')).toBeVisible();
-  await expect(page.getByTestId('tutorial-right-pane')).toBeVisible();
+  await expect(page.getByTestId('manual-modal')).toBeVisible();
+  await expect(page.getByTestId('manual-modal')).toHaveAttribute('role', 'dialog');
+  await expect(page.getByTestId('manual-modal')).toHaveAttribute('aria-modal', 'true');
+  // TOC rail is visible in wide.
+  await expect(page.getByTestId('manual-toc')).toBeVisible();
+  // Manual body resolves to a 2-track grid in wide layout.
+  const columnCount = await page.locator('.manual-body').evaluate(
+    (el) => getComputedStyle(el).gridTemplateColumns.trim().split(/\s+/).length
+  );
+  expect(columnCount).toBe(2);
 
-  // Dots — ceil(PAGES / 2) = ceil(11 / 2) = 6 content-spread dots (summary is separate state).
-  const dots = page.locator('.tutorial-dot');
-  await expect(dots).toHaveCount(6);
+  // Chapters are surfaced under the shipped SESSION-01 inventory (12+12+38=62).
+  await expect(page.getByTestId('manual-chapter-interface')).toBeVisible();
+  await expect(page.getByTestId('manual-chapter-systems')).toBeVisible();
+  await expect(page.getByTestId('manual-chapter-glossary')).toBeVisible();
 
-  // Advance to the summary state by pressing NEXT until DONE is present.
-  for (let i = 0; i < 10; i++) {
-    if (await page.getByTestId('tutorial-done').count()) break;
-    await page.getByTestId('tutorial-next').click();
-  }
-  await expect(page.getByTestId('tutorial-done')).toBeVisible();
-  await expect(page.getByTestId('tutorial-summary')).toBeVisible();
+  // Live-switch to portrait — the modal survives the underlying layout re-mount
+  // because it is a sibling of #app-root, not a child of the route container.
+  await page.setViewportSize({ width: 480, height: 900 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.layout))
+    .toBe('portrait');
+  await expect(page.getByTestId('manual-modal')).toBeVisible();
 });
 
 test('import screen wide: single centered column preserves reading posture', async ({ page }) => {
