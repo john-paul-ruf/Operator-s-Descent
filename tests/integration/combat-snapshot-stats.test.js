@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createEnemy } from '../../src/rules/enemies.js';
-import { deriveEnemyStats, toCombatSnapshot } from '../../src/rules/combat.js';
+import { deriveEnemyStats, initiateCombat, toCombatSnapshot } from '../../src/rules/combat.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { encodeRun, initEncoder } from '../../src/state/save-encode.js';
 import { decodeRun } from '../../src/state/save-decode.js';
@@ -155,5 +155,74 @@ describe('enemy combat stats survive save/restore', () => {
     expect(deriveEnemyStats('echo', 4, enemiesData)).toBeNull();
     expect(deriveEnemyStats('nonexistent', 4, enemiesData)).toBeNull();
     expect(deriveEnemyStats(null, 4, enemiesData)).toBeNull();
+  });
+});
+
+describe('apex actors serialize with two initiative slots (v5 apex fix)', () => {
+  // Regression for the pre-v5 bug: apex actionSlotsPerRound = 2 makes
+  // buildTurnOrder insert the actor twice, toCombatSnapshot emitted the
+  // duplicated id into BOTH initiativeOrder AND actors[], and the codec
+  // rejected the snapshot with duplicate_actor. v5 dedups the actors[] emit
+  // while keeping duplicates legal in initiativeOrder (up to 2 references
+  // per actor). The runtime restore path re-hydrates the double-slot by
+  // filtering initiativeOrder against actors without dedup.
+
+  function apexCombat(depth = 4) {
+    const cursor = createRNGCursorForRun(4242);
+    const apex = createEnemy('apex', depth, cursor, enemiesData);
+    apex.position = { x: 4, y: 4 };
+    const party = [{
+      id: 'operator_1',
+      side: 'party',
+      position: { x: 1, y: 1 },
+      hp: 22, hpMax: 22, charge: 4, chargeMax: 4,
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+      conditions: [], protocols: []
+    }];
+    return initiateCombat({ id: 'encounter_apex', kind: 'standard', actors: [...party, apex], window: { originX: 0, originY: 0, width: 8, height: 16 } }, cursor);
+  }
+
+  it('toCombatSnapshot dedups actors[] but keeps two apex slots in initiativeOrder', () => {
+    const combatState = apexCombat();
+    const apexId = [...combatState.combatants.values()].find((c) => c.side === 'enemy')?.id;
+    expect(combatState.turnOrder.filter((id) => id === apexId)).toHaveLength(2);
+    const snapshot = toCombatSnapshot(combatState);
+    expect(snapshot.actors.map((a) => a.id).sort()).toEqual(['operator_1', apexId].sort());
+    expect(snapshot.initiativeOrder.filter((id) => id === apexId)).toHaveLength(2);
+    expect(snapshot.initiativeOrder).toHaveLength(3);
+  });
+
+  it('encode → decode preserves the apex double-slot in initiativeOrder', () => {
+    const combatState = apexCombat();
+    const snapshot = toCombatSnapshot(combatState);
+    const state = buildRealisticRun(31, { depth: 4 });
+    state.activeCombat = snapshot;
+    const encoded = encodeRun(state);
+    expect(encoded.success).toBe(true);
+    const decoded = decodeRun(encoded.fragment);
+    expect(decoded.success).toBe(true);
+    const apexId = snapshot.actors.find((a) => a.side === 'enemy').id;
+    expect(decoded.runState.activeCombat.initiativeOrder.filter((id) => id === apexId)).toHaveLength(2);
+    expect(decoded.runState.activeCombat.initiativeOrder).toHaveLength(3);
+  });
+
+  it('the runtime restore filter preserves both apex slots (turnOrder = 3 entries)', () => {
+    // Mirrors runtime.js combatStateFromSnapshot's initiativeOrder filter:
+    //   initiativeOrder.filter((id) => actorIds.has(id))
+    // — no dedup, so duplicates for apex two-slot actors survive to
+    // turnOrder. This test pins the contract that runtime.js needs no diff
+    // for the apex fix beyond what the codec already delivers.
+    const combatState = apexCombat();
+    const snapshot = toCombatSnapshot(combatState);
+    const state = buildRealisticRun(31, { depth: 4 });
+    state.activeCombat = snapshot;
+    const encoded = encodeRun(state);
+    const decoded = decodeRun(encoded.fragment);
+    const restoredSnapshot = decoded.runState.activeCombat;
+    const actorIds = new Set(restoredSnapshot.actors.map((actor) => actor.id));
+    const turnOrder = restoredSnapshot.initiativeOrder.filter((id) => actorIds.has(id));
+    const apexId = snapshot.actors.find((a) => a.side === 'enemy').id;
+    expect(turnOrder).toHaveLength(3);
+    expect(turnOrder.filter((id) => id === apexId)).toHaveLength(2);
   });
 });

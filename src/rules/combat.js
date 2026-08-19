@@ -855,10 +855,19 @@ export function toCombatSnapshot(combatState) {
   if (!combatState || combatState.ended) return null;
   const actors = [];
   const initiativeOrder = [];
+  // Apex actors (actionSlotsPerRound === 2) appear twice in turnOrder — the
+  // second slot is inserted by buildTurnOrder. We keep BOTH slots in
+  // initiativeOrder (the v5 codec accepts up to 2 references per actor) but
+  // emit each unique actor exactly once in actors[]. Prior to v5 the double
+  // slot tripped the codec's duplicate_actor check, blocking any real save
+  // that contained an apex.
+  const seenActorIds = new Set();
   for (const id of combatState.turnOrder) {
     const actor = combatState.combatants.get(id);
     if (!actor || actor.hp <= 0) continue;
     initiativeOrder.push(id);
+    if (seenActorIds.has(actor.id)) continue;
+    seenActorIds.add(actor.id);
     const entry = {
       id: actor.id,
       side: actor.side,

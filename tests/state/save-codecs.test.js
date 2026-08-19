@@ -68,13 +68,69 @@ describe('save codecs', () => {
     expect(roundTrip(writeCombatSnapshot, readCombatSnapshot, combat())).toEqual(combat());
   });
 
+  it('round-trips an apex two-slot initiative order (duplicates legal in v5)', () => {
+    // Apex actors take a second action slot per round (combat.js
+    // buildTurnOrder), so initiativeOrder legitimately contains the same id
+    // twice while actors[] holds each unique actor once. v5 codec accepts
+    // this shape; v4 rejected it with duplicate_actor, so no real combat
+    // containing an apex could save.
+    const snapshot = combat();
+    snapshot.actors[1].id = 'enemy_4_apex_11';
+    snapshot.initiativeOrder = ['char_0', 'enemy_4_apex_11', 'enemy_4_apex_11'];
+    snapshot.currentIndex = 2;
+    const decoded = roundTrip(writeCombatSnapshot, readCombatSnapshot, snapshot);
+    expect(decoded.initiativeOrder).toEqual(['char_0', 'enemy_4_apex_11', 'enemy_4_apex_11']);
+    expect(decoded.currentIndex).toBe(2);
+    expect(decoded.actors.map((a) => a.id)).toEqual(['char_0', 'enemy_4_apex_11']);
+  });
+
+  it('round-trips a snapshot whose encounter.id matches arena.contactId (sameAs flag)', () => {
+    // toCombatSnapshot in the shipping runtime sets both fields to
+    // combatState.id, so the sameAs path fires on every real save.
+    const snapshot = combat();
+    snapshot.encounter = { id: snapshot.arena.contactId, type: snapshot.encounter.type };
+    expect(roundTrip(writeCombatSnapshot, readCombatSnapshot, snapshot)).toEqual(snapshot);
+  });
+
+  it('round-trips a same-depth run of enemy ids (delta context collapses cursor deltas)', () => {
+    // Four enemies at the same depth exercise the delta-encoded id path:
+    // the first writes the full compact form, the rest write 1-bit same-depth
+    // + 3-bit archetype + signed varInt cursor delta. Round-tripping proves
+    // the read side rebuilds the exact id strings.
+    const snapshot = combat();
+    snapshot.actors = [
+      { id: 'operator_1', side: 'party', x: 1, y: 1, hp: 20, charge: 4, conditions: [], initiative: 12, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false },
+      { id: 'enemy_4_drone_7', side: 'enemy', x: 3, y: 4, hp: 8, charge: 0, conditions: [], initiative: 10, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false, stats: { archetypeId: 'drone', hpMax: 8, chargeMax: 0, sigilCodepoint: 57392 } },
+      { id: 'enemy_4_drone_9', side: 'enemy', x: 3, y: 5, hp: 8, charge: 0, conditions: [], initiative: 9, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false, stats: { archetypeId: 'drone', hpMax: 8, chargeMax: 0, sigilCodepoint: 57392 } },
+      { id: 'enemy_4_null_12', side: 'enemy', x: 4, y: 4, hp: 12, charge: 0, conditions: [], initiative: 8, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false, stats: { archetypeId: 'null', hpMax: 12, chargeMax: 0, sigilCodepoint: 57404 } },
+    ];
+    snapshot.initiativeOrder = snapshot.actors.map((actor) => actor.id);
+    snapshot.currentIndex = 0;
+    expect(roundTrip(writeCombatSnapshot, readCombatSnapshot, snapshot)).toEqual(snapshot);
+  });
+
   it('rejects collection overflows, duplicate IDs, and invalid compact enums', () => {
     expect(() => roundTrip(writeItem, readItem, item({ affixes: Array(9).fill('edged') }))).toThrow('invalid_item');
     const character = buildRealisticRun(3).serialize().party[0];
     expect(() => roundTrip(writeCharacter, readCharacter, { ...character, protocolDeck: Array(21).fill({ school: 'ward', tier: 1 }) })).toThrow('invalid_character');
+    // Duplicate ACTOR entries (same id in actors[]) still fail — the apex
+    // fix only relaxes duplicates in initiativeOrder, not actors.
     const invalidCombat = combat();
     invalidCombat.actors.push({ ...invalidCombat.actors[0] });
     expect(() => roundTrip(writeCombatSnapshot, readCombatSnapshot, invalidCombat)).toThrow('duplicate_actor');
+    // Three-slot references (>2 per actor) exceed the apex ceiling and fail.
+    const overReferenced = combat();
+    overReferenced.initiativeOrder = ['char_0', 'char_0', 'char_0', 'enemy_0'];
+    overReferenced.currentIndex = 0;
+    expect(() => roundTrip(writeCombatSnapshot, readCombatSnapshot, overReferenced)).toThrow('invalid_combat');
+    // Missing-actor references (initiativeOrder references an id not in actors[]) fail.
+    const missing = combat();
+    missing.initiativeOrder = ['char_0', 'missing_id'];
+    expect(() => roundTrip(writeCombatSnapshot, readCombatSnapshot, missing)).toThrow('invalid_combat');
+    // Unreferenced actor (actor absent from initiativeOrder) fails.
+    const unreferenced = combat();
+    unreferenced.initiativeOrder = ['char_0', 'char_0'];
+    expect(() => roundTrip(writeCombatSnapshot, readCombatSnapshot, unreferenced)).toThrow('invalid_combat');
     expect(() => roundTrip(writeEcho, readEcho, { character, deathFloor: 4, appearanceFloor: 5 })).toThrow('invalid_echo');
   });
 

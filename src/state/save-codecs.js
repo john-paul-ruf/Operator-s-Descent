@@ -12,6 +12,10 @@ const MAX_AFFIXES = 8;
 const MAX_DECK = 20;
 const MAX_CALIBRATIONS = 16;
 const MAX_ACTORS = 24;
+// v5: initiativeOrder can hold up to 2× actors (apex actors take a second
+// action slot per round via combat.js buildTurnOrder). Every actor must appear
+// at least once and no more than twice.
+const MAX_INITIATIVE = MAX_ACTORS * 2;
 const MAX_PENDING_EFFECTS = 32;
 const MAX_VALUE_DEPTH = 8;
 const MAX_VALUE_ENTRIES = 32;
@@ -454,8 +458,10 @@ function readEnemyStatsTemplate(reader) {
 // context) but v4 no longer dedups — same-archetype packs already collapse to
 // a ~5-bit archetype write per enemy, so the extra bookkeeping wasn't earning
 // its complexity. Caller state is passed through unchanged.
+// v5: per-enemy alignToByte pair dropped — the block-level align in
+// writeCombatSnapshot / readCombatSnapshot is the only alignment that fires
+// now, and the per-enemy padding was pure overhead.
 function writeEnemyStats(writer, stats, previous) {
-  writer.alignToByte();
   const hasStats = isObject(stats);
   writer.writeBool(hasStats);
   if (!hasStats) return previous;
@@ -476,7 +482,6 @@ function writeEnemyStats(writer, stats, previous) {
 }
 
 function readEnemyStats(reader, previous) {
-  reader.alignToByte();
   if (!reader.readBool()) return { stats: undefined, previous };
   const archetypeId = readEnemyArchetypeId(reader);
   const template = archetypeId === 'echo' ? readEnemyStatsTemplate(reader) : {};
@@ -495,9 +500,74 @@ function readEnemyStats(reader, previous) {
   return { stats, previous: stats };
 }
 
-function writeActor(writer, actor) {
+// v5: enemy IDs use a combat-local delta context so a run of enemies at the
+// same floor collapses to 1-bit same-depth + 3-bit archetype + signed varInt
+// cursor delta rather than the full 8+3+varUint each time. Non-enemy IDs
+// (operator_N, echo_..., raw strings) still route through writeEntityId
+// unchanged. The context is owned by writeCombatSnapshot / readCombatSnapshot
+// so nothing else in the codec is affected.
+function writeCombatActorId(writer, value, context) {
+  if (typeof value !== 'string') fail('invalid_string');
+  const operator = value.match(/^operator_([1-4])$/);
+  if (operator) {
+    writer.writeUint(1, 2);
+    writer.writeUint(Number(operator[1]) - 1, 2);
+    return;
+  }
+  const enemy = value.match(/^enemy_(\d{1,3})_([a-z_]+)_(\d+)$/);
+  const enemyType = enemy ? ENEMY_ID_TYPES.indexOf(enemy[2]) : -1;
+  const depth = enemy ? Number(enemy[1]) : -1;
+  const cursor = enemy ? Number(enemy[3]) : -1;
+  if (enemyType >= 0 && Number.isInteger(depth) && depth >= 1 && depth <= 255 && Number.isSafeInteger(cursor) && cursor >= 0) {
+    if (context.previous) {
+      writer.writeUint(3, 2);
+      const sameDepth = depth === context.previous.depth;
+      writer.writeBool(sameDepth);
+      if (!sameDepth) writer.writeUint(depth, 8);
+      writer.writeUint(enemyType, 3);
+      writer.writeVarInt(cursor - context.previous.cursor);
+    } else {
+      writer.writeUint(2, 2);
+      writer.writeUint(depth, 8);
+      writer.writeUint(enemyType, 3);
+      writer.writeVarUint(cursor);
+    }
+    context.previous = { depth, cursor };
+    return;
+  }
+  writer.writeUint(0, 2);
+  writeString(writer, value);
+}
+
+function readCombatActorId(reader, context) {
+  switch (reader.readUint(2)) {
+    case 0: return readString(reader);
+    case 1: return `operator_${reader.readUint(2) + 1}`;
+    case 2: {
+      const depth = reader.readUint(8);
+      const enemyType = ENEMY_ID_TYPES[reader.readUint(3)];
+      const cursor = reader.readVarUint();
+      if (!enemyType) fail('invalid_string');
+      context.previous = { depth, cursor };
+      return `enemy_${depth}_${enemyType}_${cursor}`;
+    }
+    case 3: {
+      if (!context.previous) fail('invalid_string');
+      const sameDepth = reader.readBool();
+      const depth = sameDepth ? context.previous.depth : reader.readUint(8);
+      const enemyType = ENEMY_ID_TYPES[reader.readUint(3)];
+      const cursor = context.previous.cursor + reader.readVarInt();
+      if (!enemyType || depth < 1 || depth > 255 || !Number.isSafeInteger(cursor) || cursor < 0) fail('invalid_string');
+      context.previous = { depth, cursor };
+      return `enemy_${depth}_${enemyType}_${cursor}`;
+    }
+    default: fail('invalid_string');
+  }
+}
+
+function writeActor(writer, actor, enemyContext) {
   if (!isObject(actor) || !SIDES.includes(actor.side)) fail('invalid_actor');
-  writeEntityId(writer, actor.id);
+  writeCombatActorId(writer, actor.id, enemyContext);
   writer.writeUint(SIDES.indexOf(actor.side), 2);
   writer.writeUint(requireInteger(actor.x, 0, 31, 'invalid_actor'), 5);
   writer.writeUint(requireInteger(actor.y, 0, 31, 'invalid_actor'), 5);
@@ -512,8 +582,8 @@ function writeActor(writer, actor) {
   writer.writeBool(Boolean(actor.retreated));
 }
 
-function readActor(reader) {
-  const id = readEntityId(reader);
+function readActor(reader, enemyContext) {
+  const id = readCombatActorId(reader, enemyContext);
   const side = SIDES[reader.readUint(2)];
   if (!side) fail('invalid_actor');
   return {
@@ -533,17 +603,20 @@ function readActor(reader) {
   };
 }
 
-export function writeCombatSnapshot(writer, combat, symbols) {
+export function writeCombatSnapshot(writer, combat, options = {}) {
   if (!isObject(combat) || !isObject(combat.arena) || !Array.isArray(combat.actors) || combat.actors.length < 1 || combat.actors.length > MAX_ACTORS || !Array.isArray(combat.initiativeOrder) || !Array.isArray(combat.pendingEffects)) fail('invalid_combat');
   writer.writeUint(requireInteger(combat.arena.originX, 0, 31, 'invalid_combat'), 5);
   writer.writeUint(requireInteger(combat.arena.originY, 0, 31, 'invalid_combat'), 5);
   writeEncounterId(writer, combat.arena.contactId);
   writer.writeUint(combat.actors.length, 5);
   const actorIds = new Set();
-  for (const actor of combat.actors) {
+  const actorIndexById = new Map();
+  const enemyDeltaContext = { previous: null };
+  for (const [index, actor] of combat.actors.entries()) {
     if (actorIds.has(actor.id)) fail('duplicate_actor');
     actorIds.add(actor.id);
-    writeActor(writer, actor);
+    actorIndexById.set(actor.id, index);
+    writeActor(writer, actor, enemyDeltaContext);
   }
   // Enemy stat blocks are emitted contiguously after the actor list so a run of
   // identical archetypes can dedup the body (attributes, defense, behavior, …)
@@ -553,24 +626,43 @@ export function writeCombatSnapshot(writer, combat, symbols) {
   for (const actor of combat.actors) {
     if (actor.side !== 'party') previousStats = writeEnemyStats(writer, actor.stats, previousStats);
   }
-  if (combat.initiativeOrder.length !== combat.actors.length || new Set(combat.initiativeOrder).size !== combat.initiativeOrder.length || combat.initiativeOrder.some((id) => !actorIds.has(id))) fail('invalid_combat');
-  for (const id of combat.initiativeOrder) writeEntityId(writer, id);
-  writer.writeUint(requireInteger(combat.currentIndex, 0, combat.initiativeOrder.length - 1, 'invalid_combat'), 5);
+  // v5: initiativeOrder is written as 5-bit indices into actors[] (6-bit length
+  // prefix, MAX_INITIATIVE = 2×MAX_ACTORS = 48 to accommodate apex two-slot
+  // actors). Duplicates are legal but each actor must be referenced 1–2 times
+  // and every actor must appear at least once.
+  if (combat.initiativeOrder.length < combat.actors.length || combat.initiativeOrder.length > MAX_INITIATIVE) fail('invalid_combat');
+  const referenceCounts = new Map();
+  for (const id of combat.initiativeOrder) {
+    if (!actorIds.has(id)) fail('invalid_combat');
+    const count = (referenceCounts.get(id) ?? 0) + 1;
+    if (count > 2) fail('invalid_combat');
+    referenceCounts.set(id, count);
+  }
+  if (referenceCounts.size !== combat.actors.length) fail('invalid_combat');
+  writer.writeUint(combat.initiativeOrder.length, 6);
+  for (const id of combat.initiativeOrder) writer.writeUint(actorIndexById.get(id), 5);
+  writer.writeUint(requireInteger(combat.currentIndex, 0, combat.initiativeOrder.length - 1, 'invalid_combat'), 6);
   writer.writeVarUint(requireInteger(combat.round, 1, 255, 'invalid_combat'));
   if (combat.pendingEffects.length > MAX_PENDING_EFFECTS) fail('invalid_combat');
   writer.writeUint(combat.pendingEffects.length, 6);
   for (const effect of combat.pendingEffects) writeValue(writer, effect);
   if (!isObject(combat.encounter) || typeof combat.encounter.id !== 'string' || typeof combat.encounter.type !== 'string') fail('invalid_combat');
-  writeEncounterId(writer, combat.encounter.id);
+  // v5: encounter.id is almost always the same string as arena.contactId
+  // (both come from combatState.id in toCombatSnapshot). Emit 1 bit and only
+  // fall through to the full encounter-id encoding when they differ.
+  const sameAsArena = combat.encounter.id === combat.arena.contactId;
+  writer.writeBool(sameAsArena);
+  if (!sameAsArena) writeEncounterId(writer, combat.encounter.id);
   writeEncounterType(writer, combat.encounter.type);
   writer.writeVarUint(requireInteger(combat.eventOrder, 0, Number.MAX_SAFE_INTEGER, 'invalid_combat'));
 }
 
-export function readCombatSnapshot(reader, symbols) {
+export function readCombatSnapshot(reader, options = {}) {
   const arena = { originX: reader.readUint(5), originY: reader.readUint(5), contactId: readEncounterId(reader) };
   const actorLength = reader.readUint(5);
   if (actorLength < 1 || actorLength > MAX_ACTORS) fail('invalid_combat');
-  const actors = Array.from({ length: actorLength }, () => readActor(reader));
+  const enemyDeltaContext = { previous: null };
+  const actors = Array.from({ length: actorLength }, () => readActor(reader, enemyDeltaContext));
   const actorIds = new Set(actors.map((actor) => actor.id));
   if (actorIds.size !== actors.length) fail('duplicate_actor');
   reader.alignToByte();
@@ -581,14 +673,27 @@ export function readCombatSnapshot(reader, symbols) {
     if (stats !== undefined) actor.stats = stats;
     previousStats = previous;
   }
-  const initiativeOrder = Array.from({ length: actorLength }, () => readEntityId(reader));
-  if (new Set(initiativeOrder).size !== actorLength || initiativeOrder.some((id) => !actorIds.has(id))) fail('invalid_combat');
-  const currentIndex = requireInteger(reader.readUint(5), 0, actorLength - 1, 'invalid_combat');
+  const initiativeLength = reader.readUint(6);
+  if (initiativeLength < actorLength || initiativeLength > MAX_INITIATIVE) fail('invalid_combat');
+  const referenceCounts = new Map();
+  const initiativeOrder = Array.from({ length: initiativeLength }, () => {
+    const index = reader.readUint(5);
+    if (index >= actorLength) fail('invalid_combat');
+    const id = actors[index].id;
+    const count = (referenceCounts.get(id) ?? 0) + 1;
+    if (count > 2) fail('invalid_combat');
+    referenceCounts.set(id, count);
+    return id;
+  });
+  if (referenceCounts.size !== actorLength) fail('invalid_combat');
+  const currentIndex = requireInteger(reader.readUint(6), 0, initiativeLength - 1, 'invalid_combat');
   const round = requireInteger(reader.readVarUint(), 1, 255, 'invalid_combat');
   const pendingLength = reader.readUint(6);
   if (pendingLength > MAX_PENDING_EFFECTS) fail('invalid_combat');
   const pendingEffects = Array.from({ length: pendingLength }, () => readValue(reader));
-  const encounter = { id: readEncounterId(reader), type: readEncounterType(reader) };
+  const sameAsArena = reader.readBool();
+  const encounterId = sameAsArena ? arena.contactId : readEncounterId(reader);
+  const encounter = { id: encounterId, type: readEncounterType(reader) };
   const eventOrder = reader.readVarUint();
   return { arena, actors, initiativeOrder, currentIndex, round, pendingEffects, encounter, eventOrder };
 }
