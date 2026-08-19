@@ -2134,3 +2134,31 @@ playback fast-forwards to completion. `state:character-death`, `state:combat-end
 `state:party-wipe` fire only after playback (or fast-forward, unmount, or the instant path) has
 drained every entry — `logCursor` always ends equal to `combatState.log.length`. No new module
 IDs; no bus event contracts introduced or altered.
+
+<!-- SESSION-02 the-manual -->
+### M56 (UI Components) — `createManualLink` primitive (SESSION-02, the-manual)
+
+Adds `createManualLink(target, opts)` — the shared "term hyperlink" primitive for the `the-manual` feature. Returns a native `<button type="button">` classed `manual-term-link is-interactive` (plus `manual-term-link--chip` when `opts.variant === 'chip'`). On click it invokes an injected `opts.dispatch(event, payload)` with:
+
+- `event`: `'ui:manual-open'` (fixed contract — SESSION-01/03 consume verbatim)
+- `payload`: `{ target: sectionId | null, source: string }`
+
+`target` is a manual section id, or `null` for the table of contents. `opts.source` defaults to `'ui'`. When `opts.dispatch` is omitted the button is rendered `aria-disabled="true"` and clicks are inert — this is the pre-modal state.
+
+Signature: `(target: string|null, opts?: { label?, variant?: 'inline'|'chip', source?, dispatch?, describedBy?, disabled?, testid?: false|string }) => HTMLButtonElement`.
+
+**DI-not-import invariant preserved.** `src/ui/components.js` still imports nothing (no bus import added); the dispatcher is passed in by call sites (`(e, p) => bus.dispatch(e, p)`).
+
+### M56 (UI Components) — extended factories (SESSION-02, the-manual)
+
+`createConditionTag(conditionId, duration, opts?)`, `createRarityTag(rarity, opts?)`, and `createAffixTag(affix, isMajor, opts?)` gain an optional trailing `opts.manualLink = { target?, source, dispatch }`. When set, the factory returns a `createManualLink`-backed `<button>` that carries the tag's existing classes (`condition-tag cond-<id>` / `rarity-tag` / `affix-tag` [+`affix-major`]) plus `manual-term-link is-interactive`; when omitted, the factory returns the byte-identical prior `<span>`. Default targets: `conditionId` (conditions), `` `rarity_${lower}` `` (rarities), `'affixes'` (affixes).
+
+**Nested-interactive rule (hard invariant).** `createEquipmentCard`/`createProtocolCard` never pass `manualLink` to the tag factories they embed — a `<button>` inside a `<button>` is invalid HTML. Only non-interactive detail contexts (party/gear/tech detail panes, list rows) opt in. Tests in `tests/ui/components.test.js` assert cards render only `<span>` children.
+
+### M79 (Components CSS) — manual-term-link selectors (SESSION-02, the-manual)
+
+Adds `.manual-term-link` (inline: dotted-underline accent-color text link with `text-shadow` glow on hover/focus-visible; suppresses the `.is-interactive` border-glow via a higher-specificity `:not(.manual-term-link--chip)` override) and `.manual-term-link--chip` (bordered accent chip sized to `height: 44px; min-width: 44px` for hit-target parity — uses `height:` rather than `min-height:` to stay clear of the M97 touch-target scanner).
+
+### Event contract addition (SESSION-02, the-manual — pending)
+
+`'ui:manual-open'` and `'ui:manual-close'` are NOT yet registered in `src/state/bus.js` `EVENT_CONTRACTS`. Unknown events pass through `validateEventPayload` (default `true`), so link dispatch works today. **SESSION-03** will register both when it wires the modal — but note that `src/state/bus.js` is not currently in SESSION-03's declared Owns (Forge scoping caveat surfaced by SESSION-02's handoff).
