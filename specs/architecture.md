@@ -2108,3 +2108,29 @@ the AI decision layer and any future consumer that needs deterministic movement 
 enemies now route around walls instead of wedging at a local minimum. `resolveTurn` also
 pushes a synthetic `{ type: 'wait', actorId, reason }` log entry whenever an AI action
 fails, so a blocked enemy is visible in the LOG feed instead of silently losing its turn.
+
+<!-- SESSION-02 enemy-ai-and-initiative -->
+### M58 Playfield — `renderCombat` playback options (SESSION-02, enemy-ai-and-initiative)
+
+`createPlayfield(canvas).renderCombat(combatState, lattice, options)` now accepts three
+optional presentation-only fields alongside the existing overlay keys. Omitted → pixel-identical
+to the pre-session baseline (all existing callers unchanged).
+
+| Option | Type | Effect |
+|--------|------|--------|
+| `positionOverrides` | `Map<actorId, {x, y}>` | Draw the actor's sigil and ACTIVE/TARGET frames at the override cell instead of `actor.position`. `combatState` is not mutated. |
+| `activeOverrideId` | `actorId` \| `null` | Draw the ACTIVE frame on this actor instead of `turnOrder[currentTurn]`. Used during log-replay playback when the engine has already advanced back to the party. |
+| `flashCells` | `Set<'x,y'>` | Paint a `DANGER_COLOR` FLASH frame (inset=3) on each listed cell — a per-hit impact marker used by playback attack/protocol/condition/item steps. |
+
+### M71 Combat Screen — log-replay playback controller (SESSION-02, enemy-ai-and-initiative)
+
+The screen now paces enemy resolution as a presentation layer on top of the unchanged rules
+engine. `resolveTurn` still runs synchronously; state, autosave snapshot, and `runState.rngState`
+land immediately. Enemy-side log entries then replay via `setTimeout` at 140 ms per move cell,
+320 ms per attack/protocol/condition/item, and 240 ms per notice-only entry. Reduced motion
+(prefers-reduced-motion or `settings.reducedMotion === 'reduce'`) and slices with no enemy-side
+entries take the instant path. Input stays gated via `selection.resolving`; a canvas tap during
+playback fast-forwards to completion. `state:character-death`, `state:combat-end`, and
+`state:party-wipe` fire only after playback (or fast-forward, unmount, or the instant path) has
+drained every entry — `logCursor` always ends equal to `combatState.log.length`. No new module
+IDs; no bus event contracts introduced or altered.
