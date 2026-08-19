@@ -15,6 +15,7 @@ import { parseFragment, createHistoryController } from './router.js';
 import { resolveLoadout } from './rules/equipment.js';
 import { deriveEnemyStats } from './rules/combat.js';
 import { createUpdateToast } from './ui/components.js';
+import { createManualModal } from './ui/manual/manual-modal.js';
 
 // Runtime-scoped update surfacing (walls-npc-docking SESSION-03). Mounts
 // exactly one CRT toast per hosting document — the WeakSet is keyed on the
@@ -75,6 +76,7 @@ let serviceWorkerUpdateReadyDispatched = false;
 let serviceWorkerRegistration = null;
 let lastAutosaveResult = null;
 let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, reloading: false, updateReady: false, scope: null, error: null };
+let manualModal = null;
 
 function isInRunSurface() {
   return IN_RUN_SURFACES.has(currentRoute);
@@ -631,6 +633,10 @@ function setupBus() {
   listen('ui:log-entry', (entry) => {
     appendRuntimeLogEntry(entry);
   });
+
+  listen('ui:manual-open', (payload) => {
+    manualModal?.open(payload || {});
+  });
 }
 
 function registerServiceWorkerOnce() {
@@ -718,6 +724,19 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
     grainController?.setEnabled(false);
     getCrtOverlaysController()?.setEnabled(false);
   }
+
+  // Manual modal — one controller per activateRuntime. Mounts into
+  // #portrait-frame as a sibling of #app-root so it survives route remounts
+  // (including the ui:layout-change re-mount below) without needing to
+  // re-attach. Data is read lazily on every open so it is safe to create
+  // before gameData is fully validated (but here it always is).
+  const portraitFrame = typeof document !== 'undefined' ? document.getElementById?.('portrait-frame') : null;
+  manualModal = createManualModal({
+    bus,
+    getManualData: () => gameData?.manual ?? null,
+    parent: portraitFrame,
+    glitch: glitchSystem
+  });
 
   layoutControllerCleanup?.();
   layoutControllerCleanup = initLayoutController({ bus });
@@ -816,6 +835,8 @@ export function shutdownRuntime() {
   const route = currentRoute;
   runtimeActive = false;
   mountSequence += 1;
+  manualModal?.destroy?.();
+  manualModal = null;
   for (const unsubscribe of busUnsubscribers) unsubscribe();
   busUnsubscribers = [];
   layoutControllerCleanup?.();

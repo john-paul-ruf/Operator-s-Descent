@@ -3,6 +3,7 @@ const handlers = new Map();
 const ROUTES = new Set(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
 const SETTING_KEYS = new Set(['mute', 'glitch', 'reducedMotion', 'scanlineGrain']);
 const VOLUME_KEY = /^volume:(drone|pulse|sparkle|lead|noiseBed)$/;
+const MANUAL_CLOSE_REASONS = new Set(['escape', 'close-button', 'backdrop', 'programmatic']);
 
 function isObject(value) {
   return value !== null && typeof value === 'object';
@@ -141,6 +142,17 @@ export const EVENT_CONTRACTS = Object.freeze({
   'runtime:update-applied': {
     description: 'A new service worker took control of the page; runtime is reloading to apply it.',
     validate: optionalObject
+  },
+  'ui:manual-open': {
+    description: 'Open the operator manual modal. Payload: { target: sectionId|null, source: string }.',
+    validate: (payload) => isObject(payload)
+      && (payload.target === null || (typeof payload.target === 'string' && payload.target.length > 0))
+      && typeof payload.source === 'string'
+      && payload.source.length > 0
+  },
+  'ui:manual-close': {
+    description: 'Manual modal closed. Payload: { reason: escape|close-button|backdrop|programmatic }.',
+    validate: (payload) => isObject(payload) && MANUAL_CLOSE_REASONS.has(payload.reason)
   }
 });
 

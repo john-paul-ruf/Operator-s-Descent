@@ -646,3 +646,30 @@ describe('createManualView — real data/manual.json coverage (CP2)', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 });
+
+describe('bus event contracts — ui:manual-open / ui:manual-close (CP3)', () => {
+  it('ui:manual-open validates target as sectionId|null and source as non-empty string', async () => {
+    const { EVENT_CONTRACTS } = await import('../../src/state/bus.js');
+    const contract = EVENT_CONTRACTS['ui:manual-open'];
+    expect(contract).toBeTruthy();
+    expect(contract.validate({ target: 'move_mode', source: 'party' })).toBe(true);
+    expect(contract.validate({ target: null, source: 'title' })).toBe(true);
+    expect(contract.validate({ target: '', source: 'title' })).toBe(false);
+    expect(contract.validate({ target: 42, source: 'title' })).toBe(false);
+    expect(contract.validate({ target: 'x' })).toBe(false);
+    expect(contract.validate({ target: 'x', source: '' })).toBe(false);
+    expect(contract.validate(null)).toBe(false);
+  });
+
+  it('ui:manual-close validates the reason enum', async () => {
+    const { EVENT_CONTRACTS } = await import('../../src/state/bus.js');
+    const contract = EVENT_CONTRACTS['ui:manual-close'];
+    expect(contract).toBeTruthy();
+    for (const reason of ['escape', 'close-button', 'backdrop', 'programmatic']) {
+      expect(contract.validate({ reason })).toBe(true);
+    }
+    expect(contract.validate({ reason: 'other' })).toBe(false);
+    expect(contract.validate({})).toBe(false);
+    expect(contract.validate(null)).toBe(false);
+  });
+});
