@@ -456,6 +456,84 @@ describe('creation screen — manual links (portrait)', () => {
   });
 });
 
+describe('creation screen — manual link inventory (regression manifest)', () => {
+  it('portrait exposes exactly the SESSION-06 map rows: header, 6 classes, 6 attrs, gated schools, CHARGE, loot', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 2020 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+
+    // Header + 6 classes visible on class tab.
+    expect(byTestId(container, 'manual-link-character_creation')).not.toBeNull();
+    for (const id of ['breacher', 'ghost', 'compiler', 'anchor', 'oracle', 'operator']) {
+      expect(byTestId(container, `manual-link-${id}`)).not.toBeNull();
+    }
+
+    // Attrs tab: 6 attribute chips.
+    byTestId(container, 'tab-attrs').click();
+    for (const key of ['mgt', 'fin', 'vit', 'res', 'foc', 'sig']) {
+      expect(byTestId(container, `manual-link-${key}`)).not.toBeNull();
+    }
+
+    // Gear tab: loot_and_salvage chip only (via strip).
+    byTestId(container, 'tab-gear').click();
+    expect(byTestId(container, 'gear-manual-strip')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-loot_and_salvage')).not.toBeNull();
+
+    // Tech tab: breacher gates disrupt only + CHARGE chip (via strip).
+    byTestId(container, 'tab-tech').click();
+    expect(byTestId(container, 'tech-manual-strip')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-disrupt')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-charge_and_overclock')).not.toBeNull();
+    // Non-gated schools do NOT appear as links on breacher's tech pane.
+    expect(byTestId(container, 'manual-link-ward')).toBeNull();
+    expect(byTestId(container, 'manual-link-scry')).toBeNull();
+    expect(byTestId(container, 'manual-link-rewrite')).toBeNull();
+  });
+
+  it('wide layout mounts the same manual-link inventory across its sections', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 2121 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+
+    expect(byTestId(container, 'manual-link-character_creation')).not.toBeNull();
+    for (const id of ['breacher', 'ghost', 'compiler', 'anchor', 'oracle', 'operator']) {
+      expect(byTestId(container, `manual-link-${id}`)).not.toBeNull();
+    }
+    for (const key of ['mgt', 'fin', 'vit', 'res', 'foc', 'sig']) {
+      expect(byTestId(container, `manual-link-${key}`)).not.toBeNull();
+    }
+    expect(byTestId(container, 'wide-gear-manual-strip')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-loot_and_salvage')).not.toBeNull();
+    expect(byTestId(container, 'wide-tech-manual-strip')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-disrupt')).not.toBeNull();
+    expect(byTestId(container, 'manual-link-charge_and_overclock')).not.toBeNull();
+  });
+
+  it('every dispatched manual link carries source="creation" and a non-empty target', async () => {
+    const { seen, off } = captureManualDispatches();
+    const { container } = await mountCreation({ preloadedSeed: 2222 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'class-breacher').click();
+    byTestId(container, 'manual-link-character_creation').click();
+    byTestId(container, 'manual-link-breacher').click();
+    byTestId(container, 'tab-attrs').click();
+    byTestId(container, 'manual-link-mgt').click();
+    byTestId(container, 'tab-tech').click();
+    byTestId(container, 'manual-link-disrupt').click();
+    byTestId(container, 'manual-link-charge_and_overclock').click();
+    byTestId(container, 'tab-gear').click();
+    byTestId(container, 'manual-link-loot_and_salvage').click();
+    expect(seen.length).toBeGreaterThanOrEqual(6);
+    for (const payload of seen) {
+      expect(payload.source).toBe('creation');
+      expect(typeof payload.target).toBe('string');
+      expect(payload.target.length).toBeGreaterThan(0);
+    }
+    off();
+  });
+});
+
 describe('creation screen — wide layout', () => {
   it('renders the two-pane shell with data-wide-root, readout, roster, and saved-configs list', async () => {
     installMatchMedia(true);
