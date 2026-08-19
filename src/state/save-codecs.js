@@ -6,6 +6,13 @@ const RARITIES = ['stock', 'tuned', 'custom', 'prototype', 'corrupt'];
 const SIDES = ['party', 'enemy', 'echo'];
 const ENEMY_ID_TYPES = ['drone', 'stalker', 'choir', 'null', 'construct', 'apex', 'echo'];
 const ENCOUNTER_TYPES = ['standard', 'hunt'];
+// Pinned v5 condition enum (alphabetical for stability, mirrors the ids in
+// data/conditions.json). Any drift MUST bump RUN_SCHEMA_VERSION — the
+// codec-drift-guards test locks this list against the data file at every
+// build. The codec writes a 1-bit known flag + 4-bit index for known ids;
+// unknown ids fall through to the string escape path so future non-shipped
+// conditions still decode without a schema bump wound.
+export const CONDITION_IDS = ['blinded', 'burning', 'corroded', 'immobilized', 'jammed', 'marked', 'overloaded', 'panicked', 'shielded'];
 const MAX_ID = 96;
 const MAX_CONDITIONS = 9;
 const MAX_AFFIXES = 8;
@@ -209,6 +216,10 @@ function readField(reader, symbols, field, raw) {
   return symbolReader(symbols)(reader, field, raw);
 }
 
+// v5 condition encoding: known ids collapse from 8-11 raw bytes to 5 bits
+// (1-bit known flag + 4-bit index into CONDITION_IDS). Unknown ids fall
+// through the escape path so future data-file additions decode without a
+// schema bump; the codec-drift-guards test blocks a silent drift.
 function writeConditions(writer, conditions, symbols) {
   if (!Array.isArray(conditions) || conditions.length > MAX_CONDITIONS) fail('invalid_conditions');
   const ids = new Set();
@@ -216,7 +227,11 @@ function writeConditions(writer, conditions, symbols) {
   for (const condition of conditions) {
     if (!isObject(condition) || typeof condition.conditionId !== 'string' || ids.has(condition.conditionId)) fail('invalid_conditions');
     ids.add(condition.conditionId);
-    writeString(writer, condition.conditionId, 64);
+    const enumIndex = CONDITION_IDS.indexOf(condition.conditionId);
+    const known = enumIndex >= 0;
+    writer.writeBool(known);
+    if (known) writer.writeUint(enumIndex, 4);
+    else writeString(writer, condition.conditionId, 64);
     writer.writeVarUint(requireInteger(condition.duration, 0, 255, 'invalid_conditions'));
     const hasStacks = condition.stacks !== undefined;
     writer.writeBool(hasStacks);
@@ -230,7 +245,14 @@ function readConditions(reader) {
   const ids = new Set();
   const conditions = [];
   for (let index = 0; index < length; index++) {
-    const conditionId = readString(reader, 64);
+    let conditionId;
+    if (reader.readBool()) {
+      const enumIndex = reader.readUint(4);
+      if (enumIndex >= CONDITION_IDS.length) fail('invalid_conditions');
+      conditionId = CONDITION_IDS[enumIndex];
+    } else {
+      conditionId = readString(reader, 64);
+    }
     if (ids.has(conditionId)) fail('duplicate_condition');
     ids.add(conditionId);
     const duration = requireInteger(reader.readVarUint(), 0, 255, 'invalid_conditions');
