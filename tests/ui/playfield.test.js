@@ -779,9 +779,12 @@ describe('playfield rendering', () => {
     expect(rawWallLine.length).toBe(0);
   });
 
-  test('SESSION-01 walls fall back to PARTY_FALLBACK_COLOR when the accent collides with hostile red', () => {
-    // Foundry accent #e8632a collides → walls render in the fallback cool cyan (PARTY_FALLBACK_COLOR).
-    // Assertion is against partyColor(accent) so the meaning stays coupled to the helper's contract.
+  test('HOTFIX-01 walls follow the raw theme accent even when it collides with hostile red', () => {
+    // Foundry accent #e8632a collides with HOSTILE_COLOR (max-component distance 41 < 96),
+    // but walls must still tint with the raw accent so the environment reads on-theme.
+    // Prior behavior routed wallColor through partyColor(), which forced foundry/terminal
+    // themes to render walls in the cool cyan PARTY_FALLBACK_COLOR — this test guards
+    // against a regression back to that routing.
     const canvas = new FakeCanvas();
     const playfield = createPlayfield(canvas);
     playfield.setAccent('#e8632a');
@@ -790,11 +793,12 @@ describe('playfield rendering', () => {
     playfield.renderExploration(lattice(), fog, { x: 1, y: 1 });
 
     const fills = canvas.context.calls.filter(([n]) => n === 'fillRect');
-    // Walls do NOT tint to the raw warm-orange accent under fallback.
-    expect(fills.some((c) => c[1] === '#e8632a')).toBe(false);
-    // Walls render in the fallback cool cyan (PARTY_FALLBACK_COLOR === '#7ec8e3').
+    // Walls tint to the raw warm-orange accent even though it collides with hostile red.
+    const themedWallFills = fills.filter((c) => c[1] === '#e8632a');
+    expect(themedWallFills.length).toBeGreaterThan(0);
+    // No fallback cyan wall fills — the partyColor() route was unhooked from wall rendering.
     const fallbackWallFills = fills.filter((c) => c[1] === '#7ec8e3');
-    expect(fallbackWallFills.length).toBeGreaterThan(0);
+    expect(fallbackWallFills.length).toBe(0);
   });
 
   test('SESSION-01 Issue L: combat active-frame color tracks the party fallback when accent collides', () => {

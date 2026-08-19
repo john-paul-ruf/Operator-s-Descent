@@ -321,7 +321,7 @@ export function createPlayfield(canvas) {
       isRevealed,
       colStart: 0, rowStart: 0, cols: w, rows: h, size: EXPLORATION_CELL_SIZE,
       glow: glowLevel(),
-      wallColor: partyColor(accentColor)
+      wallColor: accentColor
     });
 
     for (let y = 0; y < h; y++) {
@@ -438,7 +438,7 @@ export function createPlayfield(canvas) {
       isRevealed: () => true,
       colStart: 0, rowStart: 0, cols: width, rows: height, size: COMBAT_CELL_SIZE,
       glow: glowLevel(),
-      wallColor: partyColor(accentColor)
+      wallColor: accentColor
     });
 
     for (let gy = 0; gy < height; gy++) {
