@@ -8,7 +8,7 @@ import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
-import { findExplorationPath, moveParty, computeExplorationProximity } from '../../exploration/movement.js';
+import { findExplorationPath, moveParty, computeExplorationProximity, pruneEmptyCaches } from '../../exploration/movement.js';
 import { computeLOS, createFogState, updateFogOfWar, syncVisitedBitmap } from '../../exploration/shadowcast.js';
 import { createHuntEncounter, createStandardEncounter } from '../../rules/encounters.js';
 import { findEligibleLootContainer } from '../console/loot.js';
@@ -45,7 +45,6 @@ const EXPLORATION_CELL_PX = 24;
 const DEFAULT_ENTRY_CELL_PX = 40;
 const LATTICE_WORLD_W = 20 * EXPLORATION_CELL_PX;
 const LATTICE_WORLD_H = 32 * EXPLORATION_CELL_PX;
-const AUTO_FOLLOW_MARGIN_CELLS = 2;
 const TAP_PATH_MAX_STEPS = 64;
 const MOVE_INTENT_PATTERN = /^move_(n|s|w|e|nw|ne|sw|se)$/;
 
@@ -148,7 +147,11 @@ export function mount(container, params = {}) {
 
   const camera = createViewportCamera({ worldW: LATTICE_WORLD_W, worldH: LATTICE_WORLD_H });
   let cameraDpr = 1;
-  let suppressFollow = false;
+  // Camera lock (SESSION-04): after every party move the camera snaps its
+  // center to the party. User-initiated pan/zoom sets userAdjusted=true so the
+  // manual view is preserved until the next party move resets the flag. Mirrors
+  // the combat screen's syncSelectionActor pattern.
+  let userAdjusted = false;
   let firstSized = false;
   let activeTrail = null;
   let tapRunToken = 0;
@@ -167,7 +170,7 @@ export function mount(container, params = {}) {
 
   const gestureCleanup = attachViewportGestures(playfieldBody, camera, {
     onChange: () => {
-      suppressFollow = true;
+      userAdjusted = true;
       renderPlayfield();
     },
     onTap: handleTap
@@ -214,6 +217,12 @@ export function mount(container, params = {}) {
   }
 
   const lattice = createLattice(floor, runState);
+  // Empty-cache cull (SESSION-04): run before the first LOS refresh so the
+  // culled containers never enter the discovery/interrupt path. Guarded because
+  // headless tests may not supply the full game-data registry.
+  if (data && data.equipment && data.affixes && data.consumables) {
+    pruneEmptyCaches(lattice, runState, floor, data);
+  }
   runState.partyPosition = lattice.getPartyPosition();
   const initialVisibleCells = computeLOS(lattice, runState.partyPosition.x, runState.partyPosition.y, losRadius(runState));
   const fogState = createFogState(runState.fogOfWar, initialVisibleCells);
@@ -261,12 +270,12 @@ export function mount(container, params = {}) {
   pushAudioProximity();
 
   resizeCanvas();
-  ensurePartyVisible();
+  centerOnPartyIfIdle();
   renderPlayfield();
   scheduleFrame(() => {
     if (unmounted) return;
     resizeCanvas();
-    ensurePartyVisible();
+    centerOnPartyIfIdle();
     renderPlayfield();
   });
   container.focus?.({ preventScroll: true });
@@ -340,25 +349,18 @@ export function mount(container, params = {}) {
     bus.dispatch('state:combat-start', { runState, floor, lattice, encounter, reason: result.interruptType || 'contact', contact, moveResult: result });
   }
 
-  function ensurePartyVisible() {
-    if (suppressFollow) return;
+  function centerOnPartyIfIdle() {
+    // SESSION-04: snap the camera on the party after every party move; skip
+    // when the user has manually panned/zoomed since the last party move so
+    // manual view control survives between moves.
+    if (userAdjusted) return;
     const partyPos = lattice.getPartyPosition();
     if (!partyPos) return;
     const st = camera.getState();
     if (!st.scale || !st.viewW || !st.viewH) return;
-    const spanX = st.viewW / st.scale;
-    const spanY = st.viewH / st.scale;
-    const partyPxX = partyPos.x * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
-    const partyPxY = partyPos.y * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
-    const margin = AUTO_FOLLOW_MARGIN_CELLS * EXPLORATION_CELL_PX;
-    let dx = 0;
-    let dy = 0;
-    if (partyPxX < st.x + margin) dx = partyPxX - (st.x + margin);
-    else if (partyPxX > st.x + spanX - margin) dx = partyPxX - (st.x + spanX - margin);
-    if (partyPxY < st.y + margin) dy = partyPxY - (st.y + margin);
-    else if (partyPxY > st.y + spanY - margin) dy = partyPxY - (st.y + spanY - margin);
-    if (dx === 0 && dy === 0) return;
-    camera.panBy(dx * st.scale, dy * st.scale);
+    const px = partyPos.x * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+    const py = partyPos.y * EXPLORATION_CELL_PX + EXPLORATION_CELL_PX / 2;
+    camera.centerOn(px, py);
   }
 
   function handleMoveResult(result) {
@@ -370,8 +372,9 @@ export function mount(container, params = {}) {
     }
     refreshVisibility();
     refreshLootState();
-    suppressFollow = false;
-    ensurePartyVisible();
+    // Party moved — release manual pan/zoom lock and re-center on the party.
+    userAdjusted = false;
+    centerOnPartyIfIdle();
     renderPlayfield();
     runState.rngState = rngCursor.getState();
     bus.dispatch('state:danger-clock-tick', { progress: runState.dangerClockProgress });

@@ -1,11 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { makeCharacter } from '../helpers/fixtures.js';
 import { makeGrid } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
 
-const gameData = { themes: loadData('themes') };
+const gameData = {
+  themes: loadData('themes'),
+  equipment: loadData('equipment'),
+  affixes: loadData('affixes'),
+  consumables: loadData('consumables'),
+};
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -533,5 +538,93 @@ describe('exploration screen controller', () => {
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
     expect(byTestId(container, 'move-notice').textContent).toBe('BLOCKED — wall or closed corner.');
+  });
+
+  it('camera snaps to the party cell after every party move (SESSION-04 lock)', async () => {
+    const { container } = await mountExploration();
+    const { canvas } = sizeBody(container, { width: 480, height: 768 });
+    // Start position (10,10). Move east twice; each move re-centers the camera.
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    // Look at the LAST viewTransform baked into the canvas — its dx/dy should
+    // place world cell (12,10) at the viewport center.
+    const transforms = canvas.context.calls.filter(([n]) => n === 'setTransform');
+    // Ignore identity transforms; find the last non-identity view transform.
+    const viewTransforms = transforms.filter((c) => !(c[1] === 1 && c[5] === 0 && c[6] === 0));
+    const last = viewTransforms.at(-1);
+    expect(last).toBeDefined();
+    // setTransform args (a=scale, b, c, d, e=dx, f=dy).
+    const scale = last[1];
+    const dx = last[5];
+    const dy = last[6];
+    // World px center of cell (12,10) = (12*24+12, 10*24+12) = (300, 252).
+    // After the view transform, that world point maps to canvas coord
+    // (300*scale + dx, 252*scale + dy) — which must equal the canvas center
+    // (240, 384) (canvas 480×768, dpr 1 → scale 40/24=5/3).
+    const cx = 300 * scale + dx;
+    const cy = 252 * scale + dy;
+    expect(cx).toBeCloseTo(240, 1);
+    expect(cy).toBeCloseTo(384, 1);
+  });
+
+  it('mount prunes empty-loot containers so they never trigger a container interrupt', async () => {
+    const lootModule = await import('../../src/exploration/movement.js');
+    // We can't easily stub inside movement.js here — instead stub the loot
+    // generator so the empty container path fires deterministically.
+    const loot = await import('../../src/rules/loot.js');
+    const spy = vi.spyOn(loot, 'generateLoot').mockReturnValue([]);
+    try {
+      const cachedFloor = floor({ containers: [{ id: 0, x: 12, y: 10, kind: 'cache' }] });
+      const { container, controller, runState: state } = await mountExploration({ floor: cachedFloor });
+      try {
+        // Move east into the container cell — normally would fire a container
+        // interrupt. With pruning, the container is culled and no interrupt fires.
+        container.dispatch('keydown', keyEvent('ArrowRight'));
+        expect(state.partyPosition).toEqual({ x: 11, y: 10 });
+        // Loot pane should not be selected because the container interrupt never fired.
+        expect(byTestId(container, 'console-tab-loot').getAttribute('aria-selected')).not.toBe('true');
+      } finally {
+        controller.unmount();
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('user pan sets userAdjusted=true and preserves camera between moves; next party move re-centers', async () => {
+    const { container } = await mountExploration();
+    const { playfieldBody, canvas } = sizeBody(container, { width: 480, height: 768 });
+
+    // Capture the initial view transform (camera centered on party (10,10)).
+    let transforms = canvas.context.calls.filter(([n]) => n === 'setTransform');
+    let viewTransforms = transforms.filter((c) => !(c[1] === 1 && c[5] === 0 && c[6] === 0));
+    const initialView = viewTransforms.at(-1);
+
+    // User drags past the threshold — camera pans and userAdjusted becomes true.
+    playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
+    playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: 40, clientY: 40 });
+    playfieldBody.dispatch('pointerup', { pointerId: 1 });
+
+    // The view transform after the drag should differ from the initial one.
+    transforms = canvas.context.calls.filter(([n]) => n === 'setTransform');
+    viewTransforms = transforms.filter((c) => !(c[1] === 1 && c[5] === 0 && c[6] === 0));
+    const afterDragView = viewTransforms.at(-1);
+    // dx or dy shifted by the pan.
+    const panned = afterDragView[5] !== initialView[5] || afterDragView[6] !== initialView[6];
+    expect(panned).toBe(true);
+
+    // Now move the party — the camera should re-center on the party cell.
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+    transforms = canvas.context.calls.filter(([n]) => n === 'setTransform');
+    viewTransforms = transforms.filter((c) => !(c[1] === 1 && c[5] === 0 && c[6] === 0));
+    const afterMoveView = viewTransforms.at(-1);
+    const scale = afterMoveView[1];
+    const dx = afterMoveView[5];
+    const dy = afterMoveView[6];
+    // Party is at (11,10). Canvas coords of that world center should map to (240,384).
+    const cx = (11 * 24 + 12) * scale + dx;
+    const cy = (10 * 24 + 12) * scale + dy;
+    expect(cx).toBeCloseTo(240, 1);
+    expect(cy).toBeCloseTo(384, 1);
   });
 });
