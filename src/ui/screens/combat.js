@@ -550,7 +550,19 @@ export function mount(container, params = {}) {
       renderAll();
       return false;
     }
-    selection.targetId = targets[index].id;
+    // Range gate: attack + cast + overclock refuse to commit an out-of-range target. The
+    // console still renders the illegal row (disabled, with an OUT OF RANGE chip) so the
+    // player can see why — the row just doesn't advance selection.
+    const candidate = targets[index];
+    if (['attack', 'cast', 'overclock'].includes(selection.actionType)) {
+      const preview = previewForTarget(candidate.id);
+      if (preview && preview.targetLegal === false) {
+        selection.error = 'OUT OF RANGE — MOVE OR RETARGET';
+        renderAll();
+        return false;
+      }
+    }
+    selection.targetId = candidate.id;
     selection.targetIndex = index;
     selection.phase = 'confirm';
     selection.error = null;
@@ -691,6 +703,8 @@ export function mount(container, params = {}) {
     if (selection.actionType === 'attack') {
       const target = combatState.combatants.get(selection.targetId);
       if (!target || target.hp <= 0 || target.side !== 'enemy') return 'SELECT A LIVING HOSTILE';
+      const preview = previewForTarget(selection.targetId);
+      if (preview && preview.targetLegal === false) return 'OUT OF RANGE — MOVE OR RETARGET';
     }
     if (selection.actionType === 'move') {
       const path = selection.movePath || [];
@@ -703,6 +717,8 @@ export function mount(container, params = {}) {
       if (!selection.protocol || !actor.protocols?.some((protocol) => protocol.school === selection.protocol.school && protocol.tier === selection.protocol.tier)) return 'SELECT A VALID PROTOCOL';
       const target = combatState.combatants.get(selection.targetId);
       if (!target || target.hp <= 0) return 'SELECT A LIVING TARGET';
+      const preview = previewForTarget(selection.targetId);
+      if (preview && preview.targetLegal === false) return 'OUT OF RANGE — MOVE OR RETARGET';
     }
     if (selection.actionType === 'item') {
       if (!consumableItems(runState).some((item) => item.id === selection.itemId || item.baseType === selection.itemId)) return 'SELECT A VALID ITEM';
@@ -1080,10 +1096,41 @@ export function mount(container, params = {}) {
     if (!actor || !target) return null;
     const distance = distanceCells(actor.position, target.position);
     const weapon = actor.weapon || UNARMED;
-    const range = selection.actionType === 'attack' ? evaluateRange(weapon, distance ?? 0) : { legal: true, band: selection.actionType || 'effect', accuracyModifier: 0 };
+    let range;
+    let targetLegal = true;
+    if (selection.actionType === 'attack') {
+      // evaluateRange requires a positive integer distance. Unpositioned actors (distance === null)
+      // and same-cell (distance === 0) fall through as legal — matches the rules-layer treatment
+      // in performAttackRoll (combat.js:451-455) where `positioned = distance !== null` short-circuits.
+      range = distance != null && distance >= 1
+        ? evaluateRange(weapon, distance)
+        : { legal: true, band: weapon.rangeBand ?? 'adjacent', accuracyModifier: 0, reason: 'in_range' };
+      targetLegal = range.legal;
+    } else if (selection.actionType === 'cast' || selection.actionType === 'overclock') {
+      // Protocol range gate: honor a numeric `range` on the protocol tier when present. Every
+      // shipped protocol in data/protocols.json today declares range as a human-readable string
+      // ("SIG×2", "adjacent"), so Number.isFinite is false and this stays a no-op. When a future
+      // protocol adopts a numeric range the check becomes live without a UI change.
+      const p = data?.protocols?.schools?.[selection.protocol?.school]?.tiers?.[selection.protocol?.tier - 1];
+      const pRange = Number.isFinite(p?.range) ? p.range : Infinity;
+      const withinRange = distance == null || distance <= pRange;
+      range = {
+        legal: withinRange,
+        band: 'protocol',
+        accuracyModifier: 0,
+        reason: withinRange ? 'in_range' : 'beyond_maximum'
+      };
+      targetLegal = withinRange;
+    } else if (selection.actionType === 'item') {
+      // Consumable targets are always party members from the actor's own list; no ranged item
+      // exists today so item targeting is always legal.
+      range = { legal: true, band: 'self-or-adjacent', accuracyModifier: 0, reason: 'in_range' };
+    } else {
+      range = { legal: true, band: selection.actionType || 'effect', accuracyModifier: 0, reason: 'in_range' };
+    }
     const coverBonus = selection.actionType === 'attack' ? getEdgeCoverBonus(combatState.window, actor, target) : 0;
     const flanked = selection.actionType === 'attack' ? isFlanked(target, getActors(combatState).filter((other) => other.side === actor.side && other.hp > 0), combatState.window) : false;
-    return { distance, range, coverBonus, flanked };
+    return { distance, range, coverBonus, flanked, targetLegal };
   }
 
   function overlayOptions() {

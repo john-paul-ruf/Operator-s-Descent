@@ -407,8 +407,13 @@ describe('combat screen controller', () => {
   });
 
   it('tapping an enemy cell during choose-target selects that target unchanged', async () => {
+    // Custom Rule 11: strengthened per SESSION-05's range gate — this fixture originally used
+    // an adjacent-band weapon (maxRange 1) with a target at (3,3) distance 2, which the range
+    // gate now legitimately rejects. Hero gets a short-band weapon (maxRange 5) so the tap on
+    // enemy 1 stays inside legal range and the test still exercises tap→select routing.
+    const shortRangeWeapon = makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 5, minRange: 0, accuracyBonus: 40 });
     const combat = combatState([
-      partyActor(),
+      partyActor({ weapon: shortRangeWeapon }),
       enemyActor({ id: 0, hp: 10, position: { x: 2, y: 1 } }),
       enemyActor({ id: 1, hp: 10, position: { x: 3, y: 3 } })
     ], ['hero', 0, 1]);
@@ -857,5 +862,77 @@ describe('combat screen controller', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Range gate (SESSION-05 checkpoint 3). Adjacent (maxRange 1) melee weapon; enemy placed at
+  // Chebyshev distance ≥ 2 so evaluateRange returns legal:false. The console captures
+  // previewForTarget.targetLegal via context.combatGetPreview, refuses selectTarget, and
+  // returns 'OUT OF RANGE — MOVE OR RETARGET' from validationError.
+  it('previewForTarget returns targetLegal:false when the attack target is beyond weapon range', async () => {
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
+      enemyActor({ id: 0, position: { x: 6, y: 6 }, hp: 10, hpMax: 10 })
+    ]);
+    const { container, controller } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    // Grab the preview accessor from the view state: the console reads it via combatGetPreview.
+    // We assert its shape by pulling it off the container's own combat controller via the
+    // console dataset — but the easier path is the button attribute the console renders.
+    const targetRow = byTestId(container, 'combat-target-0');
+    // Illegal target row must render with disabled attribute set (checkpoint 4 wires this via the
+    // console). But even before the console-level wiring lands, selectTarget itself must refuse
+    // the click and set the error. Click and verify the refusal.
+    targetRow.click();
+
+    // Selection did NOT advance to confirm: no successful target commit means no confirm button.
+    // (confirm renders only in `selection.phase === 'confirm'` — an illegal selectTarget leaves
+    // the phase at `choose-target`.)
+    const confirm = byTestId(container, 'combat-confirm');
+    expect(confirm).toBe(null);
+    // The error message from selectTarget surfaces via the error notice element in the console.
+    expect(byTestId(container, 'combat-error').textContent).toBe('OUT OF RANGE — MOVE OR RETARGET');
+
+    controller.unmount();
+  });
+
+  it('combatConfirm refuses when the currently-selected target is out of range', async () => {
+    // Two enemies: 0 at (2,1) is legal (distance 1), 1 at (6,6) is illegal (distance 5). Select
+    // 0 first via click, then reach into the selection via keyboard cycle to switch to 1 —
+    // validationError must then trip OUT OF RANGE.
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
+      enemyActor({ id: 0, position: { x: 2, y: 1 }, hp: 10, hpMax: 10 }),
+      enemyActor({ id: 1, position: { x: 6, y: 6 }, hp: 10, hpMax: 10 })
+    ], ['hero', 0, 1]);
+    const { container, controller } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    // Legal target 0 selected via click → confirm enabled.
+    byTestId(container, 'combat-target-0').click();
+    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+
+    // Clicking the illegal target 1 must refuse (selection stays on 0).
+    byTestId(container, 'combat-target-1').click();
+    expect(byTestId(container, 'combat-target-0').getAttribute('aria-selected')).toBe('true');
+    expect(byTestId(container, 'combat-error').textContent).toBe('OUT OF RANGE — MOVE OR RETARGET');
+
+    controller.unmount();
+  });
+
+  it('range gate does not block legal in-range attacks — confirm still fires the action', async () => {
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
+      enemyActor({ id: 0, position: { x: 2, y: 1 }, hp: 10, hpMax: 10 })
+    ]);
+    const { container, controller } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    byTestId(container, 'combat-target-0').click();
+    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+    byTestId(container, 'combat-confirm').click();
+    expect(combat.log.some((entry) => entry.type === 'attack')).toBe(true);
+
+    controller.unmount();
   });
 });
