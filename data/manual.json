@@ -96,14 +96,16 @@
       "title": "GEAR Mode",
       "body": [
         [
-          ["text", "GEAR handles equipment, inventory, junk tags, scrap, class gates, slot gates, and CORRUPT consent. In "],
+          ["text", "GEAR handles equipment, inventory, junk tags, scrap, class gates, slot gates, and "],
+          ["link", "rarity_corrupt", "CORRUPT"],
+          ["text", " consent. In "],
           ["link", "combat_mode", "combat"],
           ["text", ", the active actor gets one free swap per turn. Nearby containers are opened from "],
           ["link", "loot_mode", "LOOT"],
           ["text", "."]
         ]
       ],
-      "seeAlso": ["loot_mode", "party_mode", "combat_mode"]
+      "seeAlso": ["loot_mode", "party_mode", "combat_mode", "loot_and_salvage", "rarity_corrupt", "affixes"]
     },
     {
       "id": "tech_mode",
@@ -124,12 +126,14 @@
       "title": "LOOT Mode",
       "body": [
         [
-          ["text", "LOOT opens nearby containers. Items remain in the container until taken, inventory cap failures do not delete them, and CORRUPT items remain explicit decisions. Move items into a character's pack from here; manage equipped slots in "],
+          ["text", "LOOT opens nearby containers. Items remain in the container until taken, inventory cap failures do not delete them, and "],
+          ["link", "rarity_corrupt", "CORRUPT"],
+          ["text", " items remain explicit decisions. Move items into a character's pack from here; manage equipped slots in "],
           ["link", "gear_mode", "GEAR"],
           ["text", "."]
         ]
       ],
-      "seeAlso": ["gear_mode", "log_mode", "console_overview"]
+      "seeAlso": ["gear_mode", "log_mode", "console_overview", "loot_and_salvage", "rarity_corrupt"]
     },
     {
       "id": "log_mode",
@@ -211,13 +215,19 @@
       "title": "d20 Resolution",
       "body": [
         [
-          ["text", "Every attack, save, and contested check rolls a d20 and adds an attribute modifier equal to (rank − 5). Melee attacks add MGT modifier plus weapon accuracy; ranged attacks add FIN modifier plus accuracy, modified by range band; protocol attacks add FOC modifier."]
+          ["text", "Every attack, save, and contested check rolls a d20 and adds an attribute modifier equal to (rank − 5). Melee attacks add "],
+          ["link", "mgt", "MGT"],
+          ["text", " modifier plus weapon accuracy; ranged attacks add "],
+          ["link", "fin", "FIN"],
+          ["text", " modifier plus accuracy, modified by range band; protocol attacks add "],
+          ["link", "foc", "FOC"],
+          ["text", " modifier."]
         ],
         [
           ["text", "A natural 20 is an automatic hit that deals maximum weapon damage. A natural 1 is an automatic miss and triggers an opportunity attack from any adjacent enemy. Defense equals 10 + FIN modifier + armor + shield + cover + condition modifiers. Every roll uses the run's deterministic PRNG — the same state produces the same sequence."]
         ]
       ],
-      "seeAlso": ["cover_and_range", "ap_and_initiative", "charge_and_overclock"]
+      "seeAlso": ["cover_and_range", "ap_and_initiative", "charge_and_overclock", "mgt", "fin", "foc"]
     },
     {
       "id": "cover_and_range",
@@ -241,13 +251,15 @@
       "title": "AP and Initiative",
       "body": [
         [
-          ["text", "Combat rolls initiative once at encounter start: d20 + FIN modifier. Each character gets one move action per turn plus 2 AP. Attack, cast, use item, overclock, and begin-retreat each cost 1 AP; a weapon swap through GEAR is free (once per turn) and class signature free actions cost 0 AP."]
+          ["text", "Combat rolls initiative once at encounter start: d20 + "],
+          ["link", "fin", "FIN"],
+          ["text", " modifier. Each character gets one move action per turn plus 2 AP. Attack, cast, use item, overclock, and begin-retreat each cost 1 AP; a weapon swap through GEAR is free (once per turn) and class signature free actions cost 0 AP."]
         ],
         [
           ["text", "Unspent AP does not carry over between turns. A move action covers one 8-directional cell and cannot be exchanged for AP or vice versa. Combat ends when one side is entirely down."]
         ]
       ],
-      "seeAlso": ["d20_resolution", "cover_and_range", "combat_mode"]
+      "seeAlso": ["d20_resolution", "cover_and_range", "combat_mode", "fin"]
     },
     {
       "id": "charge_and_overclock",
@@ -256,13 +268,19 @@
       "title": "CHARGE and Overclock",
       "body": [
         [
-          ["text", "Each character's CHARGE pool equals (RES × 3) + the class's charge base. CHARGE regen restores floor(RES / 3) on every floor descent — never mid-combat — and cannot exceed the pool maximum. Casting a protocol spends its listed CHARGE plus 1 AP."]
+          ["text", "Each character's CHARGE pool equals ("],
+          ["link", "res", "RES"],
+          ["text", " × 3) + the class's charge base. CHARGE regen restores floor(RES / 3) on every floor descent — never mid-combat — and cannot exceed the pool maximum. Casting a protocol spends its listed CHARGE plus 1 AP."]
         ],
         [
-          ["text", "Overclocking doubles the CHARGE cost, adds one tier of effect, and requires a d20 + FOC modifier roll against 11 + (2 × tier). A success grants the extra tier for free; a failure keeps the base effect and adds 0.05 to the run's corruption. Compiler's signature progressively softens this cost — see the class entry."]
+          ["text", "Overclocking doubles the CHARGE cost, adds one tier of effect, and requires a d20 + "],
+          ["link", "foc", "FOC"],
+          ["text", " modifier roll against 11 + (2 × tier). A success grants the extra tier for free; a failure keeps the base effect and adds 0.05 to the run's corruption. "],
+          ["link", "compiler", "Compiler"],
+          ["text", "'s signature progressively softens this cost — see the class entry."]
         ]
       ],
-      "seeAlso": ["ap_and_initiative", "corruption", "calibration", "tech_mode"]
+      "seeAlso": ["ap_and_initiative", "corruption", "calibration", "tech_mode", "res", "foc", "compiler"]
     },
     {
       "id": "calibration",
@@ -286,13 +304,15 @@
       "title": "Corruption",
       "body": [
         [
-          ["text", "Corruption is a single run-wide number that accumulates from two sources: each failed overclock adds 0.05, and each first-time equip of a CORRUPT implant adds 0.1. It never decays and never resets during a run."]
+          ["text", "Corruption is a single run-wide number that accumulates from two sources: each failed overclock adds 0.05, and each first-time equip of a "],
+          ["link", "rarity_corrupt", "CORRUPT"],
+          ["text", " implant adds 0.1. It never decays and never resets during a run."]
         ],
         [
           ["text", "The value additively raises the danger clock's rate at (corruption × 0.003) per exploration step, so higher totals draw hunts sooner. Corruption is the permanent cost of pushing tech and gear past their safe envelope."]
         ]
       ],
-      "seeAlso": ["charge_and_overclock", "danger_clock", "corrupt_items"]
+      "seeAlso": ["charge_and_overclock", "danger_clock", "corrupt_items", "rarity_corrupt"]
     },
     {
       "id": "danger_clock",
@@ -346,13 +366,16 @@
       "title": "CORRUPT Items",
       "body": [
         [
-          ["text", "CORRUPT is the highest rarity tier: exactly three major affixes drawn from the major pool only. The first equip of a CORRUPT implant adds 0.1 to the run's corruption, and while any CORRUPT item is equipped the danger clock rate is permanently elevated for the rest of the run."]
+          ["link", "rarity_corrupt", "CORRUPT"],
+          ["text", " is the highest rarity tier: exactly three major "],
+          ["link", "affixes", "affixes"],
+          ["text", " drawn from the major pool only. The first equip of a CORRUPT implant adds 0.1 to the run's corruption, and while any CORRUPT item is equipped the danger clock rate is permanently elevated for the rest of the run."]
         ],
         [
           ["text", "The trade is direct — strictly the strongest gear in exchange for an ongoing tax on how fast hunts arrive. Consent is explicit in GEAR before an equip commits."]
         ]
       ],
-      "seeAlso": ["corruption", "danger_clock", "loot_and_salvage", "gear_mode"]
+      "seeAlso": ["corruption", "danger_clock", "loot_and_salvage", "gear_mode", "rarity_corrupt", "affixes"]
     },
     {
       "id": "descent_and_scoring",
@@ -368,6 +391,528 @@
         ]
       ],
       "seeAlso": ["calibration", "echoes", "loot_and_salvage", "seed_links"]
+    },
+    {
+      "id": "jammed",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "JAMMED",
+      "body": [
+        [
+          ["text", "The target cannot use protocols — CHARGE spending is blocked entirely. Duration 2 turns; a FOC save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "disrupt", "foc"]
+    },
+    {
+      "id": "overloaded",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "OVERLOADED",
+      "body": [
+        [
+          ["text", "The target takes +50% damage from all sources. Duration 2 turns; a RES save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "disrupt", "res"]
+    },
+    {
+      "id": "shielded",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "SHIELDED",
+      "body": [
+        [
+          ["text", "The target gains +4 Defense and immunity to the next condition applied; the buff is consumed on either use. Duration 3 turns; no save (applied by allies)."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "ward", "shield_capacitor"]
+    },
+    {
+      "id": "blinded",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "BLINDED",
+      "body": [
+        [
+          ["text", "The target's LOS drops to 1 cell and ranged attacks take −4. Duration 2 turns; a FIN save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "scry", "fin"]
+    },
+    {
+      "id": "immobilized",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "IMMOBILIZED",
+      "body": [
+        [
+          ["text", "The target loses its move action for the turn (AP actions still work). Duration 1 turn; a MGT save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "ap_and_initiative", "mgt"]
+    },
+    {
+      "id": "corroded",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "CORRODED",
+      "body": [
+        [
+          ["text", "The target loses 2 Defense per turn, cumulative, to a floor of Defense 2. Duration 3 turns; a VIT save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "vit", "affixes"]
+    },
+    {
+      "id": "marked",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "MARKED",
+      "body": [
+        [
+          ["text", "The target is visible to all hostiles regardless of LOS, and hostiles gain +2 to attack rolls against it. Duration 3 turns; no save."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "scry"]
+    },
+    {
+      "id": "panicked",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "PANICKED",
+      "body": [
+        [
+          ["text", "The target must move away from the nearest hostile on its turn (forced retreat) and cannot attack. Duration 1 turn; a FOC save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "rewrite", "foc"]
+    },
+    {
+      "id": "burning",
+      "chapter": "glossary",
+      "group": "conditions",
+      "title": "BURNING",
+      "body": [
+        [
+          ["text", "The target takes d6 damage at the start of its turn for 3 turns. This is the only stackable condition — reapplication renews the duration. A VIT save on apply negates."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "vit", "affixes"]
+    },
+    {
+      "id": "disrupt",
+      "chapter": "glossary",
+      "group": "schools",
+      "title": "DISRUPT",
+      "body": [
+        [
+          ["text", "The offensive protocol school. Five tiers — SPARK, SURGE, STORM, CASCADE, OBLITERATE — deal d6-based damage scaled by tier plus RES modifier. OBLITERATE (tier 5) ignores Defense bonuses from armor, cover, and SHIELDED."]
+        ]
+      ],
+      "seeAlso": ["tech_mode", "charge_and_overclock", "res"]
+    },
+    {
+      "id": "ward",
+      "chapter": "glossary",
+      "group": "schools",
+      "title": "WARD",
+      "body": [
+        [
+          ["text", "The healing and protection school. PATCH heals a single ally; BARRIER and BULWARK apply "],
+          ["link", "shielded", "SHIELDED"],
+          ["text", "; REGEN heals for 4 turns; FORTRESS grants +4 Defense and condition immunity to allies in a 4-cell radius."]
+        ]
+      ],
+      "seeAlso": ["tech_mode", "charge_and_overclock", "anchor"]
+    },
+    {
+      "id": "scry",
+      "chapter": "glossary",
+      "group": "schools",
+      "title": "SCRY",
+      "body": [
+        [
+          ["text", "The perception school. PING reveals enemies; TAG applies "],
+          ["link", "marked", "MARKED"],
+          ["text", "; BLIND applies "],
+          ["link", "blinded", "BLINDED"],
+          ["text", "; REVEAL uncovers the full floor; ORACLE reveals and MARKS all enemies for 3 turns."]
+        ]
+      ],
+      "seeAlso": ["tech_mode", "oracle", "foc"]
+    },
+    {
+      "id": "rewrite",
+      "chapter": "glossary",
+      "group": "schools",
+      "title": "REWRITE",
+      "body": [
+        [
+          ["text", "The control and reality school. FLIP swaps positions with an ally; PURGE removes a condition; OVERRIDE applies "],
+          ["link", "panicked", "PANICKED"],
+          ["text", "; NULLIFY drains 2 AP from an area; REFORMAT reshapes a 3×3 area of walls and floors without disconnecting the map."]
+        ]
+      ],
+      "seeAlso": ["tech_mode", "charge_and_overclock", "compiler"]
+    },
+    {
+      "id": "breacher",
+      "chapter": "glossary",
+      "group": "classes",
+      "title": "Breacher",
+      "body": [
+        [
+          ["text", "Primary attribute "],
+          ["link", "mgt", "MGT"],
+          ["text", "; hit die base 16; charge base 0. Melee frontline with heavy weapons, shield, and any armor. Access to "],
+          ["link", "disrupt", "DISRUPT"],
+          ["text", " only, up to tier 2. Signature Breach ignores cover on attacks; at signature tier 2 it also ignores "],
+          ["link", "shielded", "SHIELDED"],
+          ["text", "; at tier 3 grants a free melee attack after moving (once per turn)."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "calibration", "mgt"]
+    },
+    {
+      "id": "ghost",
+      "chapter": "glossary",
+      "group": "classes",
+      "title": "Ghost",
+      "body": [
+        [
+          ["text", "Primary attribute "],
+          ["link", "fin", "FIN"],
+          ["text", "; hit die base 10; charge base 2. Sniper and long-range specialist in light armor. Access to "],
+          ["link", "scry", "SCRY"],
+          ["text", " and "],
+          ["link", "disrupt", "DISRUPT"],
+          ["text", " up to tier 5. Signature Phase moves through one wall cell without triggering opportunity attacks; later grants +2 initiative and phases through two wall cells."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "calibration", "fin"]
+    },
+    {
+      "id": "compiler",
+      "chapter": "glossary",
+      "group": "classes",
+      "title": "Compiler",
+      "body": [
+        [
+          ["text", "Primary attribute "],
+          ["link", "res", "RES"],
+          ["text", "; hit die base 8; charge base 6. Caster with access to all four schools up to tier 5; light kit. Signature Compile discounts overclock cost by 1 CHARGE (minimum 1), then removes overclock corruption, and at tier 3 allows an automatic two-tier overclock at triple CHARGE cost."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "charge_and_overclock", "res"]
+    },
+    {
+      "id": "anchor",
+      "chapter": "glossary",
+      "group": "classes",
+      "title": "Anchor",
+      "body": [
+        [
+          ["text", "Primary attribute "],
+          ["link", "vit", "VIT"],
+          ["text", "; hit die base 14; charge base 0. Frontline "],
+          ["link", "ward", "WARD"],
+          ["text", " support with all weapons and armor. Signature Hold grants +2 Defense to self and allies within 2 cells; later extends to 4 cells with a +1 to saves; at tier 3 projects "],
+          ["link", "shielded", "SHIELDED"],
+          ["text", " as a WARD-style action at CHARGE 2."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "calibration", "vit"]
+    },
+    {
+      "id": "oracle",
+      "chapter": "glossary",
+      "group": "classes",
+      "title": "Oracle",
+      "body": [
+        [
+          ["text", "Primary attribute "],
+          ["link", "foc", "FOC"],
+          ["text", "; hit die base 6; charge base 8 (highest CHARGE ceiling). Access to "],
+          ["link", "scry", "SCRY"],
+          ["text", " and "],
+          ["link", "rewrite", "REWRITE"],
+          ["text", " up to tier 5. Signature Foresee grants telepathic detection within "],
+          ["link", "sig", "SIG"],
+          ["text", " × 3 cells regardless of LOS; later one reroll per combat; then reveals all containers and the descent point on floor entry."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "calibration", "foc"]
+    },
+    {
+      "id": "operator",
+      "chapter": "glossary",
+      "group": "classes",
+      "title": "Operator",
+      "body": [
+        [
+          ["text", "Primary attribute "],
+          ["link", "sig", "SIG"],
+          ["text", "; hit die base 12; charge base 4. Ranged utility with access to "],
+          ["link", "disrupt", "DISRUPT"],
+          ["text", " and "],
+          ["link", "ward", "WARD"],
+          ["text", " up to tier 5. Signature Overlay boosts one ally's next attack by +3 as a free action; later boosts a protocol roll instead; at tier 3 grants the whole party +1 to all d20 rolls for one turn (once per combat)."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "calibration", "sig"]
+    },
+    {
+      "id": "mgt",
+      "chapter": "glossary",
+      "group": "attributes",
+      "title": "MIGHT (MGT)",
+      "body": [
+        [
+          ["text", "Physical force. Drives melee accuracy and damage, carrying capacity, forced-movement resistance, and athletic checks. The attribute modifier is (rank − 5) per "],
+          ["link", "d20_resolution", "d20 resolution"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["d20_resolution", "character_creation", "breacher"]
+    },
+    {
+      "id": "fin",
+      "chapter": "glossary",
+      "group": "attributes",
+      "title": "FINESSE (FIN)",
+      "body": [
+        [
+          ["text", "Precision and speed. Drives ranged accuracy, initiative modifier, Defense (via 10 + FIN modifier), and reflex-based saves. The attribute modifier is (rank − 5) per "],
+          ["link", "d20_resolution", "d20 resolution"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["d20_resolution", "ap_and_initiative", "ghost"]
+    },
+    {
+      "id": "vit",
+      "chapter": "glossary",
+      "group": "attributes",
+      "title": "VITALITY (VIT)",
+      "body": [
+        [
+          ["text", "Endurance. Sets base HP = (VIT × 4) + class hit die base, drives HP growth per "],
+          ["link", "calibration", "calibration"],
+          ["text", ", and provides saves against poison, disease, and corrosion."]
+        ]
+      ],
+      "seeAlso": ["character_creation", "calibration", "anchor"]
+    },
+    {
+      "id": "res",
+      "chapter": "glossary",
+      "group": "attributes",
+      "title": "RESONANCE (RES)",
+      "body": [
+        [
+          ["text", "Attunement to tech systems. Sets CHARGE pool = (RES × 3) + class charge base and CHARGE regen = floor(RES / 3) per floor descent; also scales protocol damage and healing. See "],
+          ["link", "charge_and_overclock", "CHARGE and Overclock"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["charge_and_overclock", "compiler", "disrupt"]
+    },
+    {
+      "id": "foc",
+      "chapter": "glossary",
+      "group": "attributes",
+      "title": "FOCUS (FOC)",
+      "body": [
+        [
+          ["text", "Mental acuity. Adds to protocol attack rolls, saves against mental conditions, and the overclock success roll against 11 + (2 × tier). See "],
+          ["link", "charge_and_overclock", "CHARGE and Overclock"],
+          ["text", "."]
+        ]
+      ],
+      "seeAlso": ["charge_and_overclock", "oracle", "scry"]
+    },
+    {
+      "id": "sig",
+      "chapter": "glossary",
+      "group": "attributes",
+      "title": "SIGNAL (SIG)",
+      "body": [
+        [
+          ["text", "Reach and influence. Sets protocol range at SIG × 2 cells and the detection radius at which hostiles become aware during "],
+          ["link", "move_mode", "exploration"],
+          ["text", "; also drives deployment awareness at contact."]
+        ]
+      ],
+      "seeAlso": ["move_mode", "operator", "oracle"]
+    },
+    {
+      "id": "repair_patch",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Repair Patch",
+      "body": [
+        [
+          ["text", "Restore d6 HP to one character. Available at all depths."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "gear_mode"]
+    },
+    {
+      "id": "med_kit",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Med Kit",
+      "body": [
+        [
+          ["text", "Restore 2d6 HP to one character. Appears from depth 5+."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "gear_mode"]
+    },
+    {
+      "id": "charge_cell",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Charge Cell",
+      "body": [
+        [
+          ["text", "Restore floor(RES / 2) CHARGE to one character (minimum 2). Available at all depths."]
+        ]
+      ],
+      "seeAlso": ["charge_and_overclock", "res", "loot_and_salvage"]
+    },
+    {
+      "id": "boost_cell",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Boost Cell",
+      "body": [
+        [
+          ["text", "Restore full CHARGE to one character. Appears from depth 10+."]
+        ]
+      ],
+      "seeAlso": ["charge_and_overclock", "loot_and_salvage"]
+    },
+    {
+      "id": "purge_spike",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Purge Spike",
+      "body": [
+        [
+          ["text", "Remove one condition from one character. Appears from depth 3+."]
+        ]
+      ],
+      "seeAlso": ["combat_mode", "loot_and_salvage"]
+    },
+    {
+      "id": "shield_capacitor",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Shield Capacitor",
+      "body": [
+        [
+          ["text", "Apply "],
+          ["link", "shielded", "SHIELDED"],
+          ["text", " to one character. Appears from depth 8+."]
+        ]
+      ],
+      "seeAlso": ["shielded", "loot_and_salvage", "gear_mode"]
+    },
+    {
+      "id": "adrenal_injector",
+      "chapter": "glossary",
+      "group": "consumables",
+      "title": "Adrenal Injector",
+      "body": [
+        [
+          ["text", "Restore 1 AP to the active character (usable only in combat). Appears from depth 5+."]
+        ]
+      ],
+      "seeAlso": ["ap_and_initiative", "combat_mode", "loot_and_salvage"]
+    },
+    {
+      "id": "rarity_stock",
+      "chapter": "glossary",
+      "group": "rarities",
+      "title": "Stock",
+      "body": [
+        [
+          ["text", "The baseline rarity: no affixes. Common at shallow depths."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "affixes"]
+    },
+    {
+      "id": "rarity_tuned",
+      "chapter": "glossary",
+      "group": "rarities",
+      "title": "Tuned",
+      "body": [
+        [
+          ["text", "One minor affix. Appears from depth 1."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "affixes"]
+    },
+    {
+      "id": "rarity_custom",
+      "chapter": "glossary",
+      "group": "rarities",
+      "title": "Custom",
+      "body": [
+        [
+          ["text", "One major affix plus one minor affix — a meaningful combination. Appears from depth 5."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "affixes"]
+    },
+    {
+      "id": "rarity_prototype",
+      "chapter": "glossary",
+      "group": "rarities",
+      "title": "Prototype",
+      "body": [
+        [
+          ["text", "Two major affixes plus one minor. High-power gear that appears from depth 10 and is more common in vaults."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "affixes", "descent_and_scoring"]
+    },
+    {
+      "id": "rarity_corrupt",
+      "chapter": "glossary",
+      "group": "rarities",
+      "title": "CORRUPT",
+      "body": [
+        [
+          ["text", "The strongest tier: exactly three major affixes drawn from the major pool only. Appears from depth 15+, or from vaults at depth 10+. Equipping any CORRUPT item permanently raises the run's danger clock rate — see "],
+          ["link", "corrupt_items", "CORRUPT Items"],
+          ["text", " for the full mechanic."]
+        ]
+      ],
+      "seeAlso": ["corrupt_items", "corruption", "danger_clock", "affixes"]
+    },
+    {
+      "id": "affixes",
+      "chapter": "glossary",
+      "group": "affixes",
+      "title": "Affixes",
+      "body": [
+        [
+          ["text", "Sixteen fixed affixes across three categories. Universal: Reinforced (+1 core stat), Overcharged (+2 CHARGE pool), Lucky (reroll one d20 per floor), Phasing (ignores cover / FIN penalty). Weapon-only: Edged (damage die upgrade), Precise (+1 accuracy), Extended (+2 max range), Vampiric (heal 1 on hit), Conducting (+1 protocol damage), Incendiary (applies "],
+          ["link", "burning", "BURNING"],
+          ["text", " on crit), Corrosive (applies "],
+          ["link", "corroded", "CORRODED"],
+          ["text", " on hit; VIT save), Jamming (25% chance to apply "],
+          ["link", "jammed", "JAMMED"],
+          ["text", " on hit; FOC save). Armor-only: Lightweight (−1 FIN penalty), Shielding (applies "],
+          ["link", "shielded", "SHIELDED"],
+          ["text", " on floor entry, once per floor), Fortified (+2 Defense), Resonant (+1 CHARGE regen). Minor affixes are single-effect; major affixes are significant mechanical changes."]
+        ]
+      ],
+      "seeAlso": ["loot_and_salvage", "rarity_corrupt", "gear_mode"]
     }
   ]
 }
