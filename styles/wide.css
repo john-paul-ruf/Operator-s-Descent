@@ -152,6 +152,8 @@
   /* SESSION-06 density pass — dock/header/body padding tightened so the
      360px-max dock reclaims vertical space for actual content. */
   .wide-telemetry-header {
+    display: flex;
+    flex-direction: column;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border-dim);
     background: var(--bg-panel-elevated);
@@ -936,16 +938,15 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     TELEMETRY DOCK — MANUAL CHIP (the-manual SESSION-04)
-     Pinned to the top-right of `.wide-telemetry-header`. The `?` chip lives
-     inside the header (which is `position: relative` per status-strip.js) so
-     it never disturbs the dock's normal field stack.
+     TELEMETRY DOCK — MANUAL CHIP (playtest-clarity-and-4x-floors SESSION-01)
+     In-flow, self-aligned to the trailing edge as the header's first row so it
+     reserves its own space and never covers the DEPTH value below it. No
+     absolute positioning: no UI element may overlap another.
      ═══════════════════════════════════════════════════════════════════════════ */
   .wide-telemetry-manual-chip {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    z-index: 1;
+    align-self: flex-end;
+    flex: 0 0 auto;
+    margin-bottom: 2px;
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════

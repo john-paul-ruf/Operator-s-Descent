@@ -138,7 +138,6 @@ export function createStatusBar(runState, combatState = null) {
   strip.setAttribute('role', 'status');
   strip.setAttribute('aria-live', 'polite');
   strip.setAttribute('aria-atomic', 'true');
-  strip.style.position = 'relative';
   const cleanups = [];
 
   if (combatState) {
@@ -151,14 +150,12 @@ export function createStatusBar(runState, combatState = null) {
     cleanups.push(renderExplorationStatus(strip, runState));
   }
 
-  // Manual `?` chip — absolute-positioned so it never disturbs the strip's
-  // flex/grid layout in either mode. Registered for cleanup via listen()
-  // in createManualLink itself.
+  // Manual `?` chip — the last in-flow item of the strip so it never overlaps
+  // other readouts. `margin-left: auto` pushes it to the trailing edge without
+  // leaving the flex/grid flow. Cleanup registered via listen() in createManualLink.
   const chip = appendManualChip(strip, 'status-strip');
-  chip.style.position = 'absolute';
-  chip.style.top = '4px';
-  chip.style.right = '4px';
-  chip.style.zIndex = '1';
+  chip.style.marginLeft = 'auto';
+  chip.style.flexShrink = '0';
   cleanups.push(() => chip.cleanup?.());
 
   strip.cleanup = () => cleanups.forEach((cleanup) => cleanup?.());
@@ -400,11 +397,11 @@ export function createTelemetryDock(runState, combatState = null) {
 
   const header = document.createElement('div');
   header.className = 'wide-telemetry-header';
-  header.style.position = 'relative';
   dock.appendChild(header);
 
-  // Manual `?` chip — pinned to the top-right of the telemetry dock header.
-  // Positioned via styles/wide.css `.wide-telemetry-manual-chip` (SESSION-04).
+  // Manual `?` chip — an in-flow participant in the dock header so it never
+  // covers the DEPTH value. Placement/sizing live in styles/wide.css
+  // `.wide-telemetry-manual-chip` (in-flow, not absolute).
   const chip = appendManualChip(header, 'status-strip');
   chip.classList.add('wide-telemetry-manual-chip');
   cleanups.push(() => chip.cleanup?.());

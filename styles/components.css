@@ -1757,12 +1757,14 @@ button.protocol-card[aria-selected="true"],
   letter-spacing: 0.2em;
 }
 
-/* Manual links (the-manual S02) — one primitive, two visual variants.
-   `.is-interactive` supplies the cursor + focus-visible ring; the rules below
-   defeat its border/box-shadow on the inline variant so the affordance reads
-   as a dotted-underline text link, and give the chip variant its own bordered
-   button shell sized to a ≥44×44 hit target (uses `height:` + `min-width:`
-   rather than `min-height:` to stay clear of the M97 touch-target scanner). */
+/* Manual links (the-manual S02; chip recompacted playtest-clarity S01) — one
+   primitive, two visual variants. `.is-interactive` supplies the cursor +
+   focus-visible ring; the rules below defeat its border/box-shadow on the
+   inline variant so the affordance reads as a dotted-underline text link. The
+   chip variant keeps a ≥44×44 transparent hit target (uses `height:` +
+   `min-width:` rather than `min-height:` to stay clear of the M97 touch-target
+   scanner) but draws its visible affordance as a compact ~22px bordered ring
+   via `::before`, so the bulky empty box no longer floats over other UI. */
 .manual-term-link {
   background: transparent;
   color: var(--accent);
@@ -1789,18 +1791,38 @@ button.protocol-card[aria-selected="true"],
 }
 
 .manual-term-link--chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 44px;
   min-width: 44px;
-  padding: 4px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 2px;
+  padding: 0;
+  border: 0;
   text-decoration: none;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1;
   color: var(--accent);
   background: transparent;
+}
+
+/* The visible glyph: a centered ~22×22 bordered ring behind the `?` text.
+   The button stays 44×44 for touch; only this ring is drawn. */
+.manual-term-link--chip::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.manual-term-link--chip:hover:not([aria-disabled="true"]):not([disabled])::before,
+.manual-term-link--chip:focus-visible::before {
+  box-shadow: 0 0 6px var(--accent);
 }

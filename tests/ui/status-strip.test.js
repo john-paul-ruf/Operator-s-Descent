@@ -138,8 +138,9 @@ describe('status strip', () => {
     expect(explorationChip.tagName).toBe('BUTTON');
     expect(explorationChip.textContent).toBe('?');
     expect(explorationChip.classList.contains('manual-term-link--chip')).toBe(true);
-    // Absolute positioning keeps the chip out of the flex/grid layout
-    expect(explorationChip.style.position).toBe('absolute');
+    // In-flow trailing item — never absolutely positioned over other readouts.
+    expect(explorationChip.style.position).not.toBe('absolute');
+    expect(explorationChip.style.marginLeft).toBe('auto');
 
     const combatants = new Map([
       ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }]
@@ -271,6 +272,11 @@ describe('telemetry dock (wide)', () => {
     expect(chip.classList.contains('manual-term-link--chip')).toBe(true);
     expect(chip.textContent).toBe('?');
     expect(chip.getAttribute('data-manual-target')).toBe('');
+    // In-flow header participant — no inline absolute positioning that could
+    // float over the DEPTH value; it is a direct child of the header.
+    expect(chip.style.position).not.toBe('absolute');
+    const header = findByClass(dock, 'wide-telemetry-header');
+    expect(header.children).toContain(chip);
     chip.click();
     expect(events).toEqual([{ target: null, source: 'status-strip' }]);
     off();
