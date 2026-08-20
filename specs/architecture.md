@@ -2488,3 +2488,67 @@ copy per attempt when trimming.
   `opts.windowMs` (default 350ms) and `opts.slop` pixels (default 24).
   Both paths short-circuit when `element.disabled` is truthy. Cleanup
   removes both listeners. This is SESSION-03's declared dependency.
+
+<!-- SESSION-06 (playtest-clarity-and-4x-floors) -->
+### M89 Save Schema — v6 wire format
+
+`RUN_SCHEMA_VERSION = 6`. Coordinate widths widened from 5 to 7 bits so any
+dimension up to 128 fits without a second bump:
+- `partyPosition.x` / `partyPosition.y`: 5 → 7 bits (0–127)
+- combat `arena.originX` / `arena.originY`: 5 → 7 bits (0–127)
+- combat actor `x` / `y` (in `save-codecs.js` writeActor/readActor): 5 → 7 bits (0–127)
+- encounter-id packed encoding `writeEncounterId`/`readEncounterId`: 5 → 7 bits per coord
+
+Encounter-id string format is unchanged; the regex was widened from `\d{1,2}` to
+`\d{1,3}` to match the packed width. Ids that exceed 127 in either coord fall
+through to the raw-string escape path exactly as before.
+
+Fog framing is now self-sizing on the wire:
+- `writer.writeVarUint(state.fogOfWar.length); writer.writeBytes(fog)` on encode
+- `readBytes(integer(readVarUint(), 0, FOG_BYTES_MAX))` on decode
+- `FOG_BYTES_MAX = 4096` (32,768-cell cap — well beyond 40×64 = 320 bytes)
+
+### M33 Run State — GRID-derived FOG_BYTES + tolerant normalizeFog
+
+`FOG_BYTES = Math.ceil((GRID_W * GRID_H) / 8)` derived from
+`../floor/archetypes.js` (floor → state import is legal per FORGE-CONFIG
+dependency flow). SESSION-05 flips `GRID_W × GRID_H` to 40×64 and this module
+absorbs the change without a second schema bump.
+
+`normalizeFog(value)` now returns `{ fog, reset }` internally:
+- length mismatch → fresh zeroed `FOG_BYTES` buffer + `reset: true`
+- `normalizeRunState` treats `reset: true` as a signal to also discard
+  `partyPosition`, replacing it with `{ x: 0, y: 0 }` so `lattice.js`
+  entry-point fallback (createLattice line 20-34) resolves it to a real
+  open cell. Custom Rule 13: well-formed saves always load.
+
+### M105 Save Migration — v5 → v6 identity step
+
+`src/state/migrations/v5-to-v6.js`: `{ from: 5, to: 6, migrate: state => state }`.
+Registered via the standard `registerMigration` pattern in `save-migrate.js`
+(alongside `v3ToV4` and `v4ToV5`). Identity because v6 is a wire-format-only
+bump — the decoded RunState shape carried by a v5 payload is already v6-shape
+compatible; the fog-length mismatch that appears after the S05 dimension flip
+is handled by `normalizeFog`'s reset branch, not by the migration itself.
+
+### M106 Version Readers — v5 frozen reader pair
+
+`src/state/versions/read-v5.js` + `codecs-v5.js`, pinned to schema v5 forever
+(Custom Rule 13). Self-contained byte-copy of the v5 decode paths; never
+imports the live `save-schema.js` / `save-codecs.js`. `V5_TABLE_VERSION = 1`
+(same symbol table as v3/v4). `save-decode.js` registers
+`V5_SCHEMA_VERSION → readV5Payload` in `FROZEN_READERS`, so any future save
+made under v5 loads through the frozen reader then the `v5 → v6` migration
+step exactly as v4 is handled today.
+
+### Fixture inventory
+
+- `tests/fixtures/save-versions/v5-midrun.txt` (~1276 chars) — mid-run at
+  depth 3, partial fog, opened containers, 1 echo, 8 events, applied
+  corrupt implants, active affix ledger.
+- `tests/fixtures/save-versions/v5-combat.txt` (~956 chars) — mid-combat at
+  depth 4, 2-op party + 2 enemies (construct + drone), pending burn condition.
+
+Both were captured with the v5 encoder immediately before the v6 edits and
+are exercised by the golden v5 corpus test in
+`tests/state/save-versioning.test.js`.
