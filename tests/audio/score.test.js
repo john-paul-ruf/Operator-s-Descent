@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { FakeContext } from '../helpers/fake-audio.js';
 import { createAudioEngine } from '../../src/audio/engine.js';
+import { createDrone } from '../../src/audio/drone.js';
 import { createLead } from '../../src/audio/lead.js';
 import { createNoiseBed } from '../../src/audio/noise-bed.js';
 import { createSparkle } from '../../src/audio/sparkle.js';
@@ -193,6 +194,22 @@ describe('five layer audio score', () => {
       expect(echoRoutedOsc).toBeTruthy();
       lead.stop();
     });
+  });
+
+  test('drone builds the pad without illegal OscillatorNode.type assignment', () => {
+    const ctx = new FakeContext();
+    const conductor = makeFakeConductor();
+    const dest = ctx.createGain();
+    const drone = createDrone(ctx, dest, conductor);
+    expect(() => drone.start()).not.toThrow();
+    const padOscs = ctx.nodes.filter(
+      (n) => n.nodeKind === 'oscillator' && n.periodicWaves.length >= 1
+    );
+    expect(padOscs.length).toBeGreaterThanOrEqual(1);
+    for (const osc of ctx.nodes) {
+      if (osc.nodeKind === 'oscillator') expect(osc.type).not.toBe('custom');
+    }
+    drone.destroy();
   });
 
   test('noise bed is fixed machine texture and ignores game state', () => {

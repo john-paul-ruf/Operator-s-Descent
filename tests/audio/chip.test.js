@@ -57,6 +57,15 @@ describe('chip.buildLFSRBuffer', () => {
   });
 });
 
+describe('chip fake-audio hardening', () => {
+  test("fake rejects OscillatorNode.type = 'custom' like real browsers", () => {
+    const ctx = new FakeContext();
+    const osc = ctx.createOscillator();
+    expect(() => { osc.type = 'custom'; }).toThrow(/custom/);
+    expect(osc.type).toBe('oscillator');
+  });
+});
+
 describe('chip.playNote', () => {
   test('schedules the exact envelope events and stops the osc', () => {
     const ctx = new FakeContext();

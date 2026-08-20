@@ -8,7 +8,7 @@ export class Param {
 
 export class Node {
   constructor(type) {
-    this.type = type;
+    this._type = type;
     this.nodeKind = type;
     this.connections = [];
     this.started = [];
@@ -18,6 +18,19 @@ export class Node {
     this.detune = new Param(0);
     this.Q = new Param(0);
     this.periodicWaves = [];
+  }
+  get type() { return this._type; }
+  set type(value) {
+    if (value === 'custom') {
+      const err = typeof DOMException === 'function'
+        ? new DOMException(
+            "Failed to set 'type' on OscillatorNode: 'custom' cannot be assigned — use setPeriodicWave().",
+            'InvalidStateError'
+          )
+        : Object.assign(new Error("Failed to set 'type' on OscillatorNode: 'custom' cannot be assigned — use setPeriodicWave()."), { name: 'InvalidStateError' });
+      throw err;
+    }
+    this._type = value;
   }
   connect(dest) { this.connections.push(dest); return dest; }
   disconnect() { this.disconnected = true; }
