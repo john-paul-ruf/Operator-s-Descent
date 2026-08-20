@@ -1,5 +1,5 @@
-const GRID_W = 20;
-const GRID_H = 32;
+const GRID_W = 40;
+const GRID_H = 64;
 
 export const ARCHETYPES = {
   chambers: generateChambers,
@@ -113,12 +113,15 @@ export function widenOneWideCorridors(grid) {
 
 export function generateChambers(prng) {
   const grid = createGrid();
-  const numRooms = 5 + prng.nextInt(3);
+  // Room size scales linearly ~x2 (was 4-7, now 8-13); count grows more
+  // conservatively than area because rooms overlap heavily and would merge
+  // into one super-blob past the open-cell-bounds cap.
+  const numRooms = 10 + prng.nextInt(6);
   const rooms = [];
 
   for (let i = 0; i < numRooms; i++) {
-    const w = 4 + prng.nextInt(4);
-    const h = 4 + prng.nextInt(4);
+    const w = 8 + prng.nextInt(6);
+    const h = 8 + prng.nextInt(6);
     const x = prng.nextInt(GRID_W - w);
     const y = prng.nextInt(GRID_H - h);
     carveRoom(grid, x, y, w, h);
@@ -160,11 +163,12 @@ export function generateCaves(prng) {
 
 export function generateMazes(prng) {
   const grid = createGrid();
-  const numRegions = 2 + prng.nextInt(2);
+  // 4x area → ~4x region count. Region size scales linearly ~x2.
+  const numRegions = 8 + prng.nextInt(4);
   const regions = [];
   for (let r = 0; r < numRegions; r++) {
-    const regionW = 8 + prng.nextInt(6);
-    const regionH = 8 + prng.nextInt(8);
+    const regionW = 16 + prng.nextInt(12);
+    const regionH = 16 + prng.nextInt(16);
     const rx = prng.nextInt(GRID_W - regionW);
     const ry = prng.nextInt(GRID_H - regionH);
     regions.push({ rx, ry, regionW, regionH });
@@ -213,11 +217,16 @@ export function generateMazes(prng) {
 
 export function generateCathedrals(prng) {
   const grid = createGrid();
-  const roomH = Math.floor(GRID_H / 4);
-  const roomW = Math.floor(GRID_W / 2);
+  // 4x area → 6 rows × 3 cols = 18 chambers (was 4 × 2 = 8; count ~x2 with the
+  // per-cell area doubling giving another ~x2 = x4 total). roomH/roomW derive
+  // from GRID_H/GRID_W so cell size auto-scales.
+  const numRows = 6;
+  const numCols = 3;
+  const roomH = Math.floor(GRID_H / numRows);
+  const roomW = Math.floor(GRID_W / numCols);
   const rooms = [];
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 2; col++) {
+  for (let row = 0; row < numRows; row++) {
+    for (let col = 0; col < numCols; col++) {
       const xPadding = 2 + prng.nextInt(2);
       const yPadding = 2 + prng.nextInt(2);
       const w = roomW - xPadding - 2 - prng.nextInt(2);
@@ -230,11 +239,11 @@ export function generateCathedrals(prng) {
     }
   }
   const midX = Math.floor(GRID_W / 2);
-  for (let row = 0; row < 4; row++) {
+  for (let row = 0; row < numRows; row++) {
     const y = row * roomH;
     if (row > 0) for (let x = 1; x < GRID_W - 1; x++) grid[y][x] = 0;
   }
-  const numPillars = 8 + prng.nextInt(8);
+  const numPillars = 32 + prng.nextInt(32);
   for (let i = 0; i < numPillars; i++) {
     const room = rooms[prng.nextInt(rooms.length)];
     if (!room) continue;
@@ -252,7 +261,8 @@ export function generateCathedrals(prng) {
 
 export function generateSpines(prng) {
   const grid = createGrid();
-  const numSpines = 2 + prng.nextInt(2);
+  // 4x area → double spines (linear ~x2 on the wider axis) and quadruple side rooms.
+  const numSpines = 4 + prng.nextInt(3);
   const spinePaths = [];
   for (let s = 0; s < numSpines; s++) {
     let x = 2 + prng.nextInt(GRID_W - 4);
@@ -284,11 +294,11 @@ export function generateSpines(prng) {
       carveCorridor(grid, c1.x, c1.y, c2.x, c1.y);
     }
   }
-  const numRooms = 4 + prng.nextInt(4);
+  const numRooms = 14 + prng.nextInt(8);
   const roomCenters = [];
   for (let i = 0; i < numRooms; i++) {
-    const w = 4 + prng.nextInt(3);
-    const h = 3 + prng.nextInt(3);
+    const w = 6 + prng.nextInt(5);
+    const h = 5 + prng.nextInt(5);
     const x = prng.nextInt(GRID_W - w);
     const y = prng.nextInt(GRID_H - h);
     carveRoom(grid, x, y, w, h);
@@ -310,22 +320,23 @@ export function generateSpines(prng) {
 
 export function generateFractured(prng) {
   const grid = createGrid();
+  // 4x area → ~4x total rooms (per side), sizes scale linearly ~x2.
   const splitX = Math.floor(GRID_W / 2) + prng.nextInt(4) - 2;
-  const leftRooms = 2 + prng.nextInt(2);
-  const rightRooms = 2 + prng.nextInt(2);
+  const leftRooms = 6 + prng.nextInt(4);
+  const rightRooms = 6 + prng.nextInt(4);
   const leftCenters = [];
   const rightCenters = [];
   for (let i = 0; i < leftRooms; i++) {
-    const w = 3 + prng.nextInt(3);
-    const h = 3 + prng.nextInt(4);
+    const w = 6 + prng.nextInt(5);
+    const h = 6 + prng.nextInt(7);
     const x = prng.nextInt(Math.max(1, splitX - 2 - w));
     const y = prng.nextInt(GRID_H - h);
     carveRoom(grid, x, y, w, h);
     leftCenters.push({ x: x + Math.floor(w / 2), y: y + Math.floor(h / 2) });
   }
   for (let i = 0; i < rightRooms; i++) {
-    const w = 3 + prng.nextInt(3);
-    const h = 3 + prng.nextInt(4);
+    const w = 6 + prng.nextInt(5);
+    const h = 6 + prng.nextInt(7);
     const x = splitX + 2 + prng.nextInt(Math.max(1, GRID_W - splitX - 3 - w));
     const y = prng.nextInt(GRID_H - h);
     carveRoom(grid, x, y, w, h);
@@ -337,7 +348,7 @@ export function generateFractured(prng) {
   for (let i = 1; i < rightCenters.length; i++) {
     carveCorridor(grid, rightCenters[i - 1].x, rightCenters[i - 1].y, rightCenters[i].x, rightCenters[i].y);
   }
-  const numBridges = 2 + prng.nextInt(3);
+  const numBridges = 4 + prng.nextInt(5);
   for (let i = 0; i < numBridges; i++) {
     const leftIdx = prng.nextInt(leftCenters.length);
     const rightIdx = prng.nextInt(rightCenters.length);
@@ -349,14 +360,17 @@ export function generateFractured(prng) {
 
 export function generateRings(prng) {
   const grid = createGrid();
-  const numRings = 3 + prng.nextInt(2);
+  // 4x area → double the number of rings (linear ~x2 in Y), widen each ring
+  // linearly ~x2, and quadruple the interior room count.
+  const numRings = 6 + prng.nextInt(3);
   const ringSpacing = Math.floor(GRID_H / (numRings + 1));
   const ringCenters = [];
   for (let r = 0; r < numRings; r++) {
     const ry = ringSpacing * (r + 1);
     ringCenters.push({ y: ry, x: Math.floor(GRID_W / 2) });
-    const width = 6 + prng.nextInt(4);
-    const height = 1;
+    const width = 12 + prng.nextInt(8);
+    // Height 2 (linear ~x2 scaling) so ring interiors aren't 1-cell-wide throats.
+    const height = 2;
     const xStart = Math.floor((GRID_W - width) / 2);
     carveRoom(grid, xStart, ry, width, height);
     if (xStart > 1) carveCorridor(grid, xStart - 1, ry, 1, ry);
@@ -367,11 +381,11 @@ export function generateRings(prng) {
     const b = ringCenters[i];
     carveCorridor(grid, a.x, a.y, b.x, b.y);
   }
-  const numRooms = 3 + prng.nextInt(4);
+  const numRooms = 12 + prng.nextInt(8);
   const roomCenters = [];
   for (let i = 0; i < numRooms; i++) {
-    const w = 4 + prng.nextInt(3);
-    const h = 3 + prng.nextInt(3);
+    const w = 6 + prng.nextInt(4);
+    const h = 5 + prng.nextInt(4);
     const x = prng.nextInt(GRID_W - w);
     const y = prng.nextInt(GRID_H - h);
     carveRoom(grid, x, y, w, h);
@@ -391,13 +405,15 @@ export function generateRings(prng) {
 
 export function generateShards(prng) {
   const grid = createGrid();
-  const numShards = 6 + prng.nextInt(4);
+  // 4x area → 4x shard count. Sizes stay compact so the archetype keeps its
+  // scattered-fragment character (linear x1–1.5).
+  const numShards = 24 + prng.nextInt(12);
   const shardCenters = [];
   for (let i = 0; i < numShards; i++) {
     const cx = 1 + prng.nextInt(GRID_W - 2);
     const cy = 1 + prng.nextInt(GRID_H - 2);
-    const w = 3 + prng.nextInt(2);
-    const h = 3 + prng.nextInt(2);
+    const w = 4 + prng.nextInt(3);
+    const h = 4 + prng.nextInt(3);
     carveRoom(grid, cx, cy, Math.min(w, GRID_W - cx), Math.min(h, GRID_H - cy));
     shardCenters.push({ x: cx + Math.floor(w / 2), y: cy + Math.floor(h / 2) });
   }

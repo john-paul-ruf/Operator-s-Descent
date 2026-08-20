@@ -197,8 +197,8 @@ describe('generateFloor — cloned grid independence', () => {
 });
 
 describe('generateFloor — generation version', () => {
-  it('GENERATION_VERSION is 2', () => {
-    expect(GENERATION_VERSION).toBe(2);
+  it('GENERATION_VERSION is 3', () => {
+    expect(GENERATION_VERSION).toBe(3);
   });
 });
 

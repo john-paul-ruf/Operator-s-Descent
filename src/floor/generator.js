@@ -8,7 +8,7 @@ import { enemyCountScale, thresholdFloor } from '../rules/scaling.js';
 const MAX_CANDIDATES = 200;
 const REPAIR_THRESHOLD = 50;
 const CONTAINER_DENSITY_BASE = 3;
-const GENERATION_VERSION = 2;
+const GENERATION_VERSION = 3;
 const HIGHER_TIER_ENEMIES = ['stalker', 'choir', 'null', 'construct'];
 
 function weightedSelect(entries, prng) {

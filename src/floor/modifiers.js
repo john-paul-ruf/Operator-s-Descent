@@ -60,7 +60,10 @@ function countOrthoOpen(grid, x, y) {
 function applyDense(grid, prng) {
   const h = grid.length;
   const w = grid[0].length;
-  const numWalls = 15 + prng.nextInt(10);
+  // Density scales with area: baseline 15-24 candidates at 20x32=640 cells
+  // stays ~2-4% wall-additions at any grid size (60-99 at 40x64).
+  const areaScale = (w * h) / 640;
+  const numWalls = Math.round((15 + prng.nextInt(10)) * areaScale);
   for (let i = 0; i < numWalls; i++) {
     const x = prng.nextInt(w - 2) + 1;
     const y = prng.nextInt(h - 2) + 1;
@@ -73,7 +76,9 @@ function applyDense(grid, prng) {
 function applySparse(grid, prng) {
   const h = grid.length;
   const w = grid[0].length;
-  const numRemovals = 10 + prng.nextInt(8);
+  // Area-proportional to keep the same removal density at any grid size.
+  const areaScale = (w * h) / 640;
+  const numRemovals = Math.round((10 + prng.nextInt(8)) * areaScale);
   for (let i = 0; i < numRemovals; i++) {
     const x = prng.nextInt(w - 2) + 1;
     const y = prng.nextInt(h - 2) + 1;
@@ -86,7 +91,9 @@ function applyDangerous(grid, prng) {
   grid = applyDense(grid, prng);
   const h = grid.length;
   const w = grid[0].length;
-  const numPits = 5 + prng.nextInt(5);
+  // Area-proportional pit placement.
+  const areaScale = (w * h) / 640;
+  const numPits = Math.round((5 + prng.nextInt(5)) * areaScale);
   for (let i = 0; i < numPits; i++) {
     const x = prng.nextInt(w - 2) + 1;
     const y = prng.nextInt(h - 2) + 1;

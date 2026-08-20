@@ -55,16 +55,16 @@ describe('archetype registry', () => {
     }
   });
 
-  it('GRID_W === 20 and GRID_H === 32', () => {
-    expect(GRID_W).toBe(20);
-    expect(GRID_H).toBe(32);
+  it('GRID_W === 40 and GRID_H === 64', () => {
+    expect(GRID_W).toBe(40);
+    expect(GRID_H).toBe(64);
   });
 });
 
 describe.each(ARCH_KEYS)('archetype: %s', (name) => {
   const gen = ARCHETYPES[name];
 
-  it.each(SEEDS)('seed %d: 32 rows × 20 cols, cells ∈ {0,1}', (seed) => {
+  it.each(SEEDS)('seed %d: 64 rows × 40 cols, cells ∈ {0,1}', (seed) => {
     const grid = gen(createPRNG(seed));
     expect(grid.length).toBe(GRID_H);
     for (const row of grid) {

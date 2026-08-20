@@ -39,18 +39,19 @@ describe('validator — connectivity', () => {
 });
 
 describe('validator — loop-density', () => {
-  it('serpentine corridor with > 50 open cells and < 3 junctions → includes loop-density', () => {
-    const grid = makeGrid(20, 32, 0);
+  it('serpentine corridor with > 200 open cells and < 3 junctions → includes loop-density', () => {
+    // 40x64 area → scale threshold to 200. Grid + snake widened to clear it.
+    const grid = makeGrid(40, 64, 0);
     let y = 1;
     let leftToRight = true;
-    while (y < 31) {
-      const startX = leftToRight ? 1 : 18;
-      const endX = leftToRight ? 18 : 1;
+    while (y < 63) {
+      const startX = leftToRight ? 1 : 38;
+      const endX = leftToRight ? 38 : 1;
       const step = leftToRight ? 1 : -1;
       for (let x = startX; leftToRight ? x <= endX : x >= endX; x += step) {
         grid[y][x] = 1;
       }
-      grid[y + 1][leftToRight ? 18 : 1] = 1;
+      grid[y + 1][leftToRight ? 38 : 1] = 1;
       y += 2;
       leftToRight = !leftToRight;
     }
@@ -58,7 +59,7 @@ describe('validator — loop-density', () => {
     expect(result.failures).toContain('loop-density');
   });
 
-  it('same shape with < 50 open cells → does NOT include loop-density', () => {
+  it('same shape with < 200 open cells → does NOT include loop-density', () => {
     const grid = makeGrid(10, 10, 0);
     let y = 1;
     let leftToRight = true;
@@ -79,9 +80,10 @@ describe('validator — loop-density', () => {
 });
 
 describe('validator — open-cell-bounds', () => {
-  it('one open blob > 200 cells → includes open-cell-bounds', () => {
-    const grid = makeGrid(20, 32, 0);
-    carve(grid, 1, 1, 18, 20, 1);
+  it('one open blob > 1500 cells → includes open-cell-bounds', () => {
+    // 40x64 grid → threshold set to 1500. A 40x40 blob = 1600 cells.
+    const grid = makeGrid(40, 64, 0);
+    carve(grid, 0, 0, 40, 40, 1);
     const result = validateFloor({ cells: grid, descentPoint: { x: 5, y: 5 }, containers: [] });
     expect(result.failures).toContain('open-cell-bounds');
   });
@@ -135,10 +137,12 @@ describe('validator — container-accessibility', () => {
 });
 
 describe('validator — interior-cover', () => {
-  it('four disconnected 1-wide corridors with > 100 open cells, each < 40, loops < 2 → includes interior-cover', () => {
-    const grid = makeGrid(20, 32, 0);
-    for (let i = 0; i < 4; i++) {
-      for (let y = 1; y <= 30; y++) grid[y][1 + i * 5] = 1;
+  it('eight disconnected 1-wide corridors with > 400 open cells, largest < 240, loops < 2 → includes interior-cover', () => {
+    // 40x64 area → totalOpen threshold 400, openArea threshold 240.
+    // 8 columns × 62 cells = 496 open cells; each column is its own region (62).
+    const grid = makeGrid(40, 64, 0);
+    for (let i = 0; i < 8; i++) {
+      for (let y = 1; y <= 62; y++) grid[y][1 + i * 5] = 1;
     }
     const result = validateFloor({ cells: grid, descentPoint: { x: 1, y: 1 }, containers: [] });
     expect(result.failures).toContain('interior-cover');
@@ -184,7 +188,7 @@ describe('validator — corridor-width', () => {
   });
 
   it('countOneWideCorridors counts collinear-neighbor open cells only', () => {
-    const grid = makeGrid(20, 32, 0);
+    const grid = makeGrid(40, 64, 0);
     // A 20-cell horizontal snake — every interior cell has E+W collinear open pair.
     for (let x = 1; x < 21; x++) grid[5][x] = 1;
     // Endpoints (x=1 and x=20) each have only one collinear open neighbor,
@@ -192,9 +196,10 @@ describe('validator — corridor-width', () => {
     expect(countOneWideCorridors(grid)).toBe(18);
   });
 
-  it('20-cell collinear snake fails corridor-width', () => {
-    const grid = makeGrid(20, 32, 0);
-    for (let x = 1; x < 20; x++) grid[5][x] = 1;
+  it('55-cell collinear snake fails corridor-width', () => {
+    // MAX_ONE_WIDE_CORRIDOR scaled to 48 → need > 48 interior 1-wide cells.
+    const grid = makeGrid(60, 64, 0);
+    for (let x = 1; x < 56; x++) grid[5][x] = 1;
     const result = validateFloor({ cells: grid, descentPoint: { x: 1, y: 5 }, containers: [] });
     expect(result.failures).toContain('corridor-width');
   });

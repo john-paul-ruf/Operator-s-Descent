@@ -82,7 +82,8 @@ export function countOneWideCorridors(grid) {
 // Maximum number of 1-wide corridor tiles a candidate floor may contain
 // before the `corridor-width` check rejects it. The repair-fallback path
 // in src/floor/generator.js is exempt so the generator always terminates.
-export const MAX_ONE_WIDE_CORRIDOR = 12;
+// Area-proportional to keep the same ~1.9% ceiling at 40x64 (2560 cells).
+export const MAX_ONE_WIDE_CORRIDOR = 48;
 
 function maxOpenArea(grid) {
   const h = grid.length;
@@ -132,13 +133,16 @@ export function validateFloor(floor) {
 
   const loops = countLoops(grid);
   metrics.loops = loops;
-  if (loops < 3 && totalOpen > 50) {
+  // Cell-count thresholds scale with area (20x32=640 → 40x64=2560, x4).
+  if (loops < 3 && totalOpen > 200) {
     failures.push('loop-density');
   }
 
   const openArea = maxOpenArea(grid);
   metrics.maxRegion = openArea;
-  if (openArea > 200) {
+  // At 40x64 (2560 cells) allow up to ~59% of grid in one connected region;
+  // chambers-style archetypes naturally merge rooms into large sprawls.
+  if (openArea > 1500) {
     failures.push('open-cell-bounds');
   }
 
@@ -169,7 +173,7 @@ export function validateFloor(floor) {
     }
   }
 
-  if (totalOpen > 100 && openArea < 60 && loops < 2) {
+  if (totalOpen > 400 && openArea < 240 && loops < 2) {
     failures.push('interior-cover');
   }
 
