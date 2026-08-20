@@ -2417,3 +2417,57 @@ subscribes to the tick stream (drone/pulse/sparkle/lead) or ignores the extras (
 - `getGraphState()` gains `conductor: conductor?.getState() ?? null`.
 - `applySettings`, `setLayerVolume`, `setMasterVolume`, `setMute`, `updateContext`, `isStarted`,
   `suspend`, `destroy`: byte-for-byte behavior.
+
+<!-- SESSION-01 (autosave-checkpoints, 2026-08-20 — appended by Jikijitsu) -->
+
+## M33 · RunState — recordEvent persistence policy
+
+`RunState.recordEvent(event)` now normalizes every incoming event to a slim
+`PersistedEvent` shape before storing. The fat runtime payload (`entry`,
+`timestamp`, any other free-form fields) is dropped on the persist boundary;
+live in-session display fidelity is unchanged (it reads `runtimeLogEntries`).
+
+**Accepted:** `{ type, message, sequence? }`
+- `type`: string, defaults to `'info'`, clamped to 16 characters.
+- `message`: string, required. Clamped to 72 characters. Missing/non-string
+  message → the call returns `{ recorded: false, reason: 'invalid_event' }`
+  and nothing is stored.
+- `sequence`: optional; kept only when finite. Preserves the existing merge
+  ordering key used by `collectLogs` in M67.
+
+Cap unchanged: 64 entries, oldest dropped on overflow. Decode path is
+untouched — legacy fat entries from prior saves are still accepted as-is and
+only slim-normalized on the next `recordEvent` round-trip.
+
+## M43 · Save Encode — trim-to-fit ladder + new metrics fields
+
+`encodeRun(runState)` no longer throws on the first over-budget attempt.
+Instead it runs a deterministic descending ladder — `64, 32, 16, 8, 4, 2, 1,
+0` — trying the encode with successively smaller `recentEvents` suffixes (the
+**newest** events survive). The first attempt whose fragment length is < 1500
+wins. `RangeError('save_budget_exceeded')` is thrown only when the zero-event
+attempt still exceeds the budget (a genuine payload overflow — surfaced as
+`save_too_large` by `library.saveRun`, unchanged).
+
+The successful return grows two metrics fields:
+
+```js
+{
+  success: true,
+  fragment,
+  length,
+  metrics: {
+    rawBytes,
+    compressedBytes,
+    layers,
+    eventsKept,     // NEW: how many events survived the ladder
+    eventsDropped   // NEW: original length − eventsKept
+  }
+}
+```
+
+Callers with existing `.metrics` reads (e.g. LOG copy-link notices, release
+gate reports) are additive-safe: the pre-existing fields are unchanged.
+
+Encoding never mutates the caller's `runState`; the ladder builds a spread
+copy per attempt when trimming.
