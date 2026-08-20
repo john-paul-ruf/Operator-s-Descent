@@ -170,4 +170,22 @@ describe('TECH mode — SESSION-06 icon coverage', () => {
     expect(firstIconChild(cast)).toBeTruthy();
     expect(byTestId(container, 'tech-error')).toBe(null);
   });
+
+  // playtest-clarity-and-4x-floors SESSION-02 — TECH deck cards now carry the
+  // authored effect + range so the player can read what a prepared protocol
+  // does before opening its detail row.
+  it('prepared protocol cards render the authored effect and range from data/protocols.json', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+    const row = byTestId(container, 'tech-protocol-disrupt-1');
+    expect(row).toBeTruthy();
+    // The protocol card is the first child of the row; the effect line lives
+    // on it as .card-effect (dependency-free child span).
+    const card = row.children[0];
+    const effect = (card.children || []).find((c) => c.className === 'card-effect');
+    expect(effect).toBeTruthy();
+    expect(effect.textContent).toBe('Deal 1d6 + RES modifier damage to one target. · Range: SIG×2');
+  });
 });

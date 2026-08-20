@@ -297,7 +297,13 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   row.className = 'tech-protocol-row console-row';
   row.dataset.testid = `tech-protocol-${protocolKey(protocol)}`;
   const castReason = availabilityReason(context, character, caster, protocol, false);
-  row.appendChild(createProtocolCard({ ...protocol, name: protocolName(data, protocol), chargeCost: normalCost }, { insufficient: Boolean(castReason) }));
+  row.appendChild(createProtocolCard({
+    ...protocol,
+    name: protocolName(data, protocol),
+    chargeCost: normalCost,
+    effect: resolved?.effect,
+    range: resolved?.range
+  }, { insufficient: Boolean(castReason) }));
   const detail = text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`);
   detail.appendChild(createManualLink(protocol.school, {
     variant: 'chip', source: 'tech-school', dispatch,

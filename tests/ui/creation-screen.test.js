@@ -799,8 +799,8 @@ describe('creation screen — wide layout', () => {
   });
 
   // playtest-clarity-and-4x-floors SESSION-02 — wide sigil preview and thumbs
-  // must render the DESCENT SIGIL glyph via the creature-sigil class so the
-  // font resolves independent of stylesheet load order.
+  // must render the player-bank glyph via the creature-sigil class so the
+  // sigil font resolves independent of stylesheet load order.
   it('wide sigil preview carries the creature-sigil class independent of CSS load order', async () => {
     installMatchMedia(true);
     const { container } = await mountCreation({ preloadedSeed: 3333 });
