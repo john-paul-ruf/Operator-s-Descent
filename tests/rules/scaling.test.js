@@ -69,11 +69,15 @@ describe('lootRarityShift', () => {
 });
 
 describe('dangerClockBaseRate', () => {
-  it('(1) ≈ 0.012', () => {
-    expect(dangerClockBaseRate(1)).toBeCloseTo(0.012);
+  // Halved for 40x64 (traversal ~2x per axis → per-floor danger stays constant).
+  it('(1) === 0.006', () => {
+    expect(dangerClockBaseRate(1)).toBeCloseTo(0.006);
   });
-  it('(10) ≈ 0.03', () => {
-    expect(dangerClockBaseRate(10)).toBeCloseTo(0.03);
+  it('(5) === 0.010', () => {
+    expect(dangerClockBaseRate(5)).toBeCloseTo(0.010);
+  });
+  it('(10) === 0.015', () => {
+    expect(dangerClockBaseRate(10)).toBeCloseTo(0.015);
   });
 });
 

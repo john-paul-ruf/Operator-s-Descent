@@ -12,7 +12,9 @@ export function lootRarityShift(depth) {
 }
 
 export function dangerClockBaseRate(depth) {
-  return 0.01 + depth * 0.002;
+  // Halved from 0.01+0.002*depth: traversal doubles at 40x64, so per-floor
+  // danger accrual stays ~constant with the pre-flip 20x32 budget.
+  return 0.005 + depth * 0.001;
 }
 
 export function corruptionDangerRate(corruption) {
