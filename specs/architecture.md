@@ -2471,3 +2471,20 @@ gate reports) are additive-safe: the pre-existing fields are unchanged.
 
 Encoding never mutates the caller's `runState`; the ladder builds a spread
 copy per attempt when trimming.
+
+<!-- SESSION-02 (playtest-clarity-and-4x-floors) -->
+### M56 (UI Components) — public API additions
+
+- `createProtocolCard(protocol, opts)` now honours two optional protocol
+  fields: `effect: string` renders below the name/cost row as
+  `<div class="card-effect">`; `range: string` is appended to the same line
+  as ` · Range: <range>` when both are present. Absent/empty `effect` →
+  card renders byte-identical to prior sessions (no `card-effect` child).
+  Consumed by M65 (TECH mode) and M69 (Creation screen) in this session;
+  usable by any future card site.
+
+- New export `attachDoubleActivate(element, handler, opts?) → cleanup`.
+  Fires `handler` on native `dblclick` OR on two `pointerup` events within
+  `opts.windowMs` (default 350ms) and `opts.slop` pixels (default 24).
+  Both paths short-circuit when `element.disabled` is truthy. Cleanup
+  removes both listeners. This is SESSION-03's declared dependency.
