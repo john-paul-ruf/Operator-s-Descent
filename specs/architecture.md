@@ -2576,3 +2576,67 @@ formatter mirroring M71's `describeEntryDetail`. Element factory stays import-fr
 status-strip's wide telemetry feed (M59) picks up the second line automatically because
 it consumes the same factory. Persisted `recentEvents` entries render one line as before
 (no `detail`, no roll fields — `normalizePersistedEvent` strips both).
+
+<!-- SESSION-05 (playtest-clarity-and-4x-floors) -->
+## SESSION-05 arch delta — 4× floor scale + density/pacing retune
+
+### Dimension flip (dimension source of truth)
+
+`src/floor/archetypes.js` exports `GRID_W = 40` and `GRID_H = 64` (was `20 × 32`).
+Floors are 40 columns × 64 rows = 2560 cells (4× the pre-flip 640). Every consumer
+that computes fog size, cell indices, or spawn coordinates SHOULD import
+`GRID_W`/`GRID_H` from `src/floor/archetypes.js` and derive from those. Direct
+hardcodes of `20`, `32`, `640`, or `80` are legacy bugs.
+
+`src/state/run-state.js` already derives `FOG_BYTES = Math.ceil(GRID_W * GRID_H / 8)`
+from those exports (= 320 bytes post-flip). `normalizeFog` resets length-mismatched
+fogs from pre-flip v5 saves back to zero-fill of the current size instead of failing.
+
+### `src/floor/generator.js` — new exports and value changes
+
+- `GENERATION_VERSION`: `2 → 3` (bump — same seed now maps to a new floor, hashed
+  into every `hash(worldSeed, GENERATION_VERSION, floorNumber, k)` draw).
+- `CONTAINER_DENSITY_BASE`: `3 → 12` (exported).
+- `CONTAINER_CAP = 40` (new export). Clamps `Math.floor(CONTAINER_DENSITY_BASE × theme.lootBias.containerDensity)`
+  so container ids stay under the 64-bit `openedContainers` bitmask.
+- `ENEMY_CAP = 56` (new export). Clamps `enemyCountScale(8 + 2·⌊floor/3⌋, floor)`
+  minus the apex-elite (threshold floors) and echo-spawn reservations so the
+  total `enemySpawns.length` stays under the 64-bit `defeatedEnemies` bitmask.
+- `baseEnemyCount` formula: `2 + ⌊floor/3⌋ → 8 + 2·⌊floor/3⌋`.
+- Placement attempt budget for containers and enemies: `20 → 60` per spawn.
+
+### `src/floor/validator.js` — thresholds scaled to 40×64 area
+
+- `MAX_ONE_WIDE_CORRIDOR`: `12 → 48` (value change; export name unchanged).
+- Absolute cell-count thresholds inside `validateFloor`:
+  - `loop-density`: `totalOpen > 50 → totalOpen > 200`.
+  - `open-cell-bounds`: `openArea > 200 → openArea > 1500` (raised past 4× to
+    accommodate the chambers archetype's natural room-merge blob).
+  - `interior-cover`: `totalOpen > 100 && openArea < 60 → totalOpen > 400 && openArea < 240`.
+
+### `src/floor/archetypes.js` — algorithmic changes
+
+- `generateCaves` rewrite: initial density `0.45 → 0.42`, CA rule `≥4 → ≥5` of
+  9, and a new post-CA pass (`keepLargestConnectedComponent`, private) that
+  fills all non-winner cells with walls. Caves no longer fragments into
+  disconnected pockets at 40×64.
+- Every other archetype had its room/spine/shard/ring/pillar count scaled ~×3–4
+  (area-proportional) and its feature sizes scaled ~×2 (linear). Cathedrals
+  moved from a 4×2 room grid to 6×3 with `roomH`/`roomW` auto-scaled from
+  `GRID_H`/`GRID_W`.
+
+### `src/floor/modifiers.js` — area-adaptive densities
+
+- `applyDense`, `applySparse`, `applyDangerous` now compute their counts as
+  `Math.round((baseline) × (w × h) / 640)` so the same modifier produces the
+  same % wall/pit/removal density on any grid size (60–99 candidates at 40×64,
+  15–24 at 20×32).
+
+### `src/rules/scaling.js` — halved danger clock
+
+- `dangerClockBaseRate(depth)`: `0.01 + depth × 0.002 → 0.005 + depth × 0.001`.
+  Traversal roughly doubles at 40×64, so the per-floor danger budget stays
+  ≈ constant (a floor traversed end-to-end still accrues ≈ the same
+  `dangerClockProgress` as pre-flip).
+- `enemyCountScale`, `enemyStatScale`, `lootRarityShift`, `corruptionDangerRate`,
+  `calibrationFloor`, `thresholdFloor` — unchanged.
