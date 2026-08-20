@@ -78,7 +78,8 @@ export function createManualModal(options = {}) {
   let view = null;
   let invoker = null;
   let open = false;
-  let cleanups = [];
+  let cleanups = [];             // per-open: flushed by close() and destroy()
+  let persistentCleanups = [];   // DOM-lifetime: flushed only by destroy()
   let registeredGlitchEls = [];
   let appRoot = null;
   let appRootPreviousAriaHidden = null;
@@ -87,6 +88,11 @@ export function createManualModal(options = {}) {
   const listenerCleanups = () => {
     for (const off of cleanups) safeCall(off);
     cleanups = [];
+  };
+
+  const persistentListenerCleanups = () => {
+    for (const off of persistentCleanups) safeCall(off);
+    persistentCleanups = [];
   };
 
   const dispatchToBus = (event, payload) => {
@@ -174,7 +180,7 @@ export function createManualModal(options = {}) {
     backBtn.dataset.testid = 'manual-back';
     backBtn.disabled = true;
     backBtn.setAttribute('aria-disabled', 'true');
-    cleanups.push(backBtn.cleanup);
+    persistentCleanups.push(backBtn.cleanup);
 
     // CONTENTS uses createManualLink so the affordance matches every other
     // manual button in the UI; local dispatch keeps navigation inside the
@@ -188,14 +194,14 @@ export function createManualModal(options = {}) {
       },
       testid: 'manual-contents'
     });
-    cleanups.push(contentsLink.cleanup);
+    persistentCleanups.push(contentsLink.cleanup);
 
     closeBtn = createButton('✕', {
       label: 'Close manual',
       onClick: () => close('close-button')
     });
     closeBtn.dataset.testid = 'manual-close';
-    cleanups.push(closeBtn.cleanup);
+    persistentCleanups.push(closeBtn.cleanup);
 
     controls.append(backBtn, contentsLink, closeBtn);
     header.append(eyebrow, titleSlot, controls);
@@ -327,6 +333,9 @@ export function createManualModal(options = {}) {
 
     cleanups.push(listen(root, 'keydown', handleKeydown));
     cleanups.push(listen(root, 'click', handleBackdropClick));
+    // Document-level Escape fallback: the root listener misses keydowns when
+    // focus escapes the modal despite enforceFocus (e.g. focus on body).
+    if (doc.addEventListener) cleanups.push(listen(doc, 'keydown', handleKeydown));
     if (doc.addEventListener) cleanups.push(listen(doc, 'focusin', enforceFocus));
 
     safeCall(closeBtn?.focus?.bind(closeBtn));
@@ -342,6 +351,7 @@ export function createManualModal(options = {}) {
     destroy() {
       if (open) close('programmatic');
       listenerCleanups();
+      persistentListenerCleanups();
       unregisterGlitch();
       view?.destroy?.();
       view = null;

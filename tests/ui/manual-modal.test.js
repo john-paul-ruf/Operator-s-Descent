@@ -454,6 +454,105 @@ describe('createManualModal — shell (CP1)', () => {
   });
 });
 
+describe('createManualModal — close/reopen lifecycle regression (CP1)', () => {
+  function makeModal({ manual = SAMPLE_MANUAL, glitch = null, createView } = {}) {
+    return createManualModal({
+      bus,
+      getManualData: () => manual,
+      parent: portraitFrame,
+      glitch,
+      createView
+    });
+  }
+
+  it('close via ✕ succeeds again after a close/reopen cycle', () => {
+    const modal = makeModal();
+
+    modal.open({ target: null, source: 'first' });
+    byTestId(portraitFrame, 'manual-close').click();
+    expect(modal.isOpen()).toBe(false);
+
+    modal.open({ target: null, source: 'second' });
+    expect(modal.isOpen()).toBe(true);
+    // The ✕ listener must survive the first close — this is the confirmed bug.
+    byTestId(portraitFrame, 'manual-close').click();
+    expect(modal.isOpen()).toBe(false);
+
+    const closeEvents = bus.events.filter(([event]) => event === 'ui:manual-close');
+    expect(closeEvents).toHaveLength(2);
+    expect(closeEvents.every(([, payload]) => payload.reason === 'close-button')).toBe(true);
+  });
+
+  it('CONTENTS still navigates to the TOC after reopen', () => {
+    const modal = makeModal();
+    modal.open({ target: 'move_mode', source: 'first' });
+    byTestId(portraitFrame, 'manual-close').click();
+
+    modal.open({ target: 'move_mode', source: 'second' });
+    expect(byTestId(portraitFrame, 'manual-section')).toBeTruthy();
+
+    byTestId(portraitFrame, 'manual-contents').click();
+    expect(byTestId(portraitFrame, 'manual-toc')).toBeTruthy();
+    expect(byTestId(portraitFrame, 'manual-section')).toBeNull();
+  });
+
+  it('BACK still dispatches after reopen', () => {
+    const modal = makeModal();
+    modal.open({ target: null, source: 'first' });
+    byTestId(portraitFrame, 'manual-close').click();
+
+    // Reopen and build a back stack inside the reopened session.
+    modal.open({ target: null, source: 'second' });
+    const tocLink = (function find(node) {
+      if (node.tagName === 'BUTTON' && node.getAttribute?.('data-manual-target') === 'move_mode') return node;
+      for (const child of node.children || []) { const found = find(child); if (found) return found; }
+      return null;
+    })(portraitFrame);
+    expect(tocLink).toBeTruthy();
+    tocLink.dispatch('click');
+    expect(byTestId(portraitFrame, 'manual-section-title').textContent).toBe('MOVE Mode');
+
+    const backBtn = byTestId(portraitFrame, 'manual-back');
+    expect(backBtn.disabled).toBe(false);
+    backBtn.click();
+    expect(byTestId(portraitFrame, 'manual-toc')).toBeTruthy();
+  });
+
+  it('Escape closes when focus escaped to document.body (document-level fallback)', () => {
+    const modal = makeModal();
+    modal.open({ target: null, source: 'test' });
+
+    // Focus is no longer inside the modal — the backdrop keydown listener would
+    // never see the Escape; the document-level fallback must catch it.
+    doc.dispatch('keydown', { key: 'Escape', target: appRoot });
+
+    expect(modal.isOpen()).toBe(false);
+    expect(bus.events).toContainEqual(['ui:manual-close', { reason: 'escape' }]);
+  });
+
+  it('destroy after multiple cycles removes DOM and detaches every listener', () => {
+    const modal = makeModal();
+    modal.open({ target: null });
+    byTestId(portraitFrame, 'manual-close').click();
+    modal.open({ target: 'move_mode' });
+    byTestId(portraitFrame, 'manual-close').click();
+    modal.open({ target: null });
+
+    const root = modal.element;
+    const closeBtn = byTestId(portraitFrame, 'manual-close');
+    modal.destroy();
+
+    expect(modal.element).toBeNull();
+    expect(root.parentNode).toBeNull();
+    expect(portraitFrame.children).not.toContain(root);
+    // Header button listeners are gone after destroy.
+    expect(closeBtn.listeners.get('click') || []).toHaveLength(0);
+    // Document-level listeners are detached too.
+    doc.dispatch('keydown', { key: 'Escape' });
+    expect(bus.events.filter(([event]) => event === 'ui:manual-close')).toHaveLength(3);
+  });
+});
+
 describe('createManualView — TOC + section + back stack (CP2)', () => {
   function makeView({ manual = SAMPLE_MANUAL, dispatch = vi.fn(), onNavigate = vi.fn() } = {}) {
     return { view: createManualView({ manual, dispatch, onNavigate }), dispatch, onNavigate };
