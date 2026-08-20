@@ -8,7 +8,25 @@ const classData = loadData('classes');
 const themesData = loadData('themes');
 const themeIds = themesData.themes.map(theme => theme.id);
 
-export function buildRealisticRun(seed, { depth = 1, inventoryItems = 0, fogCells = 0, echoes = 0 } = {}) {
+const REALISTIC_EVENT_MESSAGES = [
+  { type: 'combat', message: 'Operator fires sidearm at Recovery Drone (hit, 4 dmg).' },
+  { type: 'damage', message: 'Drone strikes party for 3 damage.' },
+  { type: 'move', message: 'Party moves NW.' },
+  { type: 'loot', message: 'Container yields: fragment shard, med-kit.' },
+  { type: 'combat', message: 'Combat resolved: victory.' },
+  { type: 'progression', message: 'Danger clock ticks up (0.42).' },
+  { type: 'progression', message: 'Party descends to floor 4.' },
+  { type: 'heal', message: 'Operator applies med-kit (+8 HP).' },
+  { type: 'discovery', message: 'Cell (12,7) revealed.' },
+  { type: 'combat', message: 'Overclock: shock-lance surges (charge 4→2).' }
+];
+
+function realisticEvent(seed, index) {
+  const template = REALISTIC_EVENT_MESSAGES[index % REALISTIC_EVENT_MESSAGES.length];
+  return { type: template.type, message: template.message, sequence: seed * 1000 + index };
+}
+
+export function buildRealisticRun(seed, { depth = 1, inventoryItems = 0, fogCells = 0, echoes = 0, recentEvents = 0 } = {}) {
   const party = makeParty(2).map((character, index) => {
     const characterClass = classData.classes[index] || classData.classes[0];
     const derived = deriveStats(character, characterClass);
@@ -55,6 +73,7 @@ export function buildRealisticRun(seed, { depth = 1, inventoryItems = 0, fogCell
   for (let index = 0; index < Math.min(3, themeIds.length); index++) state.themesSeen.add(themeIds[(seed + index) % themeIds.length]);
   for (let index = 0; index < Math.min(echoes, 2); index++) state.queueEcho(party[index % party.length], depth, cursor);
   state.flags.calibrationFloorsReached = [1, 3, 5].slice(0, seed % 4);
+  for (let index = 0; index < Math.min(recentEvents, 64); index++) state.recordEvent(realisticEvent(seed, index));
   return state;
 }
 
@@ -95,7 +114,7 @@ export function buildMaximumRun(seed = 42) {
   state.themesSeen = new Set(themeIds);
   state.flags.calibrationFloorsReached = Array.from({ length: 16 }, (_, index) => index + 1);
   state.stats = { enemiesSlain: 1_000, echoesSlain: 2, corruptItemsEquipped: 0, floorsDescended: 59 };
-  state.recentEvents = Array.from({ length: 64 }, (_, index) => ({ index, type: 'combat', result: true }));
+  state.recentEvents = Array.from({ length: 64 }, (_, index) => realisticEvent(seed, index));
   state.activeCombat = {
     arena: { originX: 0, originY: 0, contactId: 'maximum_contact' },
     actors: [

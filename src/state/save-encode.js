@@ -7,6 +7,7 @@ export const SAVE_VERSION = 2;
 const MAGIC = [0x4f, 0x44];
 const BUDGET = 1500;
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const EVENT_TRIM_LADDER = Object.freeze([64, 32, 16, 8, 4, 2, 1, 0]);
 
 export function initEncoder(symbolTableData) { initCondenser(symbolTableData); }
 
@@ -42,7 +43,7 @@ function describeLayers(layers) {
   });
 }
 
-export function encodeRun(runState) {
+function buildFragment(runState) {
   const payload = encodeRunPayload(runState);
   const compressed = compressSync(payload.bytes);
   const layers = describeLayers(compressed.layers);
@@ -65,9 +66,45 @@ export function encodeRun(runState) {
   }
   frame.set(encrypt(compressed.data, SAVE_VERSION), offset);
   writeUint32(frame, frame.length - 4, crc32(frame.slice(0, -4)));
-  const fragment = base64urlEncode(frame);
-  if (fragment.length >= BUDGET) throw new RangeError('save_budget_exceeded');
-  return { success: true, fragment, length: fragment.length, metrics: { rawBytes: payload.bytes.length, compressedBytes: compressed.data.length, layers: layers.length } };
+  return { fragment: base64urlEncode(frame), payload, compressed, layers };
+}
+
+function uniqueDescending(values) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+export function encodeRun(runState) {
+  const serialized = typeof runState?.serialize === 'function' ? runState.serialize() : runState;
+  const events = Array.isArray(serialized?.recentEvents) ? serialized.recentEvents : [];
+  const targets = uniqueDescending(EVENT_TRIM_LADDER.map((keep) => Math.min(keep, events.length)));
+  for (const kept of targets) {
+    const candidate = kept === events.length
+      ? serialized
+      : { ...serialized, recentEvents: events.slice(events.length - kept) };
+    const attempt = buildFragment(candidate);
+    if (attempt.fragment.length < BUDGET) {
+      return {
+        success: true,
+        fragment: attempt.fragment,
+        length: attempt.fragment.length,
+        metrics: {
+          rawBytes: attempt.payload.bytes.length,
+          compressedBytes: attempt.compressed.data.length,
+          layers: attempt.layers.length,
+          eventsKept: kept,
+          eventsDropped: events.length - kept
+        }
+      };
+    }
+  }
+  throw new RangeError('save_budget_exceeded');
 }
 
 export function encodeSeed(worldSeed) {

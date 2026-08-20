@@ -7,9 +7,10 @@ import {
   encodeSeed,
   initEncoder,
 } from '../../src/state/save-encode.js';
-import { decodeSeed } from '../../src/state/save-decode.js';
+import { decodeRun, decodeSeed } from '../../src/state/save-decode.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { makeParty } from '../helpers/fixtures.js';
+import { buildMaximumRun, buildRealisticRun } from '../helpers/run-builder.js';
 import { loadData } from '../helpers/data.js';
 
 beforeAll(() => {
@@ -123,5 +124,68 @@ describe('encodeRun', () => {
     const result = encodeRun(makeState());
     expect(result.metrics.rawBytes).toBeGreaterThanOrEqual(result.metrics.compressedBytes);
     expect(result.metrics.layers).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reports eventsKept === events on a state that already fits without trimming', () => {
+    const state = buildRealisticRun(42, { depth: 3, recentEvents: 4 });
+    const result = encodeRun(state);
+    expect(result.length).toBeLessThan(1500);
+    expect(result.metrics.eventsKept).toBe(4);
+    expect(result.metrics.eventsDropped).toBe(0);
+  });
+});
+
+describe('encodeRun — trim-to-fit ladder', () => {
+  it('fits a 64-event tail and reports how many survived the ladder', () => {
+    const state = buildRealisticRun(42, { depth: 3, recentEvents: 64 });
+    expect(state.recentEvents).toHaveLength(64);
+    const result = encodeRun(state);
+    expect(result.success).toBe(true);
+    expect(result.length).toBeLessThan(1500);
+    expect(result.metrics.eventsKept).toBeGreaterThan(0);
+    expect(result.metrics.eventsKept).toBeLessThanOrEqual(64);
+    expect(result.metrics.eventsDropped).toBe(64 - result.metrics.eventsKept);
+  });
+
+  it('keeps the newest events when the ladder trims oldest first', () => {
+    const state = buildRealisticRun(42, { depth: 3, recentEvents: 64 });
+    // Rewrite events so we can identify which survived by index in message.
+    state.recentEvents = state.recentEvents.map((event, index) => ({ ...event, message: `evt-${String(index).padStart(2, '0')}: ${event.message}` }));
+    const result = encodeRun(state);
+    const decoded = decodeRun(result.fragment);
+    expect(decoded.success).toBe(true);
+    const survived = decoded.runState.recentEvents.map((event) => event.message);
+    // Survivors must all be the tail — newest are events with the highest indices.
+    const firstSurvivorIndex = 64 - result.metrics.eventsKept;
+    for (let index = 0; index < survived.length; index++) {
+      expect(survived[index]).toBe(`evt-${String(firstSurvivorIndex + index).padStart(2, '0')}: ${state.recentEvents[firstSurvivorIndex + index].message.split(': ').slice(1).join(': ')}`);
+    }
+  });
+
+  it('does not mutate the caller runState during trimming', () => {
+    const state = buildRealisticRun(42, { depth: 3, recentEvents: 64 });
+    const snapshot = state.recentEvents.map((event) => ({ ...event }));
+    encodeRun(state);
+    expect(state.recentEvents).toEqual(snapshot);
+  });
+
+  it('rescues a state that only overflows because of the event tail', () => {
+    // A realistic depth-3 state with 64 events overflows on a naive encode
+    // but survives when the ladder drops the oldest events to fit.
+    const state = buildRealisticRun(42, { depth: 3, recentEvents: 64 });
+    const naive = state.recentEvents.length; // 64
+    const result = encodeRun(state);
+    expect(result.success).toBe(true);
+    expect(result.metrics.eventsDropped).toBeGreaterThan(0);
+    expect(result.metrics.eventsKept + result.metrics.eventsDropped).toBe(naive);
+  });
+
+  it('throws save_budget_exceeded when the non-event payload alone busts the budget', () => {
+    // buildMaximumRun crams every field at once — 100-item inventory, 4-op
+    // party at max attrs/equipment, 2-echo queue, full active combat, etc.
+    // The baseline exceeds the budget even with an empty event tail.
+    const state = buildMaximumRun(42);
+    state.recentEvents = [];
+    expect(() => encodeRun(state)).toThrow(/save_budget_exceeded/);
   });
 });
