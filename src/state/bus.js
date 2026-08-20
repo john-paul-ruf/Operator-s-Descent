@@ -71,6 +71,10 @@ export const EVENT_CONTRACTS = Object.freeze({
     description: 'Danger clock display update. Payload: { progress }.',
     validate: (payload) => isObject(payload) && Number.isFinite(payload.progress)
   },
+  'state:loot-taken': {
+    description: 'Item moved from a container into party inventory. Payload: { runState, itemId, containerId, containerClosed }.',
+    validate: hasRunState
+  },
   'state:autosave-complete': {
     description: 'Runtime autosave success. Payload includes checkpoint reason and storage result.',
     validate: (payload) => isObject(payload) && typeof payload.reason === 'string'

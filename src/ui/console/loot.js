@@ -154,6 +154,7 @@ function takeItem(context, container, itemId) {
   state.error = '';
   state.notice = `Took ${itemName(item, context.data || {})}${remaining.length ? '' : ' · container closed'}.`;
   log(context, 'loot', state.notice, { itemId, containerId: container.id });
+  context.bus?.dispatch('state:loot-taken', { runState: context.runState, itemId, containerId: container.id, containerClosed: !remaining.length });
   context.refresh?.();
   return true;
 }

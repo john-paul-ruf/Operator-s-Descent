@@ -438,6 +438,26 @@ describe('runtime autosave checkpoints', () => {
     expect(api.getRuntimeSnapshot().route).toBe('exploration');
     off();
   });
+
+  it('autosaves on state:loot-taken and rejects a payload missing runState', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const autosaves = [];
+    const off = bus.on('state:autosave-complete', (payload) => autosaves.push(payload));
+    const state = buildRealisticRun(91, { depth: 1, fogCells: 4 });
+
+    expect(bus.dispatch('state:loot-taken', { runState: state, itemId: 'sig-1', containerId: 3, containerClosed: false })).toBe(true);
+
+    expect(autosaves).toHaveLength(1);
+    expect(autosaves[0].reason).toBe('loot-taken');
+
+    // Contract rejects a missing runState (hasRunState validator).
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(bus.dispatch('state:loot-taken', {})).toBe(false);
+    expect(autosaves).toHaveLength(1);
+    warn.mockRestore();
+    off();
+  });
 });
 
 describe('service worker update handling', () => {

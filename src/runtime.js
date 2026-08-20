@@ -645,6 +645,12 @@ function setupBus() {
     audioEngine?.updateState({ combat: false });
   });
 
+  listen('state:loot-taken', ({ runState, itemId, containerId } = {}) => {
+    if (!runState) return;
+    const floor = hasCurrentFloorForRun(runState) ? currentFloor : null;
+    commitAutosave(runState, 'loot-taken', autosaveMetadata(runState, floor, { itemId, containerId }));
+  });
+
   listen('state:party-wipe', ({ runState, summary, combatState } = {}) => {
     if (!runState) return;
     const seed = runState.worldSeed;

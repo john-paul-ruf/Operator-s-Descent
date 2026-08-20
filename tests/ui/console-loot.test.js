@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
 import { render as renderLoot } from '../../src/ui/console/loot.js';
 import { describeItem } from '../../src/rules/equipment.js';
+import { INVENTORY_CAP } from '../../src/rules/inventory.js';
 import { loadData } from '../helpers/data.js';
 
 const data = {
@@ -213,5 +214,51 @@ describe('LOOT mode — SESSION-06 icon coverage', () => {
 
     const junkAll = byTestId(container, 'loot-junk-all');
     expect(firstIconChild(junkAll)).toBeTruthy();
+  });
+
+  it('SESSION-02 — successful TAKE dispatches state:loot-taken with matching item/container ids', () => {
+    const runState = run();
+    const lootState = { container: { id: 7, kind: 'standard', x: 1, y: 1 }, items: [item('loot-sig')] };
+    const container = new FakeElement('div');
+    const calls = [];
+    const busStub = { dispatch: (event, payload) => { calls.push([event, payload]); return true; } };
+    renderLoot(container, { runState, data, lootState, bus: busStub, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+
+    const take = byTestId(container, 'loot-take-loot-sig');
+    expect(take).toBeTruthy();
+    expect(take.disabled).toBe(false);
+    take.click();
+
+    const lootDispatches = calls.filter(([event]) => event === 'state:loot-taken');
+    expect(lootDispatches).toHaveLength(1);
+    const [, payload] = lootDispatches[0];
+    expect(payload.itemId).toBe('loot-sig');
+    expect(payload.containerId).toBe(7);
+    expect(payload.runState).toBe(runState);
+    expect(payload.containerClosed).toBe(true);
+  });
+
+  it('SESSION-02 — blocked TAKE (inventory full) does not dispatch state:loot-taken', () => {
+    const fullPack = Array.from({ length: INVENTORY_CAP }, (_, index) => ({
+      id: `pack-${index}`, category: 'consumable', baseType: 'repair_patch', count: 1,
+      rarity: 'stock', affixes: [], stats: {}, salvageValue: 2, junkTagged: false
+    }));
+    const runState = run(fullPack);
+    const lootState = { container: { id: 9, kind: 'standard', x: 1, y: 1 }, items: [item('loot-blocked-taken')] };
+    const container = new FakeElement('div');
+    const calls = [];
+    const busStub = { dispatch: (event, payload) => { calls.push([event, payload]); return true; } };
+    renderLoot(container, { runState, data, lootState, bus: busStub, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+
+    const take = byTestId(container, 'loot-take-loot-blocked-taken');
+    expect(take).toBeTruthy();
+    // Button is disabled + click() is a no-op. Simulate the same click path a
+    // canvas-driven confirm would take: force the disabled flag off then click,
+    // to prove takeItem's own inventory-cap guard blocks the dispatch even when
+    // the UI gate is bypassed.
+    take.disabled = false;
+    take.click();
+    expect(runState.inventory.map((entry) => entry.id)).not.toContain('loot-blocked-taken');
+    expect(calls.filter(([event]) => event === 'state:loot-taken')).toHaveLength(0);
   });
 });
