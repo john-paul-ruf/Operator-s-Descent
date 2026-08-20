@@ -209,6 +209,109 @@ function formatLog(entry) {
   return `${entry.type || 'combat'} event.`;
 }
 
+// Signed modifier chunk formatter used by describeEntryDetail. Returns null for a
+// zero/absent value so callers can drop the chunk entirely; positives get `+N`,
+// negatives get `−N` (unicode minus, matches the design spec's line examples).
+function formatSignedModifier(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return null;
+  return n > 0 ? `+${n}` : `−${Math.abs(n)}`;
+}
+
+function describeAttackDetail(entry) {
+  if (!Number.isFinite(entry.naturalRoll)) return '';
+  const parts = [`d20 ${entry.naturalRoll}`];
+  const attrLabel = entry.attribute ? String(entry.attribute).toUpperCase() : null;
+  const attrMod = formatSignedModifier(entry.attributeModifier);
+  if (attrMod && attrLabel) parts.push(`${attrMod} ${attrLabel}`);
+  const accMod = formatSignedModifier(entry.weaponAccuracy);
+  if (accMod) parts.push(`${accMod} ACC`);
+  const markMod = formatSignedModifier(entry.markedBonus);
+  if (markMod) parts.push(`${markMod} MARK`);
+  const blindMod = formatSignedModifier(entry.blindedPenalty);
+  if (blindMod) parts.push(`${blindMod} BLIND`);
+  const flankMod = formatSignedModifier(entry.flankBonus);
+  if (flankMod) parts.push(`${flankMod} FLANK`);
+  const total = Number.isFinite(entry.roll) ? ` = ${entry.roll}` : '';
+  let defense = '';
+  if (Number.isFinite(entry.targetDefense)) {
+    defense = ` vs DEF ${entry.targetDefense}`;
+    const coverMod = formatSignedModifier(entry.coverBonus);
+    if (coverMod) defense += ` (incl. ${coverMod} COVER)`;
+  }
+  let outcome;
+  if (entry.hit) {
+    outcome = ' → HIT';
+    if (entry.crit) outcome += ' CRIT';
+    if (entry.damageDie && Number.isFinite(entry.damage)) {
+      outcome += ` · ${entry.damageDie}=${entry.damage} dmg`;
+    } else if (Number.isFinite(entry.damage)) {
+      outcome += ` · ${entry.damage} dmg`;
+    }
+  } else {
+    outcome = ' → MISS';
+    if (entry.fumble) outcome += ' FUMBLE';
+  }
+  return parts.join(' ') + total + defense + outcome;
+}
+
+function describeRetreatDetail(entry) {
+  if (!Number.isFinite(entry.roll)) return '';
+  return `d20 ${entry.roll} vs 15 → ${entry.success ? 'ESCAPE' : 'FAIL'}`;
+}
+
+function describeConditionDetail(entry) {
+  const save = entry?.save;
+  if (!save || !Number.isFinite(save.natural)) return '';
+  const parts = [`d20 ${save.natural}`];
+  const attrLabel = save.attribute ? String(save.attribute).toUpperCase() : null;
+  const modChunk = formatSignedModifier(save.modifier);
+  if (modChunk && attrLabel) parts.push(`${modChunk} ${attrLabel}`);
+  const total = Number.isFinite(save.total) ? ` = ${save.total}` : '';
+  const dc = Number.isFinite(entry.dc) ? ` vs DC ${entry.dc}` : '';
+  const outcome = save.success ? ' → SAVE' : ' → FAIL';
+  return parts.join(' ') + total + dc + outcome;
+}
+
+function describeProtocolDetail(entry) {
+  const rolls = entry?.result?.rolls;
+  const chunks = [];
+  const attack = rolls?.attack;
+  if (attack && Number.isFinite(attack.natural)) {
+    const parts = [`d20 ${attack.natural}`];
+    const modChunk = formatSignedModifier(attack.modifier);
+    if (modChunk) parts.push(`${modChunk} FOC`);
+    const total = Number.isFinite(attack.total) ? ` = ${attack.total}` : '';
+    const def = Number.isFinite(attack.target) ? ` vs PDEF ${attack.target}` : '';
+    chunks.push(parts.join(' ') + total + def + ` → ${attack.hit ? 'HIT' : 'MISS'}`);
+  }
+  const overclock = rolls?.overclock;
+  if (overclock && Number.isFinite(overclock.natural)) {
+    const parts = [`OC d20 ${overclock.natural}`];
+    const modChunk = formatSignedModifier(overclock.modifier);
+    if (modChunk) parts.push(`${modChunk} FOC`);
+    const total = Number.isFinite(overclock.total) ? ` = ${overclock.total}` : '';
+    const target = Number.isFinite(overclock.target) ? ` vs ${overclock.target}` : '';
+    chunks.push(parts.join(' ') + total + target + ` → ${overclock.success ? 'OK' : 'FAIL'}`);
+  }
+  return chunks.join(' · ');
+}
+
+// Derived breakdown line for log entries that carry dice/roll data. Reads the same fields the
+// rules layer already logs (src/rules/combat.js performAttackRoll + retreat/condition/protocol
+// pushLog sites) — this function is pure, never mutates the entry, and returns '' whenever the
+// entry has no numeric payload so notice-only entry types render exactly one line as before.
+export function describeEntryDetail(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  switch (entry.type) {
+    case 'attack': return describeAttackDetail(entry);
+    case 'retreat': return describeRetreatDetail(entry);
+    case 'condition': return describeConditionDetail(entry);
+    case 'protocol': return describeProtocolDetail(entry);
+    default: return '';
+  }
+}
+
 function markDefeated(runState, ids) {
   for (const id of ids || []) {
     const numeric = typeof id === 'number' ? id : /^\d+$/.test(String(id)) ? Number(id) : NaN;
@@ -861,6 +964,7 @@ export function mount(container, params = {}) {
     bus.dispatch('ui:log-entry', {
       type: entry.type || 'combat',
       message: formatLog(entry),
+      detail: describeEntryDetail(entry),
       entry,
       sequence: entry.sequence,
       timestamp: Date.now()

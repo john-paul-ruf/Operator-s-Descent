@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
 import { createRunState } from '../../src/state/run-state.js';
+import { describeEntryDetail } from '../../src/ui/screens/combat.js';
 import { makeCharacter, makeWeapon } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
 
@@ -957,6 +958,124 @@ describe('combat screen controller', () => {
     byTestId(container, 'combat-confirm').click();
     expect(combat.log.some((entry) => entry.type === 'attack')).toBe(true);
 
+    controller.unmount();
+  });
+});
+
+describe('describeEntryDetail — breakdown formatting', () => {
+  it('formats a plain hit with non-zero attribute/accuracy/flank/blind modifiers and cover', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 14, attribute: 'fin', attributeModifier: 3,
+      weaponAccuracy: 1, markedBonus: 0, blindedPenalty: -2, flankBonus: 2,
+      coverBonus: 2, roll: 18, targetDefense: 15,
+      hit: true, crit: false, fumble: false,
+      damage: 4, damageDie: 'd6', damageRoll: 4
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 14 +3 FIN +1 ACC −2 BLIND +2 FLANK = 18 vs DEF 15 (incl. +2 COVER) → HIT · d6=4 dmg');
+  });
+
+  it('formats a plain miss without hit/damage suffix', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 6, attribute: 'mgt', attributeModifier: 2,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 8, targetDefense: 14,
+      hit: false, crit: false, fumble: false,
+      damage: 0, damageDie: 'd6', damageRoll: null
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 6 +2 MGT = 8 vs DEF 14 → MISS');
+  });
+
+  it('flags CRIT as a suffix on a natural-20 hit and reports max damage', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 20, attribute: 'mgt', attributeModifier: 3,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 23, targetDefense: 14,
+      hit: true, crit: true, fumble: false,
+      damage: 9, damageDie: 'd6', damageRoll: null
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 20 +3 MGT = 23 vs DEF 14 → HIT CRIT · d6=9 dmg');
+  });
+
+  it('flags FUMBLE as a suffix on a natural-1 miss', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 1, attribute: 'fin', attributeModifier: 2,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 3, targetDefense: 14,
+      hit: false, crit: false, fumble: true,
+      damage: 0, damageDie: 'd8', damageRoll: null
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 1 +2 FIN = 3 vs DEF 14 → MISS FUMBLE');
+  });
+
+  it('formats a retreat success and failure with the 15 threshold', () => {
+    expect(describeEntryDetail({ type: 'retreat', roll: 17, success: true })).toBe('d20 17 vs 15 → ESCAPE');
+    expect(describeEntryDetail({ type: 'retreat', roll: 8, success: false })).toBe('d20 8 vs 15 → FAIL');
+  });
+
+  it('formats a condition-save entry with attribute/dc/outcome', () => {
+    const entry = {
+      type: 'condition', conditionId: 'jammed', dc: 13,
+      save: { natural: 12, modifier: 2, total: 14, attribute: 'foc', success: true }
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 12 +2 FOC = 14 vs DC 13 → SAVE');
+  });
+
+  it('formats a hostile protocol with an attack roll', () => {
+    const entry = {
+      type: 'protocol', school: 'disrupt', tier: 2, overclocked: false,
+      result: { rolls: { attack: { natural: 15, modifier: 3, total: 18, target: 12, hit: true }, overclock: null } }
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 15 +3 FOC = 18 vs PDEF 12 → HIT');
+  });
+
+  it('formats an overclocked protocol with both attack and overclock rolls', () => {
+    const entry = {
+      type: 'protocol', school: 'burn', tier: 2, overclocked: true,
+      result: { rolls: { attack: { natural: 12, modifier: 3, total: 15, target: 10, hit: true }, overclock: { natural: 14, modifier: 3, total: 17, target: 15, success: true } } }
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 12 +3 FOC = 15 vs PDEF 10 → HIT · OC d20 14 +3 FOC = 17 vs 15 → OK');
+  });
+
+  it('returns empty string for entries missing dice payloads or unknown types', () => {
+    expect(describeEntryDetail({ type: 'move', actorId: 'a', direction: 'n' })).toBe('');
+    expect(describeEntryDetail({ type: 'end-turn', actorId: 'a' })).toBe('');
+    expect(describeEntryDetail({ type: 'attack' })).toBe(''); // no naturalRoll
+    expect(describeEntryDetail({ type: 'retreat' })).toBe('');
+    expect(describeEntryDetail({ type: 'condition' })).toBe('');
+    expect(describeEntryDetail({ type: 'protocol', result: {} })).toBe('');
+    expect(describeEntryDetail(null)).toBe('');
+    expect(describeEntryDetail(undefined)).toBe('');
+    expect(describeEntryDetail('not-an-entry')).toBe('');
+  });
+
+  it('drops zero-value modifier chunks from the attack breakdown', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 10, attribute: 'mgt', attributeModifier: 0,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 10, targetDefense: 10,
+      hit: true, crit: false, fumble: false,
+      damage: 3, damageDie: 'd6', damageRoll: 3
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 10 = 10 vs DEF 10 → HIT · d6=3 dmg');
+  });
+});
+
+describe('combat log dispatch — detail payload', () => {
+  it('attaches a computed detail string to ui:log-entry dispatches for attack entries', async () => {
+    const combat = combatState([partyActor(), enemyActor({ hp: 10, hpMax: 10 })]);
+    const events = [];
+    const off = bus.on('ui:log-entry', (payload) => events.push(payload));
+    const { container, controller } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    byTestId(container, 'combat-target-0').click();
+    byTestId(container, 'combat-confirm').click();
+
+    const attackDispatch = events.find((event) => event.type === 'attack');
+    expect(attackDispatch).toBeTruthy();
+    expect(typeof attackDispatch.detail).toBe('string');
+    expect(attackDispatch.detail).toMatch(/^d20 \d+/);
+    off();
     controller.unmount();
   });
 });
