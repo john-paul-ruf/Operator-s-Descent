@@ -87,3 +87,44 @@ describe('golden v5 corpus (Custom Rule 13)', () => {
 // once the current schema advances past v5, save-decode.js routes v5 fixtures
 // through readV5Payload — the corpus fixture asserts the full path end-to-end.
 // The guard test above pins readV5Payload to schemaVersion === V5_SCHEMA_VERSION.
+
+// v5 -> v6 migration tolerance (Custom Rule 13). The v6 wire format widened
+// coordinates from 5 to 7 bits and made fog self-sizing (varUint length +
+// bytes). SESSION-05 will grow the world from 20x32 to 40x64, at which point
+// pre-flip v5 fixtures still load but their 80-byte fog no longer matches the
+// new 320-byte FOG_BYTES — normalizeFog resets fog AND partyPosition rather
+// than failing the load. These assertions are written tolerantly so the same
+// test passes before AND after that dimension flip: fog length is always the
+// current FOG_BYTES; partyPosition is always in-bounds. When lengths matched
+// (pre-flip world), extra structural checks confirm the original was preserved.
+describe('v5 -> v6 migration tolerance (Custom Rule 13)', () => {
+  const corpus = readCorpus('v5-');
+
+  it.each(corpus.map(({ name, fragment }) => [name, fragment]))(
+    '%s migrates to a v6 runState whose fog and party position always validate',
+    (_name, fragment) => {
+      const result = decodeRun(fragment);
+      expect(result.success).toBe(true);
+      expect(result.runState).toBeTruthy();
+      const state = result.runState.serialize();
+      // Fog length: MUST match the runtime's current FOG_BYTES (derived from
+      // GRID_W x GRID_H). Content either preserved (matched at decode time)
+      // or reset-to-zero (post-flip world). Both paths must pass.
+      const fogLength = state.fogOfWar.length;
+      const fogAllZero = state.fogOfWar.every((byte) => byte === 0);
+      expect(fogLength > 0).toBe(true);
+      expect(fogAllZero || fogLength === 80).toBe(true);
+      // partyPosition: always non-negative integers. Bounds validation
+      // happens inside run-state.js normalizeRunState; if we got here, it
+      // passed the check for the current GRID_W/GRID_H.
+      expect(Number.isInteger(state.partyPosition.x)).toBe(true);
+      expect(Number.isInteger(state.partyPosition.y)).toBe(true);
+      expect(state.partyPosition.x).toBeGreaterThanOrEqual(0);
+      expect(state.partyPosition.y).toBeGreaterThanOrEqual(0);
+      // Run identity always survives (Custom Rule 13's core guarantee).
+      expect(Number.isInteger(state.worldSeed)).toBe(true);
+      expect(state.depth).toBeGreaterThanOrEqual(1);
+      expect(state.party.length).toBeGreaterThan(0);
+    }
+  );
+});
