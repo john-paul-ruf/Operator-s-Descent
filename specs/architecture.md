@@ -2552,3 +2552,27 @@ step exactly as v4 is handled today.
 Both were captured with the v5 encoder immediately before the v6 edits and
 are exercised by the golden v5 corpus test in
 `tests/state/save-versioning.test.js`.
+
+<!-- SESSION-04 (playtest-clarity-and-4x-floors) -->
+### M71 Combat Screen — new export
+
+`describeEntryDetail(entry) → string` in `src/ui/screens/combat.js`. Pure function; reads
+combat-log fields the rules layer already logs (`naturalRoll`, `attributeModifier`,
+`weaponAccuracy`, `markedBonus`, `blindedPenalty`, `flankBonus`, `coverBonus`, `roll`,
+`targetDefense`, `hit`, `crit`, `fumble`, `damage`, `damageDie` for attacks; `roll`/`success`
+for retreats; `save.{natural,modifier,total,attribute,success}` + `dc` for conditions;
+`result.rolls.{attack,overclock}` for protocols). Returns `''` for notice-only entry types
+(move / end-turn / wait / death / item) and for entries missing numeric payloads (older
+saves in `recentEvents`). Dispatched as `detail:` on every `ui:log-entry` bus payload from
+this screen — never persisted (derived display data, save budget unaffected).
+
+### M67 Console Log — detail second line
+
+`createLogEntryElement(entry, index)` now appends a `<div class="log-detail micro">` under
+the message when `entry.detail` (from live bus dispatch) is a non-empty string, or when a
+raw combat entry with roll fields is passed directly (`entry.naturalRoll != null` or
+`entry.entry?.naturalRoll != null`). Detail is derived at render time via a local
+formatter mirroring M71's `describeEntryDetail`. Element factory stays import-free;
+status-strip's wide telemetry feed (M59) picks up the second line automatically because
+it consumes the same factory. Persisted `recentEvents` entries render one line as before
+(no `detail`, no roll fields — `normalizePersistedEvent` strips both).
