@@ -47,9 +47,13 @@
 }
 
 /* Disabled illegal target rows — SESSION-05 emits `.is-illegal` on the combat
-   target row when the currently-selected action would be out of range; the
-   session's density pass leaves the reason chip legible while dimming the row. */
-.combat-target.is-illegal { opacity: 0.5; }
+   target row when the currently-selected action would be out of range. Color +
+   dashed border marks it disabled without stacking opacity onto the text
+   (playtest-clarity S01 — opacities must never compound on text). */
+.combat-target.is-illegal {
+  color: var(--text-disabled);
+  border-style: dashed;
+}
 .is-interactive:hover:not([disabled]):not([aria-disabled="true"]) {
   border-color: var(--accent);
   box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 35%, transparent);
@@ -63,9 +67,11 @@
 }
 .is-interactive[disabled],
 .is-interactive[aria-disabled="true"] {
-  opacity: 0.45;
-  cursor: not-allowed;
+  opacity: 1;
+  color: var(--text-disabled);
+  border-color: var(--border-dim);
   border-style: dashed;
+  cursor: not-allowed;
 }
 
 /* Console Shell */
@@ -106,7 +112,8 @@
 }
 
 .mode-tab.disabled {
-  opacity: 0.3;
+  color: var(--text-disabled);
+  border-color: var(--border-dim);
   cursor: default;
 }
 
@@ -493,7 +500,8 @@
 }
 
 .stepper-btn:disabled {
-  opacity: 0.3;
+  color: var(--text-disabled);
+  border-color: var(--border-dim);
   cursor: not-allowed;
 }
 
@@ -843,6 +851,17 @@ input[type="range"]::-moz-range-thumb {
   transform: scale(1.1);
 }
 
+/* Sigil-font contract (playtest-clarity S01 × creation DOM fix S02) — the
+   creation-screen sigil surfaces render PUA glyphs directly, so they must
+   resolve the DESCENT SIGIL face even when the glyph is not wrapped in a
+   `.creature-sigil` token. Either rule alone renders glyphs; both is the
+   contract. Fixes the tofu-sigil playtest finding. */
+.sigil-preview,
+.sigil-thumbs .sigil-option,
+.sigil-choice {
+  font-family: 'DESCENT SIGIL';
+}
+
 /* Calibration Card */
 .calibration-card {
   border: 1px solid var(--border-dim);
@@ -939,8 +958,11 @@ button.protocol-card[aria-selected="true"],
 }
 
 .toggle-input:disabled + .toggle {
-  opacity: 0.45;
+  border-color: var(--text-disabled);
   cursor: not-allowed;
+}
+.toggle-input:disabled + .toggle .toggle-knob {
+  background: var(--text-disabled);
 }
 
 .input-label {
@@ -986,7 +1008,8 @@ button.protocol-card[aria-selected="true"],
 .school-rewrite  { border-color: #e8d23a;       color: #e8d23a; }
 
 .protocol-card.insufficient {
-  opacity: 0.4;
+  color: var(--text-disabled);
+  border-color: var(--border-dim);
   cursor: not-allowed;
 }
 
@@ -1107,7 +1130,7 @@ button.protocol-card[aria-selected="true"],
 }
 
 .mode-tab[aria-disabled="true"] {
-  opacity: 0.35;
+  color: var(--text-disabled);
   cursor: not-allowed;
 }
 
@@ -1313,7 +1336,8 @@ button.protocol-card[aria-selected="true"],
 
 .creation-wrapper button:disabled,
 .creation-wrapper [aria-disabled="true"] {
-  opacity: 0.45;
+  color: var(--text-disabled);
+  border-color: var(--border-dim);
   cursor: not-allowed;
 }
 

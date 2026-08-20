@@ -338,7 +338,7 @@
     box-shadow: inset 4px 0 8px rgba(126, 200, 227, 0.1);
   }
   .wide-mode-tab.disabled,
-  .wide-mode-tab[disabled] { opacity: 0.3; cursor: not-allowed; }
+  .wide-mode-tab[disabled] { color: var(--text-disabled); cursor: not-allowed; }
   .wide-console-content {
     display: flex;
     flex-direction: column;
@@ -1407,7 +1407,11 @@
     font-weight: bold;
     text-shadow: 0 0 16px var(--accent), 0 0 32px var(--accent);
     box-shadow: 0 0 24px var(--accent), inset 0 0 24px rgba(126, 200, 227, 0.1);
-    font-family: ui-monospace, monospace;
+    /* No font-family here: the sigil font must resolve through the sanctioned
+       `.creature-sigil` / `.sigil-preview` rendering boundary in components.css
+       (the sigil-lint allowlist forbids the face name in wide.css). Dropping the
+       old `ui-monospace` override lets those lower-specificity rules win and
+       fixes the tofu-glyph playtest finding. */
     justify-self: start;
   }
   .wide-editor .sigil-preview-caption {
@@ -1438,7 +1442,9 @@
     text-shadow: 0 0 8px var(--accent);
     cursor: pointer;
     transition: all 0.15s ease;
-    font-family: ui-monospace, monospace;
+    /* No font-family here — the glyph is a `.creature-sigil` child that carries
+       the sigil face from components.css; the sigil-lint allowlist forbids
+       naming the face in wide.css. */
     min-height: 72px;
     background: var(--bg-panel);
     padding: 0;
@@ -1452,7 +1458,9 @@
     transform: scale(1.08);
   }
   .wide-editor .sigil-thumbs .sigil-option:disabled {
-    opacity: 0.3;
+    color: var(--text-disabled);
+    border-color: var(--border-dim);
+    text-shadow: none;
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
@@ -1538,7 +1546,8 @@
     box-shadow: 0 0 4px var(--accent);
   }
   .wide-editor .attr-grid .attr-row .stepper-btn:disabled {
-    opacity: 0.3;
+    color: var(--text-disabled);
+    border-color: var(--border-dim);
     cursor: not-allowed;
   }
   .wide-editor .attr-grid .attr-row .desc {
@@ -1592,7 +1601,8 @@
     box-shadow: 0 0 6px var(--accent);
   }
   .wide-editor .gear-row:disabled {
-    opacity: 0.4;
+    border-color: var(--border-dim);
+    border-style: dashed;
     cursor: not-allowed;
   }
   .wide-editor .gear-row .info {

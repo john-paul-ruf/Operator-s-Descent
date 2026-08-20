@@ -13,6 +13,7 @@
   --text-primary: #e0d8f0;
   --text-secondary: #a89ac6;
   --text-dim: #8878a8;
+  --text-disabled: #71659a;                        /* ≈4.5:1 on --bg-panel — disabled ≠ invisible */
   --accent: #7ec8e3;
   --danger: #e83a3a;
   --warning: #e8632a;
