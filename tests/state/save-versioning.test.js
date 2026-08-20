@@ -6,6 +6,7 @@ import { decodeRun } from '../../src/state/save-decode.js';
 import { encodeRunPayload } from '../../src/state/save-schema.js';
 import { readV3Payload } from '../../src/state/versions/read-v3.js';
 import { readV4Payload } from '../../src/state/versions/read-v4.js';
+import { readV5Payload, V5_SCHEMA_VERSION } from '../../src/state/versions/read-v5.js';
 import { loadData } from '../helpers/data.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 
@@ -42,6 +43,14 @@ describe('frozen reader schema guards', () => {
     mutated[0] = 3;
     expect(() => readV4Payload(mutated, payload.bitLength)).toThrow('version_mismatch');
   });
+
+  it('readV5Payload rejects a non-v5 schemaVersion with version_mismatch', () => {
+    const state = buildRealisticRun(3, { depth: 4 });
+    const payload = encodeRunPayload(state);
+    const mutated = payload.bytes.slice();
+    mutated[0] = 4;
+    expect(() => readV5Payload(mutated, payload.bitLength)).toThrow('version_mismatch');
+  });
 });
 
 describe('golden v3 corpus (Custom Rule 13)', () => {
@@ -56,5 +65,31 @@ describe('golden v3 corpus (Custom Rule 13)', () => {
     expect(Number.isInteger(result.runState.worldSeed)).toBe(true);
     expect(result.runState.party.length).toBeGreaterThan(0);
     expect(result.runState.party.some((character) => (character.currentHP ?? character.hp ?? 0) > 0)).toBe(true);
+  });
+});
+
+describe('golden v5 corpus (Custom Rule 13)', () => {
+  const corpus = readCorpus('v5-');
+  it('captures at least two v5 fixtures', () => {
+    expect(corpus.length).toBeGreaterThanOrEqual(2);
+  });
+  it.each(corpus.map(({ name, fragment }) => [name, fragment]))('%s decodes to a valid, playable runState', (_name, fragment) => {
+    const result = decodeRun(fragment);
+    expect(result.success).toBe(true);
+    expect(result.runState).toBeTruthy();
+    expect(Number.isInteger(result.runState.worldSeed)).toBe(true);
+    expect(result.runState.party.length).toBeGreaterThan(0);
+    expect(result.runState.party.some((character) => (character.currentHP ?? character.hp ?? 0) > 0)).toBe(true);
+  });
+});
+
+describe('frozen readV5Payload direct decode', () => {
+  it('decodes a freshly-encoded v5 payload to a valid runState identical to the source', () => {
+    const state = buildRealisticRun(13, { depth: 4, inventoryItems: 3, echoes: 1 });
+    const payload = encodeRunPayload(state);
+    const result = readV5Payload(payload.bytes, payload.bitLength);
+    expect(result.schemaVersion).toBe(V5_SCHEMA_VERSION);
+    expect(result.worldSeed).toBe(state.worldSeed);
+    expect(result.runState.serialize()).toEqual(state.serialize());
   });
 });
