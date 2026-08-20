@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateFloor, GENERATION_VERSION, MAX_CANDIDATES, REPAIR_THRESHOLD } from '../../src/floor/generator.js';
+import { generateFloor, GENERATION_VERSION, MAX_CANDIDATES, REPAIR_THRESHOLD, CONTAINER_CAP, ENEMY_CAP } from '../../src/floor/generator.js';
 import { validateFloor, countOneWideCorridors, MAX_ONE_WIDE_CORRIDOR } from '../../src/floor/validator.js';
 import { enemyCountScale, thresholdFloor } from '../../src/rules/scaling.js';
 import { ARCHETYPES, GRID_W, GRID_H } from '../../src/floor/archetypes.js';
@@ -61,9 +61,11 @@ describe('generateFloor — structural invariants', () => {
         for (const e of f.enemySpawns) {
           expect(enemyKeys).toContain(e.archetypeId);
         }
-        const baseEnemyCount = 2 + Math.floor(floor / 3);
+        // Post-4x flip: base grows from `2+floor/3` → `8+2*floor/3`. ENEMY_CAP=56
+        // clamps the total (normal + apex + echo) so spawn ids stay < 64.
+        const baseEnemyCount = 8 + 2 * Math.floor(floor / 3);
         const maxEnemies = enemyCountScale(baseEnemyCount, floor) + (thresholdFloor(floor) ? 1 : 0);
-        expect(f.enemySpawns.length).toBeLessThanOrEqual(maxEnemies);
+        expect(f.enemySpawns.length).toBeLessThanOrEqual(Math.min(maxEnemies, 56));
 
         expect(THEME_IDS).toContain(f.themeId);
         expect(ARCH_KEYS).toContain(f.archetypeId);
@@ -149,13 +151,23 @@ describe('generateFloor — degenerate-input tolerance', () => {
     }
   });
 
-  it('containerDensity 3 → containers.length ≤ 9 and ≥ 1', () => {
+  it('containerDensity 3 → containers.length ≤ CONTAINER_CAP (40) and ≥ 1', () => {
+    // CONTAINER_DENSITY_BASE=12, density=3 → 36 requested, clamped by CONTAINER_CAP=40.
     const highDensity = {
       themes: [{ id: 'dense_loot', lootBias: { containerDensity: 3 } }],
     };
     const f = generateFloor(42, 1, {}, highDensity);
-    expect(f.containers.length).toBeLessThanOrEqual(9);
+    expect(f.containers.length).toBeLessThanOrEqual(40);
     expect(f.containers.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('containerDensity 10 → containers.length ≤ CONTAINER_CAP (40)', () => {
+    // CONTAINER_DENSITY_BASE=12, density=10 → 120 requested, capped at 40.
+    const monsterDensity = {
+      themes: [{ id: 'flood_loot', lootBias: { containerDensity: 10 } }],
+    };
+    const f = generateFloor(42, 1, {}, monsterDensity);
+    expect(f.containers.length).toBeLessThanOrEqual(40);
   });
 });
 
@@ -302,6 +314,43 @@ describe('generateFloor — corridor-width sweep', () => {
     expect(meanOneWide).toBeLessThan(6);
     expect(fallbackRate).toBeLessThanOrEqual(0.05);
     expect(meanAttempts).toBeGreaterThan(0);
+  }, 60000);
+
+  it('200 seeds × depths [1, 5, 10, 15, 20]: containers ∈ [1, 40], enemies ∈ [8, 56], ids unique < 64, no entry-cell spawn', () => {
+    // Post-4x-flip density invariants (Custom Rule 13 headroom).
+    // Container floor is 1 (density=1 * base 12 → clamp Math.max(1, ...) but many
+    // themes have containerDensity 1.0-3.0 → 12-36 targets). Enemies floor is
+    // baseEnemyCount at floor=1 (8) minus placement failures — in practice they
+    // all place given attempts=60 in an ≥35%-open 40x64 floor.
+    const seeds = Array.from({ length: 200 }, (_, i) => i + 1);
+    const depths = [1, 5, 10, 15, 20];
+    for (const seed of seeds) {
+      for (const depth of depths) {
+        const f = gen(seed, depth);
+        expect(f.containers.length).toBeGreaterThanOrEqual(1);
+        expect(f.containers.length).toBeLessThanOrEqual(CONTAINER_CAP);
+        expect(f.enemySpawns.length).toBeLessThanOrEqual(ENEMY_CAP);
+        // Bitmask ceiling: every id must be < 64 for openedContainers / defeatedEnemies.
+        const containerIds = new Set();
+        for (const c of f.containers) {
+          expect(c.id).toBeGreaterThanOrEqual(0);
+          expect(c.id).toBeLessThan(64);
+          expect(containerIds.has(c.id)).toBe(false);
+          containerIds.add(c.id);
+        }
+        const enemyIds = new Set();
+        for (const e of f.enemySpawns) {
+          expect(e.id).toBeGreaterThanOrEqual(0);
+          expect(e.id).toBeLessThan(64);
+          expect(enemyIds.has(e.id)).toBe(false);
+          enemyIds.add(e.id);
+        }
+        // Entry cell must be clear of both spawn kinds.
+        const entryKey = `${f.entryPoint.x},${f.entryPoint.y}`;
+        for (const e of f.enemySpawns) expect(`${e.x},${e.y}`).not.toBe(entryKey);
+        for (const c of f.containers) expect(`${c.x},${c.y}`).not.toBe(entryKey);
+      }
+    }
   }, 60000);
 
   it('repair-fallback path bypasses the corridor-width check', () => {

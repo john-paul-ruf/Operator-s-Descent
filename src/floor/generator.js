@@ -7,7 +7,9 @@ import { enemyCountScale, thresholdFloor } from '../rules/scaling.js';
 
 const MAX_CANDIDATES = 200;
 const REPAIR_THRESHOLD = 50;
-const CONTAINER_DENSITY_BASE = 3;
+const CONTAINER_DENSITY_BASE = 12;
+const CONTAINER_CAP = 40;
+const ENEMY_CAP = 56;
 const GENERATION_VERSION = 3;
 const HIGHER_TIER_ENEMIES = ['stalker', 'choir', 'null', 'construct'];
 
@@ -59,13 +61,14 @@ function placeFeatures(grid, prng, floorNumber, themeData, options = {}) {
   delete descentPoint._dist;
 
   const density = themeData?.lootBias?.containerDensity || 1.0;
-  const numContainers = Math.max(1, Math.floor(CONTAINER_DENSITY_BASE * density));
+  // 4x area → base density 3 → 12; cap keeps container ids < 64 (v6 bitmask).
+  const numContainers = Math.max(1, Math.min(CONTAINER_CAP, Math.floor(CONTAINER_DENSITY_BASE * density)));
   const containers = [];
   const used = new Set();
   used.add(`${descentPoint.x},${descentPoint.y}`);
 
   for (let i = 0; i < numContainers; i++) {
-    let attempts = 20;
+    let attempts = 60;
     while (attempts-- > 0) {
       const cell = floorCells[prng.nextInt(floorCells.length)];
       const key = `${cell.x},${cell.y}`;
@@ -80,8 +83,14 @@ function placeFeatures(grid, prng, floorNumber, themeData, options = {}) {
     }
   }
 
-  const baseEnemyCount = 2 + Math.floor(floorNumber / 3);
-  const numEnemies = enemyCountScale(baseEnemyCount, floorNumber);
+  // 4x area → base spawn count grows from `2 + floor/3` to `8 + 2*floor/3`.
+  const baseEnemyCount = 8 + 2 * Math.floor(floorNumber / 3);
+  const scaledEnemyCount = enemyCountScale(baseEnemyCount, floorNumber);
+  // Reserve headroom for the apex elite (threshold floors) so total spawns
+  // — normal + apex + echo — never exceed the v6 defeatedEnemies bitmask.
+  const apexReserve = isThreshold ? 1 : 0;
+  const echoReserve = (options.echoSpawns || []).length;
+  const numEnemies = Math.max(0, Math.min(scaledEnemyCount, ENEMY_CAP - apexReserve - echoReserve));
   const enemySpawns = [];
 
   const enemyWeights = themeData?.enemyMixWeights
@@ -91,7 +100,7 @@ function placeFeatures(grid, prng, floorNumber, themeData, options = {}) {
   const echoSpawns = options.echoSpawns || [];
 
   for (let i = 0; i < numEnemies; i++) {
-    let attempts = 20;
+    let attempts = 60;
     while (attempts-- > 0) {
       const cell = floorCells[prng.nextInt(floorCells.length)];
       const key = `${cell.x},${cell.y}`;
@@ -115,7 +124,7 @@ function placeFeatures(grid, prng, floorNumber, themeData, options = {}) {
 
   if (isThreshold) {
     let placed = false;
-    for (let attempts = 30; attempts > 0 && !placed; attempts--) {
+    for (let attempts = 60; attempts > 0 && !placed; attempts--) {
       const cell = floorCells[prng.nextInt(floorCells.length)];
       const key = `${cell.x},${cell.y}`;
       if (!used.has(key) && grid[cell.y][cell.x] === 1) {
@@ -335,4 +344,4 @@ export function generateFloor(worldSeed, floorNumber, options, themesData) {
   return attachDiagnostics(cloneFloor(floor), diagnostics);
 }
 
-export { GENERATION_VERSION, MAX_CANDIDATES, REPAIR_THRESHOLD };
+export { GENERATION_VERSION, MAX_CANDIDATES, REPAIR_THRESHOLD, CONTAINER_DENSITY_BASE, CONTAINER_CAP, ENEMY_CAP };
