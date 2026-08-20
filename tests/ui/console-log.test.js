@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
-import { render as renderLog } from '../../src/ui/console/log.js';
+import { createLogEntryElement, render as renderLog } from '../../src/ui/console/log.js';
 import { loadData } from '../helpers/data.js';
 
 const data = {
@@ -195,5 +195,65 @@ describe('LOG mode — slim persisted event rendering', () => {
       'LOOT · Live loot pickup.',
       'MOVE · Live footstep.'
     ]);
+  });
+});
+
+function detailChild(row) {
+  return (row.children || []).find((child) => (child.className || '').includes('log-detail')) || null;
+}
+
+describe('createLogEntryElement — detail second line', () => {
+  it('renders entry.detail on a second line under the message when the live payload carries it', () => {
+    const row = createLogEntryElement({
+      type: 'attack', message: 'operator attacks 0: 3 damage.',
+      detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg',
+      sequence: 12
+    }, 0);
+    const detail = detailChild(row);
+    expect(detail).not.toBe(null);
+    expect(detail.className).toBe('log-detail micro');
+    expect(detail.textContent).toBe('d20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg');
+    expect(detail.style.properties?.['padding-left'] === '34px' || detail.style.paddingLeft === '34px').toBe(true);
+  });
+
+  it('derives the detail line from raw roll fields when the payload lacks a precomputed detail', () => {
+    const row = createLogEntryElement({
+      type: 'attack', message: 'operator attacks 0: 4 damage.', sequence: 3,
+      naturalRoll: 14, attribute: 'fin', attributeModifier: 3,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 17, targetDefense: 15,
+      hit: true, crit: false, fumble: false,
+      damage: 4, damageDie: 'd6', damageRoll: 4
+    }, 0);
+    const detail = detailChild(row);
+    expect(detail).not.toBe(null);
+    expect(detail.textContent).toBe('d20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=4 dmg');
+  });
+
+  it('derives the detail line from a nested legacy entry.entry payload', () => {
+    const row = createLogEntryElement({
+      type: 'attack', message: 'operator attacks 0: miss.',
+      entry: {
+        type: 'attack', naturalRoll: 4, attribute: 'mgt', attributeModifier: 2,
+        weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+        coverBonus: 0, roll: 6, targetDefense: 14,
+        hit: false, crit: false, fumble: false, damage: 0, damageDie: 'd6', damageRoll: null
+      }
+    }, 0);
+    const detail = detailChild(row);
+    expect(detail).not.toBe(null);
+    expect(detail.textContent).toBe('d20 4 +2 MGT = 6 vs DEF 14 → MISS');
+  });
+
+  it('renders no detail line for slim persisted entries (no detail, no roll fields)', () => {
+    const row = createLogEntryElement({ type: 'combat', message: 'Sidearm strikes drone.', sequence: 5 }, 0);
+    expect(detailChild(row)).toBe(null);
+  });
+
+  it('renders no detail line for notice-only entry types like move / end-turn', () => {
+    const moveRow = createLogEntryElement({ type: 'move', message: 'operator moves n.', sequence: 1 }, 0);
+    const endRow = createLogEntryElement({ type: 'end-turn', message: 'operator ends turn.', sequence: 2 }, 1);
+    expect(detailChild(moveRow)).toBe(null);
+    expect(detailChild(endRow)).toBe(null);
   });
 });

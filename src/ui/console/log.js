@@ -35,6 +35,109 @@ function collectLogs(context = {}) {
     .slice(-64);
 }
 
+// Signed modifier chunk formatter shared by describeDetailFromFields (log-renderer twin of
+// src/ui/screens/combat.js:describeEntryDetail). Kept as a small local mirror so this element
+// factory stays import-free — status-strip's wide feed reuses it verbatim.
+function signedModifier(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return null;
+  return n > 0 ? `+${n}` : `−${Math.abs(n)}`;
+}
+
+function attackDetail(entry) {
+  if (!Number.isFinite(entry.naturalRoll)) return '';
+  const parts = [`d20 ${entry.naturalRoll}`];
+  const attrLabel = entry.attribute ? String(entry.attribute).toUpperCase() : null;
+  const attrMod = signedModifier(entry.attributeModifier);
+  if (attrMod && attrLabel) parts.push(`${attrMod} ${attrLabel}`);
+  const accMod = signedModifier(entry.weaponAccuracy);
+  if (accMod) parts.push(`${accMod} ACC`);
+  const markMod = signedModifier(entry.markedBonus);
+  if (markMod) parts.push(`${markMod} MARK`);
+  const blindMod = signedModifier(entry.blindedPenalty);
+  if (blindMod) parts.push(`${blindMod} BLIND`);
+  const flankMod = signedModifier(entry.flankBonus);
+  if (flankMod) parts.push(`${flankMod} FLANK`);
+  const total = Number.isFinite(entry.roll) ? ` = ${entry.roll}` : '';
+  let defense = '';
+  if (Number.isFinite(entry.targetDefense)) {
+    defense = ` vs DEF ${entry.targetDefense}`;
+    const coverMod = signedModifier(entry.coverBonus);
+    if (coverMod) defense += ` (incl. ${coverMod} COVER)`;
+  }
+  let outcome;
+  if (entry.hit) {
+    outcome = ' → HIT';
+    if (entry.crit) outcome += ' CRIT';
+    if (entry.damageDie && Number.isFinite(entry.damage)) outcome += ` · ${entry.damageDie}=${entry.damage} dmg`;
+    else if (Number.isFinite(entry.damage)) outcome += ` · ${entry.damage} dmg`;
+  } else {
+    outcome = ' → MISS';
+    if (entry.fumble) outcome += ' FUMBLE';
+  }
+  return parts.join(' ') + total + defense + outcome;
+}
+
+function retreatDetail(entry) {
+  if (!Number.isFinite(entry.roll)) return '';
+  return `d20 ${entry.roll} vs 15 → ${entry.success ? 'ESCAPE' : 'FAIL'}`;
+}
+
+function conditionDetail(entry) {
+  const save = entry?.save;
+  if (!save || !Number.isFinite(save.natural)) return '';
+  const parts = [`d20 ${save.natural}`];
+  const attrLabel = save.attribute ? String(save.attribute).toUpperCase() : null;
+  const modChunk = signedModifier(save.modifier);
+  if (modChunk && attrLabel) parts.push(`${modChunk} ${attrLabel}`);
+  const total = Number.isFinite(save.total) ? ` = ${save.total}` : '';
+  const dc = Number.isFinite(entry.dc) ? ` vs DC ${entry.dc}` : '';
+  const outcome = save.success ? ' → SAVE' : ' → FAIL';
+  return parts.join(' ') + total + dc + outcome;
+}
+
+function protocolDetail(entry) {
+  const rolls = entry?.result?.rolls;
+  const chunks = [];
+  const attack = rolls?.attack;
+  if (attack && Number.isFinite(attack.natural)) {
+    const parts = [`d20 ${attack.natural}`];
+    const modChunk = signedModifier(attack.modifier);
+    if (modChunk) parts.push(`${modChunk} FOC`);
+    const total = Number.isFinite(attack.total) ? ` = ${attack.total}` : '';
+    const def = Number.isFinite(attack.target) ? ` vs PDEF ${attack.target}` : '';
+    chunks.push(parts.join(' ') + total + def + ` → ${attack.hit ? 'HIT' : 'MISS'}`);
+  }
+  const overclock = rolls?.overclock;
+  if (overclock && Number.isFinite(overclock.natural)) {
+    const parts = [`OC d20 ${overclock.natural}`];
+    const modChunk = signedModifier(overclock.modifier);
+    if (modChunk) parts.push(`${modChunk} FOC`);
+    const total = Number.isFinite(overclock.total) ? ` = ${overclock.total}` : '';
+    const target = Number.isFinite(overclock.target) ? ` vs ${overclock.target}` : '';
+    chunks.push(parts.join(' ') + total + target + ` → ${overclock.success ? 'OK' : 'FAIL'}`);
+  }
+  return chunks.join(' · ');
+}
+
+function detailForEntry(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  switch (entry.type) {
+    case 'attack': return attackDetail(entry);
+    case 'retreat': return retreatDetail(entry);
+    case 'condition': return conditionDetail(entry);
+    case 'protocol': return protocolDetail(entry);
+    default: return '';
+  }
+}
+
+// Live bus payloads carry `detail` from the combat screen; legacy fat log entries may nest the
+// raw combat log at `entry.entry` (persisted `recentEvents` today has neither — normalizePersistedEvent
+// strips to {type, message, sequence} — so those rows deliberately render one line as before).
+function describeDetailFromFields(entry) {
+  return detailForEntry(entry) || detailForEntry(entry?.entry);
+}
+
 export function createLogEntryElement(entry, index) {
   const el = document.createElement('div');
   el.className = `log-entry log-${entry.type || 'info'} console-row`;
@@ -48,6 +151,17 @@ export function createLogEntryElement(entry, index) {
   message.style.color = EVENT_TYPES[entry.type] || EVENT_TYPES.info;
   message.textContent = `${String(entry.type || 'info').toUpperCase()} · ${entry.message || entry.summary || entry.reason || JSON.stringify(entry.entry || entry)}`;
   el.append(stamp, message);
+  const detailText = typeof entry.detail === 'string' && entry.detail.length > 0
+    ? entry.detail
+    : describeDetailFromFields(entry);
+  if (detailText) {
+    const detail = document.createElement('div');
+    detail.className = 'log-detail micro';
+    detail.dataset.testid = `log-entry-${index}-detail`;
+    detail.textContent = detailText;
+    detail.style.paddingLeft = '34px';
+    el.appendChild(detail);
+  }
   return el;
 }
 
