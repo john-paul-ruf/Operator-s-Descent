@@ -260,6 +260,101 @@ describe('console/combat.js — out-of-range target rows (SESSION-05 checkpoint 
   });
 });
 
+describe('console/combat.js — double-activate + effect-aware picker (SESSION-03)', () => {
+  it('double-activating a legal target row selects then confirms in one gesture', () => {
+    const calls = [];
+    const container = new FakeElement('div');
+    const context = renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'near', name: 'Near' })],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+    context.combatSelectTarget = (id) => calls.push(['select', id]);
+    context.combatConfirm = () => calls.push(['confirm']);
+    renderCombat(container, context);
+
+    byTestId(container, 'combat-target-near').dispatch('dblclick');
+    expect(calls).toEqual([['select', 'near'], ['confirm']]);
+  });
+
+  it('double-activating an illegal target row neither selects nor confirms', () => {
+    const calls = [];
+    const container = new FakeElement('div');
+    const context = renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'far' })],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: null },
+      previewFor: () => ({ distance: 6, range: { band: 'adjacent', legal: false, reason: 'beyond_maximum' }, coverBonus: 0, flanked: false, targetLegal: false })
+    });
+    context.combatSelectTarget = (id) => calls.push(['select', id]);
+    context.combatConfirm = () => calls.push(['confirm']);
+    renderCombat(container, context);
+
+    byTestId(container, 'combat-target-far').dispatch('dblclick');
+    expect(calls).toEqual([]);
+  });
+
+  it('a resolving turn does not double-activate a target row', () => {
+    const calls = [];
+    const container = new FakeElement('div');
+    const context = renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'near' })],
+      selection: { phase: 'confirm', actionType: 'attack', targetId: 'near', resolving: true },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+    context.combatSelectTarget = (id) => calls.push(['select', id]);
+    context.combatConfirm = () => calls.push(['confirm']);
+    renderCombat(container, context);
+
+    byTestId(container, 'combat-target-near').dispatch('dblclick');
+    expect(calls).toEqual([]);
+  });
+
+  it('the combat protocol picker renders the authored effect + range line', () => {
+    const active = makeActive({ protocols: [{ school: 'disrupt', tier: 1 }] });
+    const container = new FakeElement('div');
+    renderCombat(container, {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-protocol', actionType: 'cast', targetId: null },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['cast'], legalMoveDirections: [] }),
+      combatGetTargets: () => [],
+      combatGetPreview: () => null,
+      protocolsData: { schools: { disrupt: { tiers: [{ name: 'Spark', chargeCost: 2, effect: 'Deal 1d6 disrupt', range: '3' }] } } }
+    });
+
+    const card = byTestId(container, 'combat-protocol-disrupt-1');
+    expect(card).toBeTruthy();
+    const effect = (card.children || []).find((c) => c.className.split(/\s+/).includes('card-effect'));
+    expect(effect).toBeTruthy();
+    expect(effect.textContent).toContain('Deal 1d6 disrupt');
+    expect(effect.textContent).toContain('Range: 3');
+  });
+
+  it('double-activating a protocol card selects it without confirming (cast needs a target)', () => {
+    const calls = [];
+    const active = makeActive({ protocols: [{ school: 'disrupt', tier: 1 }] });
+    const container = new FakeElement('div');
+    const context = {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-protocol', actionType: 'cast', targetId: null },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['cast'], legalMoveDirections: [] }),
+      combatGetTargets: () => [],
+      combatGetPreview: () => null,
+      protocolsData: { schools: { disrupt: { tiers: [{ name: 'Spark', chargeCost: 2, effect: 'Deal 1d6', range: '3' }] } } },
+      combatSelectProtocol: (p) => calls.push(['select', p.school, p.tier]),
+      combatConfirm: () => calls.push(['confirm'])
+    };
+    renderCombat(container, context);
+
+    byTestId(container, 'combat-protocol-disrupt-1').dispatch('dblclick');
+    expect(calls).toEqual([['select', 'disrupt', 1]]);
+  });
+});
+
 // SESSION-02 (Issue C): every non-END-TURN action carries an explicit disabled
 // reason. The test context varies per action to make one precondition fail at a
 // time; each assertion checks the DOM's `disabled` flag, the reason exposed via

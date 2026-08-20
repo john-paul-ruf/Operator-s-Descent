@@ -1,4 +1,4 @@
-import { createButton, createHPBar, createChargeBar, createSigilToken, createConditionTag, createManualLink, createProtocolCard } from '../components.js';
+import { createButton, createHPBar, createChargeBar, createSigilToken, createConditionTag, createManualLink, createProtocolCard, attachDoubleActivate } from '../components.js';
 import { createIcon } from '../icon.js';
 
 // Mirror src/ui/console/party.js:safeCreateIcon — tests and older runtimes may render
@@ -290,15 +290,20 @@ function renderProtocols(container, context, active) {
   list.className = 'combat-protocol-list';
   list.dataset.testid = 'combat-protocols';
   if (!protocols.length) appendText(list, 'console-empty', 'No protocols prepared.');
+  const cleanups = [];
   for (const protocol of protocols) {
     const data = context.protocolsData?.schools?.[protocol.school]?.tiers?.[protocol.tier - 1];
-    const card = createProtocolCard({ ...protocol, name: data?.name || `${protocol.school}-${protocol.tier}`, chargeCost: data?.chargeCost || 0 }, {
+    const card = createProtocolCard({ ...protocol, name: data?.name || `${protocol.school}-${protocol.tier}`, chargeCost: data?.chargeCost || 0, effect: data?.effect, range: data?.range }, {
       selected: selection.protocol?.school === protocol.school && selection.protocol?.tier === protocol.tier,
       onClick: () => context.combatSelectProtocol?.(protocol)
     });
     card.dataset.testid = `combat-protocol-${protocol.school}-${protocol.tier}`;
+    // Double-activate = select only. Casting advances to choose-target (protocols
+    // hit a specific enemy), so a double-tap must not resolve on the default target.
+    if (!selection.resolving) cleanups.push(attachDoubleActivate(card, () => context.combatSelectProtocol?.(protocol)));
     list.appendChild(card);
   }
+  list.cleanup = () => cleanups.forEach((fn) => fn());
   container.appendChild(list);
 }
 
@@ -309,6 +314,7 @@ function renderItems(container, context) {
   list.className = 'combat-item-list';
   list.dataset.testid = 'combat-items';
   if (!items.length) appendText(list, 'console-empty', 'No consumables available.');
+  const cleanups = [];
   for (const item of items) {
     const button = createButton(item.name || item.baseType || item.id, {
       selected: selection.itemId === item.id || selection.itemId === item.baseType,
@@ -316,8 +322,12 @@ function renderItems(container, context) {
     });
     button.className = selectedClass('combat-item console-row', selection.itemId === item.id || selection.itemId === item.baseType);
     button.dataset.testid = `combat-item-${item.id || item.baseType}`;
+    // Double-activate = select + confirm. Consumables target the party and pre-select
+    // the first ally, so confirmSelection promotes choose-target → resolve in one gesture.
+    if (!selection.resolving) cleanups.push(attachDoubleActivate(button, () => { context.combatSelectItem?.(item); context.combatConfirm?.(); }));
     list.appendChild(button);
   }
+  list.cleanup = () => cleanups.forEach((fn) => fn());
   container.appendChild(list);
 }
 
@@ -366,6 +376,7 @@ function renderTargets(container, context) {
     }
   }
   if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
+  const cleanups = [];
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);
     // Range-gate integration (SESSION-05 checkpoint 4). preview.targetLegal is authored by
@@ -391,8 +402,15 @@ function renderTargets(container, context) {
     }
     button.className = selectedClass(`combat-target console-row${illegal ? ' is-illegal' : ''}`, isSelected);
     button.dataset.testid = `combat-target-${target.id}`;
+    // Double-activate = select + confirm on legal rows only. selectTarget advances a
+    // legal target to the confirm phase, so combatConfirm resolves the attack in one
+    // gesture. Illegal (out-of-range) rows and a resolving turn are skipped.
+    if (!illegal && !selection.resolving) {
+      cleanups.push(attachDoubleActivate(button, () => { context.combatSelectTarget?.(target.id); context.combatConfirm?.(); }));
+    }
     list.appendChild(button);
   }
+  list.cleanup = () => cleanups.forEach((fn) => fn());
   container.appendChild(list);
 }
 
