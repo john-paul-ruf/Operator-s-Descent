@@ -9,7 +9,7 @@ import { createLattice } from '../src/exploration/lattice.js';
 import { computeLOS } from '../src/exploration/shadowcast.js';
 import { executeAction, resolveTurn } from '../src/rules/combat.js';
 import { decodeRun } from '../src/state/save-decode.js';
-import { generateLeadBar } from '../src/audio/lead.js';
+import { melodyBar, progressionFor, SCALES } from '../src/audio/conductor.js';
 import { createGameHarness, loadGameDataFixture, roundTripRunState, startStandardCombat } from '../tests/helpers/game-fixture.js';
 import { runSaveStress } from './stress-saves.js';
 
@@ -129,7 +129,18 @@ function measureHotPaths(data) {
       const decoded = decodeRun(save);
       if (!decoded.success) throw new Error(decoded.error);
     }),
-    audioSchedulingProxy: timeOperation(64, (index) => generateLeadBar({ worldSeed: 4242, depth: 50, floorId: '4242:50:0', barIndex: index, audioMode: 'cold-ambient' }))
+    audioSchedulingProxy: timeOperation(64, (index) => {
+      const phraseIndex = Math.floor(index / 8);
+      const barInPhrase = index % 8;
+      const progression = progressionFor({
+        worldSeed: 4242, depth: 50, floorId: '4242:50:0', phraseIndex, audioMode: 'cold-ambient'
+      });
+      const chord = progression.chords[barInPhrase % progression.chords.length];
+      return melodyBar({
+        worldSeed: 4242, depth: 50, floorId: '4242:50:0',
+        phraseIndex, barInPhrase, chord, scale: SCALES['cold-ambient'], intensity: 0.5
+      });
+    })
   };
 }
 
