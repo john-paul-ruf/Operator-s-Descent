@@ -122,3 +122,78 @@ describe('LOG mode — SESSION-06 icon coverage', () => {
     expect(byTestId(container, 'log-notice')).toBe(null);
   });
 });
+
+function collectLogEntryRows(container) {
+  const rows = [];
+  function walk(node) {
+    if (!node) return;
+    const testId = node.dataset?.testid;
+    if (typeof testId === 'string' && testId.startsWith('log-entry-')) rows.push(node);
+    for (const child of node.children || []) walk(child);
+  }
+  walk(container);
+  return rows;
+}
+
+function messageText(row) {
+  // Skip the stamp span (className "log-turn"); message span is class "log-<type>".
+  return row.children.find((child) => (child.className || '').startsWith('log-') && child.className !== 'log-turn')?.textContent || '';
+}
+
+describe('LOG mode — slim persisted event rendering', () => {
+  it('renders slim persisted entries as TYPE · message', () => {
+    const runState = run();
+    runState.recordEvent({ type: 'combat', message: 'Sidearm strikes drone.', sequence: 5 });
+    runState.recordEvent({ type: 'loot', message: 'Container yields shard.', sequence: 6 });
+    const container = new FakeElement('div');
+    renderLog(container, { runState, data, logEntries: [] });
+    const rows = collectLogEntryRows(container);
+    expect(rows).toHaveLength(2);
+    expect(messageText(rows[0])).toBe('COMBAT · Sidearm strikes drone.');
+    expect(messageText(rows[1])).toBe('LOOT · Container yields shard.');
+  });
+
+  it('still renders legacy fat entries decoded from prior saves', () => {
+    // Simulate a legacy save that was decoded — its recentEvents were untouched
+    // by the decode path, so old fat entries with `entry` payloads remain until
+    // a fresh recordEvent replaces them.
+    const runState = createRunState(123, [character()], {
+      creationTimestamp: 1,
+      recentEvents: [{ type: 'discovery', message: 'Legacy discovery.', sequence: 1, timestamp: 999, entry: { detail: 'kept' } }]
+    });
+    const container = new FakeElement('div');
+    renderLog(container, { runState, data, logEntries: [] });
+    const rows = collectLogEntryRows(container);
+    expect(rows).toHaveLength(1);
+    expect(messageText(rows[0])).toBe('DISCOVERY · Legacy discovery.');
+  });
+
+  it('places restored persisted history before live entries when both are present', () => {
+    // Post-resume mid-session: recentEvents has the historical tail (no live
+    // sequence context yet), logEntries has fresh live activity from this session.
+    const runState = createRunState(123, [character()], {
+      creationTimestamp: 1,
+      recentEvents: [
+        { type: 'combat', message: 'Historical fight A.' },
+        { type: 'combat', message: 'Historical fight B.' }
+      ]
+    });
+    const liveNow = 1_700_000_000_000;
+    const container = new FakeElement('div');
+    renderLog(container, {
+      runState,
+      data,
+      logEntries: [
+        { type: 'loot', message: 'Live loot pickup.', sequence: liveNow + 1 },
+        { type: 'move', message: 'Live footstep.', sequence: liveNow + 2 }
+      ]
+    });
+    const rows = collectLogEntryRows(container);
+    expect(rows.map(messageText)).toEqual([
+      'COMBAT · Historical fight A.',
+      'COMBAT · Historical fight B.',
+      'LOOT · Live loot pickup.',
+      'MOVE · Live footstep.'
+    ]);
+  });
+});

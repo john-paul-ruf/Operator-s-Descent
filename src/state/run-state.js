@@ -223,6 +223,22 @@ function normalizeStructuredEntries(value, maxEntries, maxBytes) {
   return entries.every(entry => entry !== undefined) ? entries : null;
 }
 
+const PERSISTED_EVENT_TYPE_MAX = 16;
+const PERSISTED_EVENT_MESSAGE_MAX = 72;
+
+function normalizePersistedEvent(event) {
+  if (!isPlainObject(event)) return undefined;
+  const type = typeof event.type === 'string' && event.type.length > 0
+    ? event.type.slice(0, PERSISTED_EVENT_TYPE_MAX)
+    : 'info';
+  const rawMessage = typeof event.message === 'string' ? event.message : undefined;
+  if (rawMessage === undefined) return undefined;
+  const message = rawMessage.slice(0, PERSISTED_EVENT_MESSAGE_MAX);
+  const entry = { type, message };
+  if (Number.isFinite(event.sequence)) entry.sequence = event.sequence;
+  return entry;
+}
+
 function serializeCharacter(character) {
   const copy = {
     id: character.id,
@@ -387,7 +403,7 @@ function buildRunState(data) {
       return this.getInventoryCount() >= MAX_INVENTORY;
     },
     recordEvent(event) {
-      const entry = cloneBounded(event, MAX_EXTENSION_BYTES);
+      const entry = normalizePersistedEvent(event);
       if (entry === undefined) return { recorded: false, reason: 'invalid_event' };
       this.recentEvents.push(entry);
       if (this.recentEvents.length > MAX_EVENTS) this.recentEvents.splice(0, this.recentEvents.length - MAX_EVENTS);

@@ -138,11 +138,60 @@ describe('deterministic mutators', () => {
     expect(state.isCellVisited(0, 0)).toBe(false);
   });
 
-  it('caps portable LOG entries at 64 structured values', () => {
+  it('caps portable LOG entries at 64 slim persisted events', () => {
     const state = makeState();
-    for (let index = 0; index < 65; index++) state.recordEvent({ index, type: 'move' });
+    for (let index = 0; index < 65; index++) state.recordEvent({ type: 'move', message: `step ${index}`, sequence: index });
     expect(state.recentEvents).toHaveLength(64);
-    expect(state.recentEvents[0]).toEqual({ index: 1, type: 'move' });
+    expect(state.recentEvents[0]).toEqual({ type: 'move', message: 'step 1', sequence: 1 });
+  });
+});
+
+describe('recordEvent persistence policy (slim events)', () => {
+  it('drops the fat entry payload, keeping only type/message/sequence', () => {
+    const state = makeState();
+    state.recordEvent({
+      type: 'combat',
+      message: 'Operator fires sidearm.',
+      sequence: 42,
+      timestamp: 1_700_000_000_000,
+      entry: { round: 2, damage: 6, extras: { deep: 'nested' } }
+    });
+    expect(state.recentEvents).toEqual([{ type: 'combat', message: 'Operator fires sidearm.', sequence: 42 }]);
+  });
+
+  it('clamps message to 72 characters and type to 16 characters', () => {
+    const state = makeState();
+    state.recordEvent({ type: 'very-long-runtime-type-name', message: 'A'.repeat(100), sequence: 1 });
+    expect(state.recentEvents[0]).toEqual({
+      type: 'very-long-runtim',
+      message: 'A'.repeat(72),
+      sequence: 1
+    });
+  });
+
+  it('defaults missing type to "info" and omits absent sequence', () => {
+    const state = makeState();
+    state.recordEvent({ message: 'Bare message.' });
+    expect(state.recentEvents[0]).toEqual({ type: 'info', message: 'Bare message.' });
+  });
+
+  it('rejects events without a string message', () => {
+    const state = makeState();
+    expect(state.recordEvent({ type: 'combat', sequence: 3 })).toEqual({ recorded: false, reason: 'invalid_event' });
+    expect(state.recordEvent({ type: 'combat', message: 42 })).toEqual({ recorded: false, reason: 'invalid_event' });
+    expect(state.recordEvent(null)).toEqual({ recorded: false, reason: 'invalid_event' });
+    expect(state.recordEvent(undefined)).toEqual({ recorded: false, reason: 'invalid_event' });
+    expect(state.recentEvents).toEqual([]);
+  });
+
+  it('ignores non-finite sequence values', () => {
+    const state = makeState();
+    state.recordEvent({ type: 'move', message: 'A', sequence: Number.NaN });
+    state.recordEvent({ type: 'move', message: 'B', sequence: Infinity });
+    expect(state.recentEvents).toEqual([
+      { type: 'move', message: 'A' },
+      { type: 'move', message: 'B' }
+    ]);
   });
 });
 
