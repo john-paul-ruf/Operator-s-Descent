@@ -238,6 +238,40 @@ describe('LOOT mode — SESSION-06 icon coverage', () => {
     expect(payload.containerClosed).toBe(true);
   });
 
+  it('SESSION-03 — double-activating a container row takes the item without the TAKE button', () => {
+    const runState = run();
+    const lootState = { container: { id: 11, kind: 'standard', x: 1, y: 1 }, items: [item('loot-dbl')] };
+    const container = new FakeElement('div');
+    const calls = [];
+    const busStub = { dispatch: (event, payload) => { calls.push([event, payload]); return true; } };
+    renderLoot(container, { runState, data, lootState, bus: busStub, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+
+    const row = byTestId(container, 'loot-item-loot-dbl');
+    expect(row).toBeTruthy();
+    row.dispatch('dblclick');
+
+    expect(runState.inventory.map((entry) => entry.id)).toContain('loot-dbl');
+    expect(calls.filter(([event]) => event === 'state:loot-taken')).toHaveLength(1);
+  });
+
+  it('SESSION-03 — double-activate is not wired on a blocked (inventory full) container row', () => {
+    const fullPack = Array.from({ length: INVENTORY_CAP }, (_, index) => ({
+      id: `full-${index}`, category: 'consumable', baseType: 'repair_patch', count: 1,
+      rarity: 'stock', affixes: [], stats: {}, salvageValue: 2, junkTagged: false
+    }));
+    const runState = run(fullPack);
+    const lootState = { container: { id: 12, kind: 'standard', x: 1, y: 1 }, items: [item('loot-dbl-blocked')] };
+    const container = new FakeElement('div');
+    const calls = [];
+    const busStub = { dispatch: (event, payload) => { calls.push([event, payload]); return true; } };
+    renderLoot(container, { runState, data, lootState, bus: busStub, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+
+    const row = byTestId(container, 'loot-item-loot-dbl-blocked');
+    row.dispatch('dblclick');
+    expect(runState.inventory.map((entry) => entry.id)).not.toContain('loot-dbl-blocked');
+    expect(calls.filter(([event]) => event === 'state:loot-taken')).toHaveLength(0);
+  });
+
   it('SESSION-02 — blocked TAKE (inventory full) does not dispatch state:loot-taken', () => {
     const fullPack = Array.from({ length: INVENTORY_CAP }, (_, index) => ({
       id: `pack-${index}`, category: 'consumable', baseType: 'repair_patch', count: 1,

@@ -1,4 +1,4 @@
-import { createButton, createEquipmentCard, createManualLink, createRarityTag, createScrollArea } from '../components.js';
+import { createButton, createEquipmentCard, createManualLink, createRarityTag, createScrollArea, attachDoubleActivate } from '../components.js';
 import { createIcon } from '../icon.js';
 import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
@@ -212,6 +212,7 @@ function renderContainerItems(container, context, lootContainer, items) {
   list.className = 'loot-items scroll-area';
   list.dataset.testid = 'loot-items';
   if (!items.length) list.appendChild(text('loot-container empty console-row', isOpened(context.runState, lootContainer) ? 'Empty.' : 'Empty container.'));
+  const cleanups = [];
   const inventoryFull = getInventoryCount(context.runState?.inventory || []) >= INVENTORY_CAP;
   for (const item of items) {
     const row = document.createElement('div');
@@ -246,8 +247,13 @@ function renderContainerItems(container, context, lootContainer, items) {
     });
     take.dataset.testid = `loot-take-${item.id}`;
     row.appendChild(take);
+    // Double-activate = TAKE (double-click / double-tap), augmenting the explicit
+    // button so confirming a pickup needs no second control. Skipped when TAKE is
+    // blocked (inventory full) so the inert affordance stays honest.
+    if (!reason) cleanups.push(attachDoubleActivate(row, () => takeItem(context, lootContainer, item.id)));
     list.appendChild(row);
   }
+  list.cleanup = () => cleanups.forEach((fn) => fn());
   container.appendChild(list);
 }
 

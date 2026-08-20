@@ -1516,8 +1516,10 @@ button.protocol-card[aria-selected="true"],
 .tech-error { font-size: 10px; color: var(--danger); padding: 4px 0; }
 .tech-result { font-size: 10px; color: var(--text-secondary); padding: 4px 0; }
 
-.loot-container-header { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #e8d23a; background: var(--bg-panel-elevated); margin-bottom: 12px; font-size: 10px; }
-.loot-items { margin-bottom: 12px; }
+.loot-container-header { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #e8d23a; background: var(--bg-panel-elevated); margin-bottom: 8px; font-size: 10px; }
+/* Container CONTENTS take the flexible height so loot is visible without scrolling
+   past the header/OPEN chrome; the docked inventory bar keeps its own height below. */
+.loot-items { flex: 1; min-height: 0; margin-bottom: 8px; }
 .loot-item-row { padding: 4px; margin-bottom: 4px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
 .loot-detail { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
 .loot-compare { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
