@@ -38,7 +38,7 @@ bus.on('runtime:update-ready', () => {
 });
 
 export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
-export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'import-resume', 'explicit-exit']);
+export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'combat-start', 'loot-taken', 'import-resume', 'explicit-exit']);
 
 const ROUTE_SET = new Set(ROUTES);
 const AUTOSAVE_SET = new Set(AUTOSAVE_CHECKPOINTS);
@@ -629,6 +629,7 @@ function setupBus() {
     currentRunState = runState;
     setCurrentFloor(runState, isValidFloor(floor) ? floor : restoreFloorForRun(runState));
     if (!currentFloor) return;
+    commitAutosave(runState, 'combat-start', autosaveMetadata(runState, currentFloor, { encounterReason: reason || 'contact' }));
     void mountScreen('combat', { runState, floor: currentFloor, lattice, encounter, reason, contact, moveResult, combatState });
     audioEngine?.updateState({ combat: true });
   });

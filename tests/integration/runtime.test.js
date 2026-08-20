@@ -392,7 +392,7 @@ describe('runtime autosave checkpoints', () => {
     off();
   });
 
-  it('does not autosave encounter handoff, then autosaves combat resolution once', async () => {
+  it('autosaves encounter handoff, then autosaves combat resolution', async () => {
     const api = await runtime();
     await api.activateRuntime({ initialHash: '' });
     const autosaves = [];
@@ -420,13 +420,20 @@ describe('runtime autosave checkpoints', () => {
       forfeitableLoot: []
     };
     bus.dispatch('state:combat-start', { runState: state, floor, combatState, encounter: { id: 'handoff', kind: 'standard', window, actors: [...combatState.combatants.values()], forfeitableLoot: [] } });
+
+    // combat-start commits synchronously (before combat mounts), so the save
+    // lands immediately with the pre-fight exploration state (activeCombat null).
+    expect(autosaves).toHaveLength(1);
+    expect(autosaves[0].reason).toBe('combat-start');
+    expect(api.getRuntimeSnapshot().lastAutosaveResult.reason).toBe('combat-start');
+    expect(autosaves[0].runState.activeCombat == null).toBe(true);
+
     await flushAsync();
-    expect(autosaves).toHaveLength(0);
 
     bus.dispatch('state:combat-end', { runState: state, result: 'victory', completion: { outcome: 'victory' } });
 
-    expect(autosaves).toHaveLength(1);
-    expect(autosaves[0].reason).toBe('combat-resolution');
+    expect(autosaves).toHaveLength(2);
+    expect(autosaves[1].reason).toBe('combat-resolution');
     await waitForRoute(api, 'exploration');
     expect(api.getRuntimeSnapshot().route).toBe('exploration');
     off();
