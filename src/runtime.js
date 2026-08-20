@@ -469,7 +469,15 @@ function startAudioEngine(settings = loadSettings()) {
     runtimeAudioContext ||= createRuntimeAudioContext();
     audioEngine = createAudioEngine(runtimeAudioContext);
   }
-  if (!audioEngine.isStarted?.()) audioEngine.start();
+  if (!audioEngine.isStarted?.()) {
+    // Defensive: a broken audio layer (e.g. an oscillator setup that throws in
+    // real browsers but not the FakeContext used in unit tests) must not take
+    // down the whole runtime — that would leave the title screen unmounted.
+    // Log and continue; the AudioContext + engine skeleton stay in place so a
+    // subsequent fix to the offending layer works without another boot cycle.
+    try { audioEngine.start(); }
+    catch (error) { console.warn('Audio engine start failed:', error); }
+  }
   if (runtimeAudioContext && runtimeAudioContext.state !== 'running') installGestureResume();
   audioEngine.applySettings(settings);
   return audioEngine;
