@@ -63,7 +63,7 @@ describe('chip.playNote', () => {
     const dest = ctx.createGain();
     playNote(ctx, dest, { wave: 'pulse25', time: 1, freq: 440, duration: 0.5, velocity: 0.6 });
     const osc = ctx.nodes.find((n) => n.nodeKind === 'oscillator');
-    expect(osc.type).toBe('custom');
+    expect(osc.type).toBe('oscillator');
     expect(osc.periodicWaves.length).toBe(1);
     expect(osc.frequency.events).toContainEqual(['set', 440, 1]);
     const env = ctx.nodes.find((n) => n.type === 'gain' && n.gain.events.length >= 3);

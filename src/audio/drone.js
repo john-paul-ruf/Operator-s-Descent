@@ -44,7 +44,6 @@ export function createDrone(ctx, dest, conductor) {
     padFilter.connect(padGain);
     padOscs = [-1, 1].map((side) => {
       const osc = ctx.createOscillator();
-      osc.type = 'custom';
       osc.setPeriodicWave(dutyWave(ctx, 0.5));
       osc.frequency.value = 110;
       osc.detune.value = side * t.detune;

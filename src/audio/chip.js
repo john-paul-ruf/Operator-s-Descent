@@ -50,7 +50,6 @@ function configureOscWave(ctx, osc, wave) {
     return;
   }
   const pw = dutyWave(ctx, duty);
-  osc.type = 'custom';
   osc.setPeriodicWave(pw);
 }
 
