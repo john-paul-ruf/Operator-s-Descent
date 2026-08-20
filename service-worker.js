@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-19-clarity-pass-v1';
+const CACHE_VERSION = '2026-08-19-restore-audio-v1';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -13,6 +13,8 @@ const PRODUCTION_ASSETS = Object.freeze([
   './styles/manual.css',
   './styles/tailwind.css',
   './styles/wide.css',
+  './src/audio/chip.js',
+  './src/audio/conductor.js',
   './src/audio/drone.js',
   './src/audio/engine.js',
   './src/audio/lead.js',
