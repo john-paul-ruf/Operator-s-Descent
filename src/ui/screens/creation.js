@@ -463,7 +463,7 @@ export function mount(container, params = {}) {
 
     const previewColumn = document.createElement('div');
     const preview = document.createElement('div');
-    preview.className = 'sigil-preview';
+    preview.className = 'sigil-preview creature-sigil sigil-role-player';
     preview.dataset.testid = 'wide-sigil-preview';
     if (Number.isInteger(selected.sigil)) preview.textContent = String.fromCodePoint(selected.sigil);
     else preview.textContent = '?';
@@ -490,7 +490,8 @@ export function mount(container, params = {}) {
       thumb.setAttribute('aria-checked', String(isSelected));
       thumb.setAttribute('aria-label', `Sigil ${codepoint.toString(16)}`);
       thumb.dataset.testid = `wide-sigil-${codepoint.toString(16)}`;
-      thumb.textContent = String.fromCodePoint(codepoint);
+      thumb.textContent = '';
+      thumb.appendChild(createSigilToken(codepoint, 34, { role: 'player', label: `Sigil ${codepoint.toString(16)}` }));
       thumbs.appendChild(thumb);
     }
     picker.appendChild(thumbs);
@@ -579,6 +580,7 @@ export function mount(container, params = {}) {
     info.className = 'info';
     info.append(text('span', 'name', name), text('span', 'stat', stat));
     row.append(info, text('span', 'cost', cost));
+    if (opts.detail) row.appendChild(text('span', 'detail', opts.detail));
     if (opts.reason) row.appendChild(text('span', 'disabled-reason', opts.reason.toUpperCase()));
     return row;
   }
@@ -666,6 +668,9 @@ export function mount(container, params = {}) {
       const overCapacity = !isSelected && preview.summary.characters[summary.activeSlot]?.deck?.slotsUsed > selected.deck.capacity;
       const reason = overCapacity ? 'deck capacity' : preview.summary.validation.pointsSpent > 80 ? 'point budget exceeded' : '';
       const pointDelta = Math.max(0, preview.summary.pointsSpent - summary.pointsSpent);
+      const effectDetail = typeof protocol.entry.effect === 'string' && protocol.entry.effect
+        ? (protocol.entry.range ? `${protocol.entry.effect} · Range: ${protocol.entry.range}` : protocol.entry.effect)
+        : '';
       list.appendChild(wideGearRow(
         `wide-protocol-${protocol.school}-${protocol.tier}`,
         `${protocol.entry.name} · ${protocol.schoolName.toUpperCase()} T${protocol.tier}`,
@@ -676,7 +681,8 @@ export function mount(container, params = {}) {
           disabled: Boolean(reason),
           description: reason || `${pointDelta} creation points, ${protocol.entry.chargeCost} charge`,
           onClick: () => dispatch(action),
-          reason
+          reason,
+          detail: effectDetail
         }
       ));
     }
@@ -1083,6 +1089,12 @@ export function mount(container, params = {}) {
       card.className = `protocol-card action-btn console-row${isSelected ? ' selected' : ''}`;
       card.dataset.testid = `protocol-${protocol.school}-${protocol.tier}`;
       card.appendChild(text('span', 'action-cost', `${protocol.schoolName} T${protocol.tier} · ${pointDelta} PTS · ${protocol.entry.chargeCost} CHG · ${deckSlotCost(protocol.tier)} DECK`));
+      if (typeof protocol.entry.effect === 'string' && protocol.entry.effect) {
+        const effectText = protocol.entry.range
+          ? `${protocol.entry.effect} · Range: ${protocol.entry.range}`
+          : protocol.entry.effect;
+        card.appendChild(text('span', 'card-effect', effectText));
+      }
       if (reason) card.appendChild(text('span', 'disabled-reason', reason.toUpperCase()));
       grid.appendChild(card);
     }

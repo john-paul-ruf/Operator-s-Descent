@@ -166,6 +166,23 @@ describe('creation screen workflow', () => {
     controller.unmount();
   });
 
+  // playtest-clarity-and-4x-floors SESSION-02 — portrait protocol cards must
+  // surface the authored effect string so players can tell SPARK from SURGE
+  // without leaving the screen. Data source of truth: data/protocols.json.
+  it('portrait protocol cards render the authored effect string from data/protocols.json', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 3131 });
+    addBreacher(container);
+    byTestId(container, 'tab-tech').click();
+    const disruptOne = byTestId(container, 'protocol-disrupt-1');
+    expect(disruptOne).not.toBeNull();
+    expect(allText(disruptOne).join(' ')).toContain('Deal 1d6 + RES modifier damage to one target.');
+    const disruptTwo = byTestId(container, 'protocol-disrupt-2');
+    expect(allText(disruptTwo).join(' ')).toContain('Deal 2d6 + RES modifier');
+    const effectEl = disruptOne.children.find((c) => c.classList?.contains('card-effect'));
+    expect(effectEl).toBeTruthy();
+    expect(effectEl.textContent).toContain('Range: SIG×2');
+  });
+
   it('hides class-gated gear and protocols while keeping legal options + resource-limited disables visible', async () => {
     const { container } = await mountCreation({ preloadedSeed: 321 });
     addBreacher(container);
@@ -762,6 +779,51 @@ describe('creation screen — wide layout', () => {
     byTestId(container, 'wide-protocol-disrupt-2').click();
     expect(byTestId(container, 'wide-protocol-disrupt-2').classList.contains('selected')).toBe(true);
     expect(Number(byTestId(container, 'remaining').children[1].textContent)).toBeLessThan(beforeTech);
+  });
+
+  // playtest-clarity-and-4x-floors SESSION-02 — wide protocol rows expose the
+  // authored effect string via a detail slot on wideGearRow.
+  it('wide protocol rows render the authored effect string from data/protocols.json', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 3232 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    const wideOne = byTestId(container, 'wide-protocol-disrupt-1');
+    expect(wideOne).not.toBeNull();
+    const detail = wideOne.children.find((c) => c.classList?.contains('detail'));
+    expect(detail).toBeTruthy();
+    expect(detail.textContent).toContain('Deal 1d6 + RES modifier damage to one target.');
+    expect(detail.textContent).toContain('Range: SIG×2');
+    const wideTwo = byTestId(container, 'wide-protocol-disrupt-2');
+    expect(allText(wideTwo).join(' ')).toContain('Deal 2d6 + RES modifier');
+  });
+
+  // playtest-clarity-and-4x-floors SESSION-02 — wide sigil preview and thumbs
+  // must render the DESCENT SIGIL glyph via the creature-sigil class so the
+  // font resolves independent of stylesheet load order.
+  it('wide sigil preview carries the creature-sigil class independent of CSS load order', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 3333 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    const preview = byTestId(container, 'wide-sigil-preview');
+    expect(preview.classList.contains('creature-sigil')).toBe(true);
+    expect(preview.classList.contains('sigil-role-player')).toBe(true);
+    expect(preview.classList.contains('sigil-preview')).toBe(true);
+  });
+
+  it('wide sigil thumbs wrap the glyph in a creature-sigil child span', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 3434 });
+    byTestId(container, 'add-character').click();
+    byTestId(container, 'wide-class-breacher').click();
+    const thumb = byTestId(container, 'wide-sigil-e000');
+    expect(thumb).not.toBeNull();
+    expect(thumb.classList.contains('sigil-option')).toBe(true);
+    const glyph = thumb.children.find((c) => c.classList?.contains('creature-sigil'));
+    expect(glyph).toBeTruthy();
+    expect(glyph.classList.contains('sigil-role-player')).toBe(true);
+    expect(glyph.textContent).toBe(String.fromCodePoint(0xe000));
   });
 
   it('wide layout re-renders legal gear when class changes', async () => {
