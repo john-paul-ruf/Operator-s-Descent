@@ -64,6 +64,8 @@ let runtimeLogEntries = [];
 let pendingDeathEchoes = [];
 let mountSequence = 0;
 let gestureAudioContext = null;
+let runtimeAudioContext = null;
+let gestureResumeCleanup = null;
 let busUnsubscribers = [];
 let layoutControllerCleanup = null;
 let runtimeActive = false;
@@ -431,19 +433,44 @@ function setupGrain() {
   return grainController;
 }
 
+function createRuntimeAudioContext() {
+  if (typeof window === 'undefined') return null;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return null;
+  try { return new Ctor(); } catch { return null; }
+}
+
+function installGestureResume() {
+  if (gestureResumeCleanup) return;
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  const cleanup = () => {
+    window.removeEventListener?.('pointerdown', onGesture, true);
+    window.removeEventListener?.('keydown', onGesture, true);
+    gestureResumeCleanup = null;
+  };
+  const onGesture = () => {
+    const ctx = runtimeAudioContext;
+    if (!ctx || ctx.state === 'running') { cleanup(); return; }
+    ctx.resume?.()?.then?.(() => { if (ctx.state === 'running') cleanup(); })?.catch?.(() => {});
+  };
+  window.addEventListener('pointerdown', onGesture, true);
+  window.addEventListener('keydown', onGesture, true);
+  gestureResumeCleanup = cleanup;
+}
+
 function startAudioEngine(settings = loadSettings()) {
-  if (gestureAudioContext?.resume) gestureAudioContext.resume().catch?.(() => {});
-  if (audioEngine) {
-    if (gestureAudioContext) {
-      audioEngine.updateContext?.(gestureAudioContext);
-      gestureAudioContext = null;
-    }
-    audioEngine.applySettings(settings);
-    return audioEngine;
+  if (gestureAudioContext) {
+    runtimeAudioContext = gestureAudioContext;
+    gestureAudioContext = null;
+    runtimeAudioContext.resume?.()?.catch?.(() => {});
+    if (audioEngine) audioEngine.updateContext?.(runtimeAudioContext);
   }
-  audioEngine = createAudioEngine(gestureAudioContext);
-  gestureAudioContext = null;
-  audioEngine.start();
+  if (!audioEngine) {
+    runtimeAudioContext ||= createRuntimeAudioContext();
+    audioEngine = createAudioEngine(runtimeAudioContext);
+  }
+  if (!audioEngine.isStarted?.()) audioEngine.start();
+  if (runtimeAudioContext && runtimeAudioContext.state !== 'running') installGestureResume();
   audioEngine.applySettings(settings);
   return audioEngine;
 }
@@ -828,6 +855,7 @@ export function getRuntimeSnapshot() {
     hasContainer: Boolean(currentScreenContainer),
     hasAudio: Boolean(audioEngine),
     audioStarted: Boolean(audioEngine?.isStarted?.()),
+    audioContextState: runtimeAudioContext?.state ?? null,
     hasGlitch: Boolean(glitchSystem),
     hasGrain: Boolean(grainController),
     grainCanvasAttached: Boolean(grainCanvas?.parentNode),
@@ -876,9 +904,15 @@ export function shutdownRuntime() {
   grainCanvas = null;
   audioEngine?.destroy?.();
   audioEngine = null;
+  gestureResumeCleanup?.();
+  gestureResumeCleanup = null;
   if (gestureAudioContext) {
     gestureAudioContext.close?.().catch?.(() => {});
     gestureAudioContext = null;
+  }
+  if (runtimeAudioContext) {
+    runtimeAudioContext.close?.().catch?.(() => {});
+    runtimeAudioContext = null;
   }
   currentRunState = null;
   setCurrentFloor(null, null);
