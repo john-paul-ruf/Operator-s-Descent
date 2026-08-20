@@ -5,6 +5,7 @@ import { createRunState } from '../../src/state/run-state.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import { makeParty } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
+import { createGameHarness, descend, loadGameDataFixture } from '../helpers/game-fixture.js';
 
 beforeAll(() => initEncoder(loadData('symbol-table')));
 
@@ -144,6 +145,65 @@ describe('library hostile storage', () => {
   it('returns not_found for an absent run and null for its seed', () => {
     expect(loadRun('missing')).toEqual({ success: false, error: 'not_found' });
     expect(getSeed('missing')).toBeNull();
+  });
+});
+
+describe('library — end-to-end noisy-play descent regression', () => {
+  // Before the SESSION-01 fix, a run that logged more than ~8 events would
+  // exceed the 1500-char budget, saveRun would return `save_too_large`, the
+  // silent autosave would drop the descent, and reload would resume on
+  // whatever save last fit — usually floor 1 from creation. With slim
+  // persisted events + trim-to-fit encode, the exact same play loop must
+  // survive multiple descents and always resume on the latest floor.
+  it('descends through two floors under load, saving noisily and resuming at depth 3', () => {
+    loadGameDataFixture();
+    const harness = createGameHarness({ seed: 9001, partySize: 2, depth: 1 });
+    const key = `${harness.runState.worldSeed >>> 0}_${harness.runState.creationTimestamp}`;
+
+    // Creation-time save: baseline, always fits.
+    const creationSave = saveRun(harness.runState);
+    expect(creationSave).toMatchObject({ success: true, key });
+
+    // Log 30 realistic events on floor 1 — the exact pattern real play produces.
+    for (let index = 0; index < 30; index++) {
+      harness.runState.recordEvent({
+        type: ['combat', 'damage', 'move', 'loot', 'heal', 'discovery'][index % 6],
+        message: `Floor-1 event ${index}: operator engages with mid-length dialogue.`,
+        sequence: 1_700_000_000_000 + index
+      });
+    }
+    expect(harness.runState.recentEvents).toHaveLength(30);
+
+    // Descend to floor 2 — the real progression pipeline, same one runtime uses.
+    const first = descend(harness);
+    expect(first.result.error).toBeUndefined();
+    expect(harness.runState.depth).toBe(2);
+
+    // Autosave after floor transition — this is the write that used to fail
+    // silently, sending the player back to floor 1 on reload.
+    const depth2Save = saveRun(harness.runState);
+    expect(depth2Save).toMatchObject({ success: true, key });
+    const depth2Load = loadRun(key);
+    expect(depth2Load.success).toBe(true);
+    expect(depth2Load.runState.depth).toBe(2);
+
+    // Log another 30 events on floor 2, then descend again.
+    for (let index = 0; index < 30; index++) {
+      harness.runState.recordEvent({
+        type: ['combat', 'damage', 'move', 'loot', 'heal', 'discovery'][index % 6],
+        message: `Floor-2 event ${index}: operator engages with mid-length dialogue.`,
+        sequence: 1_700_000_000_030 + index
+      });
+    }
+    const second = descend(harness);
+    expect(second.result.error).toBeUndefined();
+    expect(harness.runState.depth).toBe(3);
+
+    const depth3Save = saveRun(harness.runState);
+    expect(depth3Save).toMatchObject({ success: true, key });
+    const depth3Load = loadRun(key);
+    expect(depth3Load.success).toBe(true);
+    expect(depth3Load.runState.depth).toBe(3);
   });
 });
 

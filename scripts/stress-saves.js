@@ -2,6 +2,11 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { createGameHarness, loadGameDataFixture, lootFirstContainer, queueSingleDeathEcho, roundTripRunState, startStandardCombat } from '../tests/helpers/game-fixture.js';
 import { decodeRun } from '../src/state/save-decode.js';
+import { encodeRun } from '../src/state/save-encode.js';
+
+const EVENT_TAIL_COUNTS = [0, 4, 8, 16, 32, 64];
+const EVENT_TAIL_MIN_SURVIVORS = 8; // when count >= this, at least this many must survive
+const EVENT_TYPES = ['combat', 'damage', 'move', 'loot', 'heal', 'discovery'];
 
 function percentile(values, fraction) {
   if (!values.length) return 0;
@@ -112,6 +117,68 @@ function fixtures() {
   ];
 }
 
+function eventTailFixtures() {
+  loadGameDataFixture();
+  // Representative slice of live-play sizes. The event-tail dimension crosses
+  // each with the ladder counts; every combination must save without loss of
+  // the whole tail — that is the exact user-facing bug this gate defends.
+  return [
+    ['depth-1-freshly-started', () => createGameHarness({ seed: 909, partySize: 2, depth: 1 }).runState],
+    ['depth-3-post-first-loot', () => {
+      const h = createGameHarness({ seed: 910, partySize: 2, depth: 3 });
+      lootFirstContainer(h);
+      return h.runState;
+    }],
+    ['depth-12-two-op-mid-run', () => {
+      const h = createGameHarness({ seed: 911, partySize: 2, depth: 12 });
+      lootFirstContainer(h);
+      h.runState.corruption = 0.15;
+      return h.runState;
+    }]
+  ];
+}
+
+function pushRealisticEvents(runState, count) {
+  runState.recentEvents = [];
+  for (let index = 0; index < count; index++) {
+    runState.recordEvent({
+      type: EVENT_TYPES[index % EVENT_TYPES.length],
+      message: `Event ${index}: mid-length message representative of live play activity.`,
+      sequence: 1_700_000_000_000 + index
+    });
+  }
+}
+
+function runEventTailStress() {
+  const cases = [];
+  for (const [fixtureName, factory] of eventTailFixtures()) {
+    for (const count of EVENT_TAIL_COUNTS) {
+      const runState = factory();
+      pushRealisticEvents(runState, count);
+      const encodeStart = performance.now();
+      const encoded = encodeRun(runState);
+      const encodeMs = performance.now() - encodeStart;
+      if (!encoded.success) throw new Error(`${fixtureName}@${count}events: encode failed`);
+      if (encoded.fragment.length >= 1500) throw new Error(`${fixtureName}@${count}events: save length ${encoded.fragment.length} exceeds budget`);
+      if (count > 0 && encoded.metrics.eventsKept === 0) throw new Error(`${fixtureName}@${count}events: trim ladder dropped ALL events — resuming player would lose full history`);
+      if (count >= EVENT_TAIL_MIN_SURVIVORS && encoded.metrics.eventsKept < EVENT_TAIL_MIN_SURVIVORS) {
+        throw new Error(`${fixtureName}@${count}events: only ${encoded.metrics.eventsKept} events survived, below floor of ${EVENT_TAIL_MIN_SURVIVORS}`);
+      }
+      const decoded = decodeRun(encoded.fragment);
+      if (!decoded.success) throw new Error(`${fixtureName}@${count}events: decode failed ${decoded.error}`);
+      if (decoded.runState.recentEvents.length !== encoded.metrics.eventsKept) throw new Error(`${fixtureName}@${count}events: decoded tail length drift`);
+      cases.push({
+        name: `${fixtureName}@${count}events`,
+        length: encoded.fragment.length,
+        eventsKept: encoded.metrics.eventsKept,
+        eventsDropped: encoded.metrics.eventsDropped,
+        encodeMs: Number(encodeMs.toFixed(3))
+      });
+    }
+  }
+  return cases;
+}
+
 export function runSaveStress() {
   const cases = [];
   for (const [name, runState] of fixtures()) {
@@ -134,6 +201,7 @@ export function runSaveStress() {
       decodeMs: Number(decodeMs.toFixed(3))
     });
   }
+  const eventTailCases = runEventTailStress();
   const lengths = cases.map((entry) => entry.length);
   const encodeTimes = cases.map((entry) => entry.encodeMs);
   const decodeTimes = cases.map((entry) => entry.decodeMs);
@@ -143,7 +211,13 @@ export function runSaveStress() {
     p95Length: percentile(lengths, 0.95),
     encodeMs: { max: Math.max(...encodeTimes), p95: percentile(encodeTimes, 0.95) },
     decodeMs: { max: Math.max(...decodeTimes), p95: percentile(decodeTimes, 0.95) },
-    cases
+    cases,
+    eventTail: {
+      caseCount: eventTailCases.length,
+      minSurvivors: EVENT_TAIL_MIN_SURVIVORS,
+      counts: EVENT_TAIL_COUNTS,
+      cases: eventTailCases
+    }
   };
 }
 
@@ -151,6 +225,12 @@ function printReport(report) {
   console.log(`Save stress: ${report.caseCount} legal fixtures, max fragment ${report.maxLength}`);
   console.log(`Encode ms max/p95: ${report.encodeMs.max}/${report.encodeMs.p95}`);
   console.log(`Decode ms max/p95: ${report.decodeMs.max}/${report.decodeMs.p95}`);
+  const eventTail = report.eventTail;
+  if (eventTail) {
+    const minKept = Math.min(...eventTail.cases.map((entry) => entry.eventsKept));
+    const maxKept = Math.max(...eventTail.cases.map((entry) => entry.eventsKept));
+    console.log(`Event-tail sweep: ${eventTail.caseCount} combinations (counts ${eventTail.counts.join('/')}), eventsKept min/max ${minKept}/${maxKept}`);
+  }
   console.log(JSON.stringify(report, null, 2));
 }
 
