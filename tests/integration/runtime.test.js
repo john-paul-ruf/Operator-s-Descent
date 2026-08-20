@@ -6,6 +6,7 @@ import { saveSettings } from '../../src/state/library.js';
 import { resetGameDataForTests } from '../../src/data-loader.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
+import { FakeContext as FakeAudioContext } from '../helpers/fake-audio.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -478,5 +479,130 @@ describe('service worker update handling', () => {
     await flushAsync();
 
     expect(browser.update).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('audio boot lifecycle', () => {
+  // Autoplay-honoring context: mirrors WebAudio semantics where a fresh
+  // AudioContext arrives in 'suspended' state and only transitions to
+  // 'running' after resume() (which the browser blocks until a user gesture
+  // arrives on the page — our test fires that gesture through the captured
+  // window listeners).
+  class ResumableAudioContext extends FakeAudioContext {
+    constructor() {
+      super();
+      this.state = 'suspended';
+      this.resumed = 0;
+      this.closed = false;
+    }
+    resume() {
+      this.resumed += 1;
+      this.state = 'running';
+      return Promise.resolve();
+    }
+    close() {
+      this.closed = true;
+      this.state = 'closed';
+      return Promise.resolve();
+    }
+  }
+
+  let windowListeners;
+  let constructedContexts;
+
+  beforeEach(() => {
+    windowListeners = new Map();
+    constructedContexts = [];
+    class TrackedResumable extends ResumableAudioContext {
+      constructor() {
+        super();
+        constructedContexts.push(this);
+      }
+    }
+    globalThis.window.AudioContext = TrackedResumable;
+    globalThis.window.addEventListener = (type, listener) => {
+      windowListeners.set(type, [...(windowListeners.get(type) || []), listener]);
+    };
+    globalThis.window.removeEventListener = (type, listener) => {
+      windowListeners.set(type, (windowListeners.get(type) || []).filter((candidate) => candidate !== listener));
+    };
+  });
+
+  it('creates a suspended AudioContext eagerly and starts the engine before any gesture', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+
+    const snap = api.getRuntimeSnapshot();
+    expect(snap.hasAudio).toBe(true);
+    expect(snap.audioStarted).toBe(true);
+    expect(snap.audioContextState).toBe('suspended');
+    expect(constructedContexts).toHaveLength(1);
+    expect(constructedContexts[0].resumed).toBe(0);
+    expect((windowListeners.get('pointerdown') || []).length).toBe(1);
+    expect((windowListeners.get('keydown') || []).length).toBe(1);
+  });
+
+  it('resumes the AudioContext on the first user gesture and self-removes both listeners', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    expect(api.getRuntimeSnapshot().audioContextState).toBe('suspended');
+
+    const pointerdown = (windowListeners.get('pointerdown') || [])[0];
+    expect(typeof pointerdown).toBe('function');
+    pointerdown({});
+    await flushAsync();
+
+    expect(constructedContexts[0].resumed).toBe(1);
+    expect(api.getRuntimeSnapshot().audioContextState).toBe('running');
+    expect((windowListeners.get('pointerdown') || []).length).toBe(0);
+    expect((windowListeners.get('keydown') || []).length).toBe(0);
+  });
+
+  it('honors a caller-provided AudioContext (legacy injection) without constructing another', async () => {
+    const injected = new ResumableAudioContext();
+    const api = await runtime();
+    await api.activateRuntime({ audioContext: injected, initialHash: '' });
+
+    // Legacy inject path: startAudioEngine transfers gestureAudioContext into
+    // runtimeAudioContext and immediately calls resume(); the mock's resume
+    // flips state to 'running' synchronously, so no gesture wait is needed.
+    expect(constructedContexts).toHaveLength(0);
+    const snap = api.getRuntimeSnapshot();
+    expect(snap.hasAudio).toBe(true);
+    expect(snap.audioStarted).toBe(true);
+    expect(snap.audioContextState).toBe('running');
+    expect(injected.resumed).toBeGreaterThanOrEqual(1);
+  });
+
+  it('ui:audio-start keeps the engine started so the listener remains a valid safety net', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    expect(api.getRuntimeSnapshot().audioStarted).toBe(true);
+
+    bus.dispatch('ui:audio-start');
+    await flushAsync();
+
+    // Post-fix, startAudioEngine is idempotent on a started engine and always
+    // ends with a started engine when a context is obtainable. The pre-fix bug
+    // (`updateContext` on a never-started engine silently stored without
+    // starting) is closed by the explicit `if (!isStarted) start()` in the
+    // rewritten startAudioEngine.
+    expect(api.getRuntimeSnapshot().audioStarted).toBe(true);
+    expect(api.getRuntimeSnapshot().audioContextState).toBe('suspended');
+  });
+
+  it('closes the runtime-created AudioContext and removes gesture listeners on shutdown', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    expect(api.getRuntimeSnapshot().audioContextState).toBe('suspended');
+    expect((windowListeners.get('pointerdown') || []).length).toBe(1);
+    expect((windowListeners.get('keydown') || []).length).toBe(1);
+
+    api.shutdownRuntime();
+
+    expect(constructedContexts[0].closed).toBe(true);
+    expect(api.getRuntimeSnapshot().audioContextState).toBe(null);
+    expect((windowListeners.get('pointerdown') || []).length).toBe(0);
+    expect((windowListeners.get('keydown') || []).length).toBe(0);
   });
 });
