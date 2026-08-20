@@ -1,9 +1,15 @@
 import { dangerClockBaseRate, corruptionDangerRate } from '../rules/scaling.js';
 import { createRNGCursorForRun } from '../core/rng-cursor.js';
+import { GRID_W, GRID_H } from '../floor/archetypes.js';
 
-const GRID_WIDTH = 20;
-const GRID_HEIGHT = 32;
-const FOG_BYTES = 80;
+// v6 derives fog sizing from the live floor dimensions (floor → state import
+// is legal per FORGE-CONFIG). SESSION-05 flips GRID_W×GRID_H to 40×64; this
+// module absorbs the change without a second schema bump because the v6 wire
+// format writes fog as varUint length + bytes. Loading a pre-flip save into
+// the post-flip world lands via `normalizeFog`'s reset branch below.
+const GRID_WIDTH = GRID_W;
+const GRID_HEIGHT = GRID_H;
+const FOG_BYTES = Math.ceil((GRID_WIDTH * GRID_HEIGHT) / 8);
 const MAX_DEPTH = 255;
 const MAX_INVENTORY = 100;
 const MAX_ECHOES = 2;
@@ -47,16 +53,23 @@ function normalizeBitfield(value) {
   }
 }
 
+// v6 tolerant fog normalization. A length mismatch (e.g. loading a pre-flip
+// 80-byte fog into the post-flip 320-byte world, or vice-versa) is not an
+// error — the caller resets fog to a fresh zeroed buffer AND discards the
+// stale party position so the lattice entry-point fallback places the party
+// on a real open cell. Only genuinely malformed inputs (non-array or byte
+// out of range) return null. Returned shape: { fog, reset } — reset === true
+// signals the caller that partyPosition should also be reset.
 function normalizeFog(value) {
-  if (value === undefined) return new Uint8Array(FOG_BYTES);
+  if (value === undefined) return { fog: new Uint8Array(FOG_BYTES), reset: false };
   if (!Array.isArray(value) && !(value instanceof Uint8Array)) return null;
-  if (value.length !== FOG_BYTES) return null;
+  if (value.length !== FOG_BYTES) return { fog: new Uint8Array(FOG_BYTES), reset: true };
   const fog = new Uint8Array(FOG_BYTES);
   for (let index = 0; index < FOG_BYTES; index++) {
     if (!finiteInteger(value[index], 0, 255)) return null;
     fog[index] = value[index];
   }
-  return fog;
+  return { fog, reset: false };
 }
 
 function normalizeAttributes(value) {
@@ -471,11 +484,19 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
   if (!isPlainObject(input) || !finiteInteger(input.worldSeed, 0, 0xffffffff)) return null;
   if (!finiteInteger(input.creationTimestamp, 0, Number.MAX_SAFE_INTEGER)) return null;
   if (!finiteInteger(input.depth, 1, MAX_DEPTH) || !finiteInteger(input.floorSubSeed, 0, 0xffffffff)) return null;
-  if (!isPlainObject(input.partyPosition) || !finiteInteger(input.partyPosition.x, 0, GRID_WIDTH - 1) || !finiteInteger(input.partyPosition.y, 0, GRID_HEIGHT - 1)) return null;
-  const fogOfWar = normalizeFog(input.fogOfWar);
+  const fogResult = normalizeFog(input.fogOfWar);
+  // When fog resets (length mismatch — pre-flip save into post-flip world or
+  // vice-versa) we discard the stale partyPosition too and hand a corner cell
+  // to the lattice; lattice.js line 20-34 fallback resolves it to entryPoint
+  // or the first open cell.
+  const partyPositionInput = fogResult && fogResult.reset
+    ? { x: 0, y: 0 }
+    : input.partyPosition;
+  if (!isPlainObject(partyPositionInput) || !finiteInteger(partyPositionInput.x, 0, GRID_WIDTH - 1) || !finiteInteger(partyPositionInput.y, 0, GRID_HEIGHT - 1)) return null;
   const openedContainers = normalizeBitfield(input.openedContainers);
   const defeatedEnemies = normalizeBitfield(input.defeatedEnemies);
-  if (!fogOfWar || openedContainers === null || defeatedEnemies === null || !Number.isFinite(input.dangerClockProgress ?? 0) || input.dangerClockProgress < 0 || input.dangerClockProgress > 1_000_000) return null;
+  if (!fogResult || openedContainers === null || defeatedEnemies === null || !Number.isFinite(input.dangerClockProgress ?? 0) || input.dangerClockProgress < 0 || input.dangerClockProgress > 1_000_000) return null;
+  const fogOfWar = fogResult.fog;
   if (!Array.isArray(input.party) || input.party.length > 4 || (!allowConstructionDefaults && input.party.length < 1)) return null;
   const party = input.party.map(character => normalizeCharacter(character, { sourceVersion, allowConstructionDefaults }));
   if (party.some(character => character === null)) return null;
@@ -520,7 +541,7 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
     creationTimestamp: input.creationTimestamp,
     depth: input.depth,
     floorSubSeed: input.floorSubSeed,
-    partyPosition: { ...input.partyPosition },
+    partyPosition: { ...partyPositionInput },
     fogOfWar,
     openedContainers,
     defeatedEnemies,

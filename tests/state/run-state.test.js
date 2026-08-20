@@ -67,7 +67,6 @@ describe('RunState bounds and hostile input', () => {
 
   it.each([
     ['seed', state => { state.worldSeed = -1; }],
-    ['fog length', state => { state.fogOfWar.pop(); }],
     ['position', state => { state.partyPosition.x = 20; }],
     ['inventory', state => { state.inventory = Array.from({ length: 101 }, () => validItem()); }],
     ['echo queue', state => { state.echoQueue = [validEcho(), validEcho(), validEcho()]; }],
@@ -77,6 +76,20 @@ describe('RunState bounds and hostile input', () => {
     const serialized = makeState().serialize();
     mutate(serialized);
     expect(deserializeRunState(serialized)).toBeNull();
+  });
+
+  // v6 fog is self-sizing (varUint length in the wire format) and tolerant on
+  // load: a length mismatch (pre-flip save into post-flip world or vice-versa)
+  // resets fog to a fresh zero buffer AND resets partyPosition — never fails
+  // the load. Custom Rule 13 requires versioned saves to always load.
+  it('resets fog and party position on length mismatch instead of failing the load', () => {
+    const serialized = makeState().serialize();
+    serialized.fogOfWar.pop();
+    const state = deserializeRunState(serialized);
+    expect(state).not.toBeNull();
+    expect(state.fogOfWar).toHaveLength(80);
+    expect(state.fogOfWar.every(byte => byte === 0)).toBe(true);
+    expect(state.partyPosition).toEqual({ x: 0, y: 0 });
   });
 });
 

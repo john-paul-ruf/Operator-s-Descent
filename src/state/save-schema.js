@@ -3,7 +3,15 @@ import { getTableVersion, readSymbol, writeSymbol } from './condense.js';
 import { deserializeRunState, validateRunState } from './run-state.js';
 import { readCharacter, readCombatSnapshot, readEcho, readItem, writeCharacter, writeCombatSnapshot, writeEcho, writeItem } from './save-codecs.js';
 
-export const RUN_SCHEMA_VERSION = 5;
+export const RUN_SCHEMA_VERSION = 6;
+
+// v6 widens the on-wire fog to accommodate any grid size that fits in the
+// fog-of-war budget (self-sizing framing: varUint length + bytes). 4096 bytes
+// caps out at a 32,768-cell world — headroom well beyond the 40×64 (320-byte)
+// target that follows in the density session. Any encoded fog whose length
+// disagrees with the runtime's `FOG_BYTES` (post-load) is reset by
+// `normalizeFog`; the payload still loads.
+const FOG_BYTES_MAX = 4096;
 
 export const RUN_SCHEMA_FIELDS = Object.freeze([
   'schemaVersion', 'tableVersion', 'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed',
@@ -216,9 +224,12 @@ export function encodeRunPayload(runState) {
   writer.writeVarUint(state.creationTimestamp);
   writer.writeUint(state.depth, 8);
   writer.writeUint(state.floorSubSeed, 32);
-  writer.writeUint(state.partyPosition.x, 5);
-  writer.writeUint(state.partyPosition.y, 5);
-  writer.writeBytes(Uint8Array.from(state.fogOfWar));
+  writer.writeUint(state.partyPosition.x, 7);
+  writer.writeUint(state.partyPosition.y, 7);
+  const fogBytes = Uint8Array.from(state.fogOfWar);
+  if (fogBytes.length > FOG_BYTES_MAX) fail('invalid_fog');
+  writer.writeVarUint(fogBytes.length);
+  writer.writeBytes(fogBytes);
   writeBitfield(writer, state.openedContainers);
   writeBitfield(writer, state.defeatedEnemies);
   writeNumber(writer, state.dangerClockProgress);
@@ -272,8 +283,8 @@ export function decodeRunPayload(bytes, bitLength, options = {}) {
       creationTimestamp: reader.readVarUint(),
       depth: integer(reader.readUint(8), 1, MAX_DEPTH),
       floorSubSeed: reader.readUint(32),
-      partyPosition: { x: reader.readUint(5), y: reader.readUint(5) },
-      fogOfWar: Array.from(reader.readBytes(80)),
+      partyPosition: { x: reader.readUint(7), y: reader.readUint(7) },
+      fogOfWar: Array.from(reader.readBytes(integer(reader.readVarUint(), 0, FOG_BYTES_MAX, 'invalid_fog'))),
       openedContainers: readBitfield(reader),
       defeatedEnemies: readBitfield(reader),
       dangerClockProgress: readNumber(reader)

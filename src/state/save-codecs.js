@@ -136,14 +136,19 @@ function readEntityId(reader) {
 
 function writeEncounterId(writer, value) {
   if (typeof value !== 'string') fail('invalid_string');
-  const encounter = value.match(/^encounter_(\d{1,2})_(\d{1,2})_(\d+)$/);
+  // v6 encounter-id string format is unchanged (regex still 1-3 digits per
+  // coord to match string-side widths up to 999) but the packed encoding
+  // widens to 7 bits per coord so 40×64 (max coord 63) and beyond fit
+  // without falling through to the string-escape path. Anything larger than
+  // 127 still escapes to the raw string form.
+  const encounter = value.match(/^encounter_(\d{1,3})_(\d{1,3})_(\d+)$/);
   const x = encounter ? Number(encounter[1]) : -1;
   const y = encounter ? Number(encounter[2]) : -1;
   const cursor = encounter ? Number(encounter[3]) : -1;
-  if (Number.isInteger(x) && x >= 0 && x <= 31 && Number.isInteger(y) && y >= 0 && y <= 31 && Number.isSafeInteger(cursor) && cursor >= 0) {
+  if (Number.isInteger(x) && x >= 0 && x <= 127 && Number.isInteger(y) && y >= 0 && y <= 127 && Number.isSafeInteger(cursor) && cursor >= 0) {
     writer.writeBool(true);
-    writer.writeUint(x, 5);
-    writer.writeUint(y, 5);
+    writer.writeUint(x, 7);
+    writer.writeUint(y, 7);
     writer.writeVarUint(cursor);
     return;
   }
@@ -153,7 +158,7 @@ function writeEncounterId(writer, value) {
 
 function readEncounterId(reader) {
   if (!reader.readBool()) return readString(reader);
-  return `encounter_${reader.readUint(5)}_${reader.readUint(5)}_${reader.readVarUint()}`;
+  return `encounter_${reader.readUint(7)}_${reader.readUint(7)}_${reader.readVarUint()}`;
 }
 
 function writeEncounterType(writer, value) {
@@ -675,8 +680,8 @@ function writeActor(writer, actor, enemyContext) {
   if (!isObject(actor) || !SIDES.includes(actor.side)) fail('invalid_actor');
   writeCombatActorId(writer, actor.id, enemyContext);
   writer.writeUint(SIDES.indexOf(actor.side), 2);
-  writer.writeUint(requireInteger(actor.x, 0, 31, 'invalid_actor'), 5);
-  writer.writeUint(requireInteger(actor.y, 0, 31, 'invalid_actor'), 5);
+  writer.writeUint(requireInteger(actor.x, 0, 127, 'invalid_actor'), 7);
+  writer.writeUint(requireInteger(actor.y, 0, 127, 'invalid_actor'), 7);
   writer.writeVarUint(requireInteger(actor.hp, 0, 255, 'invalid_actor'));
   writer.writeVarUint(requireInteger(actor.charge ?? 0, 0, 255, 'invalid_actor'));
   writeConditions(writer, actor.conditions ?? []);
@@ -695,8 +700,8 @@ function readActor(reader, enemyContext) {
   return {
     id,
     side,
-    x: reader.readUint(5),
-    y: reader.readUint(5),
+    x: reader.readUint(7),
+    y: reader.readUint(7),
     hp: requireInteger(reader.readVarUint(), 0, 255, 'invalid_actor'),
     charge: requireInteger(reader.readVarUint(), 0, 255, 'invalid_actor'),
     conditions: readConditions(reader),
@@ -712,8 +717,8 @@ function readActor(reader, enemyContext) {
 export function writeCombatSnapshot(writer, combat, options = {}) {
   if (!isObject(combat) || !isObject(combat.arena) || !Array.isArray(combat.actors) || combat.actors.length < 1 || combat.actors.length > MAX_ACTORS || !Array.isArray(combat.initiativeOrder) || !Array.isArray(combat.pendingEffects)) fail('invalid_combat');
   const depth = Number.isInteger(options.depth) && options.depth >= 1 && options.depth <= 255 ? options.depth : 1;
-  writer.writeUint(requireInteger(combat.arena.originX, 0, 31, 'invalid_combat'), 5);
-  writer.writeUint(requireInteger(combat.arena.originY, 0, 31, 'invalid_combat'), 5);
+  writer.writeUint(requireInteger(combat.arena.originX, 0, 127, 'invalid_combat'), 7);
+  writer.writeUint(requireInteger(combat.arena.originY, 0, 127, 'invalid_combat'), 7);
   writeEncounterId(writer, combat.arena.contactId);
   writer.writeUint(combat.actors.length, 5);
   const actorIds = new Set();
@@ -766,7 +771,7 @@ export function writeCombatSnapshot(writer, combat, options = {}) {
 
 export function readCombatSnapshot(reader, options = {}) {
   const depth = Number.isInteger(options.depth) && options.depth >= 1 && options.depth <= 255 ? options.depth : 1;
-  const arena = { originX: reader.readUint(5), originY: reader.readUint(5), contactId: readEncounterId(reader) };
+  const arena = { originX: reader.readUint(7), originY: reader.readUint(7), contactId: readEncounterId(reader) };
   const actorLength = reader.readUint(5);
   if (actorLength < 1 || actorLength > MAX_ACTORS) fail('invalid_combat');
   const enemyDeltaContext = { previous: null };

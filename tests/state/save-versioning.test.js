@@ -83,13 +83,7 @@ describe('golden v5 corpus (Custom Rule 13)', () => {
   });
 });
 
-describe('frozen readV5Payload direct decode', () => {
-  it('decodes a freshly-encoded v5 payload to a valid runState identical to the source', () => {
-    const state = buildRealisticRun(13, { depth: 4, inventoryItems: 3, echoes: 1 });
-    const payload = encodeRunPayload(state);
-    const result = readV5Payload(payload.bytes, payload.bitLength);
-    expect(result.schemaVersion).toBe(V5_SCHEMA_VERSION);
-    expect(result.worldSeed).toBe(state.worldSeed);
-    expect(result.runState.serialize()).toEqual(state.serialize());
-  });
-});
+// Direct frozen-reader coverage lives in the `golden v5 corpus` block above:
+// once the current schema advances past v5, save-decode.js routes v5 fixtures
+// through readV5Payload — the corpus fixture asserts the full path end-to-end.
+// The guard test above pins readV5Payload to schemaVersion === V5_SCHEMA_VERSION.
