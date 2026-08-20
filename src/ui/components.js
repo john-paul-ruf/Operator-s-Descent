@@ -329,7 +329,59 @@ export function createProtocolCard(protocol, opts = {}) {
   cost.className = 'action-cost';
   cost.textContent = `${protocol.chargeCost || 0} CHG`;
   card.append(name, cost);
+  if (typeof protocol.effect === 'string' && protocol.effect) {
+    const effect = document.createElement('div');
+    effect.className = 'card-effect';
+    effect.textContent = protocol.range ? `${protocol.effect} · Range: ${protocol.range}` : protocol.effect;
+    card.appendChild(effect);
+  }
   return withCleanup(card, opts.onClick ? listen(card, 'click', opts.onClick) : undefined);
+}
+
+/**
+ * attachDoubleActivate — install a double-activation gesture on any element.
+ * Fires `handler` when the element receives a native `dblclick` OR two
+ * `pointerup` events within `windowMs` (default 350ms) and `slop` pixels
+ * (default 24). Both paths short-circuit while the element is disabled so
+ * the ADA-inert affordance stays honest. Returns a cleanup fn that removes
+ * both listeners.
+ *
+ * SESSION-03 depends on this API shape: attachDoubleActivate(el, fn, opts)
+ * → cleanup. Options: { windowMs?: number, slop?: number }.
+ *
+ * @param {HTMLElement} element
+ * @param {(event: Event) => void} handler
+ * @param {{ windowMs?: number, slop?: number }} [opts]
+ * @returns {() => void}
+ */
+export function attachDoubleActivate(element, handler, opts = {}) {
+  const windowMs = Number(opts.windowMs ?? 350);
+  const slop = Number(opts.slop ?? 24);
+  let lastTime = 0;
+  let lastX = 0;
+  let lastY = 0;
+  const isDisabled = () => Boolean(element.disabled);
+  const cleanups = [
+    listen(element, 'dblclick', (event) => {
+      if (isDisabled()) return;
+      handler(event);
+    }),
+    listen(element, 'pointerup', (event) => {
+      if (isDisabled()) return;
+      const now = Number(event.timeStamp) || 0;
+      const x = Number(event.clientX) || 0;
+      const y = Number(event.clientY) || 0;
+      if (lastTime && (now - lastTime) <= windowMs && Math.hypot(x - lastX, y - lastY) <= slop) {
+        lastTime = 0;
+        handler(event);
+        return;
+      }
+      lastTime = now;
+      lastX = x;
+      lastY = y;
+    })
+  ];
+  return () => cleanups.forEach((cleanup) => cleanup());
 }
 
 export function createAttributeRow(attrName, rank, opts = {}) {

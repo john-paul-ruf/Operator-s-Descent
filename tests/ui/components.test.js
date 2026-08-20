@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createAffixTag, createButton, createChargeBar, createConditionTag, createEquipmentCard, createHPBar, createManualLink, createProtocolCard, createRarityTag, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
+import { attachDoubleActivate, createAffixTag, createButton, createChargeBar, createConditionTag, createEquipmentCard, createHPBar, createManualLink, createProtocolCard, createRarityTag, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -444,6 +444,99 @@ describe('semantic components', () => {
     for (const child of protocolCard.children) {
       expect(child.tagName).not.toBe('BUTTON');
     }
+  });
+
+  // playtest-clarity-and-4x-floors SESSION-02 — createProtocolCard now surfaces
+  // the authored effect text (and optional range) below the name/cost row so
+  // players can tell SPARK from SURGE without opening the manual.
+  test('createProtocolCard renders a card-effect line with the authored effect string when provided', () => {
+    const card = createProtocolCard({
+      id: 'spark', name: 'SPARK', school: 'disrupt', chargeCost: 2,
+      effect: 'Deal 1d6 + RES modifier damage to one target.'
+    });
+    const effect = card.children.find((child) => child.className === 'card-effect');
+    expect(effect).toBeTruthy();
+    expect(effect.textContent).toBe('Deal 1d6 + RES modifier damage to one target.');
+  });
+
+  test('createProtocolCard appends the range suffix when protocol.range is set', () => {
+    const card = createProtocolCard({
+      id: 'spark', name: 'SPARK', school: 'disrupt', chargeCost: 2,
+      effect: 'Deal 1d6 + RES modifier damage to one target.',
+      range: 'SIG×2'
+    });
+    const effect = card.children.find((child) => child.className === 'card-effect');
+    expect(effect.textContent).toBe('Deal 1d6 + RES modifier damage to one target. · Range: SIG×2');
+  });
+
+  test('createProtocolCard without an effect string renders no card-effect child (byte-identical prior behaviour)', () => {
+    const card = createProtocolCard({ id: 'spark', name: 'SPARK', chargeCost: 2 });
+    expect(card.children.find((child) => child.className === 'card-effect')).toBeUndefined();
+    const emptyEffect = createProtocolCard({ id: 'spark', name: 'SPARK', chargeCost: 2, effect: '' });
+    expect(emptyEffect.children.find((child) => child.className === 'card-effect')).toBeUndefined();
+  });
+
+  // SESSION-02 helper: SESSION-03 declared dependency. The API shape below is
+  // frozen: attachDoubleActivate(el, fn, opts) → cleanup.
+  test('attachDoubleActivate fires the handler on native dblclick', () => {
+    const element = document.createElement('button');
+    let fired = 0;
+    const cleanup = attachDoubleActivate(element, () => { fired += 1; });
+    element.dispatch('dblclick');
+    expect(fired).toBe(1);
+    cleanup();
+    element.dispatch('dblclick');
+    expect(fired).toBe(1);
+  });
+
+  test('attachDoubleActivate fires on two pointerup events within window and slop', () => {
+    const element = document.createElement('button');
+    let fired = 0;
+    attachDoubleActivate(element, () => { fired += 1; });
+    element.dispatch('pointerup', { timeStamp: 100, clientX: 10, clientY: 10 });
+    expect(fired).toBe(0);
+    element.dispatch('pointerup', { timeStamp: 300, clientX: 14, clientY: 12 });
+    expect(fired).toBe(1);
+  });
+
+  test('attachDoubleActivate ignores pointerup pairs beyond the 350ms window', () => {
+    const element = document.createElement('button');
+    let fired = 0;
+    attachDoubleActivate(element, () => { fired += 1; });
+    element.dispatch('pointerup', { timeStamp: 100, clientX: 10, clientY: 10 });
+    element.dispatch('pointerup', { timeStamp: 500, clientX: 10, clientY: 10 });
+    expect(fired).toBe(0);
+  });
+
+  test('attachDoubleActivate ignores pointerup pairs beyond the 24px slop', () => {
+    const element = document.createElement('button');
+    let fired = 0;
+    attachDoubleActivate(element, () => { fired += 1; });
+    element.dispatch('pointerup', { timeStamp: 100, clientX: 0, clientY: 0 });
+    element.dispatch('pointerup', { timeStamp: 200, clientX: 50, clientY: 0 });
+    expect(fired).toBe(0);
+  });
+
+  test('attachDoubleActivate honours element.disabled on both paths', () => {
+    const element = document.createElement('button');
+    element.disabled = true;
+    let fired = 0;
+    attachDoubleActivate(element, () => { fired += 1; });
+    element.dispatch('dblclick');
+    element.dispatch('pointerup', { timeStamp: 100, clientX: 0, clientY: 0 });
+    element.dispatch('pointerup', { timeStamp: 200, clientX: 0, clientY: 0 });
+    expect(fired).toBe(0);
+  });
+
+  test('attachDoubleActivate cleanup removes both listeners', () => {
+    const element = document.createElement('button');
+    let fired = 0;
+    const cleanup = attachDoubleActivate(element, () => { fired += 1; });
+    cleanup();
+    element.dispatch('dblclick');
+    element.dispatch('pointerup', { timeStamp: 100, clientX: 0, clientY: 0 });
+    element.dispatch('pointerup', { timeStamp: 200, clientX: 0, clientY: 0 });
+    expect(fired).toBe(0);
   });
 
   // combat-and-overworld-clarity-pass SESSION-06 — icon prefix API on
