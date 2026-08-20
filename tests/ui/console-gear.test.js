@@ -152,6 +152,49 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     expect(invChip.textContent).not.toContain('Oracle');
   });
 
+  it('SESSION-03 — with a 6-item inventory every EQUIP button is a visible in-flow child of its row', () => {
+    const inventory = Array.from({ length: 6 }, (_, i) => item(`inv-${i}`, 'sidearm'));
+    const runState = run(inventory, [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    for (let i = 0; i < 6; i++) {
+      const row = byTestId(container, `gear-item-inv-${i}`);
+      expect(row, `row inv-${i} exists`).toBeTruthy();
+      const equip = byTestId(row, `gear-equip-inv-${i}`);
+      expect(equip, `equip button inv-${i} present`).toBeTruthy();
+      // In-flow: the button is a direct descendant of its row, not detached/hidden.
+      expect(equip.parentNode).toBe(row);
+      expect(equip.disabled).toBe(false);
+      expect(equip.className.split(/\s+/)).not.toContain('is-collapsed');
+    }
+  });
+
+  it('SESSION-03 — double-activating an inventory row equips the item without the EQUIP button', () => {
+    const runState = run([item('dbl-sidearm', 'sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const row = byTestId(container, 'gear-item-dbl-sidearm');
+    row.dispatch('dblclick');
+    expect(runState.party[0].equipment.weapon.id).toBe('dbl-sidearm');
+    expect(runState.inventory).toHaveLength(0);
+  });
+
+  it('SESSION-03 — double-activating a corrupt inventory row surfaces the consent warning, not an equip', () => {
+    const corrupt = item('dbl-corrupt', 'sidearm', { rarity: 'corrupt', corrupt: true, corruptionValue: 0.1 });
+    const runState = run([corrupt], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-item-dbl-corrupt').dispatch('dblclick');
+    expect(runState.party[0].equipment.weapon).toBe(null);
+    expect(byTestId(container, 'gear-corrupt-warning')).toBeTruthy();
+  });
+
   it('a disabled icon-prefixed UNEQUIP does not fire its handler on click', () => {
     // Full inventory blocks the unequip transaction — the button is rendered
     // disabled, and clicking must not call requestUnequip (icon should never

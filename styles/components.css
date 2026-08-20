@@ -1540,9 +1540,14 @@ button.protocol-card[aria-selected="true"],
 .equipped-section { margin-bottom: 12px; }
 .equipped-row { padding: 8px; margin-bottom: 8px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
 .equipped-slot { font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; }
-.inventory-header { font-size: 10px; color: var(--text-secondary); padding: 8px 0; }
-.inventory-list { margin-bottom: 12px; }
-.inventory-row { padding: 8px; margin-bottom: 8px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
+/* Header is a flex row so the `?` salvage chip sits after the summary text
+   instead of on top of it (owner rule: never overlap UI elements). */
+.inventory-header { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-secondary); padding: 8px 0; }
+/* Long inventories scroll within the list rather than pushing JUNK ALL off-pane. */
+.inventory-list { flex: 1; min-height: 0; margin-bottom: 12px; }
+/* Column flex with visible overflow keeps every action (EQUIP / TAG JUNK) in-flow
+   and reachable — the "missing equip button" bug was clipped/overlapped rows. */
+.inventory-row { display: flex; flex-direction: column; gap: 6px; overflow: visible; padding: 8px; margin-bottom: 8px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
 .inventory-row.junk-tagged { opacity: 0.5; }
 .gear-comparison { font-size: 9px; color: var(--text-dim); margin-top: 4px; }
 .corrupt-warning { padding: 8px; border: 1px solid var(--warning); background: rgba(232,99,42,0.1); color: var(--warning); font-size: 10px; margin-bottom: 12px; }

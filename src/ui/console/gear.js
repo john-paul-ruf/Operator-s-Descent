@@ -1,4 +1,4 @@
-import { createButton, createEquipmentCard, createManualLink, createRarityTag, createAffixTag, createScrollArea } from '../components.js';
+import { createButton, createEquipmentCard, createManualLink, createRarityTag, createAffixTag, createScrollArea, attachDoubleActivate } from '../components.js';
 import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
 import { describeItem, describeItemStats, equipItem, itemDisplayName, unequipItem, resolveLoadout } from '../../rules/equipment.js';
@@ -386,7 +386,9 @@ function renderInventory(container, context, character, ui) {
   list.className = 'inventory-list';
   list.dataset.testid = 'gear-inventory';
   if (!inventory.length) list.appendChild(text('console-empty', 'Inventory empty.'));
-  for (const item of inventory) renderInventoryItem(list, context, character, ui, item);
+  const cleanups = [];
+  for (const item of inventory) renderInventoryItem(list, context, character, ui, item, cleanups);
+  list.cleanup = () => cleanups.forEach((fn) => fn());
   container.appendChild(list);
 
   const junkButton = createButton(ui.pendingJunkAll ? 'CONFIRM JUNK ALL TAGGED' : 'JUNK ALL TAGGED', {
@@ -399,7 +401,7 @@ function renderInventory(container, context, character, ui) {
   container.appendChild(junkButton);
 }
 
-function renderInventoryItem(list, context, character, ui, item) {
+function renderInventoryItem(list, context, character, ui, item, cleanups = []) {
   const wrapper = document.createElement('div');
   wrapper.className = `inventory-row console-row${item.junkTagged ? ' junk-tagged' : ''}`;
   wrapper.dataset.testid = `gear-item-${item.id}`;
@@ -416,6 +418,11 @@ function renderInventoryItem(list, context, character, ui, item) {
   });
   equip.dataset.testid = `gear-equip-${item.id}`;
   wrapper.appendChild(equip);
+  // Double-activate = EQUIP. The existing gates (equipDisabledReason, CORRUPT
+  // two-step confirm) run unchanged inside requestEquip, so a corrupt item's
+  // first double-activate surfaces the warning instead of equipping. Skipped
+  // when the item is not equippable so the inert row stays honest.
+  if (!reason) cleanups.push(attachDoubleActivate(wrapper, () => requestEquip(context, item)));
   if (reason) {
     const why = text('disabled-reason equip-blocked-reason console-row', reason);
     why.dataset.testid = `gear-equip-reason-${item.id}`;
