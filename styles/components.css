@@ -1487,6 +1487,10 @@ button.protocol-card[aria-selected="true"],
 .loot-detail { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
 .loot-compare { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
 .loot-inventory-header { font-size: 10px; color: var(--text-secondary); padding: 8px 0; }
+/* Collapsible junk manager — collapsed by default so a full pack of TAG buttons
+   does not bury the container CONTENTS / OPEN / TAKE controls above it. */
+.loot-inventory-toggle { width: 100%; justify-content: flex-start; font-size: 10px; letter-spacing: 0.08em; color: var(--text-secondary); margin: 4px 0 8px; }
+.loot-inventory-body.is-collapsed { display: none; }
 .loot-junk-list { margin-bottom: 12px; }
 .loot-notice { font-size: 10px; color: var(--heal); padding: 4px 0; }
 .loot-error { font-size: 10px; color: var(--danger); padding: 4px 0; }

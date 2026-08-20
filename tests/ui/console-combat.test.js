@@ -297,6 +297,48 @@ describe('console/combat.js — action button disabled reasons (SESSION-02)', ()
     expect(button.getAttribute('aria-description')).toBe('No weapon equipped.');
   });
 
+  it('ATTACK — disabled with "No targets in range." when combatActionTargeting reports 0 legal targets', () => {
+    const active = makeActive({ ap: 1, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const context = makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] }
+    });
+    context.combatActionTargeting = () => ({ total: 2, legal: 0 });
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    const button = byTestId(container, 'combat-action-attack');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('No targets in range.');
+  });
+
+  it('ATTACK — disabled with "No targets." when there are no enemy targets at all', () => {
+    const active = makeActive({ ap: 1, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const context = makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] }
+    });
+    context.combatActionTargeting = () => ({ total: 0, legal: 0 });
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    const button = byTestId(container, 'combat-action-attack');
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('title')).toBe('No targets.');
+  });
+
+  it('ATTACK — enabled when at least one enemy is within range', () => {
+    const active = makeActive({ ap: 1, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const context = makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] }
+    });
+    context.combatActionTargeting = () => ({ total: 2, legal: 1 });
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    const button = byTestId(container, 'combat-action-attack');
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('title')).toBe(null);
+  });
+
   it('CAST — disabled when no prepared protocol is affordable at current CHARGE', () => {
     const active = makeActive({
       ap: 1, charge: 0,

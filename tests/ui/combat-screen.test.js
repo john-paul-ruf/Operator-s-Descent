@@ -872,24 +872,46 @@ describe('combat screen controller', () => {
     }
   });
 
-  // Range gate (SESSION-05 checkpoint 3+4). Adjacent (maxRange 1) melee weapon; enemy placed at
-  // Chebyshev distance ≥ 2 so evaluateRange returns legal:false. previewForTarget carries
-  // targetLegal:false; the console disables the row so a click is a no-op; keyboard cycle
-  // that lands the selection on the illegal target trips validationError.
+  // Range gate (SESSION-05 checkpoint 3+4). Adjacent (maxRange 1) melee weapon. With a legal enemy
+  // (id 0, distance 1) in range the ATTACK action stays enabled, and a second enemy (id 1) at
+  // Chebyshev distance ≥ 2 makes evaluateRange return legal:false — previewForTarget carries
+  // targetLegal:false, so the console disables that row and a click is a no-op.
   it('previewForTarget returns targetLegal:false and the console disables the row for an out-of-range target', async () => {
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
+      enemyActor({ id: 0, position: { x: 2, y: 1 }, hp: 10, hpMax: 10 }),
+      enemyActor({ id: 1, position: { x: 6, y: 6 }, hp: 10, hpMax: 10 })
+    ], ['hero', 0, 1]);
+    const { container, controller } = await mountCombat({ combat });
+
+    // Enemy 0 is in range, so ATTACK is available and opens the target list.
+    expect(byTestId(container, 'combat-action-attack').disabled).toBe(false);
+    byTestId(container, 'combat-action-attack').click();
+    const targetRow = byTestId(container, 'combat-target-1');
+    expect(targetRow.disabled).toBe(true);
+    expect(targetRow.className).toContain('is-illegal');
+    // Clicking a disabled row must not move the selection onto that out-of-range target.
+    targetRow.click();
+    expect(byTestId(container, 'combat-target-1').getAttribute('aria-selected')).not.toBe('true');
+    controller.unmount();
+  });
+
+  // Action-level range gate (user feedback: "if not able to attack anything, attack should not be
+  // enabled"). When every living enemy is out of the active actor's weapon range, ATTACK is disabled
+  // outright with an explanatory reason rather than opening a target list of only-illegal rows.
+  it('disables the ATTACK action entirely when no enemy is within weapon range', async () => {
     const combat = combatState([
       partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
       enemyActor({ id: 0, position: { x: 6, y: 6 }, hp: 10, hpMax: 10 })
     ]);
     const { container, controller } = await mountCombat({ combat });
 
-    byTestId(container, 'combat-action-attack').click();
-    const targetRow = byTestId(container, 'combat-target-0');
-    expect(targetRow.disabled).toBe(true);
-    expect(targetRow.className).toContain('is-illegal');
-    // Clicking a disabled row must not advance selection into confirm phase — no CONFIRM renders.
-    targetRow.click();
-    expect(byTestId(container, 'combat-confirm')).toBe(null);
+    const attack = byTestId(container, 'combat-action-attack');
+    expect(attack.disabled).toBe(true);
+    expect(attack.getAttribute('title')).toBe('No targets in range.');
+    // The disabled button is inert — clicking it never opens a target list.
+    attack.click();
+    expect(byTestId(container, 'combat-targets')).toBe(null);
     controller.unmount();
   });
 

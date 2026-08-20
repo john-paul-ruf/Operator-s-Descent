@@ -168,6 +168,16 @@ function combatActionDisabledReason(action, context, active, legalActions) {
   if (action.id === 'attack') {
     if (ap <= 0) return 'No AP.';
     if (!active?.weapon) return 'No weapon equipped.';
+    // User feedback: an ATTACK button that can't hit anything should be dark, not
+    // clickable-but-inert. combatActionTargeting reports {total, legal} for enemies —
+    // total 0 means no enemies at all, legal 0 means every enemy is out of range.
+    // The per-row range gate (renderTargets) still explains partial reach whenever at
+    // least one enemy IS in range, so this only fires when the action is truly useless.
+    const census = context.combatActionTargeting?.('attack');
+    if (census) {
+      if (census.total === 0) return 'No targets.';
+      if (census.legal === 0) return 'No targets in range.';
+    }
     return '';
   }
   if (action.id === 'cast') {

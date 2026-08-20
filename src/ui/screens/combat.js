@@ -369,6 +369,7 @@ export function mount(container, params = {}) {
     combatGetActiveActor: () => getActiveActor(combatState),
     combatGetLegalActions: () => legalActions(),
     combatGetTargets: () => targetsForSelection(),
+    combatActionTargeting: (actionType) => actionTargeting(actionType),
     combatGetItems: () => consumableItems(runState),
     combatGetPreview: (targetId) => previewForTarget(targetId),
     combatGetMoveRange: () => getMoveRange(),
@@ -462,6 +463,27 @@ export function mount(container, params = {}) {
 
   function targetsForSelection() {
     return targetsForAction(selection.actionType);
+  }
+
+  // Census of how many targets an action has, and how many are *legally reachable*
+  // right now. The console reads this to disable ATTACK when nothing is in range
+  // (user feedback: "if not able to attack anything, attack should not be enabled").
+  // The attack legality here mirrors previewForTarget's attack branch exactly so the
+  // action gate and the per-row range gate never disagree: distance null / same-cell
+  // is legal, otherwise evaluateRange decides. Non-attack actions have no range gate
+  // today, so legal === total for them.
+  function actionTargeting(actionType = selection.actionType) {
+    const targets = targetsForAction(actionType);
+    if (actionType !== 'attack') return { total: targets.length, legal: targets.length };
+    const actor = getActiveActor(combatState);
+    const weapon = actor?.weapon || UNARMED;
+    let legal = 0;
+    for (const target of targets) {
+      const distance = distanceCells(actor?.position, target.position);
+      const inRange = distance == null || distance < 1 ? true : evaluateRange(weapon, distance).legal;
+      if (inRange) legal += 1;
+    }
+    return { total: targets.length, legal };
   }
 
   function syncSelectionActor() {

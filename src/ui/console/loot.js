@@ -32,7 +32,11 @@ function text(className, value, testid = null) {
 }
 
 function stateFor(runState) {
-  if (!stateByRun.has(runState)) stateByRun.set(runState, { containers: new Map(), pendingJunkAll: false, notice: '', error: '' });
+  // inventoryOpen defaults false: the junk-management list starts collapsed so a full
+  // pack never buries the container CONTENTS / OPEN / TAKE controls. The flag lives on
+  // the per-run state so an explicit expand survives the re-render that every tag/take
+  // triggers.
+  if (!stateByRun.has(runState)) stateByRun.set(runState, { containers: new Map(), pendingJunkAll: false, notice: '', error: '', inventoryOpen: false });
   return stateByRun.get(runState);
 }
 
@@ -250,12 +254,36 @@ function renderContainerItems(container, context, lootContainer, items) {
 function renderInventoryJunk(container, context, state) {
   const inventory = context.runState?.inventory || [];
   const tagged = inventory.filter((item) => item.junkTagged);
+  // Only a non-empty pack is worth collapsing; an empty inventory stays inline so its
+  // "nothing to salvage" state reads normally.
+  const collapsible = inventory.length > 0;
+  const open = collapsible ? Boolean(state.inventoryOpen) : true;
+
   container.appendChild(text('mode-indicator', '◈ INVENTORY', 'loot-inventory-heading'));
   const header = document.createElement('div');
   header.className = 'loot-inventory-header console-row';
   header.dataset.testid = 'loot-inventory-header';
   header.textContent = `Inventory ${getInventoryCount(inventory)}/${INVENTORY_CAP} · Scrap ${context.runState?.scrapCounter || 0} · Tagged ${tagged.length} / ${tagged.reduce((sum, item) => sum + getSalvageValue(item), 0)}`;
   container.appendChild(header);
+
+  if (collapsible) {
+    const toggle = createButton(`${open ? '▾' : '▸'} MANAGE JUNK · ${inventory.length}`, {
+      onClick: () => { state.inventoryOpen = !open; context.refresh?.(); }
+    });
+    toggle.className = 'loot-inventory-toggle console-row';
+    toggle.dataset.testid = 'loot-inventory-toggle';
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-controls', 'loot-inventory-body');
+    container.appendChild(toggle);
+  }
+
+  // The junk list + JUNK ALL stay in the DOM even when collapsed (hidden via
+  // .is-collapsed) so tag/junk and the canvas-confirm path keep working without an
+  // expand step, and the SESSION-06 icon-coverage tests still find the buttons.
+  const body = document.createElement('div');
+  body.className = `loot-inventory-body${open ? '' : ' is-collapsed'}`;
+  body.id = 'loot-inventory-body';
+  body.dataset.testid = 'loot-inventory-body';
   const inv = document.createElement('div');
   inv.className = 'loot-junk-list';
   inv.dataset.testid = 'loot-junk-list';
@@ -267,14 +295,15 @@ function renderInventoryJunk(container, context, state) {
     button.dataset.testid = `loot-junk-${item.id}`;
     inv.appendChild(button);
   }
-  container.appendChild(inv);
+  body.appendChild(inv);
   const junkAll = createButton(state.pendingJunkAll ? 'CONFIRM JUNK ALL TAGGED' : 'JUNK ALL TAGGED', {
     danger: true, disabled: !tagged.length,
     onClick: () => requestJunkAll(context),
     icon: 'recycle', iconSize: 14
   });
   junkAll.dataset.testid = 'loot-junk-all';
-  container.appendChild(junkAll);
+  body.appendChild(junkAll);
+  container.appendChild(body);
 }
 
 export function render(container, context = {}) {

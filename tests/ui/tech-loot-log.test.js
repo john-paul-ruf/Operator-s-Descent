@@ -316,6 +316,32 @@ describe('LOOT mode', () => {
     expect(runState.scrapCounter).toBe(5);
   });
 
+  it('collapses the junk manager by default and expands it via the MANAGE JUNK toggle', () => {
+    const runState = run([item('inv-a', 'sidearm'), item('inv-b', 'polearm')]);
+    const lootState = { container: { id: 1, x: 1, y: 1 }, items: [item('loot-sidearm')] };
+    const { container } = renderLootWith(runState, lootState);
+
+    // Junk buttons stay in the DOM so the canvas-confirm path keeps working, but the wrapper
+    // is collapsed so a full pack cannot bury the container CONTENTS / OPEN / TAKE controls.
+    const body = byTestId(container, 'loot-inventory-body');
+    expect(body.className).toContain('is-collapsed');
+    expect(byTestId(container, 'loot-junk-inv-a')).toBeTruthy();
+    expect(byTestId(container, 'loot-inventory-toggle').getAttribute('aria-expanded')).toBe('false');
+
+    byTestId(container, 'loot-inventory-toggle').click();
+
+    expect(byTestId(container, 'loot-inventory-body').className).not.toContain('is-collapsed');
+    expect(byTestId(container, 'loot-inventory-toggle').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('omits the MANAGE JUNK toggle and renders inline when the inventory is empty', () => {
+    const runState = run([]);
+    const lootState = { container: { id: 1, x: 1, y: 1 }, items: [item('loot-sidearm')] };
+    const { container } = renderLootWith(runState, lootState);
+    expect(byTestId(container, 'loot-inventory-toggle')).toBeNull();
+    expect(byTestId(container, 'loot-inventory-body').className).not.toContain('is-collapsed');
+  });
+
   it('renders resolved names and descriptions on loot cards', () => {
     const runState = run([]);
     const tuned = item('loot-sidearm', 'sidearm', { rarity: 'tuned', affixes: ['precise'], salvageValue: 1 });
@@ -325,11 +351,13 @@ describe('LOOT mode', () => {
     const row = byTestId(container, 'loot-item-loot-sidearm');
     expect(textOf(row)).toContain('Sidearm');
     expect(textOf(row)).not.toContain('baseType');
-    const detail = byTestId(container, 'loot-detail-loot-sidearm');
-    expect(textOf(detail)).toContain('d6 dmg');
-    expect(textOf(detail)).toContain('adjacent range');
-    expect(textOf(detail)).toContain('Precise: +1 accuracy bonus');
-    expect(textOf(detail)).toContain('scrap 1');
+    // SESSION-03 folded the old loot-detail block into the equipment card: the resolved
+    // stat line now renders in the card body (.card-desc), not a loot-detail-* node. The
+    // same resolved strings must still surface on the card.
+    expect(textOf(row)).toContain('d6 dmg');
+    expect(textOf(row)).toContain('adjacent range');
+    expect(textOf(row)).toContain('Precise: +1 accuracy bonus');
+    expect(textOf(row)).toContain('scrap 1');
   });
 
   it('opens the manual for the rarity chip in the container item detail', () => {
