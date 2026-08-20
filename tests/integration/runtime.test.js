@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/skip-boot.js';
 import { bus } from '../../src/state/bus.js';
 import { saveSettings } from '../../src/state/library.js';
+import { encodeRun } from '../../src/state/save-encode.js';
+import { decodeRun } from '../../src/state/save-decode.js';
 import { resetGameDataForTests } from '../../src/data-loader.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
@@ -456,6 +458,38 @@ describe('runtime autosave checkpoints', () => {
     expect(bus.dispatch('state:loot-taken', {})).toBe(false);
     expect(autosaves).toHaveLength(1);
     warn.mockRestore();
+    off();
+  });
+
+  it('stores the exact #r= export token in localStorage after a loot-taken autosave', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const autosaves = [];
+    const off = bus.on('state:autosave-complete', (payload) => autosaves.push(payload));
+    const state = buildRealisticRun(97, { depth: 2, fogCells: 6, recentEvents: 4 });
+
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'proof-item', containerId: 5, containerClosed: false });
+
+    expect(autosaves).toHaveLength(1);
+    expect(autosaves[0].reason).toBe('loot-taken');
+    const key = autosaves[0].key;
+    expect(typeof key).toBe('string');
+
+    const stored = globalThis.localStorage.getItem('od_run_' + key);
+    expect(typeof stored).toBe('string');
+    expect(stored.length).toBeGreaterThan(0);
+
+    // The stored value IS the export token: byte-identical to what the LOG
+    // copy-link builds via encodeRun(runState).fragment. Pipeline is
+    // deterministic and we make no state mutations between save and re-encode.
+    const reEncoded = encodeRun(state);
+    expect(stored).toBe(reEncoded.fragment);
+
+    const decoded = decodeRun(stored);
+    expect(decoded.success).toBe(true);
+    expect(decoded.runState.worldSeed).toBe(state.worldSeed);
+    expect(decoded.runState.depth).toBe(state.depth);
+    expect(decoded.runState.inventory.length).toBe(state.inventory.length);
     off();
   });
 });

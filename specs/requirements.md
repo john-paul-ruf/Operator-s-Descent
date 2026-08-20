@@ -412,7 +412,7 @@
   - [ ] Any number of runs may persist in `localStorage` simultaneously.
   - [ ] Each run is saved as its **world seed + full run state** in `localStorage`. The seed is the primary key; the state is the resumable snapshot.
   - [ ] Each run is displayed in a library listing: seed, depth reached, party composition (sigils), accent swatch.
-  - [ ] A run autosaves on floor transition and on combat resolution.
+  - [ ] A run autosaves on combat start (pre-fight), on combat resolution, on loot pickup, and on floor transition.
   - [ ] A run persists until its party wipes; a live run is never automatically deleted.
   - [ ] There is no single save slot, no overwrite of one run by another, and no undo within a run.
   - [ ] The player can choose which run to open from the library.

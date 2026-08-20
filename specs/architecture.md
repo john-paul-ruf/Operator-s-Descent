@@ -779,7 +779,7 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
    - Container/descent/feature discovered → halt, dispatch `ui:discovery`.
    - Damage taken → halt, dispatch `ui:interrupt`.
 4. `exploration/movement.js` ticks danger clock each step → if threshold reached, spawn hunt → dispatch `state:combat-start`.
-5. `state/library.js` autosaves on floor transitions.
+5. `state/library.js` autosaves on combat start (pre-fight), combat resolution, loot pickup, and floor transition.
 
 ### Combat Loop
 1. `rules/combat.js` initiates combat: roll initiative, build turn order, create `CombatState`.
@@ -793,7 +793,7 @@ The junk/salvage mechanic (FR-50) provides the gameplay motivation for the cap: 
 5. Victory → return to exploration. Wipe → `state/bus.js` dispatches `state:party-wipe` → `state/library.js.deleteRunState(key)` removes the run's state (but keeps the seed) → mount scorecard screen. The scorecard offers only the seed-only `#w=` link (no full-state `#r=` link — the party is dead, the run state is gone). Scorecard also offers: restart with same seed (creation screen with same worldSeed), start new run (fresh seed), return to title. **While the party is alive (mid-run),** the player can generate a full-state `#r=` link at any time (via LOG mode or a console action) to share their exact current position — same party, same depth, same inventory, same everything.
 
 ### Save/Load Flow
-1. **Autosave:** On floor transition and combat resolution, `state/library.js` serializes `RunState` and writes to `localStorage`.
+1. **Autosave:** On combat start (pre-fight), combat resolution, loot pickup, and floor transition, `state/library.js` serializes `RunState` and writes to `localStorage`.
 2. **Copy link:** `state/save-encode.js` encodes `RunState` to URL fragment → copy to clipboard.
 3. **Import link:** Paste URL → `state/save-encode.js` decodes → success: mount exploration with restored state; failure: mount named failure screen.
 4. **Library resume:** `state/library.js` loads run from `localStorage` → `RunState.deserialize()` → mount exploration at saved depth.

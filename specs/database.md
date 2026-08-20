@@ -144,7 +144,7 @@ interface LibraryEntry {
 **Value format:** A base64url string, typically 200–500 characters (well under the 1500-char URL limit). This is dramatically smaller than a full JSON serialization of `RunState`, which would be several KB.
 
 **Constraints:**
-- Written on autosave (floor transition, combat resolution). The `saveRun()` call encodes the `RunState` through the same pipeline as URL fragment saves, then writes the resulting string to `localStorage`.
+- Written on autosave (combat start, combat resolution, loot pickup, floor transition). The `saveRun()` call encodes the `RunState` through the same pipeline as URL fragment saves, then writes the resulting string to `localStorage`.
 - Deleted on party wipe (`deleteRunState(key)`). The seed is preserved separately.
 - Treated as untrusted on load — `loadRun()` decodes through the same pipeline as URL fragment import. Malformed data, checksum failures, or version mismatches fail gracefully and return `null`, never crash the app.
 - Because the same encoding is used for both `localStorage` and URL fragments, there is exactly one serialization path to maintain. Any migration logic in `state/save-decode.js` applies equally to both storage layers.
