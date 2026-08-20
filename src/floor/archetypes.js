@@ -138,9 +138,11 @@ export function generateChambers(prng) {
 
 export function generateCaves(prng) {
   let grid = createGrid();
+  // Initial density lowered slightly (0.45 → 0.42) so 40x64 doesn't converge
+  // to a single mega-void that would trip open-cell-bounds.
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
-      grid[y][x] = prng.next() < 0.45 ? 1 : 0;
+      grid[y][x] = prng.next() < 0.42 ? 1 : 0;
     }
   }
   for (let pass = 0; pass < 3; pass++) {
@@ -153,12 +155,52 @@ export function generateCaves(prng) {
             if (grid[y + dy][x + dx] === 1) neighbors++;
           }
         }
-        next[y][x] = neighbors >= 4 ? 1 : 0;
+        next[y][x] = neighbors >= 5 ? 1 : 0;
       }
     }
     grid = next;
   }
+  // Keep only the largest connected component — the CA rule fragments the
+  // grid into many pockets that would trip connectivity validation.
+  keepLargestConnectedComponent(grid);
   return grid;
+}
+
+function keepLargestConnectedComponent(grid) {
+  const h = grid.length;
+  const w = grid[0].length;
+  const region = new Array(h);
+  for (let y = 0; y < h; y++) region[y] = new Int32Array(w);
+  let nextId = 1;
+  const sizes = [0]; // id 0 reserved for walls / unvisited walls
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (grid[y][x] !== 1 || region[y][x] !== 0) continue;
+      const id = nextId++;
+      const stack = [[x, y]];
+      region[y][x] = id;
+      let size = 0;
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop();
+        size++;
+        if (cy > 0 && grid[cy - 1][cx] === 1 && region[cy - 1][cx] === 0) { region[cy - 1][cx] = id; stack.push([cx, cy - 1]); }
+        if (cy < h - 1 && grid[cy + 1][cx] === 1 && region[cy + 1][cx] === 0) { region[cy + 1][cx] = id; stack.push([cx, cy + 1]); }
+        if (cx > 0 && grid[cy][cx - 1] === 1 && region[cy][cx - 1] === 0) { region[cy][cx - 1] = id; stack.push([cx - 1, cy]); }
+        if (cx < w - 1 && grid[cy][cx + 1] === 1 && region[cy][cx + 1] === 0) { region[cy][cx + 1] = id; stack.push([cx + 1, cy]); }
+      }
+      sizes.push(size);
+    }
+  }
+  let winner = 0, best = 0;
+  for (let id = 1; id < sizes.length; id++) {
+    if (sizes[id] > best) { best = sizes[id]; winner = id; }
+  }
+  if (winner === 0) return;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (grid[y][x] === 1 && region[y][x] !== winner) grid[y][x] = 0;
+    }
+  }
 }
 
 export function generateMazes(prng) {
