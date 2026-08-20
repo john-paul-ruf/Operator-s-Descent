@@ -110,6 +110,17 @@
   cursor: default;
 }
 
+/* In-tab shortcut badge (playtest-clarity S01) — replaces the native `title`
+   tooltip that occluded the TARGET panel. Small, dim, non-wrapping. */
+.tab-key {
+  margin-left: 4px;
+  align-self: flex-start;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 /* Status Strip */
 .status-strip {
   display: flex;

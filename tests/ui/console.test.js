@@ -75,6 +75,26 @@ describe('console shell', () => {
     expect(root.getAttribute('aria-expanded')).toBe('false');
   });
 
+  test('renders an in-tab key badge instead of a native title tooltip, with the shortcut in aria-label', () => {
+    const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
+    const root = consoleShell.render();
+    const tabs = root.children[1].children;
+
+    tabs.forEach((tab, index) => {
+      // No native tooltip — it floated over the TARGET panel.
+      expect(tab.getAttribute('title')).toBeNull();
+      const badge = byClass(tab, 'tab-key');
+      expect(badge).not.toBe(null);
+      expect(badge.textContent).toBe(String(index + 1));
+      expect(badge.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    // Enabled tab carries the spoken shortcut; disabled tab carries its reason.
+    expect(tabs[0].getAttribute('aria-label')).toBe('MOVE · Key 1');
+    expect(tabs[1].disabled).toBe(true);
+    expect(tabs[1].getAttribute('aria-label')).toBe('CMBT · No active combat.');
+  });
+
   test('switching modes destroys previous content and focuses the mode panel', () => {
     const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
     const root = consoleShell.render();

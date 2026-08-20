@@ -96,7 +96,14 @@ export function createConsole(state, options = {}) {
     tab.id = `console-tab-${mode.id}`;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', 'console-content');
-    tab.title = `Key ${index + 1}`;
+    // In-tab shortcut badge replaces the native `title` tooltip, which floated
+    // over the TARGET panel. The number is decorative (aria-label carries the
+    // spoken shortcut); disabled tabs keep their reason in aria-label only.
+    const keyBadge = document.createElement('span');
+    keyBadge.className = 'tab-key';
+    keyBadge.textContent = String(index + 1);
+    keyBadge.setAttribute('aria-hidden', 'true');
+    tab.appendChild(keyBadge);
     tab.dataset.testid = `console-tab-${mode.id}`;
     tab.addEventListener('click', () => {
       const wasActive = currentMode === mode.id;
@@ -132,7 +139,9 @@ export function createConsole(state, options = {}) {
       tab.setAttribute('aria-selected', String(active));
       tab.setAttribute('aria-expanded', String(active && expanded));
       tab.setAttribute('aria-disabled', String(!available));
-      tab.title = available ? `${mode.label} · ${mode.key.replace('mode_', 'Key ')}` : mode.reason;
+      tab.setAttribute('aria-label', available
+        ? `${mode.label} · ${mode.key.replace('mode_', 'Key ')}`
+        : `${mode.label} · ${mode.reason}`);
     }
     if (contentHeaderLabel) {
       const mode = modeById(currentMode);
