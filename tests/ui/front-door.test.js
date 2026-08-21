@@ -316,12 +316,11 @@ describe('settings screen', () => {
       reducedMotion: 'full',
       scanlineGrainEnabled: false
     });
-    // masterVolume live-dispatch coverage is pending a bus.js SETTING_KEYS
-    // widen (out of lease this session); persistence above proves the slider
-    // callback + saveSettings path. Follow-up: add { key: 'masterVolume',
-    // value: 40 } here once bus.js gains 'masterVolume'.
+    // SESSION-05 — bus.js SETTING_KEYS whitelist now includes 'masterVolume',
+    // so the MASTER slider input dispatches through the real bus end-to-end.
     expect(changes).toEqual(expect.arrayContaining([
       { key: 'mute', value: true },
+      { key: 'masterVolume', value: 40 },
       { key: 'volume:drone', value: 23 },
       { key: 'reducedMotion', value: 'full' },
       { key: 'scanlineGrain', value: false }

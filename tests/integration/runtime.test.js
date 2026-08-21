@@ -743,16 +743,31 @@ describe('audio boot lifecycle', () => {
     expect(api.getRuntimeSnapshot().masterVolume).toBe(100);
   });
 
-  it('routes a masterVolume settings-change directly through the runtime handler when reachable', () => {
-    // NOTE: The bus contract validator in src/state/bus.js (SETTING_KEYS)
-    // currently rejects `masterVolume` payloads before listeners fire, so a
-    // live `bus.dispatch('state:settings-change', { key: 'masterVolume', ... })`
-    // is unreachable end-to-end until that whitelist gains 'masterVolume'.
-    // The runtime branch itself (audioEngine?.setMasterVolume) is guarded by
-    // optional chaining and cannot throw with or without an active engine —
-    // this test locks in the no-throw contract for the day the whitelist
-    // ships.
-    expect(() => bus.dispatch('state:settings-change', { key: 'masterVolume', value: 50 })).not.toThrow();
+  it('routes a masterVolume settings-change through the runtime handler and updates the live audio graph', async () => {
+    // SESSION-05 — bus.js SETTING_KEYS now whitelists 'masterVolume', so this
+    // dispatch reaches the runtime's state:settings-change listener, which
+    // calls audioEngine.setMasterVolume. The engine surfaces the change on
+    // getGraphState().masterVolume, which getRuntimeSnapshot() re-exports.
+    // Re-import bus after runtime so both bind to the same module instance
+    // when a prior describe (service-worker) has called vi.resetModules().
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const { bus: liveBus } = await import('../../src/state/bus.js');
+    expect(api.getRuntimeSnapshot().masterVolume).toBe(100);
+
+    expect(liveBus.dispatch('state:settings-change', { key: 'masterVolume', value: 40 })).toBe(true);
+    expect(api.getRuntimeSnapshot().masterVolume).toBe(40);
+
+    // Second live update proves the handler is not a one-shot.
+    expect(liveBus.dispatch('state:settings-change', { key: 'masterVolume', value: 12 })).toBe(true);
+    expect(api.getRuntimeSnapshot().masterVolume).toBe(12);
+
+    // Unknown key is rejected by the bus contract before any listener runs;
+    // dispatch returns false and the audio graph value is unchanged.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(liveBus.dispatch('state:settings-change', { key: 'not-a-real-setting', value: 99 })).toBe(false);
+    expect(api.getRuntimeSnapshot().masterVolume).toBe(12);
+    warn.mockRestore();
   });
 
   it('closes the runtime-created AudioContext and removes gesture listeners on shutdown', async () => {
