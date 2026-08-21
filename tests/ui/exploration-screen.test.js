@@ -172,7 +172,7 @@ function sizeBody(container, { width = 100, height = 100 } = {}) {
   return { playfieldBody, canvas };
 }
 
-// zoomToCells(24, 40): body==world (480×768) → fitScale 1 → scale = clamp(40/24, 1, 4) = 5/3.
+// zoomToCells(24, 40): body 480×768 vs world 960×1536 → fitScale 0.5 → scale = clamp(40/24, 0.5, 4) = 5/3.
 // Camera centers the party at the canvas center; one world cell = 24 * 5/3 = 40 screen px.
 const CELL_PX = 24;
 const SCALE = 40 / CELL_PX;
@@ -337,9 +337,9 @@ describe('exploration screen controller', () => {
     const { container, runState: state } = await mountExploration();
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    // Body 480×768 == world → fitScale 1; primeCamera calls zoomToCells(24, 40) → scale 5/3
-    // and centers the party (10,10) at the canvas center (240, 384). A +2px pointermove
-    // stays under the 6px drag threshold → tap fires; tap on the party cell is ignored.
+    // Body 480×768 vs world 960×1536 → fitScale 0.5; primeCamera calls zoomToCells(24, 40) →
+    // scale clamp(5/3, 0.5, 4) = 5/3 and centers party (10,10) at canvas center (240, 384).
+    // A +2px pointermove stays under the 6px drag threshold → tap fires; tap on party is ignored.
     const down = cellToClient(0, 0);
     playfieldBody.dispatch('pointerdown', { pointerId: 1, clientX: down.x, clientY: down.y });
     playfieldBody.dispatch('pointermove', { pointerId: 1, clientX: down.x + 2, clientY: down.y + 2 });
@@ -364,10 +364,10 @@ describe('exploration screen controller', () => {
     const { container, runState: state } = await mountExploration();
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    // Body 480×768 == world (20×24=480, 32×24=768). primeCamera runs zoomToCells(24, 40) →
-    // scale 5/3 and centers party (10,10) at canvas center (240, 384). One world cell = 40
-    // screen px. Tap on world cell (11,10) → client (280, 384). Below drag threshold →
-    // fires as tap; BFS finds [e]; party executes immediately.
+    // Body 480×768 vs world 960×1536 (40×24, 64×24) → fitScale 0.5. primeCamera runs
+    // zoomToCells(24, 40) → scale clamp(5/3, 0.5, 4) = 5/3 and centers party (10,10) at
+    // canvas center (240, 384). One world cell = 40 screen px. Tap on world cell (11,10) →
+    // client (280, 384). Below drag threshold → fires as tap; BFS finds [e]; executes immediately.
     const tap = cellToClient(1, 0);
     playfieldBody.dispatch('pointerdown', { pointerId: 3, clientX: tap.x, clientY: tap.y });
     playfieldBody.dispatch('pointerup', { pointerId: 3, clientX: tap.x, clientY: tap.y });
@@ -600,8 +600,9 @@ describe('exploration screen controller', () => {
   //
   // Camera math for these tests: playfieldBody has no bounding rect in the fake
   // DOM → resizeCanvas fallback primes the camera to canvas.width×height
-  // (480×768). zoomToCells(24, 40) → scale 5/3. centerOn party (10,10) center
-  // (252, 252) → state.x = 108, state.y = 21.6 (both in-range after clamp).
+  // (480×768) vs world 960×1536 → fitScale 0.5; zoomToCells(24, 40) → scale
+  // clamp(5/3, 0.5, 4) = 5/3. centerOn party (10,10) center (252, 252) → state.x
+  // = 108, state.y = 21.6 (clamp bounds 0..672 / 0..1075.2 — both in-range).
   it('renders the loot-eligible marker positioned over an adjacent unopened container', async () => {
     const containerFloor = floor({ containers: [{ id: 0, x: 11, y: 10 }] });
     const { container } = await mountExploration({ floor: containerFloor });
@@ -650,7 +651,7 @@ describe('exploration screen controller', () => {
     expect(marker.hidden).toBe(false);
     // Container (12,10) center: worldX = 12*24 + 12 = 300, worldY = 252.
     // Camera re-centered on party (11,10) after move → new worldCenter (276,252)
-    // → state.x = 276 − 144 = 132 (clamped to ≤192, in range), state.y = 21.6.
+    // → state.x = 276 − 144 = 132 (clamped to ≤672, in range), state.y = 21.6.
     // cssX = (300 − 132) * 5/3 = 280; cssY = (252 − 21.6) * 5/3 = 384.
     expect(marker.style.left).toBe('280px');
     expect(marker.style.top).toBe('384px');
