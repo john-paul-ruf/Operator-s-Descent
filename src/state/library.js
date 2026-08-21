@@ -95,6 +95,7 @@ function writeIndex(storage, index) { return write(storage, KEY_RUNS, JSON.strin
 function defaultSettings() {
   return {
     masterMute: false,
+    masterVolume: 100,
     layerVolumes: { drone: 75, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 },
     glitchEnabled: true,
     reducedMotion: 'system',
@@ -112,6 +113,7 @@ function normalizeSettings(value) {
   return {
     ...input,
     masterMute: typeof input.masterMute === 'boolean' ? input.masterMute : defaults.masterMute,
+    masterVolume: Math.max(0, Math.min(100, Number.isFinite(input.masterVolume) ? Math.round(input.masterVolume) : defaults.masterVolume)),
     layerVolumes: {
       ...layers,
       ...Object.fromEntries(LAYERS.map((layer) => [layer, Math.max(0, Math.min(100, Number.isFinite(layers[layer]) ? Math.round(layers[layer]) : defaults.layerVolumes[layer]))]))

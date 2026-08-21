@@ -211,6 +211,7 @@ describe('settings and flags', () => {
   it('uses the complete default setting shape', () => {
     expect(loadSettings()).toEqual({
       masterMute: false,
+      masterVolume: 100,
       layerVolumes: { drone: 75, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 },
       glitchEnabled: true,
       reducedMotion: 'system',
@@ -227,12 +228,32 @@ describe('settings and flags', () => {
     }));
     expect(loadSettings()).toEqual({
       masterMute: false,
+      masterVolume: 100,
       layerVolumes: { drone: 0, pulse: 43, sparkle: 75, lead: 100, noiseBed: 75 },
       glitchEnabled: true,
       reducedMotion: 'reduce',
       scanlineGrainEnabled: true,
       futureOption: { retained: true }
     });
+  });
+
+  it('clamps and rounds masterVolume, defaults on non-finite input, preserves 0', () => {
+    localStorage.setItem('od_settings', JSON.stringify({ masterVolume: 250.6 }));
+    expect(loadSettings().masterVolume).toBe(100);
+    localStorage.setItem('od_settings', JSON.stringify({ masterVolume: -5 }));
+    expect(loadSettings().masterVolume).toBe(0);
+    localStorage.setItem('od_settings', JSON.stringify({ masterVolume: 0 }));
+    expect(loadSettings().masterVolume).toBe(0);
+    localStorage.setItem('od_settings', JSON.stringify({ masterVolume: 'loud' }));
+    expect(loadSettings().masterVolume).toBe(100);
+    localStorage.setItem('od_settings', JSON.stringify({ masterVolume: null }));
+    expect(loadSettings().masterVolume).toBe(100);
+  });
+
+  it('preserves masterVolume across a saveSettings round-trip', () => {
+    const saved = saveSettings({ masterVolume: 42 });
+    expect(saved.success).toBe(true);
+    expect(loadSettings().masterVolume).toBe(42);
   });
 
   it('normalizes explicit reduced-motion overrides and preserves unknown fields when saving', () => {
