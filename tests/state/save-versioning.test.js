@@ -7,6 +7,7 @@ import { encodeRunPayload } from '../../src/state/save-schema.js';
 import { readV3Payload } from '../../src/state/versions/read-v3.js';
 import { readV4Payload } from '../../src/state/versions/read-v4.js';
 import { readV5Payload, V5_SCHEMA_VERSION } from '../../src/state/versions/read-v5.js';
+import { FOG_BYTES } from '../../src/state/run-state.js';
 import { loadData } from '../helpers/data.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 
@@ -111,9 +112,8 @@ describe('v5 -> v6 migration tolerance (Custom Rule 13)', () => {
       // GRID_W x GRID_H). Content either preserved (matched at decode time)
       // or reset-to-zero (post-flip world). Both paths must pass.
       const fogLength = state.fogOfWar.length;
-      const fogAllZero = state.fogOfWar.every((byte) => byte === 0);
       expect(fogLength > 0).toBe(true);
-      expect(fogAllZero || fogLength === 80).toBe(true);
+      expect(fogLength === FOG_BYTES).toBe(true);
       // partyPosition: always non-negative integers. Bounds validation
       // happens inside run-state.js normalizeRunState; if we got here, it
       // passed the check for the current GRID_W/GRID_H.

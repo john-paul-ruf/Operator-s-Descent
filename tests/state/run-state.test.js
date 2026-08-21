@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
-import { createRunState, deserializeRunState, validateRunState } from '../../src/state/run-state.js';
+import { createRunState, deserializeRunState, validateRunState, FOG_BYTES } from '../../src/state/run-state.js';
+import { GRID_W } from '../../src/floor/archetypes.js';
 
 function makeCharacter(id = 'operator_1') {
   return {
@@ -67,7 +68,7 @@ describe('RunState bounds and hostile input', () => {
 
   it.each([
     ['seed', state => { state.worldSeed = -1; }],
-    ['position', state => { state.partyPosition.x = 20; }],
+    ['position', state => { state.partyPosition.x = GRID_W; }],
     ['inventory', state => { state.inventory = Array.from({ length: 101 }, () => validItem()); }],
     ['echo queue', state => { state.echoQueue = [validEcho(), validEcho(), validEcho()]; }],
     ['non-finite number', state => { state.corruption = Number.NaN; }],
@@ -87,7 +88,7 @@ describe('RunState bounds and hostile input', () => {
     serialized.fogOfWar.pop();
     const state = deserializeRunState(serialized);
     expect(state).not.toBeNull();
-    expect(state.fogOfWar).toHaveLength(80);
+    expect(state.fogOfWar).toHaveLength(FOG_BYTES);
     expect(state.fogOfWar.every(byte => byte === 0)).toBe(true);
     expect(state.partyPosition).toEqual({ x: 0, y: 0 });
   });
@@ -119,19 +120,19 @@ describe('deterministic mutators', () => {
   it('returns explicit failures for invalid mutation requests and caps Echoes', () => {
     const state = makeState();
     expect(state.markContainerOpened(64)).toEqual({ marked: false, reason: 'invalid_id' });
-    expect(state.markCellVisited(20, 0)).toEqual({ marked: false, reason: 'invalid_coordinate' });
+    expect(state.markCellVisited(GRID_W, 0)).toEqual({ marked: false, reason: 'invalid_coordinate' });
     state.queueEcho(makeCharacter('one'), 1, createRNGCursorForRun(1));
     state.queueEcho(makeCharacter('two'), 1, createRNGCursorForRun(2));
     expect(state.queueEcho(makeCharacter('three'), 1, createRNGCursorForRun(3))).toEqual({ queued: false, reason: 'queue_full' });
   });
 
-  it('tracks visited cells as exactly 80 persisted bits and resets them', () => {
+  it('tracks visited cells as FOG_BYTES persisted bits and resets them', () => {
     const state = makeState();
     state.markCellVisited(19, 31);
     expect(state.isCellVisited(19, 31)).toBe(true);
-    expect(state.isCellVisited(20, 31)).toBe(false);
+    expect(state.isCellVisited(GRID_W, 31)).toBe(false);
     state.resetFogOfWar();
-    expect(state.fogOfWar).toHaveLength(80);
+    expect(state.fogOfWar).toHaveLength(FOG_BYTES);
     expect(state.isCellVisited(19, 31)).toBe(false);
   });
 
