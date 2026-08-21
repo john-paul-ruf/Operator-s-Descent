@@ -155,19 +155,22 @@ describe('LOG mode — slim persisted event rendering', () => {
     expect(messageText(rows[1])).toBe('LOOT · Container yields shard.');
   });
 
-  it('still renders legacy fat entries decoded from prior saves', () => {
-    // Simulate a legacy save that was decoded — its recentEvents were untouched
-    // by the decode path, so old fat entries with `entry` payloads remain until
-    // a fresh recordEvent replaces them.
+  it('sanitizes legacy fat entries at the createRunState/load boundary so no detail row leaks in', () => {
+    // A legacy save shape (timestamp + nested `entry` payload) is stripped by
+    // normalizePersistedEvent on load. The row still renders — the sanitizer
+    // preserves type/message/sequence — but the fat payload never reaches the
+    // renderer, so no `.log-detail` line appears.
     const runState = createRunState(123, [character()], {
       creationTimestamp: 1,
       recentEvents: [{ type: 'discovery', message: 'Legacy discovery.', sequence: 1, timestamp: 999, entry: { detail: 'kept' } }]
     });
+    expect(runState.recentEvents).toEqual([{ type: 'discovery', message: 'Legacy discovery.', sequence: 1 }]);
     const container = new FakeElement('div');
     renderLog(container, { runState, data, logEntries: [] });
     const rows = collectLogEntryRows(container);
     expect(rows).toHaveLength(1);
     expect(messageText(rows[0])).toBe('DISCOVERY · Legacy discovery.');
+    expect(detailChild(rows[0])).toBe(null);
   });
 
   it('places restored persisted history before live entries when both are present', () => {
@@ -259,7 +262,9 @@ describe('createLogEntryElement — detail second line', () => {
     expect(detailChild(endRow)).toBe(null);
   });
 
-  it('renders a persisted recentEvent that carries a `detail` string as a full log row with the detail line', () => {
+  it('recordEvent strips detail — a persisted row rendered from recentEvents has no detail line even when the caller passed one', () => {
+    // The canonical persisted boundary drops `detail` at recordEvent time, so
+    // a resume-only render (logEntries: []) shows the slim one-line form.
     const runState = run();
     runState.recordEvent({
       type: 'attack',
@@ -267,8 +272,30 @@ describe('createLogEntryElement — detail second line', () => {
       sequence: 42,
       detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
     });
+    expect(runState.recentEvents[0]).not.toHaveProperty('detail');
     const container = new FakeElement('div');
     renderLog(container, { runState, data, logEntries: [] });
+    const rows = collectLogEntryRows(container);
+    expect(rows).toHaveLength(1);
+    expect(detailChild(rows[0])).toBe(null);
+  });
+
+  it('renders a live logEntries payload with its detail intact — live diagnostics are not weakened', () => {
+    // logEntries is the live in-memory list runtime maintains alongside recentEvents.
+    // It preserves rich fields for the current session's log, so the row exposes a
+    // `.log-detail` second line even though the equivalent persisted event is slim.
+    const runState = run();
+    const container = new FakeElement('div');
+    renderLog(container, {
+      runState,
+      data,
+      logEntries: [{
+        type: 'attack',
+        message: 'operator attacks 0: 3 damage.',
+        sequence: 42,
+        detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
+      }]
+    });
     const rows = collectLogEntryRows(container);
     expect(rows).toHaveLength(1);
     const detail = detailChild(rows[0]);
@@ -300,13 +327,15 @@ describe('LOG mode — persisted + live dedupe', () => {
     expect(detail.textContent).toBe('d20 14 = 14 vs DEF 12 → HIT · d6=3 dmg');
   });
 
-  it('richer persisted detail wins over a plainer live duplicate', () => {
-    // The dedupe is symmetric: if the persisted entry carries `detail` and the live
-    // copy is plain, the persisted (richer) one survives.
+  it('sanitizes persisted-side detail on load — a legacy detail-carrying recentEvent is stripped and the plain live duplicate wins with no detail line', () => {
+    // After the SESSION-03 boundary change, persisted recentEvents can never carry
+    // `detail` (the sanitizer strips it on both recordEvent and load). A single-row
+    // dedupe with no detail is the expected outcome when the live copy is also plain.
     const runState = createRunState(123, [character()], {
       creationTimestamp: 1,
       recentEvents: [{ type: 'attack', message: 'Operator strikes drone.', sequence: 5, detail: 'd20 20 = 20 → HIT CRIT · d6=6 dmg' }]
     });
+    expect(runState.recentEvents[0]).not.toHaveProperty('detail');
     const container = new FakeElement('div');
     renderLog(container, {
       runState,
@@ -315,8 +344,6 @@ describe('LOG mode — persisted + live dedupe', () => {
     });
     const rows = collectLogEntryRows(container);
     expect(rows).toHaveLength(1);
-    const detail = detailChild(rows[0]);
-    expect(detail).not.toBe(null);
-    expect(detail.textContent).toBe('d20 20 = 20 → HIT CRIT · d6=6 dmg');
+    expect(detailChild(rows[0])).toBe(null);
   });
 });

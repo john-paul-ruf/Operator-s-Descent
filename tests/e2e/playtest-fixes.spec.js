@@ -205,7 +205,7 @@ test('--text-disabled token clears WCAG AA against the panel background it appea
 //    persisted `recentEvents` (normalized by normalizePersistedEvent) render the
 //    slim one-line form with no detail row.
 // ─────────────────────────────────────────────────────────────────────────────
-test('LIVE combat log carries d20 detail; persisted entries render without detail', async ({ page }) => {
+test('LIVE combat log carries d20 detail; persisted entries resume in a fresh page context with zero detail rows', async ({ page }) => {
   // LIVE half runs in wide: the wide telemetry dock (status-strip.js) is the only
   // renderer that subscribes to `ui:log-entry` directly and carries the live payload
   // through createLogEntryElement — the portrait LOG mode collects only persisted
@@ -224,21 +224,42 @@ test('LIVE combat log carries d20 detail; persisted entries render without detai
   // does not surface the portrait status-strip's AP badge.
   await expect(feed.locator('.log-entry .log-detail').first()).toBeVisible({ timeout: 15000 });
   const liveDetail = await feed.locator('.log-entry .log-detail').first().textContent();
+  // (1) Live diagnostics are preserved: the wide telemetry feed exposes the d20
+  //     breakdown for the attack we just dispatched. If normalizePersistedEvent
+  //     ever accidentally stripped the live payload upstream, this assertion trips.
   expect(liveDetail || '').toMatch(/d20 \d+/);
+  const liveDetailCount = await feed.locator('.log-entry .log-detail').count();
+  expect(liveDetailCount).toBeGreaterThanOrEqual(1);
 
-  // Persisted half: back to portrait, reopen from a fresh URL and assert the LOG
-  // panel renders no detail — recentEvents were stripped by normalizePersistedEvent.
+  // Persisted half: copy the LOG link from portrait, then resume in a
+  // genuinely fresh page context (a new page — the runtime's in-memory
+  // runtimeLogEntries do not survive the new window) and assert the LOG
+  // panel renders no detail.
   await page.setViewportSize({ width: 1080, height: 1920 });
   await page.getByTestId('console-tab-log').click();
   await page.getByTestId('log-copy-link').click();
   const link = await page.getByTestId('log-link-text').inputValue();
   const fragmentAfter = new URL(link).hash.slice(3);
-  await installStorage(page);
-  await page.goto(`/?run=${fragmentAfter.slice(0, 8)}#r=${fragmentAfter}`);
-  await page.getByTestId('import-resume').click();
-  await expect(page.getByTestId('combat-canvas')).toBeVisible();
-  await page.getByTestId('console-tab-log').click();
-  const persistedDetailCount = await page.locator('.log-entry .log-detail').count();
+  expect(fragmentAfter.length).toBeGreaterThan(0);
+  await page.close();
+
+  // (2) Resume the copied link in a fresh page context — new page in the same
+  //     browser context, storage installed from scratch, no in-memory carry-over.
+  const freshPage = await page.context().newPage();
+  await installStorage(freshPage);
+  await freshPage.goto(`/?run=${fragmentAfter.slice(0, 8)}#r=${fragmentAfter}`);
+  await expect(freshPage.getByTestId('import-run-summary')).toBeVisible();
+  await freshPage.getByTestId('import-resume').click();
+  await expect(freshPage.getByTestId('combat-canvas')).toBeVisible();
+  await freshPage.getByTestId('console-tab-log').click();
+  // Sanity: the resumed session actually shows persisted rows — otherwise the
+  // "zero details" assertion below would be trivially satisfied by an empty log.
+  const persistedRowCount = await freshPage.locator('.log-entry').count();
+  expect(persistedRowCount).toBeGreaterThan(0);
+  // (3) The persisted LOG contains zero .log-entry .log-detail rows — the
+  //     canonical sanitizer stripped detail at both recordEvent time (during
+  //     the pre-copy session) and load time (in this fresh session).
+  const persistedDetailCount = await freshPage.locator('.log-entry .log-detail').count();
   expect(persistedDetailCount).toBe(0);
 });
 
