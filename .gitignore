@@ -11,3 +11,4 @@
 /test-results/
 /.claude/
 /node_modules/
+/.playwright-cli/
