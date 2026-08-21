@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { createStandardEncounter, createHuntEncounter, completeEncounter, getDueEchoes, consumeEcho, injectEcho } from '../../src/rules/encounters.js';
+import { createStandardEncounter, createHuntEncounter, completeEncounter, getDueEchoes, consumeEcho, injectEcho, deployBands } from '../../src/rules/encounters.js';
 // windowMetricsOfWindow / buildRawWindow below are local mirrors used by the widening tests.
 import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { createPRNG } from '../../src/core/prng.js';
 import { generateFloor } from '../../src/floor/generator.js';
 import { makeParty, makeCharacter } from '../helpers/fixtures.js';
+import { makeGrid, reachable } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
 
 const themesData = loadData('themes');
@@ -409,6 +410,20 @@ function buildRawWindow(floorCells, originX, originY) {
   }
   return cells;
 }
+
+describe('deployBands — reachability invariant (SESSION-01)', () => {
+  it('confines party and hostile bands to one connected region (always mutually reachable)', () => {
+    const cells = makeGrid(8, 16, 1);            // fully open
+    for (let x = 0; x < 8; x++) cells[8][x] = 0; // wall row y=8 → top room (y0-7) ⟂ bottom room (y9-15)
+    const win = { originX: 0, originY: 0, width: 8, height: 16, cells };
+    const { partyPositions, hostilePositions } = deployBands(win, 2, 2);
+    const all = [...partyPositions, ...hostilePositions];
+    expect(all.length).toBe(4);
+    // Every position sits in the same connected region as the first (BFS reachability).
+    const reach = reachable(cells, all[0].x, all[0].y);
+    for (const p of all) expect(reach.has(`${p.x},${p.y}`)).toBe(true);
+  });
+});
 
 describe('completeEncounter — hunt outcome', () => {
   it('victory on hunt returns resolved with loot', () => {
