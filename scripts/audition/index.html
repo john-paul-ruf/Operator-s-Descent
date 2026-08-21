@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Audition Harness — Operator's Descent</title>
+<style>
+  :root {
+    --bg-base: #0a0612;
+    --bg-panel: #13092a;
+    --bg-panel-elevated: #1a0e36;
+    --border-dim: #453370;
+    --text-primary: #e0d8f0;
+    --text-secondary: #a89ac6;
+    --text-dim: #8878a8;
+    --accent: #7ec8e3;
+    --danger: #e83a3a;
+    --warning: #e8632a;
+    --heal: #3ae8a8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 15px; margin: 0 0 4px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+  h2 { font-size: 12px; margin: 0 0 8px; color: var(--text-secondary); letter-spacing: 0.08em; text-transform: uppercase; }
+  .wrap { display: grid; grid-template-columns: minmax(320px, 460px) minmax(360px, 1fr); gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; }
+  .panel { background: var(--bg-panel); border: 1px solid var(--border-dim); padding: 14px; border-radius: 4px; }
+  .panel + .panel { margin-top: 12px; }
+  .row { display: grid; grid-template-columns: 110px 1fr 48px; gap: 8px; align-items: center; margin: 6px 0; }
+  .row label { color: var(--text-secondary); font-size: 12px; }
+  .row output { font-variant-numeric: tabular-nums; color: var(--text-primary); text-align: right; }
+  select, input[type="number"], input[type="range"], button {
+    background: var(--bg-panel-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-dim);
+    padding: 4px 6px;
+    font: inherit;
+    border-radius: 3px;
+  }
+  input[type="range"] { padding: 0; accent-color: var(--accent); }
+  button {
+    cursor: pointer;
+    background: var(--bg-panel-elevated);
+    border-color: var(--accent);
+    color: var(--accent);
+    padding: 6px 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  button:hover { background: var(--accent); color: var(--bg-base); }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.danger:hover { background: var(--danger); color: var(--bg-base); }
+  button[disabled] { opacity: 0.4; cursor: not-allowed; }
+  .transport { display: flex; gap: 8px; margin-bottom: 12px; }
+  .status { font-size: 12px; color: var(--text-dim); margin-left: auto; align-self: center; }
+  .status.on { color: var(--heal); }
+  .status.off { color: var(--warning); }
+  .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+  .presets button { padding: 6px 4px; font-size: 11px; }
+  .inline { display: flex; gap: 8px; align-items: center; }
+  .inline input[type="number"] { width: 100px; }
+  pre#telemetry {
+    background: var(--bg-base);
+    border: 1px solid var(--border-dim);
+    padding: 10px;
+    margin: 0;
+    min-height: 260px;
+    max-height: 70vh;
+    overflow: auto;
+    font-size: 11px;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .checkbox-row label { color: var(--text-secondary); }
+  .hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <div class="panel">
+        <h1>Audition Harness</h1>
+        <div class="hint">Dev-only listening rig for the audio engine. Not shipped.</div>
+        <div class="transport" style="margin-top: 12px;">
+          <button id="start" type="button">Start</button>
+          <button id="stop" type="button" class="danger" disabled>Stop</button>
+          <span id="engine-status" class="status off">stopped</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Game State</h2>
+        <div class="row">
+          <label for="theme">Theme</label>
+          <select id="theme"></select>
+          <output for="theme"></output>
+        </div>
+        <div class="row">
+          <label for="depth">Depth</label>
+          <input id="depth" type="range" min="1" max="30" step="1" value="1" />
+          <output id="depth-out">1</output>
+        </div>
+        <div class="row">
+          <label for="hostile">Hostile</label>
+          <input id="hostile" type="range" min="0" max="10" step="1" value="10" />
+          <output id="hostile-out">10</output>
+        </div>
+        <div class="row">
+          <label for="container">Container</label>
+          <input id="container" type="range" min="0" max="10" step="1" value="10" />
+          <output id="container-out">10</output>
+        </div>
+        <div class="checkbox-row">
+          <input id="combat" type="checkbox" />
+          <label for="combat">Combat active</label>
+        </div>
+        <div class="row" style="grid-template-columns: 110px 1fr auto;">
+          <label for="seed">Seed</label>
+          <input id="seed" type="number" value="1337" step="1" />
+          <button id="reroll" type="button">Reroll</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Mix</h2>
+        <div class="checkbox-row">
+          <input id="mute" type="checkbox" />
+          <label for="mute">Master mute</label>
+        </div>
+        <div class="row">
+          <label for="vol-master">Master</label>
+          <input id="vol-master" type="range" min="0" max="100" step="1" value="75" />
+          <output id="vol-master-out">75</output>
+        </div>
+        <div class="row">
+          <label for="vol-drone">Drone</label>
+          <input id="vol-drone" type="range" min="0" max="100" step="1" value="75" />
+          <output id="vol-drone-out">75</output>
+        </div>
+        <div class="row">
+          <label for="vol-pulse">Pulse</label>
+          <input id="vol-pulse" type="range" min="0" max="100" step="1" value="75" />
+          <output id="vol-pulse-out">75</output>
+        </div>
+        <div class="row">
+          <label for="vol-sparkle">Sparkle</label>
+          <input id="vol-sparkle" type="range" min="0" max="100" step="1" value="75" />
+          <output id="vol-sparkle-out">75</output>
+        </div>
+        <div class="row">
+          <label for="vol-lead">Lead</label>
+          <input id="vol-lead" type="range" min="0" max="100" step="1" value="75" />
+          <output id="vol-lead-out">75</output>
+        </div>
+        <div class="row">
+          <label for="vol-noiseBed">Noise bed</label>
+          <input id="vol-noiseBed" type="range" min="0" max="100" step="1" value="75" />
+          <output id="vol-noiseBed-out">75</output>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Scenario Presets</h2>
+        <div class="presets">
+          <button type="button" data-preset="calm">Calm Explore</button>
+          <button type="button" data-preset="loot">Loot Near</button>
+          <button type="button" data-preset="hunted">Hunted</button>
+          <button type="button" data-preset="deep">Deep Floor</button>
+          <button type="button" data-preset="combat">Combat</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Telemetry — engine.getGraphState()</h2>
+      <pre id="telemetry">(engine not started)</pre>
+    </div>
+  </div>
+  <script type="module" src="./audition.js"></script>
+</body>
+</html>
