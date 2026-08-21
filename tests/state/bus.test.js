@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { bus } from '../../src/state/bus.js';
+import { bus, isKnownEvent, validateEventPayload, EVENT_CONTRACTS } from '../../src/state/bus.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -68,5 +68,69 @@ describe('bus — Set dedup', () => {
     bus.on('test7:dedup', handler);
     bus.dispatch('test7:dedup', {});
     expect(count).toBe(1);
+  });
+});
+
+describe('bus — SESSION-05 event contracts', () => {
+  const validRunState = { runState: { worldSeed: 77, depth: 1 } };
+
+  it('isKnownEvent discovers the state:inventory-change contract and unknown events remain undiscovered', () => {
+    expect(isKnownEvent('state:inventory-change')).toBe(true);
+    expect(Object.hasOwn(EVENT_CONTRACTS, 'state:inventory-change')).toBe(true);
+    expect(isKnownEvent('state:definitely-not-a-real-event')).toBe(false);
+  });
+
+  it('valid state:inventory-change dispatch reaches the listener and returns true', () => {
+    const seen = [];
+    const off = bus.on('state:inventory-change', (payload) => seen.push(payload));
+    expect(bus.dispatch('state:inventory-change', validRunState)).toBe(true);
+    expect(seen).toEqual([validRunState]);
+    off();
+  });
+
+  it('state:inventory-change rejects a missing runState and warns once; listener does not fire', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const seen = [];
+    const off = bus.on('state:inventory-change', (payload) => seen.push(payload));
+    expect(bus.dispatch('state:inventory-change', {})).toBe(false);
+    expect(seen).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it('state:inventory-change rejects a malformed runState (missing depth/worldSeed) without firing the listener', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const seen = [];
+    const off = bus.on('state:inventory-change', (payload) => seen.push(payload));
+    expect(bus.dispatch('state:inventory-change', { runState: { worldSeed: 'not-an-integer', depth: 1 } })).toBe(false);
+    expect(bus.dispatch('state:inventory-change', { runState: { worldSeed: 5 } })).toBe(false);
+    expect(bus.dispatch('state:inventory-change', { runState: null })).toBe(false);
+    expect(seen).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(3);
+    off();
+  });
+
+  it('validateEventPayload accepts the whitelisted masterVolume setting key and rejects unknown keys', () => {
+    expect(validateEventPayload('state:settings-change', { key: 'masterVolume', value: 40 })).toBe(true);
+    expect(validateEventPayload('state:settings-change', { key: 'nope-not-a-setting', value: 1 })).toBe(false);
+    expect(validateEventPayload('state:settings-change', { key: 'volume:drone', value: 25 })).toBe(true);
+  });
+
+  it('state:settings-change with key masterVolume reaches its listener and returns true', () => {
+    const seen = [];
+    const off = bus.on('state:settings-change', (payload) => seen.push(payload));
+    expect(bus.dispatch('state:settings-change', { key: 'masterVolume', value: 40 })).toBe(true);
+    expect(seen).toEqual([{ key: 'masterVolume', value: 40 }]);
+    off();
+  });
+
+  it('state:settings-change with an unknown key is rejected and its listener never fires', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const seen = [];
+    const off = bus.on('state:settings-change', (payload) => seen.push(payload));
+    expect(bus.dispatch('state:settings-change', { key: 'not-a-real-setting', value: 1 })).toBe(false);
+    expect(seen).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    off();
   });
 });

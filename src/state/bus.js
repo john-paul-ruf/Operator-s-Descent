@@ -1,7 +1,7 @@
 const handlers = new Map();
 
 const ROUTES = new Set(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
-const SETTING_KEYS = new Set(['mute', 'glitch', 'reducedMotion', 'scanlineGrain']);
+const SETTING_KEYS = new Set(['mute', 'masterVolume', 'glitch', 'reducedMotion', 'scanlineGrain']);
 const VOLUME_KEY = /^volume:(drone|pulse|sparkle|lead|noiseBed)$/;
 const MANUAL_CLOSE_REASONS = new Set(['escape', 'close-button', 'backdrop', 'programmatic']);
 
@@ -73,6 +73,10 @@ export const EVENT_CONTRACTS = Object.freeze({
   },
   'state:loot-taken': {
     description: 'Item moved from a container into party inventory. Payload: { runState, itemId, containerId, containerClosed }.',
+    validate: hasRunState
+  },
+  'state:inventory-change': {
+    description: 'Party inventory or equipment mutation checkpoint from GEAR mode. Payload: { runState }.',
     validate: hasRunState
   },
   'state:autosave-complete': {
