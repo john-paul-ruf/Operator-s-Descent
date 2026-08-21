@@ -195,6 +195,38 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     expect(byTestId(container, 'gear-corrupt-warning')).toBeTruthy();
   });
 
+  it('SESSION-03 — a successful equip dispatches state:inventory-change with the current runState', () => {
+    const runState = run([item('fresh-sidearm', 'sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const dispatch = vi.fn();
+    const context = { runState, data, bus: { dispatch }, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-equip-fresh-sidearm').click();
+
+    const inventoryEvents = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
+    expect(inventoryEvents).toHaveLength(1);
+    expect(inventoryEvents[0][1]).toEqual({ runState });
+  });
+
+  it('SESSION-03 — a junk-toggle dispatches state:inventory-change on success and not on failure', () => {
+    const runState = run([item('inv-junk', 'sidearm')]);
+    const container = new FakeElement('div');
+    const dispatch = vi.fn();
+    const context = { runState, data, bus: { dispatch }, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-junk-inv-junk').click();
+    let events = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
+    expect(events).toHaveLength(1);
+    expect(events[0][1]).toEqual({ runState });
+
+    // Untag the same item — another successful toggle → second dispatch.
+    byTestId(container, 'gear-junk-inv-junk').click();
+    events = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
+    expect(events).toHaveLength(2);
+  });
+
   it('a disabled icon-prefixed UNEQUIP does not fire its handler on click', () => {
     // Full inventory blocks the unequip transaction — the button is rendered
     // disabled, and clicking must not call requestUnequip (icon should never

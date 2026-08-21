@@ -73,6 +73,14 @@ function applyRunState(target, source) {
   for (const key of Object.keys(source)) target[key] = source[key];
 }
 
+// SESSION-03 — every successful equip/unequip/junk mutates runState.inventory
+// (or party equipment); the runtime autosaves on the paired bus event so a
+// tab close after a swap never loses the change. Optional-chain the bus so
+// bus-less test contexts stay green.
+function notifyInventoryChange(context) {
+  context.bus?.dispatch('state:inventory-change', { runState: context.runState });
+}
+
 function combatActorFor(context, character) {
   const combatants = context?.combatState?.combatants;
   return combatants instanceof Map ? combatants.get(character?.id) || null : null;
@@ -165,6 +173,7 @@ function transactionResult(context, result, message) {
   state.notice = message;
   state.pendingCorruptItemId = null;
   state.pendingJunkAll = false;
+  notifyInventoryChange(context);
   context.refresh?.();
   return true;
 }
@@ -220,6 +229,7 @@ function requestJunkToggle(context, item) {
     context.runState.inventory = result.inventory;
     state.error = '';
     state.notice = `${itemName(item, context.data)} ${result.junkTagged ? 'tagged as junk' : 'untagged'}.`;
+    notifyInventoryChange(context);
   }
   state.pendingJunkAll = false;
   context.refresh?.();
@@ -248,6 +258,7 @@ function requestJunkAll(context) {
   state.pendingJunkAll = false;
   state.error = '';
   state.notice = `Junked ${result.destroyedUnits} unit(s): +${result.scrapGained} scrap.`;
+  notifyInventoryChange(context);
   context.refresh?.();
   return true;
 }
