@@ -39,7 +39,7 @@ bus.on('runtime:update-ready', () => {
 });
 
 export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
-export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'combat-start', 'loot-taken', 'import-resume', 'explicit-exit']);
+export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'combat-start', 'loot-taken', 'import-resume', 'explicit-exit', 'inventory-change']);
 
 const ROUTE_SET = new Set(ROUTES);
 const AUTOSAVE_SET = new Set(AUTOSAVE_CHECKPOINTS);
@@ -666,6 +666,12 @@ function setupBus() {
     if (!runState) return;
     const floor = hasCurrentFloorForRun(runState) ? currentFloor : null;
     commitAutosave(runState, 'loot-taken', autosaveMetadata(runState, floor, { itemId, containerId }));
+  });
+
+  listen('state:inventory-change', ({ runState } = {}) => {
+    if (!runState) return;
+    const floor = hasCurrentFloorForRun(runState) ? currentFloor : null;
+    commitAutosave(runState, 'inventory-change', autosaveMetadata(runState, floor, { reason: 'inventory' }));
   });
 
   listen('state:party-wipe', ({ runState, summary, combatState } = {}) => {

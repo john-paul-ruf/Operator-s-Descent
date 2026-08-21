@@ -508,6 +508,30 @@ describe('runtime autosave checkpoints', () => {
     off();
   });
 
+  it('autosaves on state:inventory-change and rejects a payload missing runState', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const autosaves = [];
+    const off = bus.on('state:autosave-complete', (payload) => autosaves.push(payload));
+    const state = buildRealisticRun(93, { depth: 1, fogCells: 4 });
+
+    // AUTOSAVE_CHECKPOINTS must advertise the new checkpoint so consumers
+    // (release-budget scan, docs, tests) see the full frozen list.
+    expect(api.AUTOSAVE_CHECKPOINTS.includes('inventory-change')).toBe(true);
+
+    bus.dispatch('state:inventory-change', { runState: state });
+
+    expect(autosaves).toHaveLength(1);
+    expect(autosaves[0].reason).toBe('inventory-change');
+
+    // Guard: no runState → no autosave. The event has no bus contract so
+    // dispatch itself is a no-op-plus-emit (returns true); the listener's
+    // `if (!runState) return` is what protects the save chokepoint.
+    bus.dispatch('state:inventory-change', {});
+    expect(autosaves).toHaveLength(1);
+    off();
+  });
+
   it('stores the exact #r= export token in localStorage after a loot-taken autosave', async () => {
     const api = await runtime();
     await api.activateRuntime({ initialHash: '' });
