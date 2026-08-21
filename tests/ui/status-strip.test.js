@@ -160,6 +160,56 @@ describe('status strip', () => {
     expect(findByClass(strip, 'init-rail').style.padding).toBe('2px 4px');
   });
 
+  test('combat collapse persists across per-turn strip rebuilds; a fresh combatState starts expanded', () => {
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
+      ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
+    ]);
+    const runState = { depth: 3 };
+    // Same combatState reference across rebuilds mirrors production: combat
+    // creates one state via initiateCombat and re-mounts the strip each turn.
+    const combatState = { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 1 };
+
+    const first = createStatusBar(runState, combatState);
+    expect(first.classList.contains('status-collapsed')).toBe(false);
+    byTestId(first, 'status-collapse').dispatchEvent('click');
+    expect(first.classList.contains('status-collapsed')).toBe(true);
+    first.cleanup();
+
+    // Per-turn rebuild — must restore collapsed state, glyph and aria-expanded.
+    const rebuilt = createStatusBar(runState, combatState);
+    expect(rebuilt.classList.contains('status-collapsed')).toBe(true);
+    const rebuiltToggle = byTestId(rebuilt, 'status-collapse');
+    expect(rebuiltToggle.textContent).toBe('▾');
+    expect(rebuiltToggle.getAttribute('aria-expanded')).toBe('false');
+
+    // Toggling back to expanded is also remembered on the next rebuild.
+    rebuiltToggle.dispatchEvent('click');
+    expect(rebuilt.classList.contains('status-collapsed')).toBe(false);
+    rebuilt.cleanup();
+    const reExpanded = createStatusBar(runState, combatState);
+    expect(reExpanded.classList.contains('status-collapsed')).toBe(false);
+    reExpanded.cleanup();
+
+    // A different combatState (new encounter) — independent memory, starts expanded.
+    const nextCombat = { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 1 };
+    const fresh = createStatusBar(runState, nextCombat);
+    expect(fresh.classList.contains('status-collapsed')).toBe(false);
+    fresh.cleanup();
+  });
+
+  test('exploration collapse stays per-mount — no cross-mount persistence for the exploration strip', () => {
+    const runState = { depth: 3, worldSeed: 'seed', dangerClockProgress: 0, corruption: 0, party: [] };
+    const first = createStatusBar(runState);
+    byTestId(first, 'status-collapse').dispatchEvent('click');
+    expect(first.classList.contains('status-collapsed')).toBe(true);
+    first.cleanup();
+
+    const rebuilt = createStatusBar(runState);
+    expect(rebuilt.classList.contains('status-collapsed')).toBe(false);
+    rebuilt.cleanup();
+  });
+
   test('renders the manual `?` chip in exploration and combat portrait strips and dispatches ui:manual-open on click', () => {
     const explorationStrip = createStatusBar({ depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] });
     const explorationChip = byTestId(explorationStrip, 'status-manual');

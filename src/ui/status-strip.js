@@ -39,6 +39,17 @@ function appendManualChip(parent, source) {
   return chip;
 }
 
+// SESSION-02 — combat strip is rebuilt every turn (combat/screens/combat.js
+// re-mounts on each turn resolve). Persist the player's collapse choice across
+// those rebuilds by keying on the combatState object identity — the encounter
+// creates one combatState via initiateCombat and passes the same reference to
+// every rebuild until the encounter ends, so a WeakMap here scopes memory
+// exactly to a single encounter. A new encounter (fresh combatState) starts
+// expanded, matching the pattern in ./console/party.js (`selectionByRun`).
+// Exploration strip stays per-mount — its rebuilds are structural (screen
+// changes) rather than per-turn, so cross-mount memory is not warranted.
+const combatCollapseStore = new WeakMap();
+
 function actorList(combatState) {
   return combatState?.combatants instanceof Map
     ? [...combatState.combatants.values()]
@@ -199,16 +210,19 @@ export function createStatusBar(runState, combatState = null, options = {}) {
 
   // Portrait collapse toggle (SESSION-02). Sits beside the manual chip and
   // adds/removes `status-collapsed` on the strip; CSS hides everything except
-  // the summary row when collapsed. State is per-mount — the strip re-renders
-  // per turn in combat, so persistence across turns is a future concern.
+  // the summary row when collapsed. Combat variant persists across per-turn
+  // rebuilds via `combatCollapseStore` (WeakMap on combatState identity, see
+  // note above); exploration variant stays per-mount by design.
+  const initialCollapsed = combatState ? Boolean(combatCollapseStore.get(combatState)) : false;
+  if (initialCollapsed) strip.classList.add('status-collapsed');
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'status-collapse-toggle';
   toggle.dataset.testid = 'status-collapse';
   toggle.setAttribute('aria-controls', 'status-strip');
   toggle.setAttribute('aria-label', combatState ? 'Collapse combat status' : 'Collapse exploration status');
-  toggle.setAttribute('aria-expanded', 'true');
-  toggle.textContent = '▴';
+  toggle.setAttribute('aria-expanded', String(!initialCollapsed));
+  toggle.textContent = initialCollapsed ? '▾' : '▴';
   toggle.style.marginLeft = '4px';
   toggle.style.flexShrink = '0';
   toggle.addEventListener('click', () => {
@@ -216,6 +230,7 @@ export function createStatusBar(runState, combatState = null, options = {}) {
     strip.classList.toggle('status-collapsed', collapsed);
     toggle.textContent = collapsed ? '▾' : '▴';
     toggle.setAttribute('aria-expanded', String(!collapsed));
+    if (combatState) combatCollapseStore.set(combatState, collapsed);
   });
   strip.appendChild(toggle);
 
