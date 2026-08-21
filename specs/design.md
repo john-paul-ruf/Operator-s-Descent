@@ -480,6 +480,34 @@ desktop-only editor).
 lets tooling exclude planned-only structures from portrait-scope parity checks and marks the
 implementation surface unambiguously for the follow-up implementation feature.
 
+**Portrait Console Expand States (2026-08-21 · mobile-ux-and-combat-readout SESSION-02).**
+The portrait `.console-bar` cycles through **three** height states — the wide dock (`variant:
+'dock'`) is unaffected and stays full-height. Legacy `.expanded` / `.collapsed` class names
+are preserved (mocks, keyboard-flow e2e `/expanded/` regex, and the M97 design-scan
+`check-mock-classes` rule depend on them); the new `data-expand-state` attribute
+disambiguates size.
+
+| State | Height (portrait) | Container classes | `data-expand-state` |
+|-------|-------------------|-------------------|---------------------|
+| collapsed | tab bar only (~64px) | `console-bar collapsed` | `collapsed` |
+| half | 50% of the portrait frame | `console-bar expanded expanded-half` | `half` |
+| full | 100% of the portrait frame | `console-bar expanded expanded-full` | `full` |
+
+**Tap-cycle.** Tapping the currently-active tab cycles `collapsed → half → full → collapsed`.
+Tapping a different tab switches mode; it opens the console at `half` only when it was
+collapsed, otherwise it keeps the current size. The intent payload dispatched via
+`CONSOLE_INTENTS.expand` / `CONSOLE_INTENTS.collapse` now carries `{ mode, size }` so
+downstream listeners can distinguish half vs full landings; the pre-existing `ui:console-expand`
+/ `ui:console-collapse` / `ui:camera-request` events fire on every landing state.
+
+**Status-strip collapse (portrait exploration + combat).** The strip carries a trailing
+`.status-collapse-toggle` button beside the manual `?` chip. The affordance is a text glyph
+matching the d-pad's unicode-arrow precedent — `▴` when expanded, `▾` when collapsed — with
+a 44×44 tap floor (M97 `check-touch-targets`). Clicking toggles the `status-collapsed` class
+and flips `aria-expanded`; the collapsed row hides seed, initiative, danger, clock, and the
+active-actor charge bar / move flag while keeping DEPTH, ROUND (combat), the active sigil,
+mini-HP, and AP legible.
+
 ### Screen Layouts by Class
 
 One row per screen × {portrait, wide} for all 15 mock screens. The **portrait** column
