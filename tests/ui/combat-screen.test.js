@@ -4,6 +4,29 @@ import { createRunState } from '../../src/state/run-state.js';
 import { describeEntryDetail } from '../../src/ui/screens/combat.js';
 import { makeCharacter, makeWeapon } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
+import * as viewport from '../../src/ui/viewport.js';
+
+// Wraps each camera returned by createViewportCamera so tests can assert which zoom lever the
+// combat screen pulls on mount. The real camera math still runs — only fit/zoomToCells calls are
+// intercepted for counting.
+vi.mock('../../src/ui/viewport.js', async () => {
+  const actual = await vi.importActual('../../src/ui/viewport.js');
+  const state = { instances: [] };
+  return {
+    ...actual,
+    createViewportCamera(args) {
+      const camera = actual.createViewportCamera(args);
+      const record = { fit: 0, zoomToCells: [] };
+      const origFit = camera.fit.bind(camera);
+      const origZoom = camera.zoomToCells.bind(camera);
+      camera.fit = (...a) => { record.fit++; return origFit(...a); };
+      camera.zoomToCells = (...a) => { record.zoomToCells.push(a); return origZoom(...a); };
+      state.instances.push(record);
+      return camera;
+    },
+    __viewportSpyState: state
+  };
+});
 
 const gameData = {
   protocols: loadData('protocols'),
@@ -230,7 +253,7 @@ async function mountCombat({ state = runState(), combat = combatState([partyActo
   return { container, controller, runState: state, combatState: combat };
 }
 
-beforeEach(() => { installDocument(); installMatchMedia(false); });
+beforeEach(() => { installDocument(); installMatchMedia(false); viewport.__viewportSpyState.instances.length = 0; });
 afterEach(() => { delete globalThis.document; delete globalThis.window; });
 
 describe('combat screen controller', () => {
@@ -323,10 +346,10 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-move').click();
     const playfield = byClass(container, 'combat-playfield');
-    // Canvas rect is 384×768 in the fake; cellSize=48; hero at (1,1) so cell (3,3) is a legal
-    // 2-step SE destination. Client coords land inside cell (3,3): 3*48+8 = 152.
-    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
-    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+    // Portrait mount zooms to ~64 CSS px per world cell (scale ≈ 4/3), so cell (3,3) centered on
+    // world (168, 168) lands at screen (224, 224). Hero at (1,1) → 2-step SE destination.
+    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
     expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
     byTestId(container, 'combat-confirm').click();
@@ -377,14 +400,14 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-move').click();
     const playfield = byClass(container, 'combat-playfield');
-    // Tap 1: route BFS path to (3,3) — 2 SE steps.
-    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
-    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+    // Tap 1: route BFS path to (3,3) — 2 SE steps. Portrait zoom puts cell (3,3) at screen (224,224).
+    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
     expect(byTestId(container, 'combat-notice').textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
 
     // Tap 2: same cell → confirm inline, no separate CONFIRM click.
-    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
-    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
     const hero = combat.combatants.get('hero');
     expect(hero.position).toEqual({ x: 3, y: 3 });
@@ -398,12 +421,12 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-move').click();
     const playfield = byClass(container, 'combat-playfield');
-    // Tap 1: cell (2,2) — 1 SE step.
-    playfield.dispatch('pointerdown', { clientX: 104, clientY: 104 });
-    playfield.dispatch('pointerup', { clientX: 104, clientY: 104 });
+    // Tap 1: cell (2,2) — 1 SE step. Screen (160,160) under portrait zoom = world (120,120).
+    playfield.dispatch('pointerdown', { clientX: 160, clientY: 160 });
+    playfield.dispatch('pointerup', { clientX: 160, clientY: 160 });
     // Tap 2: a DIFFERENT reachable cell (3,3) — re-routes (2 SE), does not confirm the (2,2) path.
-    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
-    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
     const hero = combat.combatants.get('hero');
     // Hero has not moved — no confirmation happened.
@@ -430,9 +453,9 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-attack').click();
     const playfield = byClass(container, 'combat-playfield');
-    // Tap the second enemy (id=1) at (3,3) — canvas coords land inside cell (3,3).
-    playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
-    playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+    // Tap the second enemy (id=1) at (3,3) — portrait zoom puts cell (3,3) at screen (224,224).
+    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
     expect(byTestId(container, 'combat-target-1').getAttribute('aria-selected')).toBe('true');
     expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
@@ -591,6 +614,28 @@ describe('combat screen controller', () => {
     expect(byTestId(container, 'pane-handle-right')).toBe(null);
     expect(byTestId(container, 'pane-collapse-left')).toBe(null);
     expect(byTestId(container, 'pane-collapse-right')).toBe(null);
+  });
+
+  // Portrait mounts zoom the camera to a legible default (~64 CSS px per world cell) instead of
+  // fitting the whole window; wide keeps camera.fit() so the docked column reads as an overview.
+  it('portrait mount zooms via camera.zoomToCells with COMBAT_CELL_SIZE, not camera.fit', async () => {
+    await mountCombat();
+    const spy = viewport.__viewportSpyState.instances[0];
+    expect(spy).toBeTruthy();
+    expect(spy.zoomToCells.length).toBeGreaterThan(0);
+    expect(spy.zoomToCells[0][0]).toBe(48);
+    expect(spy.zoomToCells[0][1]).toBe(64);
+    expect(spy.fit).toBe(0);
+  });
+
+  it('wide mount calls camera.fit and never calls camera.zoomToCells', async () => {
+    installMatchMedia(true);
+    viewport.__viewportSpyState.instances.length = 0;
+    await mountCombat();
+    const spy = viewport.__viewportSpyState.instances[0];
+    expect(spy).toBeTruthy();
+    expect(spy.fit).toBeGreaterThan(0);
+    expect(spy.zoomToCells.length).toBe(0);
   });
 
   it('unmount destroys the playfield pulse loop so no further rAF frames are scheduled', async () => {

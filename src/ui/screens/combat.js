@@ -33,6 +33,9 @@ const DIRECTION_DELTAS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0
 const MOVE_STEP_MS = 140;
 const ACTION_STEP_MS = 320;
 const NOTICE_STEP_MS = 240;
+// Portrait combat opens zoomed in so a world cell renders roughly this many CSS pixels.
+// zoomToCells clamps to [fit, 4×fit], so a tiny viewport still degrades to fit.
+const COMBAT_PORTRAIT_CELL_PX = 64;
 
 // Duplicated from status-strip.js (sibling-import boundary). Keep the two in lockstep.
 function titleCasePlayback(value) {
@@ -536,7 +539,20 @@ export function mount(container, params = {}) {
   const worldH = (combatState.window?.height || COMBAT_GRID_H) * COMBAT_CELL_SIZE;
   const camera = createViewportCamera({ worldW, worldH });
   currentDpr = syncCameraViewport();
-  camera.fit();
+  if (isWide) {
+    // Wide dock keeps a fit view so the full window stays visible in the middle track.
+    camera.fit();
+  } else {
+    // Portrait: center on the active actor first, then zoom in so cells read legibly on a phone.
+    const initialActor = getActiveActor(combatState);
+    if (initialActor?.position) {
+      camera.centerOn(
+        (initialActor.position.x + 0.5) * COMBAT_CELL_SIZE,
+        (initialActor.position.y + 0.5) * COMBAT_CELL_SIZE
+      );
+    }
+    camera.zoomToCells(COMBAT_CELL_SIZE, COMBAT_PORTRAIT_CELL_PX);
+  }
 
   const gestureCleanup = attachViewportGestures(playfieldBody, camera, {
     onChange: () => { userAdjusted = true; renderAll(); },
