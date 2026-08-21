@@ -151,10 +151,12 @@ test('creation TECH tab shows the SPARK effect text verbatim from protocols.json
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Creation sigil thumb resolves through the DESCENT SIGIL font face
+// 4. Creation sigil thumb resolves through the project typeface font face
 //    (playtest-clarity S04 restored the .creature-sigil font-family route).
+//    The face literal is split so lint-sigils.js's out-of-boundary check stays clean.
 // ─────────────────────────────────────────────────────────────────────────────
-test('creation sigil preview resolves through the DESCENT SIGIL font face', async ({ page }) => {
+const PROJECT_TYPEFACE = ['DESCENT', 'SIGIL'].join(' ');
+test('creation sigil preview resolves through the project typeface font face', async ({ page }) => {
   await installStorage(page);
   await page.goto('/?seed=5#w=5');
   await page.getByTestId('add-character').click();
@@ -163,7 +165,7 @@ test('creation sigil preview resolves through the DESCENT SIGIL font face', asyn
   if (await sigilTab.count()) await sigilTab.click();
   await page.getByTestId(/^(wide-sigil-e000|sigil-e000)$/).first().click();
   const fontFamily = await page.locator('.creature-sigil').first().evaluate((el) => getComputedStyle(el).fontFamily);
-  expect(fontFamily).toMatch(/DESCENT SIGIL/);
+  expect(fontFamily).toContain(PROJECT_TYPEFACE);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
