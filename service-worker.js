@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-19-restore-audio-v2';
+const CACHE_VERSION = '2026-08-20-hotfix-40x64-v6';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -66,6 +66,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/state/library.js',
   './src/state/migrations/v3-to-v4.js',
   './src/state/migrations/v4-to-v5.js',
+  './src/state/migrations/v5-to-v6.js',
   './src/state/party-configs.js',
   './src/state/run-state.js',
   './src/state/save-codecs.js',
@@ -75,8 +76,10 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/state/save-schema.js',
   './src/state/versions/codecs-v3.js',
   './src/state/versions/codecs-v4.js',
+  './src/state/versions/codecs-v5.js',
   './src/state/versions/read-v3.js',
   './src/state/versions/read-v4.js',
+  './src/state/versions/read-v5.js',
   './src/ui/components.js',
   './src/ui/console/combat.js',
   './src/ui/console/console.js',
