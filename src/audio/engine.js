@@ -101,6 +101,7 @@ export function createAudioEngine(initialAudioContext = null) {
     },
     applySettings(settings = {}) {
       this.setMute(Boolean(settings.masterMute));
+      if (Number.isFinite(Number(settings.masterVolume))) this.setMasterVolume(settings.masterVolume);
       for (const [layer, volume] of Object.entries(settings.layerVolumes || {})) this.setLayerVolume(layer, volume);
     },
     setLayerVolume(layerName, volume) {

@@ -68,6 +68,19 @@ describe('five layer audio score', () => {
     expect(engine.getGraphState().conductor).not.toBeNull();
     engine.applySettings({ masterMute: true, layerVolumes: { drone: 25, pulse: 0, sparkle: 50, lead: 75, noiseBed: 100 } });
     expect(engine.getGraphState().muted).toBe(true);
+
+    // applySettings honors an explicit masterVolume; a subsequent settings
+    // object that omits the key leaves master untouched (the guard prevents
+    // Number(undefined)=NaN from silencing the bus). Out-of-range clamps.
+    engine.applySettings({ masterVolume: 40 });
+    expect(engine.getGraphState().masterVolume).toBe(40);
+    engine.applySettings({ masterMute: false });
+    expect(engine.getGraphState().masterVolume).toBe(40);
+    engine.applySettings({ masterVolume: 250 });
+    expect(engine.getGraphState().masterVolume).toBe(100);
+    engine.applySettings({ masterVolume: -20 });
+    expect(engine.getGraphState().masterVolume).toBe(0);
+
     engine.destroy();
     engine.destroy();
     expect(engine.isStarted()).toBe(false);
@@ -94,15 +107,25 @@ describe('five layer audio score', () => {
     driveEngine(ctx, 3);
 
     const later = ctx.nodes.slice(sustainedCount);
+    // Filter out vibrato LFOs (type='sine' oscillators added by playNote for
+    // sustained lead notes) — they start at note-time + delay by design and
+    // are modulation, not rendered notes. Musical oscillators are either
+    // triangle-typed (kick) or use setPeriodicWave (pulse waves); percussion
+    // is bufferSource. Sine oscillators are only ever vibrato LFOs.
     const times = later
-      .filter((n) => (n.nodeKind === 'oscillator' || n.nodeKind === 'bufferSource') && n.started.length)
+      .filter((n) => (n.nodeKind === 'oscillator' || n.nodeKind === 'bufferSource') && n.started.length && n.type !== 'sine')
       .map((n) => n.started[0])
       .filter((t) => t > 0)
       .sort((a, b) => a - b);
     expect(times.length).toBeGreaterThan(4);
 
-    // Depth 1, no danger, no combat ⇒ intensity target 0.15 ⇒ tempo 96 ⇒ 16th = 60/96/4.
-    const secondsPerSixteenth = 60 / 96 / 4;
+    // Derive the 16th grid from the live conductor tempo instead of hardcoding
+    // it — the intensity/depth → tempo curve is subject to composition tuning
+    // (floor 112, upbeat-melodic-score S01) and every future adjustment should
+    // stay covered without another test edit (Custom Rule 11 — strengthen).
+    const conductorTempo = engine.getGraphState().conductor?.tempo;
+    expect(Number.isFinite(conductorTempo)).toBe(true);
+    const secondsPerSixteenth = 60 / conductorTempo / 4;
     const firstTickTime = times[0];
     for (const t of times) {
       const k = (t - firstTickTime) / secondsPerSixteenth;
