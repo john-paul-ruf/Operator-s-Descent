@@ -9,12 +9,27 @@ const QUIET_SETTINGS = {
   scanlineGrainEnabled: false
 };
 
+// partyOverrides.weapon only affects the fresh in-fixture combat state — toCombatSnapshot
+// preserves per-instance state (hp/ap/position) but not weapon overrides, so on resume the
+// party actor's weapon comes from character.equipment (a sidearm — adjacent range). Move
+// the enemy into an adjacent cell so combatActionDisabledReason's census reports a legal
+// target (loot-combat-ux SESSION-01 added the disabled-when-no-target-in-range gate).
 function activeDepthTwoFragment() {
   const harness = createGameHarness({ seed: 91357, partySize: 1, depth: 2 });
   startStandardCombat(harness, {
     enemyHP: 12,
     partyOverrides: [{ weapon: { damageDie: 'd4', rangeBand: 'short', maxRange: 16, minRange: 0, accuracyBonus: 20 } }]
   });
+  const activeCombat = harness.runState.activeCombat;
+  if (activeCombat) {
+    const party = activeCombat.actors.find((actor) => actor.side === 'party');
+    const enemy = activeCombat.actors.find((actor) => actor.side !== 'party');
+    if (party && enemy) {
+      const dx = party.x >= 1 ? -1 : 1;
+      enemy.x = Math.max(0, Math.min(7, party.x + dx));
+      enemy.y = Math.max(0, Math.min(15, party.y));
+    }
+  }
   const partyTurn = harness.runState.activeCombat?.initiativeOrder?.findIndex((id) => String(id).startsWith('operator_'));
   if (partyTurn >= 0) harness.runState.activeCombat.currentIndex = partyTurn;
   return roundTripRunState(harness.runState).encoded.fragment;

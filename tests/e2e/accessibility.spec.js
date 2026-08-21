@@ -27,9 +27,31 @@ async function createExploration(page) {
   await expect(page.getByTestId('exploration-canvas')).toBeVisible();
 }
 
+// After landing loot-combat-ux's "No targets in range" gate (`combatActionDisabledReason`
+// in src/ui/console/combat.js:176), the resumed party actor's weapon reverts to its
+// character-persisted equipment (a sidearm — adjacent range 1) because toCombatSnapshot
+// only preserves per-instance state, not weapon overrides. The fixture's deployBands anchor
+// pair places party and enemy at opposite window corners (chebyshev ≈ 15), which fails the
+// adjacency check. Mutate the snapshot so the enemy sits one cell east/west of the party
+// and it stays party turn on resume — both are within the codec's 0..127 bounds.
+function primeCombatSnapshot(runState) {
+  const activeCombat = runState.activeCombat;
+  if (!activeCombat) return;
+  const party = activeCombat.actors.find((actor) => actor.side === 'party');
+  const enemy = activeCombat.actors.find((actor) => actor.side !== 'party');
+  if (party && enemy) {
+    const dx = party.x >= 1 ? -1 : 1;
+    enemy.x = Math.max(0, Math.min(7, party.x + dx));
+    enemy.y = Math.max(0, Math.min(15, party.y));
+  }
+  const partyTurn = activeCombat.initiativeOrder?.findIndex?.((id) => String(id).startsWith('operator_'));
+  if (partyTurn >= 0) activeCombat.currentIndex = partyTurn;
+}
+
 function activeCombatFragment() {
   const harness = createGameHarness({ seed: 41, partySize: 1 });
   startStandardCombat(harness, { enemyHP: 20 });
+  primeCombatSnapshot(harness.runState);
   return roundTripRunState(harness.runState).encoded.fragment;
 }
 
@@ -66,7 +88,10 @@ test('portrait frame keeps fixed ratio and centered letterbox without tab reorde
   expect(Math.abs((frame.width / frame.height) - (1080 / 1920))).toBeLessThan(0.01);
   expect(Math.abs(frame.x - (1600 - frame.width) / 2)).toBeLessThan(2);
 
-  const labels = await page.locator('.mode-tab').evaluateAll((tabs) => tabs.map((tab) => tab.textContent?.trim()));
+  // Each tab now renders `<button>LABEL<span class="tab-key">N</span></button>` after
+  // ui-clarity-polish moved the shortcut hint into an in-tab badge — the label lives on
+  // the leading text node, so extract that instead of textContent (which includes the badge).
+  const labels = await page.locator('.mode-tab').evaluateAll((tabs) => tabs.map((tab) => tab.firstChild?.textContent?.trim()));
   expect(labels).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
   await expect(page.locator('.console-bar')).toHaveCSS('bottom', '0px');
 });

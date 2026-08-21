@@ -17,6 +17,22 @@ function stripVolatile(run) {
   return copy;
 }
 
+// partyOverrides.weapon only affects the fresh in-fixture combat state — toCombatSnapshot
+// preserves per-instance state (hp/ap/position) but not weapon overrides, so on resume
+// party actors get their character-equipped sidearm (adjacent range 1). Move the enemy
+// into an adjacent cell so combatActionDisabledReason's census (from loot-combat-ux
+// SESSION-01) reports a legal target — window bounds are 8×16, codec bounds 0..127.
+function placeEnemyAdjacent(runState) {
+  const activeCombat = runState.activeCombat;
+  if (!activeCombat) return;
+  const party = activeCombat.actors.find((actor) => actor.side === 'party');
+  const enemy = activeCombat.actors.find((actor) => actor.side !== 'party');
+  if (!party || !enemy) return;
+  const dx = party.x >= 1 ? -1 : 1;
+  enemy.x = Math.max(0, Math.min(7, party.x + dx));
+  enemy.y = Math.max(0, Math.min(15, party.y));
+}
+
 function portableFixture() {
   const harness = createGameHarness({ seed: 60013, partySize: 2, depth: 3 });
   harness.runState.party[0].currentHP = Math.max(1, harness.runState.party[0].currentHP - 3);
@@ -34,6 +50,7 @@ function portableFixture() {
     enemyHP: 20,
     partyOverrides: [{ weapon: { damageDie: 'd4', rangeBand: 'short', maxRange: 16, minRange: 0, accuracyBonus: 20 } }]
   });
+  placeEnemyAdjacent(harness.runState);
   const partyTurn = harness.runState.activeCombat?.initiativeOrder?.findIndex((id) => String(id).startsWith('operator_'));
   if (partyTurn >= 0) harness.runState.activeCombat.currentIndex = partyTurn;
   const { encoded, decoded } = roundTripRunState(harness.runState);
@@ -48,6 +65,7 @@ function futureFixture() {
     enemyHP: 12,
     partyOverrides: [{ weapon: { damageDie: 'd4', rangeBand: 'short', maxRange: 16, minRange: 0, accuracyBonus: 20 } }]
   });
+  placeEnemyAdjacent(harness.runState);
   const partyTurn = harness.runState.activeCombat?.initiativeOrder?.findIndex((id) => String(id).startsWith('operator_'));
   if (partyTurn >= 0) harness.runState.activeCombat.currentIndex = partyTurn;
   return roundTripRunState(harness.runState).encoded.fragment;

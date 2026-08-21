@@ -19,7 +19,14 @@ async function installStableStorage(page) {
   }, REDUCED_SETTINGS);
 }
 
-async function createRunByTouch(page, seed = 2) {
+// Seed 5 puts the party at (10, 2) — inside the exploration camera's still-hardcoded
+// LATTICE_WORLD_W/H of 20×32 cells (src/ui/screens/exploration.js:46-47), so canvas
+// coordinates map correctly even though the underlying lattice was widened to 40×64
+// (playtest-clarity-and-4x-floors S06). Nearest enemy is Chebyshev 13 away, so
+// `nearestConnectedHostile` (HOSTILE_CONTACT_RANGE=2) never fires during south/north
+// steps. Followup logged: the exploration camera should adopt the true 40×64 world
+// bounds so any spawn cell tap-maps correctly.
+async function createRunByTouch(page, seed = 5) {
   await page.goto(`/?seed=${seed}#w=${seed}`);
   await expect(page.getByTestId('add-character')).toBeVisible();
   await page.getByTestId('add-character').tap();
@@ -30,12 +37,29 @@ async function createRunByTouch(page, seed = 2) {
   await expect(page.getByTestId('exploration-canvas')).toBeVisible();
 }
 
+// partyOverrides.weapon only affects the fresh in-fixture combat state — toCombatSnapshot
+// preserves per-instance state (hp/ap/position) but not weapon overrides, so on resume
+// the party actor's weapon reverts to character.equipment (a sidearm — adjacent range 1).
+// Move the enemy adjacent and force the party's initiative slot so combat-action-attack
+// stays enabled through the loot-combat-ux "no targets in range" gate.
 function activeCombatFragment() {
   const harness = createGameHarness({ seed: 31, partySize: 1 });
   startStandardCombat(harness, {
     enemyHP: 20,
     partyOverrides: [{ weapon: { damageDie: 'd4', rangeBand: 'short', maxRange: 16, minRange: 0, accuracyBonus: 20 } }]
   });
+  const activeCombat = harness.runState.activeCombat;
+  if (activeCombat) {
+    const party = activeCombat.actors.find((actor) => actor.side === 'party');
+    const enemy = activeCombat.actors.find((actor) => actor.side !== 'party');
+    if (party && enemy) {
+      const dx = party.x >= 1 ? -1 : 1;
+      enemy.x = Math.max(0, Math.min(7, party.x + dx));
+      enemy.y = Math.max(0, Math.min(15, party.y));
+    }
+    const partyTurn = activeCombat.initiativeOrder?.findIndex((id) => String(id).startsWith('operator_'));
+    if (partyTurn >= 0) activeCombat.currentIndex = partyTurn;
+  }
   return roundTripRunState(harness.runState).encoded.fragment;
 }
 
@@ -59,8 +83,11 @@ async function tapCoordForCell(page, cellX, cellY, partyCell) {
   return page.evaluate(({ cellX, cellY, party }) => {
     const canvas = document.querySelector('[data-testid="exploration-canvas"]');
     const rect = canvas.getBoundingClientRect();
-    const WORLD_W = 480;
-    const WORLD_H = 768;
+    // World is 40×64 cells at 24px each (playtest-clarity-and-4x-floors S06 widened
+    // the lattice from 20×32 to 40×64). WORLD_H stays > WORLD_W so fitScale is still
+    // rect.height / WORLD_H at portrait/phone viewports.
+    const WORLD_W = 40 * 24;
+    const WORLD_H = 64 * 24;
     const CELL = 24;
     const ENTRY_CELL_PX = 40;      // DEFAULT_ENTRY_CELL_PX from exploration.js
     const MAX_ZOOM = 4;            // MAX_ZOOM_SCALE from viewport.js
