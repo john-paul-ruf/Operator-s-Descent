@@ -508,6 +508,20 @@ and flips `aria-expanded`; the collapsed row hides seed, initiative, danger, clo
 active-actor charge bar / move flag while keeping DEPTH, ROUND (combat), the active sigil,
 mini-HP, and AP legible.
 
+**Portrait Combat (2026-08-21 · mobile-combat-pass SESSION-04).** In portrait, the COMBAT
+console pane is actions-first: the pinned status strip owns the readout (HP / CHARGE / AP /
+MV + initiative), so the pane drops the full active panel and initiative rail and keeps only
+a slim `.combat-active-conditions` row (AP repeated for glance-ability alongside the actions,
+plus condition tags — the strip shows neither). The action list is a 2-column grid where
+`combat-action--primary` (Move / Attack / End Turn) spans both columns for thumb reach and
+the four secondary actions (Protocol / Overclock / Item / Retreat) pair up in two-column
+rows; every action keeps a 48px minimum tap floor. The wide dock is unaffected and keeps its
+full active panel + initiative rail. The combat map defaults to a legible portrait zoom
+(`zoomToCells(COMBAT_CELL_SIZE, 64)` on the M104 viewport camera) centered on the active
+actor. The console auto-presents per turn — expand to `half` on party turn, collapse on
+enemy playback — with a per-turn manual override via `ui:console-collapse` so the console
+never fights the player.
+
 ### Screen Layouts by Class
 
 One row per screen × {portrait, wide} for all 15 mock screens. The **portrait** column
