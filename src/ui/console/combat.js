@@ -475,11 +475,24 @@ export function render(container, context = {}) {
   const selection = context.selection || {};
   const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const active = context.combatGetActiveActor?.() || null;
+  const isWide = context.layout === 'wide';
   appendText(container, 'mode-indicator', `COMBAT · ${selection.phase || 'choose-action'}`, 'combat-indicator');
+  // SESSION-01 (portrait-usability-regression-repair) — portrait mode delegates
+  // selection notices/errors to the screen-owned feedback rail (M71 renders it
+  // between the playfield and the console so it is outside `.console-content`
+  // and cannot be scrolled out of view). Wide keeps the readout inside the dock
+  // — the wide dock has no top status strip and no screen-owned rail — but the
+  // notice/error rows now render BEFORE the actions/targets scrolling content
+  // instead of after it, so the feedback stays glance-able even when the
+  // action or target list is long.
+  if (isWide) {
+    if (selection.notice) appendText(container, 'combat-notice console-row', selection.notice, 'combat-notice');
+    if (selection.error) appendText(container, 'combat-error console-row', selection.error, 'combat-error');
+  }
   // Wide keeps the full readout (the wide dock has no top status strip); portrait
   // (default when `context.layout` is unset) hands the readout to M59 and shows
   // only the slim AP + conditions row here.
-  if (context.layout === 'wide') {
+  if (isWide) {
     initiativeRail(container, combatState);
     activeSummary(container, active, dispatch);
   } else {
@@ -501,8 +514,6 @@ export function render(container, context = {}) {
   if (selection.phase === 'choose-target' || (selection.phase === 'confirm' && ['attack', 'cast', 'overclock', 'item'].includes(selection.actionType))) renderTargets(container, context);
   if (selection.phase === 'confirm') renderConfirm(container, context);
   else if (selection.actionType) appendText(container, 'combat-hint console-row', 'Select an option, then confirm.', 'combat-hint');
-  if (selection.notice) appendText(container, 'combat-notice console-row', selection.notice, 'combat-notice');
-  if (selection.error) appendText(container, 'combat-error console-row', selection.error, 'combat-error');
 }
 
 export function handleInput(event, context = {}) {

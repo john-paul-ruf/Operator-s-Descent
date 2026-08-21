@@ -649,6 +649,90 @@ describe('console/combat.js — portrait readout de-dup (SESSION-01)', () => {
   });
 });
 
+describe('console/combat.js — feedback ownership (portrait-usability-regression-repair SESSION-01)', () => {
+  function hasClass(node, className) {
+    return (node.className || '').split(/\s+/).includes(className);
+  }
+
+  it('portrait render OMITS combat-notice and combat-error rows even when selection carries them', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: {
+        phase: 'choose-action', actionType: null, targetId: null,
+        notice: 'TAP DESTINATION AGAIN TO CONFIRM.', error: 'OUT OF RANGE'
+      },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+
+    // Portrait: notice/error are the screen-owned rail's responsibility.
+    expect(byTestId(container, 'combat-notice')).toBe(null);
+    expect(byTestId(container, 'combat-error')).toBe(null);
+  });
+
+  it('wide render places combat-notice / combat-error at the TOP of the dock, before actions/targets', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const context = renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: {
+        phase: 'choose-target', actionType: 'attack', targetId: null,
+        notice: 'HOLD ON', error: 'BAD MOVE'
+      },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+    context.layout = 'wide';
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+
+    const notice = byTestId(container, 'combat-notice');
+    const error = byTestId(container, 'combat-error');
+    expect(notice).not.toBe(null);
+    expect(notice.textContent).toBe('HOLD ON');
+    expect(error).not.toBe(null);
+    expect(error.textContent).toBe('BAD MOVE');
+
+    const actions = byTestId(container, 'combat-actions');
+    const targets = byTestId(container, 'combat-targets');
+    const indexOf = (needle) => container.children.indexOf(needle);
+    expect(indexOf(notice)).toBeGreaterThanOrEqual(0);
+    expect(indexOf(error)).toBeGreaterThanOrEqual(0);
+    // Notice/error render before actions and target-list content — feedback stays glance-able.
+    expect(indexOf(notice)).toBeLessThan(indexOf(actions));
+    expect(indexOf(error)).toBeLessThan(indexOf(actions));
+    expect(indexOf(notice)).toBeLessThan(indexOf(targets));
+    expect(indexOf(error)).toBeLessThan(indexOf(targets));
+
+    // A single instance of each testid — no duplicate feedback element in wide.
+    const collectByTestId = (root, testid, matches = []) => {
+      if (root.dataset?.testid === testid) matches.push(root);
+      for (const child of root.children || []) collectByTestId(child, testid, matches);
+      return matches;
+    };
+    expect(collectByTestId(container, 'combat-notice')).toHaveLength(1);
+    expect(collectByTestId(container, 'combat-error')).toHaveLength(1);
+  });
+
+  it('portrait render emits zero combat-notice / combat-error nodes at all — no test-id duplicates for the screen-owned rail to fight', () => {
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active: makeActive({ ap: 2 }),
+      enemies: [makeEnemy()],
+      selection: { phase: 'confirm', actionType: 'attack', targetId: 'enemy', notice: 'X', error: 'Y' },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+    const collectByTestId = (root, testid, matches = []) => {
+      if (root.dataset?.testid === testid) matches.push(root);
+      for (const child of root.children || []) collectByTestId(child, testid, matches);
+      return matches;
+    };
+    expect(collectByTestId(container, 'combat-notice')).toHaveLength(0);
+    expect(collectByTestId(container, 'combat-error')).toHaveLength(0);
+  });
+});
+
 describe('console/combat.js — primary-action contract (SESSION-01)', () => {
   function hasClass(node, className) {
     return (node.className || '').split(/\s+/).includes(className);
