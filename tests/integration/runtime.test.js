@@ -368,6 +368,53 @@ describe('runtime lifecycle and routes', () => {
     offError();
     offRoute();
   });
+
+  // Regression: combat-resume rehydrate must derive hpMax/chargeMax from class +
+  // loadout (rules.attributes.deriveStats) — never copy currentHP/currentCHARGE
+  // as the max. Root-cause site: src/runtime.js actorFromSnapshot. buildRealisticRun's
+  // party[0] is a breacher with vit=5, hitDieBase=16 → derived hpMax=36; res=5,
+  // chargeBase=0 → chargeMax=15. We injure the hero to hp=1 so the pre-fix fallback
+  // (base.currentHP) would have fabricated hpMax=1.
+  it('resume-combat rehydrate derives hpMax/chargeMax for an injured party member instead of copying currentHP', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const runtimeRoutes = [];
+    const offRoute = bus.on('runtime:route', (payload) => runtimeRoutes.push(payload));
+
+    const state = buildRealisticRun(24, { depth: 2, fogCells: 4 });
+    const hero = state.party[0];
+    hero.currentHP = 1;
+    hero.currentCHARGE = 0;
+    state.activeCombat = {
+      arena: { originX: 0, originY: 0, contactId: 'rehydrate-derive-test' },
+      actors: [
+        { id: hero.id, side: 'party', x: 1, y: 1, hp: 1, charge: 0, conditions: [], initiative: 12, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false },
+        { id: 'enemy-0', side: 'enemy', x: 2, y: 1, hp: 8, charge: 0, conditions: [], initiative: 8, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false }
+      ],
+      initiativeOrder: [hero.id, 'enemy-0'],
+      currentIndex: 0,
+      round: 2,
+      pendingEffects: [],
+      encounter: { id: 'rehydrate-derive-test', type: 'standard' },
+      eventOrder: 0
+    };
+
+    bus.dispatch('ui:navigate', { screen: 'exploration', params: { runState: state, resume: true, floor: openFloor() } });
+    await waitForRoute(api, 'combat');
+
+    // The mounted combat route carries the rehydrated combatState (built by
+    // combatStateFromSnapshot → actorFromSnapshot). Peek the hero directly.
+    const combatRoute = runtimeRoutes.find((route) => route.screen === 'combat');
+    expect(combatRoute).toBeTruthy();
+    const rehydratedHero = combatRoute.params.combatState.combatants.get(hero.id);
+    expect(rehydratedHero).toBeTruthy();
+    expect(rehydratedHero.hp).toBe(1);
+    // Derived from deriveStats(breacher character, breacher class, loadout).
+    expect(rehydratedHero.hpMax).toBe(36);
+    expect(rehydratedHero.charge).toBe(0);
+    expect(rehydratedHero.chargeMax).toBe(15);
+    offRoute();
+  });
 });
 
 describe('runtime autosave checkpoints', () => {

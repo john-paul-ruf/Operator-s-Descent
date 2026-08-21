@@ -14,6 +14,7 @@ import { initLayoutController } from './ui/layout.js';
 import { parseFragment, createHistoryController } from './router.js';
 import { resolveLoadout } from './rules/equipment.js';
 import { deriveEnemyStats } from './rules/combat.js';
+import { deriveStats } from './rules/attributes.js';
 import { createUpdateToast } from './ui/components.js';
 import { createManualModal } from './ui/manual/manual-modal.js';
 
@@ -295,15 +296,26 @@ function actorFromSnapshot(actor, runState) {
     : null;
   const persistedHpMax = persistedStats?.hpMax;
   const persistedChargeMax = persistedStats?.chargeMax;
+  // Party actors resume with hpMax/chargeMax derived from class + loadout (Rule
+  // 13 — max HP/CHARGE is derived, never stored). Falling back `base.maxHP ??
+  // base.currentHP` before this fix would fabricate the ceiling from an injured
+  // hero's live HP. Guarded on class registry presence so headless test runs
+  // without gameData still fall through to base.maxHP/base.currentHP.
+  const partyClass = !enemy && gameData?.classes?.classes?.find((entry) => entry.id === base?.classId) || null;
+  const partyDerived = partyClass ? deriveStats(base, partyClass, resolveLoadout(base, gameData?.equipment, gameData?.affixes) || base?.equipment || {}) : null;
   return {
     ...base,
     id: actor?.id ?? base.id,
     side: actor?.side === 'echo' ? 'echo' : enemy ? 'enemy' : 'party',
     position: { x: Math.floor(actor?.x ?? 0), y: Math.floor(actor?.y ?? 0) },
     hp,
-    hpMax: Number.isFinite(persistedHpMax) ? Math.max(hp, persistedHpMax) : Math.max(hp, base.maxHP ?? base.currentHP ?? hp),
+    hpMax: Number.isFinite(persistedHpMax)
+      ? Math.max(hp, persistedHpMax)
+      : Math.max(hp, partyDerived?.hpMax ?? base.maxHP ?? base.currentHP ?? hp),
     charge,
-    chargeMax: Number.isFinite(persistedChargeMax) ? Math.max(charge, persistedChargeMax) : Math.max(charge, base.maxCHARGE ?? base.currentCHARGE ?? charge),
+    chargeMax: Number.isFinite(persistedChargeMax)
+      ? Math.max(charge, persistedChargeMax)
+      : Math.max(charge, partyDerived?.chargeMax ?? base.maxCHARGE ?? base.currentCHARGE ?? charge),
     currentHP: hp,
     currentCHARGE: charge,
     attributes: persistedStats?.attributes ?? derivedStats?.attributes ?? base.attributes ?? DEFAULT_ATTRIBUTES,
