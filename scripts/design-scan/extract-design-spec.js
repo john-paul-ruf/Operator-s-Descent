@@ -5,7 +5,9 @@ export function extractColorTokens(designMd = readText('specs/design.md')) {
     startMarker: '### Color Palette',
     endMarker: '### Typography'
   });
-  assertCount(rows, 16, 'design.md color palette tokens');
+  // SESSION-06 — count raised to 17 with `--hp` (player vitality, non-red per
+  // Custom Rule 14). Update this alongside every palette addition or removal.
+  assertCount(rows, 17, 'design.md color palette tokens');
   return rows.map(([token, value]) => ({ token, value }));
 }
 

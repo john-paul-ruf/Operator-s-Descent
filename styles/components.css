@@ -26,15 +26,10 @@
 .condition-tag.has-icon > .icon { flex-shrink: 0; }
 
 /* Wide-layout density pass — the console dock and telemetry dock are narrow;
-   share tighter row minimums and prevent shared portrait rows from wrapping.
-   Portrait keeps its 96px `.console-row` floor (defined below via the shared
-   `min-height: 48px` rule + the creation override), so this only relaxes rows
-   in wide mode. */
-:root[data-layout="wide"] .console-row,
-:root[data-layout="wide"] .action-btn,
-:root[data-layout="wide"] .item-card,
-:root[data-layout="wide"] .equipment-card,
-:root[data-layout="wide"] .protocol-card { min-height: 48px; }
+   prevent shared portrait rows from wrapping. Row-minimum densification
+   (48px, pointer-only) moved to styles/wide.css inside a fine-pointer /
+   hover-only media guard so any coarse-pointer wide surface (e.g.
+   1024×1024 touch tablet) still hits the 96px floor. */
 :root[data-layout="wide"] .combat-active-panel,
 :root[data-layout="wide"] .loot-container-header,
 :root[data-layout="wide"] .gear-slot-row { flex-wrap: nowrap; min-width: 0; }
@@ -96,7 +91,7 @@
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-height: 48px;
+  min-height: 96px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -331,6 +326,19 @@
 
 .grid-cell.range-valid {
   background: rgba(126,200,227,0.03);
+}
+
+/* Combat deployment markers (SESSION-06) — mirrors the mock definitions in
+   mocks/combat.html + mocks/wide/combat.html so the design-scan mock-class
+   parity check no longer flags them. Player zones tint with the floor accent,
+   enemy zones tint with hostile danger (Custom Rule 14). */
+.grid-cell.deploy-p {
+  background: var(--bg-base);
+  box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.grid-cell.deploy-e {
+  background: var(--bg-base);
+  box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--danger) 10%, transparent);
 }
 
 .token {
@@ -617,7 +625,7 @@ input[type="range"]::-moz-range-thumb {
   transition: all 0.15s ease;
   text-align: center;
   flex: 1;
-  min-height: 48px;
+  min-height: 96px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -912,6 +920,11 @@ input[type="range"]::-moz-range-thumb {
   color: var(--accent);
   text-shadow: 0 0 4px var(--accent);
 }
+/* Touch floor (SESSION-06) — every touch-capable row is at least 96 CSS px
+   at phone (412×915), portrait-reference (1080×1920), and touch-wide (1024×
+   1024). Wide-mode densification down to 48px is now scoped to fine-pointer
+   hover contexts only (see styles/wide.css) so any coarse-pointer / touch
+   surface still hits this 96px floor. */
 .console-row,
 .mode-tab,
 .action-btn,
@@ -924,7 +937,7 @@ input[type="range"]::-moz-range-thumb {
 .toggle-row,
 .slider-row,
 .text-input-row {
-  min-height: 48px;
+  min-height: 96px;
 }
 
 button.mode-tab[aria-selected="true"],
@@ -1047,10 +1060,14 @@ button.protocol-card[aria-selected="true"],
   white-space: nowrap;
 }
 
+/* Status strip container + fields are noninteractive readouts (SESSION-06).
+   Height comes from padding + inline flex alignment, not a misleading
+   `min-height` that would trip the touch-target scanner. */
 .status-strip {
-  min-height: 48px;
   gap: 12px;
   overflow: hidden;
+  padding: 8px 12px;
+  line-height: 1.35;
 }
 
 .status-depth,
@@ -1064,7 +1081,7 @@ button.protocol-card[aria-selected="true"],
 .status-move {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  padding: 4px 0;
   color: var(--text-primary);
   white-space: nowrap;
 }
@@ -1191,11 +1208,11 @@ button.protocol-card[aria-selected="true"],
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background: var(--bg-panel);
   border-top: 1px solid var(--border-dim);
   border-bottom: 1px solid var(--border-dim);
-  min-height: 44px;
+  line-height: 1.4;
   color: var(--text-primary);
 }
 .combat-feedback-notice {
@@ -1228,9 +1245,11 @@ button.protocol-card[aria-selected="true"],
   cursor: not-allowed;
 }
 
+/* Noninteractive polite notice — padding-based height, no misleading min-height
+   (SESSION-06). */
 .console-notice {
-  min-height: 32px;
-  padding: 4px 16px;
+  padding: 8px 16px;
+  line-height: 1.4;
   color: var(--warning);
   background: var(--bg-panel);
 }
@@ -1412,7 +1431,7 @@ button.protocol-card[aria-selected="true"],
 
 .config-name-input {
   width: 100%;
-  min-height: 64px;
+  min-height: 96px;
   padding: 8px 12px;
   color: var(--text-primary);
   background: var(--bg-base);
@@ -1670,7 +1689,8 @@ button.protocol-card[aria-selected="true"],
    for glance-ability alongside the actions; the row hosts condition tags. Lives
    under `.console-bar` only (portrait), so the wide dock keeps its full panel
    untouched. 44px minimum keeps the row tappable for any embedded chip. */
-.combat-active-conditions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 8px; min-height: 44px; }
+/* Noninteractive summary row — padding-based height, no min-height (SESSION-06). */
+.combat-active-conditions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px; margin-bottom: 8px; line-height: 1.4; }
 /* CMBT action density (SESSION-02, tightened by mobile-combat-pass SESSION-04).
    Portrait: 2-column action grid with the primary set (Move / Attack / End Turn)
    spanning both columns so the thumb-reach set stays big, and the four
@@ -1678,11 +1698,14 @@ button.protocol-card[aria-selected="true"],
    `.combat-action--primary` only exist inside `.console-bar` (portrait); the
    wide dock uses its own grid. Direction pad stays 3×3 with 48px+ cells (M97
    touch-target floor). */
+/* Portrait CMBT action + direction rows (SESSION-06) — every touch-capable
+   row hits the 96px floor at phone (412×915) and 1080-portrait alike.
+   Direction pad becomes a 3×3 grid of 96px cells for reliable thumb reach. */
 .combat-action-list { margin-bottom: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.combat-action { width: 100%; min-height: 48px; padding: 8px 12px; font-size: 11px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+.combat-action { width: 100%; min-height: 96px; padding: 10px 12px; font-size: 11px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
 .combat-action--primary { grid-column: 1 / -1; }
-.combat-direction-grid { display: grid; grid-template-columns: repeat(3, minmax(48px, 1fr)); grid-template-rows: repeat(3, minmax(48px, 56px)); gap: 4px; justify-content: center; margin-bottom: 12px; }
-.combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; min-height: 48px; }
+.combat-direction-grid { display: grid; grid-template-columns: repeat(3, minmax(96px, 1fr)); grid-template-rows: repeat(3, 96px); gap: 6px; justify-content: center; margin-bottom: 12px; }
+.combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; min-height: 96px; }
 .combat-protocol-list { margin-bottom: 12px; }
 .combat-item-list { margin-bottom: 12px; }
 .combat-item { padding: 6px 12px; font-size: 10px; }
@@ -1691,7 +1714,7 @@ button.protocol-card[aria-selected="true"],
    (clip + ellipsis), keep the 44px tap floor, and stay compatible with
    `.combat-target.is-illegal` (defined at :53 above). Under `.console-bar`
    only. */
-.combat-target { padding: 6px 12px; font-size: 10px; min-height: 44px; display: flex; align-items: center; gap: 6px; }
+.combat-target { padding: 10px 12px; font-size: 10px; min-height: 96px; display: flex; align-items: center; gap: 6px; }
 .combat-target > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .combat-confirm-row { display: flex; gap: 8px; margin-bottom: 12px; }
 .combat-terminal { font-size: 12px; color: var(--danger); text-align: center; padding: 16px; text-transform: uppercase; }
@@ -1917,8 +1940,8 @@ button.protocol-card[aria-selected="true"],
 }
 .update-toast-label { white-space: nowrap; }
 .update-toast-reload {
-  min-height: 48px;
-  min-width: 88px;
+  min-height: 96px;
+  min-width: 96px;
   padding: 10px 20px;
   font-size: 12px;
   letter-spacing: 0.2em;

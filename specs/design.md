@@ -18,12 +18,13 @@ The base is neon-on-violet, ported from Universal Operator's Tarot. A single CSS
 | `--text-dim` | `#8878a8` | Disabled, far-muted |
 | `--text-disabled` | `#71659a` | Disabled controls, illegal targets — ≥4.5:1 on `--bg-panel` |
 | `--accent` | `#7ec8e3` (default — Cold Storage) | Per-floor accent; flows through glow, borders, UI tints |
-| `--danger` | `#e83a3a` | HP loss, death, The Terminal theme |
-| `--warning` | `#e8632a` | CORRUPT items, overclock risk, The Foundry theme |
+| `--danger` | `#e83a3a` | Enemy sigils, semantic error states (Custom Rule 14). Never used for player-facing "level" gauges |
+| `--warning` | `#e8632a` | CORRUPT items, overclock risk, critical HP fill, The Foundry theme |
 | `--heal` | `#3ae8a8` | Healing, positive effects, The Nursery theme |
+| `--hp` | `#e8b23a` | Player HP-bar fill and future player vitality gauges — dedicated non-red per Custom Rule 14 |
 | `--sigil-player` | `var(--accent)` | Player sigil color (inherits floor accent) |
-| `--sigil-enemy` | `#e83a3a` | Enemy sigil color (red) |
-| `--sigil-echo` | `#e83a3a` | Echo sigil (red, per spec) |
+| `--sigil-enemy` | `#e83a3a` | Enemy sigil color (red, per Custom Rule 14) |
+| `--sigil-echo` | `#e83a3a` | Echo sigil color (red, per Custom Rule 14) |
 
 #### Playfield Palette
 
@@ -480,47 +481,55 @@ desktop-only editor).
 lets tooling exclude planned-only structures from portrait-scope parity checks and marks the
 implementation surface unambiguously for the follow-up implementation feature.
 
-**Portrait Console Expand States (2026-08-21 · mobile-ux-and-combat-readout SESSION-02).**
-The portrait `.console-bar` cycles through **three** height states — the wide dock (`variant:
-'dock'`) is unaffected and stays full-height. Legacy `.expanded` / `.collapsed` class names
-are preserved (mocks, keyboard-flow e2e `/expanded/` regex, and the M97 design-scan
-`check-mock-classes` rule depend on them); the new `data-expand-state` attribute
-disambiguates size.
+**Portrait Console Expand States (2026-08-21 · portrait-usability-regression-repair
+SESSION-06).** The portrait `.console-bar` is an **in-flow flex child** of the run screen's
+flex column — never absolute, never over the playfield, never triggers the dim layer. It
+cycles through **three bounded height states**; the wide dock (`variant: 'dock'`) is
+unaffected. Legacy `.expanded` / `.collapsed` class names are preserved (mocks,
+keyboard-flow e2e `/expanded/` regex, and the M97 design-scan `check-mock-classes` rule
+depend on them); the new `data-expand-state` attribute disambiguates size.
 
 | State | Height (portrait) | Container classes | `data-expand-state` |
 |-------|-------------------|-------------------|---------------------|
-| collapsed | tab bar only (~64px) | `console-bar collapsed` | `collapsed` |
-| half | 50% of the portrait frame | `console-bar expanded expanded-half` | `half` |
-| full | 100% of the portrait frame | `console-bar expanded expanded-full` | `full` |
+| collapsed | tab bar only (≥96px per-tab touch floor) | `console-bar collapsed` | `collapsed` |
+| half | `clamp(220px, 32dvh, 420px)` | `console-bar expanded expanded-half` | `half` |
+| full | `clamp(320px, 48dvh, 640px)` | `console-bar expanded expanded-full` | `full` |
+
+The clamps guarantee a meaningful map region above the console in every state at every
+portrait viewport (phone 412×915, tall portrait 1080×1920). Neither `half` nor `full` may
+consume the entire frame; mode content scrolls internally via `.console-content`'s
+`overflow-y: auto`.
 
 **Tap-cycle.** Tapping the currently-active tab cycles `collapsed → half → full → collapsed`.
 Tapping a different tab switches mode; it opens the console at `half` only when it was
 collapsed, otherwise it keeps the current size. The intent payload dispatched via
-`CONSOLE_INTENTS.expand` / `CONSOLE_INTENTS.collapse` now carries `{ mode, size }` so
-downstream listeners can distinguish half vs full landings; the pre-existing `ui:console-expand`
-/ `ui:console-collapse` / `ui:camera-request` events fire on every landing state.
+`CONSOLE_INTENTS.expand` / `CONSOLE_INTENTS.collapse` carries `{ mode, size }` so downstream
+listeners can distinguish half vs full landings; `ui:console-expand` / `ui:console-collapse`
+/ `ui:camera-request` fire on every landing state.
 
-**Status-strip collapse (portrait exploration + combat).** The strip carries a trailing
-`.status-collapse-toggle` button beside the manual `?` chip. The affordance is a text glyph
-matching the d-pad's unicode-arrow precedent — `▴` when expanded, `▾` when collapsed — with
-a 44×44 tap floor (M97 `check-touch-targets`). Clicking toggles the `status-collapsed` class
-and flips `aria-expanded`; the collapsed row hides seed, initiative, danger, clock, and the
-active-actor charge bar / move flag while keeping DEPTH, ROUND (combat), the active sigil,
-mini-HP, and AP legible.
+**Status strip (portrait exploration + combat).** The strip is always fully rendered — no
+status-collapse toggle, no `status-collapsed` class, no per-turn hiding. Density comes from
+CSS layout (multi-row wrapping grid in combat, tightened padding, inline flex fields) not
+from removing critical readouts. Every field (DEPTH, ROUND in combat, SEED, active sigil,
+mini-HP, CHARGE, AP, MV, initiative, danger clock, corruption) stays legible on both phone
+and tall portrait.
 
-**Portrait Combat (2026-08-21 · mobile-combat-pass SESSION-04).** In portrait, the COMBAT
-console pane is actions-first: the pinned status strip owns the readout (HP / CHARGE / AP /
-MV + initiative), so the pane drops the full active panel and initiative rail and keeps only
-a slim `.combat-active-conditions` row (AP repeated for glance-ability alongside the actions,
-plus condition tags — the strip shows neither). The action list is a 2-column grid where
+**Portrait Combat (SESSION-06).** In portrait, the COMBAT console pane is actions-first:
+the pinned status strip owns the readout (HP / CHARGE / AP / MV + initiative), so the pane
+drops the full active panel and initiative rail and keeps only a slim
+`.combat-active-conditions` row (AP repeated for glance-ability alongside the actions, plus
+condition tags — the strip shows neither). The action list is a 2-column grid where
 `combat-action--primary` (Move / Attack / End Turn) spans both columns for thumb reach and
 the four secondary actions (Protocol / Overclock / Item / Retreat) pair up in two-column
-rows; every action keeps a 48px minimum tap floor. The wide dock is unaffected and keeps its
-full active panel + initiative rail. The combat map defaults to a legible portrait zoom
+rows; every action, direction cell, target row, and mode tab hits the **96px touch floor**.
+The console opens once at `half` on mount; enemy playback, action completion, and party-turn
+boundaries never resize it. Move feedback (notices, errors) renders on a screen-owned
+`.combat-feedback-rail` live region sitting between the playfield and the console, outside
+`.console-content`, so it stays visible regardless of console scroll or expand state. The
+wide dock is unaffected and keeps its full active panel, initiative rail, and dock-hosted
+feedback. The combat map defaults to a legible portrait zoom
 (`zoomToCells(COMBAT_CELL_SIZE, 64)` on the M104 viewport camera) centered on the active
-actor. The console auto-presents per turn — expand to `half` on party turn, collapse on
-enemy playback — with a per-turn manual override via `ui:console-collapse` so the console
-never fights the player.
+actor.
 
 ### Screen Layouts by Class
 

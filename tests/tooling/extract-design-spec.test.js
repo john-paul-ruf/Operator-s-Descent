@@ -7,13 +7,15 @@ import {
 } from '../../scripts/design-scan/extract-design-spec.js';
 
 describe('extract-design-spec', () => {
-  it('extracts all 16 color tokens with correct values', () => {
+  it('extracts all 17 color tokens with correct values', () => {
     const tokens = extractColorTokens();
-    expect(tokens).toHaveLength(16);
+    expect(tokens).toHaveLength(17);
     expect(tokens.find((t) => t.token === '--bg-base')).toEqual({ token: '--bg-base', value: '#0a0612' });
     expect(tokens.find((t) => t.token === '--accent')).toEqual({ token: '--accent', value: '#7ec8e3' });
     expect(tokens.find((t) => t.token === '--border-active')).toEqual({ token: '--border-active', value: 'var(--accent)' });
     expect(tokens.find((t) => t.token === '--text-disabled')).toEqual({ token: '--text-disabled', value: '#71659a' });
+    // SESSION-06 — `--hp` is the dedicated player-vitality token (Custom Rule 14).
+    expect(tokens.find((t) => t.token === '--hp')).toEqual({ token: '--hp', value: '#e8b23a' });
   });
 
   it('extracts corner radius rules', () => {

@@ -9,6 +9,22 @@
     aspect-ratio: auto;
   }
 
+  /* Wide-layout row densification (SESSION-06) — 48px minimum, pointer-only.
+     The inner `@media (hover: hover) and (pointer: fine) and not (any-pointer:
+     coarse)` guard ensures this NEVER matches when any coarse pointer is
+     available (touch tablets, hybrid laptops, etc.), so wide surfaces with a
+     touch pointer keep the 96px touch floor from styles/components.css. */
+  @media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
+    .wide-console-content-body .console-row,
+    .wide-console-content-body .action-btn,
+    .wide-console-content-body .item-card,
+    .wide-console-content-body .equipment-card,
+    .wide-console-content-body .protocol-card,
+    .wide-settings-body .settings-row {
+      min-height: 48px;
+    }
+  }
+
   /* ═══ WIDE SHELL — three-region grid (Adaptive Layout System) ═══ */
   /*
    * Pane widths are driven by CSS custom properties owned by the M100 pane

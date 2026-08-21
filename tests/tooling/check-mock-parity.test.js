@@ -7,14 +7,11 @@ describe('check-mock-parity', () => {
     expect(checkMockTokens()).toEqual([]);
   });
 
-  it('ignores only mock-generated combat deployment markers in both layouts', () => {
-    const findings = checkMockClasses();
-    expect(findings.map(({ layout, mockFile, className }) => `${layout}:${mockFile}:${className}`)).toEqual([
-      'portrait:combat.html:deploy-p',
-      'portrait:combat.html:deploy-e',
-      'wide:combat.html:deploy-p',
-      'wide:combat.html:deploy-e'
-    ]);
-    for (const finding of findings) expect(finding.level).toBe('warning');
+  // SESSION-06 — deploy-p and deploy-e are now defined in styles/components.css
+  // (with player-accent / hostile-danger semantics) so every mock class has a
+  // production home. Zero findings means every mock class is legitimately
+  // matched by a production stylesheet.
+  it('reports zero mock-class parity findings after SESSION-06', () => {
+    expect(checkMockClasses()).toEqual([]);
   });
 });

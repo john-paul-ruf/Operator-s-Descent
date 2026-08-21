@@ -16,14 +16,14 @@ describe('check-tokens', () => {
 });
 
 describe('check-touch-targets', () => {
-  it('reports no touch-target errors against the current repo', () => {
-    // Assert on errors only. Warning-level findings surface min-heights below the
-    // aspirational 96px comfort minimum — those are advisory and drift naturally as
-    // components are added/removed (mobile-combat-pass SESSION-04 added two more when
-    // the portrait CMBT pane picked up .combat-active-conditions + tightened
-    // .combat-target rows). Hardcoding a warning count made the test tripwire on
-    // cosmetic changes; the 0-error invariant still holds.
+  it('reports zero errors AND zero warnings against the current repo (SESSION-06)', () => {
+    // SESSION-06 raised every touch-capable row to the 96px floor and moved the
+    // wide-mode 48px densification into a fine-pointer / hover-only scope in
+    // styles/wide.css. The scanner reads styles/components.css so its findings
+    // must now be empty on both axes — no more "advisory" warnings for rows
+    // below the touch floor.
     const findings = checkTouchTargets();
     expect(findings.filter((f) => f.level === 'error')).toEqual([]);
+    expect(findings.filter((f) => f.level === 'warning')).toEqual([]);
   });
 });
