@@ -307,39 +307,50 @@ describe('conductor.drumPattern', () => {
 });
 
 describe('conductor.directorTargets', () => {
-  test('no signals — depth 1', () => {
+  test('no signals — depth 1 lands on the upbeat floors (intensity 0.35, sparkle 0.25)', () => {
     const t = directorTargets({ depth: 1 });
-    expect(t.intensity).toBeCloseTo(0.15);
-    expect(t.sparkle).toBe(0);
+    expect(t.intensity).toBeCloseTo(0.35);
+    expect(t.sparkle).toBeCloseTo(0.25);
     expect(t.combat).toBe(false);
-    expect(t.tempo).toBe(Math.round(92 + 0 + 0.15 * 26));
+    expect(t.tempo).toBe(Math.round(116 + 0 + 0.35 * 22));
   });
 
-  test('hostile at distance 1 raises intensity via danger 0.9 * 0.9', () => {
+  test('hostile at distance 1 raises intensity via danger 0.9 * 0.9 above the floor', () => {
     const t = directorTargets({ depth: 1, proximity: { hostile: 1 } });
     expect(t.intensity).toBeCloseTo(0.81);
-    expect(t.tempo).toBe(Math.round(92 + 0 + 0.81 * 26));
+    expect(t.tempo).toBe(Math.round(116 + 0 + 0.81 * 22));
   });
 
-  test('container at distance 3 raises sparkle to 0.7', () => {
+  test('container at distance 3 raises sparkle to 0.7 above its 0.25 floor', () => {
     const t = directorTargets({ depth: 1, proximity: { container: 3 } });
     expect(t.sparkle).toBeCloseTo(0.7);
-    expect(t.intensity).toBeCloseTo(0.15);
+    expect(t.intensity).toBeCloseTo(0.35);
   });
 
-  test('combat pins intensity to 1 and adds +18 to tempo', () => {
-    const t = directorTargets({ depth: 1, combatActive: true });
-    expect(t.intensity).toBe(1);
-    expect(t.combat).toBe(true);
-    expect(t.tempo).toBe(Math.round(92 + 0 + 26 + 18));
+  test('combat pins intensity to 1 and adds +22 to tempo, regardless of key spelling', () => {
+    const asActive = directorTargets({ depth: 1, combatActive: true });
+    const asState = directorTargets({ depth: 1, combatState: { any: true } });
+    const asCombat = directorTargets({ depth: 1, combat: true });
+    for (const t of [asActive, asState, asCombat]) {
+      expect(t.intensity).toBe(1);
+      expect(t.combat).toBe(true);
+      expect(t.tempo).toBe(Math.round(116 + 0 + 22 + 22));
+    }
   });
 
-  test('depth 30 raises floor to ~0.3917 and tempo shifts by 29', () => {
+  test('depth 30 raises the intensity floor toward 0.55 and shifts tempo above depth 1', () => {
     const t = directorTargets({ depth: 30 });
-    expect(t.intensity).toBeCloseTo(0.15 + 29 / 30 * 0.25);
-    expect(t.tempo).toBe(Math.round(92 + 29 + (0.15 + 29 / 30 * 0.25) * 26));
-    expect(t.tempo).toBeGreaterThanOrEqual(92);
-    expect(t.tempo).toBeLessThanOrEqual(176);
+    expect(t.intensity).toBeCloseTo(0.35 + 29 / 30 * 0.2);
+    expect(t.tempo).toBe(Math.round(116 + 29 * 0.8 + (0.35 + 29 / 30 * 0.2) * 22));
+    expect(t.tempo).toBeGreaterThanOrEqual(112);
+    expect(t.tempo).toBeLessThanOrEqual(180);
+  });
+
+  test('tempo is clamped to [112, 180] at extremes', () => {
+    const low = directorTargets({ depth: 1 });
+    expect(low.tempo).toBeGreaterThanOrEqual(112);
+    const high = directorTargets({ depth: 30, proximity: { hostile: 0 }, combat: true });
+    expect(high.tempo).toBeLessThanOrEqual(180);
   });
 });
 
@@ -473,7 +484,8 @@ describe('conductor clock', () => {
       drumsKick: [...p.drums.kick],
       drumsSnare: [...p.drums.snare],
       drumsHat: [...p.drums.hat],
-      melody: p.melody.map((s) => (s ? { ...s } : null))
+      melody: p.melody.map((s) => (s ? { ...s } : null)),
+      bass: p.bass.map((s) => (s ? { ...s } : null))
     });
     c1.subscribe(capture(e1));
     c2.subscribe(capture(e2));
@@ -516,5 +528,66 @@ describe('conductor clock', () => {
     expect(payload).toBeTruthy();
     const expected = 110 * Math.pow(2, ROOTS['flowing-cyan'] / 12) * Math.pow(2, -1);
     expect(payload.rootFreq).toBeCloseTo(expected, 6);
+  });
+
+  test('updateState merges — a lone {combat:true} preserves depth/tempo and pins intensity target to 1', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    c.updateState({ worldSeed: 9, depth: 20, floorId: 'deep', audioMode: 'cold-ambient', proximity: { hostile: 10, container: 10 } });
+    const events = [];
+    c.subscribe((p) => events.push({ tempo: p.tempo, intensity: p.intensity, combat: p.combat, depth: p.pos.bar >= 0 ? 20 : null }));
+    c.start();
+    drive(ctx, 2);
+    const preTempo = events.at(-1).tempo;
+    expect(preTempo).toBeGreaterThan(0);
+
+    c.updateState({ combat: true });
+    drive(ctx, 5);
+    c.stop();
+
+    const postCombat = events.slice(events.length - 20);
+    expect(postCombat.some((e) => e.combat === true)).toBe(true);
+    const settledIntensity = postCombat.at(-1).intensity;
+    expect(settledIntensity).toBeGreaterThan(0.9);
+    const settledTempo = postCombat.at(-1).tempo;
+    const combatBonus = 22;
+    const combatMin = Math.round(116 + 19 * 0.8 + 1 * 22 + combatBonus);
+    expect(settledTempo).toBeGreaterThanOrEqual(Math.min(combatMin - 5, 180));
+    expect(settledTempo).toBeLessThanOrEqual(180);
+  });
+
+  test('every payload includes a 16-slot bass array with valid slot shape', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    c.updateState({ worldSeed: 4, depth: 5, floorId: 'x', audioMode: 'organic-green' });
+    const payloads = [];
+    c.subscribe((p) => payloads.push(p));
+    c.start();
+    drive(ctx, 3);
+    c.stop();
+    expect(payloads.length).toBeGreaterThan(0);
+    for (const p of payloads) {
+      expect(Array.isArray(p.bass)).toBe(true);
+      expect(p.bass.length).toBe(16);
+      for (const slot of p.bass) {
+        if (!slot) continue;
+        expect(typeof slot.semi).toBe('number');
+        expect([-1, 0]).toContain(slot.octave);
+        expect(slot.velocity).toBeGreaterThan(0);
+        expect(slot.lengthSlots).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test('motif signatures differ across phrases 0..3 on a single floor', () => {
+    const ctx = new FakeContext();
+    const c = createConductor(ctx);
+    c.updateState({ worldSeed: 21, depth: 6, floorId: 'phraseDiv', audioMode: 'organic-green' });
+    c.start();
+    // enough time for at least 4 phrases (8 bars each) at ~124bpm ⇒ ~15.5s per phrase; drive plenty
+    drive(ctx, 80);
+    c.stop();
+    const s = c.getState();
+    expect(s.ledgerSize).toBeGreaterThanOrEqual(4);
   });
 });

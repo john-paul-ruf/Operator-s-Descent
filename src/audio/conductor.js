@@ -398,32 +398,34 @@ export function drumPattern({ tier = 0, barInPhrase = 0, h = 0 } = {}) {
 export function directorTargets({
   depth = 1,
   proximity = {},
-  combatActive = false,
-  combatState = null
+  combat,
+  combatActive,
+  combatState
 } = {}) {
-  const combat = Boolean(combatActive || combatState);
-  const hostileDist = Number.isFinite(proximity.hostile) ? proximity.hostile : 10;
-  const containerDist = Number.isFinite(proximity.container) ? proximity.container : 10;
+  const combatFlag = Boolean(combat ?? combatActive ?? combatState);
+  const hostileDist = Number.isFinite(proximity?.hostile) ? proximity.hostile : 10;
+  const containerDist = Number.isFinite(proximity?.container) ? proximity.container : 10;
   const danger = 1 - Math.min(Math.max(hostileDist, 0), 10) / 10;
+  const containerPressure = 1 - Math.min(Math.max(containerDist, 0), 10) / 10;
   const clampedDepth = Math.min(Math.max(depth - 1, 0), 30);
-  const floorBase = 0.15 + (clampedDepth / 30) * 0.25;
-  const intensity = combat ? 1 : Math.max(floorBase, danger * 0.9);
-  const sparkle = 1 - Math.min(Math.max(containerDist, 0), 10) / 10;
-  const tempoRaw = 92 + clampedDepth + intensity * 26 + (combat ? 18 : 0);
-  const tempo = Math.max(92, Math.min(176, Math.round(tempoRaw)));
-  return { intensity, sparkle, tempo, combat };
+  const intensityFloor = 0.35 + (clampedDepth / 30) * 0.2;
+  const intensity = combatFlag ? 1 : Math.max(intensityFloor, danger * 0.9);
+  const sparkle = Math.max(0.25, containerPressure);
+  const tempoRaw = 116 + clampedDepth * 0.8 + intensity * 22 + (combatFlag ? 22 : 0);
+  const tempo = Math.max(112, Math.min(180, Math.round(tempoRaw)));
+  return { intensity, sparkle, tempo, combat: combatFlag };
 }
 
 const LOOKAHEAD_MS = 25;
 const HORIZON_S = 0.12;
 const PROGRESSION_LEDGER_CAP = 4;
-const MELODY_LEDGER_CAP = 64;
+const MOTIF_LEDGER_CAP = 16;
 
 function tierFor(intensity, combat) {
   if (combat) return 3;
-  if (intensity < 0.25) return 0;
-  if (intensity < 0.5) return 1;
-  if (intensity < 0.75) return 2;
+  if (intensity < 0.45) return 0;
+  if (intensity < 0.6) return 1;
+  if (intensity < 0.8) return 2;
   return 3;
 }
 
@@ -447,19 +449,20 @@ export function createConductor(ctx) {
   let barInPhrase = 0;
   let phraseIndex = 0;
 
-  let barTempo = 96;
+  let barTempo = 124;
   let smoothedIntensity = 0;
   let smoothedSparkle = 0;
   let combatOn = false;
 
   let currentProgression = null;
   let currentChord = null;
+  let currentMotif = null;
   let currentMelody = new Array(16).fill(null);
+  let currentBass = new Array(16).fill(null);
   let currentDrums = { kick: new Array(16).fill(false), snare: new Array(16).fill(false), hat: new Array(16).fill(false) };
 
   let progressionLedger = [];
-  let melodyLedger = new Set();
-  let melodyLedgerOrder = [];
+  const motifLedger = new Set();
 
   function refreshProgression() {
     currentProgression = progressionFor({
@@ -474,36 +477,49 @@ export function createConductor(ctx) {
     while (progressionLedger.length > PROGRESSION_LEDGER_CAP) progressionLedger.shift();
   }
 
-  function refreshBar() {
-    const chordIdx = Math.floor(barInPhrase / 2);
-    currentChord = currentProgression.chords[chordIdx];
+  function refreshMotif() {
     const scale = SCALES[active.audioMode] || SCALES['cold-ambient'];
     let candidate = null;
-    let key = '';
     for (let perturb = 0; perturb <= MOTIF_MAX_PERTURB; perturb++) {
-      candidate = melodyBar({
+      candidate = motifFor({
         worldSeed: active.worldSeed,
         depth: active.depth,
         floorId: active.floorId,
         phraseIndex,
-        barInPhrase,
-        chord: currentChord,
-        scale,
         intensity: smoothedIntensity,
+        scale,
         perturb
       });
-      key = candidate.map((s) => (s ? `${s.degree}.${s.octave}.${s.lengthSlots}` : '_')).join('|');
-      if (!melodyLedger.has(key)) break;
+      if (!motifLedger.has(candidate.signature)) break;
     }
-    melodyLedger.add(key);
-    melodyLedgerOrder.push(key);
-    while (melodyLedgerOrder.length > MELODY_LEDGER_CAP) {
-      const dropped = melodyLedgerOrder.shift();
-      melodyLedger.delete(dropped);
+    currentMotif = candidate;
+    motifLedger.add(candidate.signature);
+    while (motifLedger.size > MOTIF_LEDGER_CAP) {
+      motifLedger.delete(motifLedger.values().next().value);
     }
-    currentMelody = candidate;
+  }
+
+  function refreshBar() {
+    const chordIdx = Math.floor(barInPhrase / 2);
+    currentChord = currentProgression.chords[chordIdx];
+    const nextChord = currentProgression.chords[(chordIdx + 1) % currentProgression.chords.length];
+    const scale = SCALES[active.audioMode] || SCALES['cold-ambient'];
+    if (barInPhrase === 0 || !currentMotif) refreshMotif();
+    currentMelody = phraseBar({
+      motif: currentMotif,
+      chord: currentChord,
+      scale,
+      barInPhrase,
+      worldSeed: active.worldSeed,
+      depth: active.depth,
+      floorId: active.floorId,
+      phraseIndex
+    });
+    const tier = tierFor(smoothedIntensity, combatOn);
+    const bassHash = hash(active.worldSeed, active.depth, active.floorId, phraseIndex, barInPhrase, 'bass');
+    currentBass = bassBar({ chord: currentChord, nextChord, tier, barInPhrase, h: bassHash });
     const drumHash = hash(active.worldSeed, active.depth, active.floorId, phraseIndex, barInPhrase, 'drums');
-    currentDrums = drumPattern({ tier: tierFor(smoothedIntensity, combatOn), barInPhrase, h: drumHash });
+    currentDrums = drumPattern({ tier, barInPhrase, h: drumHash });
   }
 
   function emitTick() {
@@ -523,9 +539,9 @@ export function createConductor(ctx) {
         phraseIndex = 0;
         barInPhrase = 0;
         progressionLedger.length = 0;
-        melodyLedger.clear();
-        melodyLedgerOrder.length = 0;
+        motifLedger.clear();
         currentProgression = null;
+        currentMotif = null;
       }
       if (!currentProgression || barInPhrase === 0) refreshProgression();
       refreshBar();
@@ -550,6 +566,7 @@ export function createConductor(ctx) {
       sparkle: smoothedSparkle,
       combat: combatOn,
       melody: currentMelody,
+      bass: currentBass,
       drums: currentDrums
     };
 
@@ -581,11 +598,12 @@ export function createConductor(ctx) {
       running = true;
       step = 0; bar = 0; barInPhrase = 0; phraseIndex = 0;
       progressionLedger = [];
-      melodyLedger = new Set();
-      melodyLedgerOrder = [];
+      motifLedger.clear();
       currentProgression = null;
       currentChord = null;
+      currentMotif = null;
       currentMelody = new Array(16).fill(null);
+      currentBass = new Array(16).fill(null);
       currentDrums = { kick: new Array(16).fill(false), snare: new Array(16).fill(false), hat: new Array(16).fill(false) };
       smoothedIntensity = 0;
       smoothedSparkle = 0;
@@ -604,8 +622,8 @@ export function createConductor(ctx) {
       return () => subs.delete(fn);
     },
     updateState(gameState) {
-      latestGameState = gameState || {};
       if (!gameState) return;
+      latestGameState = { ...latestGameState, ...gameState };
       const nextMode = gameState.theme?.audioMode || gameState.audioMode;
       const staged = pending || {};
       if (gameState.worldSeed !== undefined) staged.worldSeed = gameState.worldSeed;
@@ -623,7 +641,7 @@ export function createConductor(ctx) {
         combat: combatOn,
         audioMode: active.audioMode,
         phraseKey: currentProgression?.key ?? null,
-        ledgerSize: melodyLedger.size
+        ledgerSize: motifLedger.size
       };
     }
   };
