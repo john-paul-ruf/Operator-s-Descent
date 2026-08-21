@@ -1084,6 +1084,12 @@ button.protocol-card[aria-selected="true"],
   border-color: currentColor;
 }
 
+/* Portrait console bar. Height is now a percentage of the portrait frame
+   (.console-bar is absolute against #app-root; #app-root fills the frame).
+   The 3-state tap cycle (collapsed → half → full → collapsed) lives in
+   src/ui/console/console.js and drives .expanded-half / .expanded-full;
+   the legacy .expanded class is still applied for both non-collapsed sizes
+   so mocks, keyboard-flow e2e (/expanded/), and the M97 scanner still pass. */
 .console-bar {
   position: absolute;
   left: 0;
@@ -1092,7 +1098,6 @@ button.protocol-card[aria-selected="true"],
   z-index: 30;
   display: flex;
   flex-direction: column;
-  max-height: 720px;
   border-top: 1px solid var(--border-dim);
 }
 
@@ -1100,20 +1105,24 @@ button.protocol-card[aria-selected="true"],
   display: none;
 }
 
-.console-bar.expanded {
-  height: 720px;
+.console-bar.expanded-half {
+  height: 50%;
+}
+
+.console-bar.expanded-full {
+  height: 100%;
 }
 
 .console-tab-bar {
   display: flex;
-  min-height: 96px;
+  min-height: 64px;
 }
 
 .console-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px;
   background: var(--bg-panel);
 }
 

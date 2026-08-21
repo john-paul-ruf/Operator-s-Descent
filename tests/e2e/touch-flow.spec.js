@@ -119,16 +119,29 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
   await installStableStorage(page);
   await createRunByTouch(page);
 
+  // Portrait tab-tap cycle (SESSION-02): collapsed → half → full → collapsed.
+  // The `expanded` class stays applied for BOTH open sizes so mock parity,
+  // the M97 design-scan check-mock-classes rule, and keyboard-flow.spec.js's
+  // `/expanded/` regex keep working; `data-expand-state` disambiguates which.
   await page.getByTestId('console-tab-move').tap();
   await expect(page.locator('.console-bar')).toHaveClass(/expanded/);
+  await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', 'half');
 
+  // Touch-target floor per M97 (≥44px). Every visible `.console-row` /
+  // `.mode-tab` must respect the 48px min-height set in components.css.
   const visibleRows = page.locator('.console-row:visible, .mode-tab:visible');
   const heights = await visibleRows.evaluateAll((rows) => rows.map((row) => Math.round(row.getBoundingClientRect().height)));
-  expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
+  expect(Math.min(...heights)).toBeGreaterThanOrEqual(48);
 
-  // Collapse the console so the canvas is the main tap target.
+  // Tap 2: half → full.
+  await page.getByTestId('console-tab-move').tap();
+  await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', 'full');
+  await expect(page.locator('.console-bar')).toHaveClass(/expanded/);
+
+  // Tap 3: full → collapsed (playfield the primary tap target again).
   await page.getByTestId('console-tab-move').tap();
   await expect(page.locator('.console-bar')).toHaveClass(/collapsed/);
+  await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', 'collapsed');
 
   const startCell = await readPartyCell(page);
 
