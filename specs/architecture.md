@@ -2640,3 +2640,17 @@ fogs from pre-flip v5 saves back to zero-fill of the current size instead of fai
   `dangerClockProgress` as pre-flip).
 - `enemyCountScale`, `enemyStatScale`, `lootRarityShift`, `corruptionDangerRate`,
   `calibrationFloor`, `thresholdFloor` — unchanged.
+
+<!-- SESSION-01 — hotfix-shadowcast-40x64-and-gate -->
+
+### M33 Run State — public-API addendum
+
+Newly exported constant:
+
+- `FOG_BYTES` — the current fog-of-war bitmap byte length, derived as `Math.ceil((GRID_W * GRID_H) / 8)` from `src/floor/archetypes.js`. At the live 40×64 world this is 320; at any future dimension flip it re-derives automatically. Consumers no longer need to hand-compute `ceil(W×H/8)`.
+
+Rationale: eliminates literal-drift in tests that previously asserted `80` (the pre-flip value) and provides a single source of truth for the fog-bitmap size shared between production code and tests. Frozen readers under `src/state/versions/` are unaffected — each carries its own historical dimensions.
+
+### M31 Shadowcast — dependency addendum (no signature change)
+
+Shadowcast now imports `{ GRID_W, GRID_H }` from `src/floor/archetypes.js` and derives `CELLS = GRID_W * GRID_H` internally. The three exported functions (`createFogState`, `updateFogOfWar`, `syncVisitedBitmap`) keep their existing signatures — the change is invisible to callers in `movement.js` and `exploration.js`. Dependency direction (exploration ← floor) matches the FORGE-CONFIG flow and follows the precedent set by `src/state/run-state.js:3`.
