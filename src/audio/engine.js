@@ -25,7 +25,7 @@ export function createAudioEngine(initialAudioContext = null) {
   let destroyed = false;
   let masterVolume = 100;
   let muted = false;
-  const pendingVolumes = { drone: 75, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 };
+  const pendingVolumes = { drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 };
 
   function setParam(param, value, time = audioContext?.currentTime || 0, glide = 0) {
     if (!param) return;

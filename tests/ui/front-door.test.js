@@ -311,7 +311,7 @@ describe('settings screen', () => {
     expect(loadSettings()).toMatchObject({
       masterMute: true,
       masterVolume: 40,
-      layerVolumes: { drone: 23, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 },
+      layerVolumes: { drone: 23, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 },
       glitchEnabled: true,
       reducedMotion: 'full',
       scanlineGrainEnabled: false

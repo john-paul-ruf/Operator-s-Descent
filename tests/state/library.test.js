@@ -212,7 +212,7 @@ describe('settings and flags', () => {
     expect(loadSettings()).toEqual({
       masterMute: false,
       masterVolume: 100,
-      layerVolumes: { drone: 75, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 },
+      layerVolumes: { drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 },
       glitchEnabled: true,
       reducedMotion: 'system',
       scanlineGrainEnabled: true
@@ -229,7 +229,7 @@ describe('settings and flags', () => {
     expect(loadSettings()).toEqual({
       masterMute: false,
       masterVolume: 100,
-      layerVolumes: { drone: 0, pulse: 43, sparkle: 75, lead: 100, noiseBed: 75 },
+      layerVolumes: { drone: 0, pulse: 43, sparkle: 100, lead: 100, noiseBed: 11 },
       glitchEnabled: true,
       reducedMotion: 'reduce',
       scanlineGrainEnabled: true,
@@ -272,7 +272,7 @@ describe('settings and flags', () => {
 
   it('uses defaults for non-numeric layer volumes', () => {
     saveSettings({ layerVolumes: { drone: 'loud', sparkle: NaN } });
-    expect(loadSettings().layerVolumes).toMatchObject({ drone: 75, sparkle: 75 });
+    expect(loadSettings().layerVolumes).toMatchObject({ drone: 10, sparkle: 100 });
   });
 
   it('defensively reads and writes flags', () => {
