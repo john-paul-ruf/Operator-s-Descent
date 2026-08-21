@@ -18,6 +18,7 @@
   --danger: #e83a3a;
   --warning: #e8632a;
   --heal: #3ae8a8;
+  --hp: #e8b23a;                                   /* player vitality — NOT enemy-red (Custom Rule 14) */
   --sigil-player: var(--accent);
   --sigil-enemy: #e83a3a;
   --sigil-echo: #e83a3a;
@@ -281,7 +282,7 @@ body {
   transition: width 0.3s ease;
 }
 
-.bar-fill-hp { background: var(--danger); box-shadow: 0 0 4px var(--danger); }
+.bar-fill-hp { background: var(--hp); box-shadow: 0 0 4px var(--hp); }
 .bar-fill-warning { background: var(--warning); box-shadow: 0 0 4px var(--warning); }
 .bar-fill-heal { background: var(--heal); box-shadow: 0 0 4px var(--heal); }
 

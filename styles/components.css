@@ -1722,9 +1722,19 @@ button.protocol-card[aria-selected="true"],
   box-shadow: 0 0 8px var(--accent);
 }
 
+/* HP-bar-only class (emitted by createHPBar). Repointed off enemy-red onto --hp
+   per Custom Rule 14 — red is reserved for hostiles + semantic errors. */
 .bar-fill-danger {
-  background: var(--danger);
-  box-shadow: 0 0 2px var(--danger);
+  background: var(--hp);
+  box-shadow: 0 0 2px var(--hp);
+}
+
+/* Critical HP (<25%) — createHPBar adds `.danger` on the fill. Warning-orange
+   keeps "almost dead" reading as caution without collapsing back to enemy-red. */
+.bar-fill-hp.danger,
+.bar-fill-danger.danger {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
 }
 
 .bar-fill-charge {
