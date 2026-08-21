@@ -400,6 +400,7 @@ function appendRuntimeLogEntry(entry = {}) {
     message: typeof entry.message === 'string' ? entry.message : (entry.entry?.message || entry.type || 'Runtime event.'),
     sequence: entry.sequence,
     timestamp: Number.isFinite(entry.timestamp) ? entry.timestamp : Date.now(),
+    ...(typeof entry.detail === 'string' && entry.detail ? { detail: entry.detail } : {}),
     ...(entry.entry ? { entry: entry.entry } : {})
   };
   runtimeLogEntries.push(payload);

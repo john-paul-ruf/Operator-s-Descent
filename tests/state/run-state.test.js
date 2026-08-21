@@ -207,6 +207,34 @@ describe('recordEvent persistence policy (slim events)', () => {
       { type: 'move', message: 'B' }
     ]);
   });
+
+  it('keeps a string detail on recentEvents, bounded to 96 characters', () => {
+    const state = makeState();
+    state.recordEvent({
+      type: 'attack',
+      message: 'Operator strikes drone.',
+      sequence: 7,
+      detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
+    });
+    expect(state.recentEvents[0]).toEqual({
+      type: 'attack',
+      message: 'Operator strikes drone.',
+      sequence: 7,
+      detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
+    });
+    // Long detail is sliced at 96 characters.
+    state.recordEvent({ type: 'attack', message: 'Overflow', sequence: 8, detail: 'X'.repeat(200) });
+    expect(state.recentEvents[1].detail).toBe('X'.repeat(96));
+  });
+
+  it('drops non-string detail values instead of persisting them', () => {
+    const state = makeState();
+    state.recordEvent({ type: 'attack', message: 'No detail', sequence: 9, detail: null });
+    state.recordEvent({ type: 'attack', message: 'Numeric detail', sequence: 10, detail: 42 });
+    state.recordEvent({ type: 'attack', message: 'Object detail', sequence: 11, detail: { some: 'object' } });
+    state.recordEvent({ type: 'attack', message: 'Empty string', sequence: 12, detail: '' });
+    for (const entry of state.recentEvents) expect(entry).not.toHaveProperty('detail');
+  });
 });
 
 describe('v1 normalization', () => {

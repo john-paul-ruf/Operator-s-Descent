@@ -238,6 +238,7 @@ function normalizeStructuredEntries(value, maxEntries, maxBytes) {
 
 const PERSISTED_EVENT_TYPE_MAX = 16;
 const PERSISTED_EVENT_MESSAGE_MAX = 72;
+const PERSISTED_EVENT_DETAIL_MAX = 96;
 
 function normalizePersistedEvent(event) {
   if (!isPlainObject(event)) return undefined;
@@ -249,6 +250,12 @@ function normalizePersistedEvent(event) {
   const message = rawMessage.slice(0, PERSISTED_EVENT_MESSAGE_MAX);
   const entry = { type, message };
   if (Number.isFinite(event.sequence)) entry.sequence = event.sequence;
+  // Detail is a pre-formatted breakdown string (e.g. "d20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg")
+  // supplied by combat dispatch and runtime log entries. Bounded (96 chars) so the
+  // event trimmer in save-encode can predict payload size; non-string detail drops.
+  if (typeof event.detail === 'string' && event.detail.length > 0) {
+    entry.detail = event.detail.slice(0, PERSISTED_EVENT_DETAIL_MAX);
+  }
   return entry;
 }
 
