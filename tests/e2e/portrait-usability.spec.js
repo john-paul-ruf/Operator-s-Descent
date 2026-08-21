@@ -178,6 +178,27 @@ async function tapCoordForCombatCell(page, cellX, cellY, ctx) {
   });
 }
 
+// ─── Exploration touch flow (fresh run via tap-through creation) ─────────────
+
+async function createRunByTouch(page, seed = 5) {
+  await page.goto(`/?seed=${seed}#w=${seed}`);
+  await expect(page.getByTestId('add-character')).toBeVisible();
+  await page.getByTestId('add-character').tap();
+  await page.getByTestId('class-breacher').tap();
+  const sigilTab = page.getByTestId('tab-sigil');
+  if (await sigilTab.count()) await sigilTab.tap();
+  await page.getByTestId('sigil-e000').tap();
+  await page.getByTestId('finalize').tap();
+  await expect(page.getByTestId('exploration-canvas')).toBeVisible();
+}
+
+async function readPartyCell(page) {
+  const label = await page.getByTestId('exploration-canvas').getAttribute('aria-label');
+  const match = /Party at (-?\d+),(-?\d+)\./.exec(label ?? '');
+  if (!match) throw new Error(`could not read party cell from aria-label: ${label}`);
+  return { x: Number(match[1]), y: Number(match[2]) };
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 test.describe('portrait usability integrated acceptance', () => {
@@ -292,5 +313,115 @@ test.describe('portrait usability integrated acceptance', () => {
 
     const shotName = testInfo.project.name === PHONE_PROJECT ? 'combat-phone.png' : 'combat-tall.png';
     await attachViewportShot(page, testInfo, shotName);
+  });
+
+  // ── Checkpoint 2 — touch exploration + title/manual evidence ─────────────
+  test('phone exploration: touch drag pans without moving the party; regions contained + non-overlapping', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== PHONE_PROJECT, 'phone-touch project only');
+    test.slow();
+    await installStableStorage(page);
+    await createRunByTouch(page);
+    const viewport = page.viewportSize();
+
+    const rects = await readRects(page, {
+      status: '.status-strip',
+      playfield: '[data-testid="exploration-canvas"]',
+      tabBar: '.console-tab-bar'
+    });
+    for (const [name, r] of Object.entries(rects)) {
+      if (!r) throw new Error(`missing region: ${name}`);
+      expect(insideViewport(r, viewport, 2), `${name} inside viewport`).toBe(true);
+    }
+    const regionKeys = ['status', 'playfield', 'tabBar'];
+    for (let i = 0; i < regionKeys.length; i++) {
+      for (let j = i + 1; j < regionKeys.length; j++) {
+        expect(overlaps(rects[regionKeys[i]], rects[regionKeys[j]]), `${regionKeys[i]} overlaps ${regionKeys[j]}`).toBe(false);
+      }
+    }
+
+    const startCell = await readPartyCell(page);
+
+    // Real synthetic touch drag on the exploration playfield. Multiple
+    // pointermove steps take the pointer well past DRAG_THRESHOLD_PX so the
+    // gesture engine classifies as a pan and never falls through to onTap.
+    const box = await page.getByTestId('exploration-canvas').boundingBox();
+    const xStart = box.x + 40;
+    const y = box.y + box.height * 0.6;
+    const xEnd = box.x + box.width - 40;
+    const dragReport = await page.evaluate(({ xStart, xEnd, y }) => {
+      const el = document.querySelector('.exploration-playfield');
+      if (!el || typeof PointerEvent !== 'function') return { supported: false };
+      const opts = (x) => ({
+        clientX: x, clientY: y, pointerId: 42, pointerType: 'touch',
+        bubbles: true, cancelable: true, isPrimary: true, button: 0
+      });
+      el.dispatchEvent(new PointerEvent('pointerdown', opts(xStart)));
+      const steps = 6;
+      for (let i = 1; i <= steps; i++) {
+        const x = xStart + ((xEnd - xStart) * i) / steps;
+        el.dispatchEvent(new PointerEvent('pointermove', opts(x)));
+      }
+      el.dispatchEvent(new PointerEvent('pointerup', opts(xEnd)));
+      return { supported: true };
+    }, { xStart, xEnd, y });
+    expect(dragReport.supported).toBe(true);
+    const afterDragCell = await readPartyCell(page);
+    expect(afterDragCell).toEqual(startCell);
+
+    await attachViewportShot(page, testInfo, 'touch-exploration-phone.png');
+  });
+
+  test('title/manual: START ↔ branches toggle; modal contained; close restores START without changing history or leaving app-root inert', async ({ page }, testInfo) => {
+    test.skip(!PORTRAIT_PROJECTS.has(testInfo.project.name), 'phone + tall portrait only');
+    await installStableStorage(page);
+    await page.goto('/');
+    const viewport = page.viewportSize();
+
+    const start = page.getByTestId('title-start');
+    const branches = page.getByTestId('title-branches');
+    const modal = page.getByTestId('manual-modal');
+
+    // START visible initially; branches hidden until START is pressed.
+    await expect(start).toBeVisible();
+    await expect(branches).toBeHidden();
+
+    await start.click();
+    await expect(branches).toBeVisible();
+    const hashBeforeOpen = await page.evaluate(() => window.location.hash);
+
+    await page.getByTestId('title-manual').click();
+    await expect(modal).toBeVisible();
+    const modalRect = await modal.boundingBox();
+    expect(modalRect).not.toBeNull();
+    expect(insideViewport(modalRect, viewport, 2), 'manual modal inside viewport').toBe(true);
+    expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeOpen);
+    // While the modal is open, app-root should be inert / aria-hidden.
+    const openState = await page.evaluate(() => {
+      const root = document.getElementById('app-root');
+      return { ariaHidden: root?.getAttribute('aria-hidden'), inert: root ? Boolean(root.inert) : null };
+    });
+    expect(openState.ariaHidden).toBe('true');
+
+    const openShot = testInfo.project.name === PHONE_PROJECT ? 'title-manual-phone.png' : 'title-manual-tall.png';
+    await attachViewportShot(page, testInfo, openShot);
+
+    await page.getByTestId('manual-close').click();
+    await expect(modal).toBeHidden();
+    // Title reset: START back, branches hidden, focus on START.
+    await expect(start).toBeVisible();
+    await expect(branches).toBeHidden();
+    await expect(start).toBeFocused();
+    // Hash unchanged — modal is not a route.
+    expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeOpen);
+    // #app-root free of stuck aria-hidden or inert.
+    const rootState = await page.evaluate(() => {
+      const root = document.getElementById('app-root');
+      return { ariaHidden: root?.getAttribute('aria-hidden'), inert: root ? Boolean(root.inert) : null };
+    });
+    expect(rootState.ariaHidden === 'true', 'app-root aria-hidden not stuck').toBe(false);
+    expect(rootState.inert, 'app-root inert not stuck').toBe(false);
+
+    const closeShot = testInfo.project.name === PHONE_PROJECT ? 'title-after-close-phone.png' : 'title-after-close-tall.png';
+    await attachViewportShot(page, testInfo, closeShot);
   });
 });
