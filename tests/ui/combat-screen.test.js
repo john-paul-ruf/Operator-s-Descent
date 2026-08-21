@@ -992,6 +992,31 @@ describe('combat screen controller', () => {
     controller.unmount();
     void container;
   });
+
+  // viewState now carries `data` (SESSION-02/03 party/tech/gear consumers) and
+  // `logEntries` (LOG mode merges with runState.recentEvents). Both flow through
+  // the console shell to the mode context. Clicking the LOG tab renders the
+  // injected live entry — proving `logEntries` reached the LOG module.
+  it('pipes params.logEntries into the LOG console context via viewState', async () => {
+    const combat = combatState([partyActor(), enemyActor()]);
+    const container = new FakeElement('div');
+    const { mount } = await import('../../src/ui/screens/combat.js');
+    const encounter = { id: combat.id, kind: 'standard', window: combat.window, actors: [...combat.combatants.values()], forfeitableLoot: [] };
+    const injected = [{ type: 'attack', message: 'injected live entry.', sequence: 999, detail: 'd20 15 = 15 → HIT' }];
+    const controller = mount(container, { runState: runState(), floor: floor(), combatState: combat, encounter, data: gameData, logEntries: injected });
+
+    byTestId(container, 'console-tab-log').click();
+    const logArea = byTestId(container, 'log-area');
+    expect(logArea).not.toBe(null);
+    // The injected message must appear in the log body.
+    const includesText = (node, needle) => {
+      if ((node.textContent || '').includes(needle)) return true;
+      for (const child of node.children || []) if (includesText(child, needle)) return true;
+      return false;
+    };
+    expect(includesText(logArea, 'injected live entry.')).toBe(true);
+    controller.unmount();
+  });
 });
 
 describe('describeEntryDetail — breakdown formatting', () => {

@@ -124,11 +124,13 @@ describe('LOG mode — SESSION-06 icon coverage', () => {
 });
 
 function collectLogEntryRows(container) {
+  // Match `log-entry-N` — NOT `log-entry-N-detail` (the detail child sits inside
+  // the row and shares the `log-entry-` prefix but must not be counted as a row).
+  const isRow = (id) => typeof id === 'string' && /^log-entry-\d+$/.test(id);
   const rows = [];
   function walk(node) {
     if (!node) return;
-    const testId = node.dataset?.testid;
-    if (typeof testId === 'string' && testId.startsWith('log-entry-')) rows.push(node);
+    if (isRow(node.dataset?.testid)) rows.push(node);
     for (const child of node.children || []) walk(child);
   }
   walk(container);
@@ -255,5 +257,66 @@ describe('createLogEntryElement — detail second line', () => {
     const endRow = createLogEntryElement({ type: 'end-turn', message: 'operator ends turn.', sequence: 2 }, 1);
     expect(detailChild(moveRow)).toBe(null);
     expect(detailChild(endRow)).toBe(null);
+  });
+
+  it('renders a persisted recentEvent that carries a `detail` string as a full log row with the detail line', () => {
+    const runState = run();
+    runState.recordEvent({
+      type: 'attack',
+      message: 'operator attacks 0: 3 damage.',
+      sequence: 42,
+      detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
+    });
+    const container = new FakeElement('div');
+    renderLog(container, { runState, data, logEntries: [] });
+    const rows = collectLogEntryRows(container);
+    expect(rows).toHaveLength(1);
+    const detail = detailChild(rows[0]);
+    expect(detail).not.toBe(null);
+    expect(detail.textContent).toBe('d20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg');
+  });
+});
+
+describe('LOG mode — persisted + live dedupe', () => {
+  it('renders a single row when the same event appears in both recentEvents and logEntries', () => {
+    // Runtime pushes every combat entry to both stores; collectLogs must dedupe by
+    // (type, sequence, message) so LOG mode doesn't show two identical rows for a
+    // single event.
+    const runState = createRunState(123, [character()], {
+      creationTimestamp: 1,
+      recentEvents: [{ type: 'attack', message: 'Operator strikes drone.', sequence: 5 }]
+    });
+    const container = new FakeElement('div');
+    renderLog(container, {
+      runState,
+      data,
+      logEntries: [{ type: 'attack', message: 'Operator strikes drone.', sequence: 5, detail: 'd20 14 = 14 vs DEF 12 → HIT · d6=3 dmg' }]
+    });
+    const rows = collectLogEntryRows(container);
+    expect(rows).toHaveLength(1);
+    // The richer entry (with detail) wins — its detail line must be present.
+    const detail = detailChild(rows[0]);
+    expect(detail).not.toBe(null);
+    expect(detail.textContent).toBe('d20 14 = 14 vs DEF 12 → HIT · d6=3 dmg');
+  });
+
+  it('richer persisted detail wins over a plainer live duplicate', () => {
+    // The dedupe is symmetric: if the persisted entry carries `detail` and the live
+    // copy is plain, the persisted (richer) one survives.
+    const runState = createRunState(123, [character()], {
+      creationTimestamp: 1,
+      recentEvents: [{ type: 'attack', message: 'Operator strikes drone.', sequence: 5, detail: 'd20 20 = 20 → HIT CRIT · d6=6 dmg' }]
+    });
+    const container = new FakeElement('div');
+    renderLog(container, {
+      runState,
+      data,
+      logEntries: [{ type: 'attack', message: 'Operator strikes drone.', sequence: 5 }]
+    });
+    const rows = collectLogEntryRows(container);
+    expect(rows).toHaveLength(1);
+    const detail = detailChild(rows[0]);
+    expect(detail).not.toBe(null);
+    expect(detail.textContent).toBe('d20 20 = 20 → HIT CRIT · d6=6 dmg');
   });
 });

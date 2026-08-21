@@ -751,6 +751,27 @@ describe('exploration screen controller', () => {
     expect(screenY).toBeLessThanOrEqual(768);
   });
 
+  // viewState now carries `logEntries` (LOG mode merges with runState.recentEvents).
+  // Clicking the LOG tab must render the injected live entry — proves the value flows
+  // through the console shell into the LOG module context.
+  it('pipes params.logEntries into the LOG console context via viewState', async () => {
+    const container = new FakeElement('div');
+    const { mount } = await import('../../src/ui/screens/exploration.js');
+    const injected = [{ type: 'discovery', message: 'exploration injected entry.', sequence: 555 }];
+    const controller = mount(container, { runState: runState(), floor: floor(), data: gameData, logEntries: injected });
+
+    byTestId(container, 'console-tab-log').click();
+    const logArea = byTestId(container, 'log-area');
+    expect(logArea).not.toBe(null);
+    const includesText = (node, needle) => {
+      if ((node.textContent || '').includes(needle)) return true;
+      for (const child of node.children || []) if (includesText(child, needle)) return true;
+      return false;
+    };
+    expect(includesText(logArea, 'exploration injected entry.')).toBe(true);
+    controller.unmount();
+  });
+
   it('drag pans past the legacy 20×32 boundary without moving the party', async () => {
     const { container, runState: state } = await mountExploration();
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });

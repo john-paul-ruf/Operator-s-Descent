@@ -435,7 +435,7 @@ export function mount(container, params = {}) {
     shell.dataset.wideRoot = '';
     shell.dataset.testid = 'wide-shell';
 
-    telemetryDock = createTelemetryDock(runState, combatState);
+    telemetryDock = createTelemetryDock(runState, combatState, { data });
     shell.appendChild(telemetryDock);
 
     widePlayfieldColumn = document.createElement('section');
@@ -448,7 +448,7 @@ export function mount(container, params = {}) {
     shell.appendChild(widePlayfieldColumn);
     container.appendChild(shell);
   } else {
-    statusBar = createStatusBar(runState, combatState);
+    statusBar = createStatusBar(runState, combatState, { data });
     statusBar.classList.add('panel', 'combat-status', 'in-run-status');
     statusBar.style.flex = '0 0 auto';
     container.appendChild(statusBar);
@@ -487,6 +487,14 @@ export function mount(container, params = {}) {
     floor,
     combatState,
     selection,
+    // Full game-data registry — LOG mode uses `data.symbolTable` to init the save
+    // encoder on demand, and party/tech/gear panes (S03) read class/loadout tables
+    // to derive maxes for the display.
+    data,
+    // Runtime-tracked log entries injected via params.logEntries — LOG mode merges
+    // them with runState.recentEvents so post-resume history stays visible alongside
+    // live activity.
+    logEntries: params.logEntries,
     protocolsData: data.protocols,
     consumablesData: data.consumables,
     inputHandler,
@@ -1371,7 +1379,7 @@ export function mount(container, params = {}) {
       flashCells: playback.flashCells.size ? playback.flashCells : undefined
     });
     if (!isWide) {
-      const nextStatusBar = createStatusBar(runState, combatState);
+      const nextStatusBar = createStatusBar(runState, combatState, { data });
       nextStatusBar.classList.add('panel', 'combat-status', 'in-run-status');
       nextStatusBar.style.flex = '0 0 auto';
       statusBar.cleanup?.();

@@ -83,7 +83,7 @@ export function mount(container, params = {}) {
     shell.dataset.wideRoot = '';
     shell.dataset.testid = 'wide-shell';
 
-    telemetryDock = createTelemetryDock(runState);
+    telemetryDock = createTelemetryDock(runState, null, { data });
     shell.appendChild(telemetryDock);
 
     widePlayfieldColumn = document.createElement('section');
@@ -105,7 +105,7 @@ export function mount(container, params = {}) {
     shell.appendChild(widePlayfieldColumn);
     container.appendChild(shell);
   } else {
-    statusBar = createStatusBar(runState);
+    statusBar = createStatusBar(runState, null, { data });
     statusBar.classList.add('panel', 'in-run-status');
     statusBar.style.flex = '0 0 auto';
     container.appendChild(statusBar);
@@ -250,6 +250,10 @@ export function mount(container, params = {}) {
     runState,
     floor,
     data,
+    // Runtime-tracked log entries injected via params.logEntries — LOG mode merges
+    // them with runState.recentEvents so persistent history stays visible alongside
+    // live activity.
+    logEntries: params.logEntries,
     inputHandler,
     lattice,
     fogState,

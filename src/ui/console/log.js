@@ -28,11 +28,40 @@ function stateFor(runState) {
   return stateByRun.get(key);
 }
 
+// Deduplicate combined persisted + live log entries. Runtime pushes every combat
+// bus event to BOTH runState.recentEvents (persisted, slim: {type, message, sequence, detail?})
+// AND runtimeLogEntries (live, may carry `entry` + `detail`), so the merge sees each
+// event twice. Key: `${type}|${sequence ?? ''}|${message}`. When both copies land, the
+// richer one wins (prefers the entry that has `detail` or a nested `entry` payload).
+function richness(entry) {
+  return (typeof entry?.detail === 'string' && entry.detail ? 1 : 0)
+    + (entry?.entry ? 1 : 0);
+}
+
+function dedupeLogEntries(entries) {
+  const byKey = new Map();
+  const output = [];
+  for (const entry of entries) {
+    const key = `${entry.type ?? ''}|${entry.sequence ?? ''}|${entry.message ?? ''}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { entry, index: output.length });
+      output.push(entry);
+      continue;
+    }
+    if (richness(entry) > richness(existing.entry)) {
+      output[existing.index] = entry;
+      byKey.set(key, { entry, index: existing.index });
+    }
+  }
+  return output;
+}
+
 function collectLogs(context = {}) {
-  return [...(context.runState?.recentEvents || []), ...(context.logEntries || [])]
+  const merged = [...(context.runState?.recentEvents || []), ...(context.logEntries || [])]
     .map((entry, index) => ({ ...entry, _index: index }))
-    .sort((left, right) => (left.sequence ?? left.turn ?? left.eventIndex ?? left._index) - (right.sequence ?? right.turn ?? right.eventIndex ?? right._index))
-    .slice(-64);
+    .sort((left, right) => (left.sequence ?? left.turn ?? left.eventIndex ?? left._index) - (right.sequence ?? right.turn ?? right.eventIndex ?? right._index));
+  return dedupeLogEntries(merged).slice(-64);
 }
 
 // Signed modifier chunk formatter shared by describeDetailFromFields (log-renderer twin of
