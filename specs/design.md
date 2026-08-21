@@ -16,6 +16,7 @@ The base is neon-on-violet, ported from Universal Operator's Tarot. A single CSS
 | `--text-primary` | `#e0d8f0` | Body text, labels, values |
 | `--text-secondary` | `#a89ac6` | Muted labels, captions, hints |
 | `--text-dim` | `#8878a8` | Disabled, far-muted |
+| `--text-disabled` | `#71659a` | Disabled controls, illegal targets — ≥4.5:1 on `--bg-panel` |
 | `--accent` | `#7ec8e3` (default — Cold Storage) | Per-floor accent; flows through glow, borders, UI tints |
 | `--danger` | `#e83a3a` | HP loss, death, The Terminal theme |
 | `--warning` | `#e8632a` | CORRUPT items, overclock risk, The Foundry theme |

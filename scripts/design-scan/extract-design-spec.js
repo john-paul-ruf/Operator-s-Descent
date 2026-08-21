@@ -5,7 +5,7 @@ export function extractColorTokens(designMd = readText('specs/design.md')) {
     startMarker: '### Color Palette',
     endMarker: '### Typography'
   });
-  assertCount(rows, 15, 'design.md color palette tokens');
+  assertCount(rows, 16, 'design.md color palette tokens');
   return rows.map(([token, value]) => ({ token, value }));
 }
 
