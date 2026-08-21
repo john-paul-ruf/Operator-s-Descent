@@ -112,6 +112,61 @@ describe('chip.playNote', () => {
     expect(lfoGain).toBeTruthy();
     expect(lfoGain.connections).toContain(oscs[0].frequency);
   });
+
+  test('sustain envelope: attack → hold at 0.85·velocity → exponential release', () => {
+    const ctx = new FakeContext();
+    playNote(ctx, ctx.destination, {
+      wave: 'triangle', time: 2, freq: 220, duration: 0.5, velocity: 0.6, sustain: true
+    });
+    const env = ctx.nodes.filter((n) => n.nodeKind === 'gain').find((g) => g.gain.events.length >= 4);
+    expect(env).toBeTruthy();
+    expect(env.gain.events[0]).toEqual(['set', 0, 2]);
+    expect(env.gain.events[1][0]).toBe('linear');
+    expect(env.gain.events[1][1]).toBeCloseTo(0.6);
+    expect(env.gain.events[1][2]).toBeCloseTo(2.005);
+    expect(env.gain.events[2][0]).toBe('set');
+    expect(env.gain.events[2][1]).toBeCloseTo(0.6 * 0.85);
+    expect(env.gain.events[2][2]).toBeCloseTo(2 + 0.5 * 0.7);
+    expect(env.gain.events[3][0]).toBe('exp');
+    expect(env.gain.events[3][1]).toBeCloseTo(0.001);
+    expect(env.gain.events[3][2]).toBeCloseTo(2 + 0.5);
+  });
+
+  test('default (no sustain) still emits the three-event pluck envelope', () => {
+    const ctx = new FakeContext();
+    playNote(ctx, ctx.destination, {
+      wave: 'triangle', time: 0, freq: 220, duration: 0.4, velocity: 0.3
+    });
+    const env = ctx.nodes.filter((n) => n.nodeKind === 'gain').find((g) => g.gain.events.length >= 3);
+    expect(env).toBeTruthy();
+    expect(env.gain.events.length).toBe(3);
+    expect(env.gain.events[2][0]).toBe('exp');
+  });
+
+  test('vibrato.delay shifts the LFO start time', () => {
+    const ctx = new FakeContext();
+    playNote(ctx, ctx.destination, {
+      wave: 'triangle', time: 1, freq: 220, duration: 0.5, velocity: 0.4,
+      vibrato: { rate: 5.5, depth: 8, delay: 0.15 }
+    });
+    const oscs = ctx.nodes.filter((n) => n.nodeKind === 'oscillator');
+    expect(oscs.length).toBe(2);
+    const lfo = oscs[1];
+    expect(lfo.started.length).toBe(1);
+    expect(lfo.started[0]).toBeCloseTo(1 + 0.15);
+    expect(lfo.stopped[0]).toBeCloseTo(1 + 0.5 + 0.05);
+  });
+
+  test('vibrato without delay still starts at note time (default 0)', () => {
+    const ctx = new FakeContext();
+    playNote(ctx, ctx.destination, {
+      wave: 'triangle', time: 3, freq: 220, duration: 0.2, velocity: 0.4,
+      vibrato: { rate: 6, depth: 4 }
+    });
+    const oscs = ctx.nodes.filter((n) => n.nodeKind === 'oscillator');
+    const lfo = oscs[1];
+    expect(lfo.started[0]).toBe(3);
+  });
 });
 
 describe('chip.playKick', () => {

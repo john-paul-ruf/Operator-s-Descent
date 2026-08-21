@@ -61,7 +61,8 @@ export function playNote(ctx, dest, {
   velocity,
   decay = 0.9,
   vibrato = null,
-  slideTo = null
+  slideTo = null,
+  sustain = false
 }) {
   const osc = ctx.createOscillator();
   configureOscWave(ctx, osc, wave);
@@ -72,7 +73,12 @@ export function playNote(ctx, dest, {
   const env = ctx.createGain();
   env.gain.setValueAtTime(0, time);
   env.gain.linearRampToValueAtTime(velocity, time + 0.005);
-  env.gain.exponentialRampToValueAtTime(0.001, time + duration * decay);
+  if (sustain) {
+    env.gain.setValueAtTime(velocity * 0.85, time + duration * 0.7);
+    env.gain.exponentialRampToValueAtTime(0.001, time + duration);
+  } else {
+    env.gain.exponentialRampToValueAtTime(0.001, time + duration * decay);
+  }
   osc.connect(env);
   env.connect(dest);
   if (vibrato && vibrato.rate && vibrato.depth) {
@@ -83,7 +89,8 @@ export function playNote(ctx, dest, {
     lfoGain.gain.setValueAtTime(vibrato.depth, time);
     lfo.connect(lfoGain);
     lfoGain.connect(osc.frequency);
-    lfo.start(time);
+    const lfoStart = time + (vibrato.delay || 0);
+    lfo.start(lfoStart);
     lfo.stop(time + duration + 0.05);
   }
   osc.start(time);
