@@ -424,4 +424,110 @@ test.describe('portrait usability integrated acceptance', () => {
     const closeShot = testInfo.project.name === PHONE_PROJECT ? 'title-after-close-phone.png' : 'title-after-close-tall.png';
     await attachViewportShot(page, testInfo, closeShot);
   });
+
+  // ── Checkpoint 3 — wide-square settings + cross-feature smoke ────────────
+  test('wide-square settings at 1024×1024: rows ≥ 96px, contained, labels/inputs/values disjoint, consecutive rows disjoint, BACK usable', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== TALL_PROJECT, 'wide-square case runs at chromium-portrait (viewport reshape)');
+    test.slow();
+    await installStableStorage(page);
+    await page.setViewportSize({ width: 1024, height: 1024 });
+    const viewport = { width: 1024, height: 1024 };
+    await page.goto('/');
+    await expect(page.getByTestId('title-start')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.layout)).toBe('wide');
+    await page.getByTestId('title-start').click();
+    await page.getByTestId('title-settings').click();
+    await expect(page.locator('.wide-settings-shell')).toBeVisible();
+
+    // Two scroll columns reachable.
+    await expect(page.getByTestId('settings-audio-column')).toBeVisible();
+    await expect(page.getByTestId('settings-visual-column')).toBeVisible();
+
+    const rows = page.locator('.wide-settings-body .toggle-row, .wide-settings-body .slider-row, .wide-settings-body .motion-options');
+    const heights = await rows.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+    expect(heights.length).toBeGreaterThan(0);
+    expect(Math.min(...heights), 'min settings row height').toBeGreaterThanOrEqual(96);
+
+    const rowInfo = await rows.evaluateAll((els) => els.map((el) => {
+      const rect = el.getBoundingClientRect().toJSON();
+      const columnEl = el.closest('.wide-settings-column');
+      const columnRect = columnEl ? columnEl.getBoundingClientRect().toJSON() : null;
+      return { rect, columnRect };
+    }));
+    for (const info of rowInfo) {
+      expect(info.columnRect, 'row parent column').not.toBeNull();
+      expect(info.rect.left).toBeGreaterThanOrEqual(info.columnRect.left - 1);
+      expect(info.rect.right).toBeLessThanOrEqual(info.columnRect.right + 1);
+      expect(info.rect.left).toBeGreaterThanOrEqual(0);
+      expect(info.rect.right).toBeLessThanOrEqual(viewport.width + 1);
+      expect(info.rect.top).toBeGreaterThanOrEqual(0);
+      expect(info.rect.bottom).toBeLessThanOrEqual(viewport.height + 1);
+    }
+
+    // Slider label / input / value rects never intersect horizontally.
+    const sliderTrios = await page.locator('.wide-settings-body .slider-row').evaluateAll((rows) => rows.map((row) => {
+      const label = row.querySelector('.slider-label')?.getBoundingClientRect().toJSON() || null;
+      const input = row.querySelector('input[type="range"]')?.getBoundingClientRect().toJSON() || null;
+      const value = row.querySelector('.slider-value')?.getBoundingClientRect().toJSON() || null;
+      return { label, input, value };
+    }));
+    expect(sliderTrios.length).toBeGreaterThan(0);
+    const overlapsX = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1;
+    for (const trio of sliderTrios) {
+      expect(trio.label, 'slider label rect').not.toBeNull();
+      expect(trio.input, 'slider input rect').not.toBeNull();
+      expect(trio.value, 'slider value rect').not.toBeNull();
+      expect(overlapsX(trio.label, trio.input), 'label vs input').toBe(false);
+      expect(overlapsX(trio.input, trio.value), 'input vs value').toBe(false);
+      expect(overlapsX(trio.label, trio.value), 'label vs value').toBe(false);
+    }
+
+    // Consecutive rows within the same column do not overlap vertically.
+    const byColumn = new Map();
+    for (const info of rowInfo) {
+      const key = `${info.columnRect.left}:${info.columnRect.top}`;
+      if (!byColumn.has(key)) byColumn.set(key, []);
+      byColumn.get(key).push(info.rect);
+    }
+    for (const rects of byColumn.values()) {
+      rects.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < rects.length; i++) {
+        expect(rects[i - 1].bottom, 'consecutive rows disjoint').toBeLessThanOrEqual(rects[i].top + 1);
+      }
+    }
+
+    // BACK usable — inside viewport and clickable to return to title.
+    const backRect = await page.getByTestId('settings-back').boundingBox();
+    expect(backRect).not.toBeNull();
+    expect(insideViewport(backRect, viewport, 2), 'BACK inside viewport').toBe(true);
+
+    await attachViewportShot(page, testInfo, 'settings-wide-square.png');
+
+    await page.getByTestId('settings-back').click();
+    await expect(page.getByTestId('title-start')).toBeVisible();
+  });
+
+  test('cross-feature smoke: state:settings-change (masterVolume) reaches runtime audio graph; invalid state:inventory-change returns false', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== TALL_PROJECT, 'runtime snapshot smoke runs at chromium-portrait only');
+    await installStableStorage(page);
+    await page.goto('/');
+    await expect(page.getByTestId('title-start')).toBeVisible();
+
+    const initial = await page.evaluate(() =>
+      import('/src/runtime.js').then((m) => m.getRuntimeSnapshot().masterVolume)
+    );
+    expect(initial, 'initial masterVolume readable').not.toBeNull();
+
+    const target = initial === 42 ? 63 : 42;
+    const result = await page.evaluate(async (volume) => {
+      const bus = (await import('/src/state/bus.js')).bus;
+      const goodDispatch = bus.dispatch('state:settings-change', { key: 'masterVolume', value: volume });
+      const badInventory = bus.dispatch('state:inventory-change', {});
+      const runtime = await import('/src/runtime.js');
+      return { goodDispatch, badInventory, masterVolume: runtime.getRuntimeSnapshot().masterVolume };
+    }, target);
+    expect(result.goodDispatch, 'valid settings-change accepted').toBe(true);
+    expect(result.badInventory, 'invalid inventory-change payload returns false').toBe(false);
+    expect(result.masterVolume, 'live masterVolume reflected in runtime graph').toBe(target);
+  });
 });
