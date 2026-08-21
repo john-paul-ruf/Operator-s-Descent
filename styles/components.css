@@ -74,7 +74,9 @@
   cursor: not-allowed;
 }
 
-/* Console Shell */
+/* Console Shell (SESSION-06 — in-flow, see the detailed rule further below).
+   Background + shadow keep the console visually separated from the playfield
+   even though it now sits below in normal flow instead of overlaying. */
 .console-bar {
   background: var(--bg-panel);
   box-shadow: 0 -2px 12px rgba(0,0,0,0.6), 0 -1px 4px rgba(126,200,227,0.1);
@@ -1093,113 +1095,132 @@ button.protocol-card[aria-selected="true"],
   margin-right: 0;
 }
 
-/* Collapse toggle affordance — text glyph (▴/▾) matching the d-pad's unicode
-   arrow precedent; no icon-sprite rebuild. Minimum 44×44 tap target per M97
-   check-touch-targets. */
-.status-collapse-toggle {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 4px 8px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-dim);
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Portrait combat status grid (SESSION-06) — the strip is the sole owner of
+   HP / CHARGE / AP / MV + initiative in portrait, so every field must stay
+   in the viewport at phone (412×915) and tall portrait (1080×1920) widths.
+   The JS emits a 4-column grid with the initiative rail spanning row 2
+   (see src/ui/status-strip.js:renderCombatStatus); this rule tightens the
+   strip's padding and lets the active-group cell wrap to its own line if
+   space is truly scarce. Wide takes its own dock (styles/wide.css). */
+:root:not([data-layout="wide"]) .status-strip.status-strip-combat {
+  padding: 6px 10px;
+  align-items: start;
 }
 
-.status-collapse-toggle:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+:root:not([data-layout="wide"]) .status-strip.status-strip-combat .status-initiative {
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.status-collapse-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* In-run screens (SESSION-06) — the exploration / combat containers are
+   flex columns so the in-flow console-bar (formerly absolute) can sit
+   below the playfield without covering it. Wide layout mounts its own
+   `.wide-shell` grid as a single child; flex-column parent is a no-op there. */
+.in-run-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+@supports (height: 100dvh) {
+  .in-run-screen { height: 100dvh; }
 }
 
-/* Collapsed portrait strip — a slim summary row. The toggle button and the
-   trailing manual chip stay visible; every readout group hides via the
-   `.status-group` marker (createGroup applies it to every group container).
-   Combat variant keeps the `.status-active-actor` block visible so DEPTH,
-   ROUND, and the active sigil + mini HP + AP stay legible; the initiative
-   rail (`.status-initiative` group) is hidden by the group rule. Exploration
-   variant keeps DEPTH + the party sigils row visible. */
-.status-strip.status-collapsed {
-  min-height: 48px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-}
-
-.status-strip.status-collapsed .status-seed-group,
-.status-strip.status-collapsed .status-seed-combat-group,
-.status-strip.status-collapsed .status-initiative-group,
-.status-strip.status-collapsed .status-danger-group,
-.status-strip.status-collapsed .status-clock-group {
-  display: none;
-}
-
-.status-strip.status-collapsed .status-active-actor .status-mini-charge,
-.status-strip.status-collapsed .status-active-actor .status-move {
-  display: none;
-}
-
-/* Portrait console bar. Height is now a percentage of the portrait frame
-   (.console-bar is absolute against #app-root; #app-root fills the frame).
-   The 3-state tap cycle (collapsed → half → full → collapsed) lives in
-   src/ui/console/console.js and drives .expanded-half / .expanded-full;
-   the legacy .expanded class is still applied for both non-collapsed sizes
-   so mocks, keyboard-flow e2e (/expanded/), and the M97 scanner still pass. */
+/* Portrait console bar (SESSION-06) — in-flow flex child of the run
+   screen's flex-column container. Never absolute, never covers the
+   playfield, never triggers a dim layer. The 3-state tap cycle
+   (collapsed → half → full → collapsed) lives in src/ui/console/console.js
+   and drives .expanded-half / .expanded-full; the legacy .expanded class
+   is still applied for both non-collapsed sizes so mocks, keyboard-flow
+   e2e (/expanded/), and the M97 scanner still pass. */
 .console-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border-dim);
+  min-height: 0;
 }
 
 .console-bar.collapsed .console-content {
   display: none;
 }
 
+/* Bounded in-flow sizes — tuned so both `half` and `full` reserve real
+   playfield room above the console in every portrait viewport (phone,
+   tall desktop). Neither state may consume the whole frame; content
+   scrolls inside `.console-content` via its own overflow rule. */
 .console-bar.expanded-half {
-  height: 50%;
+  height: clamp(220px, 32dvh, 420px);
+  min-height: 220px;
+  max-height: 420px;
 }
 
 .console-bar.expanded-full {
-  height: 100%;
+  height: clamp(320px, 48dvh, 640px);
+  min-height: 320px;
+  max-height: 640px;
 }
 
 .console-tab-bar {
   display: flex;
-  min-height: 64px;
+  flex: 0 0 auto;
+  min-height: 96px;
 }
 
 .console-content {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: 12px;
   background: var(--bg-panel);
 }
 
+/* Dim layer suppressed (SESSION-06). Class definition preserved for DOM
+   compatibility if a stale mount emits the div — the layer never renders
+   in production, and the console never overlays the playfield. */
 .console-dim-layer {
-  display: none;
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: rgba(0,0,0,0.38);
+  display: none !important;
 }
 
-.console-bar.expanded .console-dim-layer {
-  display: block;
+/* Combat feedback rail (SESSION-06) — the screen-owned polite live region
+   between the playfield and the console. Sibling of `.console-bar`, not a
+   child of `.console-content`, so notices/errors stay visible regardless of
+   console scroll or expand state. */
+.combat-feedback-rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-dim);
+  border-bottom: 1px solid var(--border-dim);
+  min-height: 44px;
+  color: var(--text-primary);
+}
+.combat-feedback-notice {
+  color: var(--heal);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 4px color-mix(in oklab, var(--heal) 45%, transparent);
+}
+.combat-feedback-error {
+  color: var(--danger);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 4px color-mix(in oklab, var(--danger) 45%, transparent);
+}
+.combat-feedback-notice[hidden],
+.combat-feedback-error[hidden] {
+  display: none;
+}
+
+/* Exploration playfield override (SESSION-06) — the JS still sets an inline
+   `margin-bottom: 96px` (stale, from the old absolute-console era). With the
+   in-flow console the margin becomes a gap between playfield and console;
+   zero it so the playfield fills the flex parent up to the console. */
+.exploration-screen .exploration-playfield {
+  margin-bottom: 0 !important;
 }
 
 .mode-tab[aria-disabled="true"] {
