@@ -135,6 +135,30 @@ function activeSummary(container, active, dispatch) {
   container.appendChild(panel);
 }
 
+// SESSION-01 (mobile-combat-pass): portrait-only slim active row. The pinned
+// status strip (src/ui/status-strip.js:242 renderCombatStatus) already renders
+// initiative + active HP/CHARGE/AP/MV in portrait, so the console pane stops
+// duplicating them. It keeps AP (repeated for glance-ability alongside the
+// action buttons) and the condition tags (the strip shows neither). Testid
+// 'combat-active' stays stable so existing lookups keep resolving.
+function activeConditions(container, active, dispatch) {
+  if (!active) return;
+  const row = document.createElement('div');
+  row.className = 'combat-active-conditions console-row';
+  row.dataset.testid = 'combat-active';
+  const apLine = appendText(row, 'combat-ap', `AP ${active.ap ?? 0} · ${active.moveAvailable ? 'MOVE READY' : 'MOVE SPENT'}`);
+  apLine.appendChild(createManualLink('ap_and_initiative', {
+    variant: 'chip', source: 'combat-ap', dispatch, testid: 'combat-ap-link'
+  }));
+  for (const condition of active.conditions || []) {
+    const conditionId = condition.id || condition.conditionId || condition;
+    row.appendChild(createConditionTag(conditionId, condition.duration, {
+      manualLink: { source: 'combat-condition', dispatch }
+    }));
+  }
+  container.appendChild(row);
+}
+
 function initiativeRail(container, combatState) {
   const rail = document.createElement('div');
   rail.className = 'init-rail panel console-row';
@@ -443,8 +467,15 @@ export function render(container, context = {}) {
   const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const active = context.combatGetActiveActor?.() || null;
   appendText(container, 'mode-indicator', `COMBAT · ${selection.phase || 'choose-action'}`, 'combat-indicator');
-  initiativeRail(container, combatState);
-  activeSummary(container, active, dispatch);
+  // Wide keeps the full readout (the wide dock has no top status strip); portrait
+  // (default when `context.layout` is unset) hands the readout to M59 and shows
+  // only the slim AP + conditions row here.
+  if (context.layout === 'wide') {
+    initiativeRail(container, combatState);
+    activeSummary(container, active, dispatch);
+  } else {
+    activeConditions(container, active, dispatch);
+  }
   if (combatState.ended) {
     appendText(container, 'combat-terminal console-row', `COMBAT ${String(combatState.result || 'ENDED').toUpperCase()}`, 'combat-terminal');
     return;
