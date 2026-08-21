@@ -12,6 +12,7 @@ import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalAct
 import { createStandardEncounter, completeEncounter } from '../../rules/encounters.js';
 import { distanceCells, getEdgeCoverBonus, isFlanked } from '../../rules/combat-geometry.js';
 import { evaluateRange, resolveLoadout } from '../../rules/equipment.js';
+import { deriveStats } from '../../rules/attributes.js';
 import { createViewportCamera, attachViewportGestures, sizeCanvasToContainer } from '../viewport.js';
 
 const ACTION_PHASES = {
@@ -72,6 +73,18 @@ function normalizeCondition(condition) {
   return { ...condition, id, conditionId: id, duration: condition?.duration ?? 0 };
 }
 
+// Derive hpMax/chargeMax for a party actor from its class + loadout via the
+// canonical rules.attributes.deriveStats function. Returns null when the class
+// registry is unavailable (test envs without the data pack) so the caller falls
+// back to the pre-derivation path.
+function derivedPartyMaxes(actor, data) {
+  const classData = data?.classes?.classes?.find((entry) => entry.id === actor?.classId) || null;
+  if (!classData) return null;
+  const loadout = data ? resolveLoadout(actor, data.equipment, data.affixes) : null;
+  const derived = deriveStats(actor, classData, loadout || actor?.equipment || {});
+  return { hpMax: derived.hpMax, chargeMax: derived.chargeMax };
+}
+
 function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
   const side = actorSide(actor, fallbackSide);
   const equipment = actor?.equipment || { weapon: actor?.weapon ?? null, armor: actor?.armor ?? null, offhand: actor?.offhand ?? null };
@@ -81,13 +94,22 @@ function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
   // damageDie/rangeBand/maxRange. A null loadout (equipment-less enemy) falls
   // through so the caller's UNARMED_WEAPON / archetype fallback stays intact.
   const loadout = data && actor?.equipment ? resolveLoadout(actor, data.equipment, data.affixes) : null;
+  // Derive party maxes when the actor lacks an explicit max — fixes the reported
+  // "HP N/N while injured" bug where an injured party member entering combat would
+  // otherwise fabricate hpMax from currentHP. Enemies, echoes, and snapshot actors
+  // arrive with hpMax already, so this stays null for them and the fallback below
+  // short-circuits before touching `hp`.
+  const derived = side === 'party' && (
+    (actor?.hpMax == null && actor?.maxHP == null) ||
+    (actor?.chargeMax == null && actor?.maxCHARGE == null)
+  ) ? derivedPartyMaxes(actor, data) : null;
   return {
     ...actor,
     side,
     hp,
-    hpMax: actor?.hpMax ?? actor?.maxHP ?? actor?.currentHP ?? hp,
+    hpMax: actor?.hpMax ?? actor?.maxHP ?? Math.max(derived?.hpMax ?? hp, hp),
     charge,
-    chargeMax: actor?.chargeMax ?? actor?.maxCHARGE ?? actor?.currentCHARGE ?? charge,
+    chargeMax: actor?.chargeMax ?? actor?.maxCHARGE ?? Math.max(derived?.chargeMax ?? charge, charge),
     protocols: actor?.protocols ?? actor?.protocolDeck ?? [],
     protocolDeck: actor?.protocolDeck ?? actor?.protocols ?? [],
     equipment,

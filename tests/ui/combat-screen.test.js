@@ -960,6 +960,38 @@ describe('combat screen controller', () => {
 
     controller.unmount();
   });
+
+  // Regression: an injured party member entering combat must NOT get its hpMax
+  // fabricated from currentHP. deriveStats(character, classData, loadout) is the
+  // ONLY source of true hpMax/chargeMax — normalizeCombatActor must fall through
+  // to that derivation before ever touching `hp`. Breacher with vit=6, hitDieBase=16
+  // → hpMax=40. Breacher with res=5, chargeBase=0 → chargeMax=15.
+  it('derives hpMax/chargeMax for a party member entering combat without an explicit max', async () => {
+    const injured = partyActor({ id: 'hero', hp: 15, hpMax: undefined, charge: 4, chargeMax: undefined });
+    const combat = combatState([injured, enemyActor()]);
+    const { container, controller } = await mountCombat({ combat });
+    const hero = combat.combatants.get('hero');
+    expect(hero.hp).toBe(15);
+    expect(hero.hpMax).toBe(40);
+    expect(hero.charge).toBe(4);
+    expect(hero.chargeMax).toBe(15);
+    controller.unmount();
+    // Silence unused-container warning in strict envs.
+    void container;
+  });
+
+  it('preserves an explicit party hpMax/chargeMax over the derived value on entry', async () => {
+    const combat = combatState([partyActor({ id: 'hero', hp: 15 }), enemyActor()]);
+    const { container, controller } = await mountCombat({ combat });
+    const hero = combat.combatants.get('hero');
+    // partyActor default hpMax=30, chargeMax=10 — explicit values must stick even
+    // though the derived max would be higher. Fixes the "hpMax = currentHP" bug
+    // without regressing legitimate explicit maxes.
+    expect(hero.hpMax).toBe(30);
+    expect(hero.chargeMax).toBe(10);
+    controller.unmount();
+    void container;
+  });
 });
 
 describe('describeEntryDetail — breakdown formatting', () => {
