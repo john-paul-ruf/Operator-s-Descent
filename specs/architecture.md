@@ -2667,3 +2667,11 @@ Shadowcast now imports `{ GRID_W, GRID_H }` from `src/floor/archetypes.js` and d
 - **tierFor thresholds:** `<0.45 → 0`, `<0.6 → 1`, `<0.8 → 2`, else 3; combat pins 3.
 - Motif repetition contract: motifs never repeat across phrases within a floor (per-floor Set, cap 16); bars within a phrase deliberately repeat by design (`A A′ B A(half-cad) | A A″ B C(full-cad)`). Replaces "lead bars never repeat within a run."
 - `src/runtime.js` and the M52 engine public API are unchanged — all wiring fixes are receiver-side in M110.
+
+<!-- upbeat-melodic-score SESSION-03 -->
+### M114 Audition Harness — dev-only listening rig (upbeat-melodic-score SESSION-03)
+
+- **Path:** `scripts/audition/` (`index.html`, `audition.js`) — served at `http://127.0.0.1:8080/scripts/audition/` by the M84 dev server.
+- **Owns:** Dev-only listening rig for the audio engine — drives `updateState`/`setLayerVolume`/`setMasterVolume`/`setMute` from a dark HTML/JS UI, polls `getGraphState()` at 250ms into a telemetry pane; five scenario presets (Calm Explore / Loot Near / Hunted / Deep Floor / Combat).
+- **Depends on:** M52 engine public API (frozen), M110 `SCALES` export only.
+- **Never ships:** not linked from `index.html`, not in `service-worker.js` `ASSETS`, no imports from `src/` reach it (Custom Rules 1 & 12).
