@@ -2706,3 +2706,23 @@ touch-row floor.
 **No public-API changes to M76's exports.** Live dispatch remains
 blocked in production until `src/state/bus.js` `SETTING_KEYS` gains
 `'masterVolume'` (out of this session's lease; see handoff `followUp`).
+
+<!-- mobile-ux-and-combat-readout SESSION-01 (2026-08-21 — appended by Jikijitsu) -->
+### Combat truth + rich log pipeline — derived maxes, statusBar `{ data }`, persisted event `detail`
+
+**New module edges (both via `deriveStats`, M15 Attributes Rules):**
+- **M71 Combat Screen → M15.** `src/ui/screens/combat.js` imports `deriveStats`; `normalizeCombatActor` calls a local `derivedPartyMaxes(actor, data)` to compute `hpMax`/`chargeMax` from class + loadout when a party actor arrives without an explicit max — fixes the injured-character "HP N/N" bug at its source. Enemy/echo/snapshot actors carry explicit maxes and short-circuit before derivation.
+- **M86 Hot Runtime → M15.** `src/runtime.js` imports `deriveStats`; `actorFromSnapshot` derives party `hpMax`/`chargeMax` from the base character's class + resolved loadout when the persisted stats block lacks explicit maxes, so combat-resume rehydrate no longer copies `currentHP` into `hpMax`.
+
+**Public-API additions (no removals, no schema bump):**
+- `createStatusBar(runState, combatState = null, { data } = {})` and `createTelemetryDock(runState, combatState = null, { data } = {})` — third param added; `data` is the M87 game-data registry. Ignored by S01; SESSION-02 status-strip consumes it. Call sites in `combat.js` (×3) and `exploration.js` (×1) updated.
+- **Combat viewState** now carries `data` (SESSION-03 party/tech/gear consumers) and `logEntries` (runtime-tracked live entries; LOG mode merges with `runState.recentEvents`). **Exploration viewState** now carries `logEntries` (`data` already present). M60 console spreads viewState into every mode `context`.
+
+**Persisted event schema — `recentEvents` gains a bounded `detail`:**
+- `src/state/run-state.js` `normalizePersistedEvent` keeps a string `detail` bounded to 96 chars (new `PERSISTED_EVENT_DETAIL_MAX`); non-string/empty/missing detail is dropped. Non-breaking; encoder still trims the event tail under budget pressure — `stress:saves` max fragment 1360 < 1500.
+- `src/runtime.js` `appendRuntimeLogEntry` propagates `detail` into both `runtimeLogEntries` and `recordEvent(payload)`, so the LOG feed shows full d20 breakdowns live or resumed.
+
+**LOG-mode merge dedupe:**
+- `src/ui/console/log.js` `collectLogs` dedupes the merged `recentEvents ++ context.logEntries` stream by `(type, sequence, message)`, preferring the richer entry (one carrying `detail`/nested `entry`); result stays `.slice(-64)`-clamped.
+
+Verification: full vitest **2708** pass (2698 baseline + 10 new); `node --check` on 5 touched src files OK; `stress:saves` exit 0 (max fragment 1360 < 1500). Commits c230fd0 (ckpt1) → 3b1ad26 (ckpt2) → 29b1898 (ckpt3) → 253a234 (ckpt4).
