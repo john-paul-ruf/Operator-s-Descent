@@ -43,8 +43,6 @@ function normalizeMoveOptions(toggles) {
 
 const EXPLORATION_CELL_PX = 24;
 const DEFAULT_ENTRY_CELL_PX = 40;
-const LATTICE_WORLD_W = 20 * EXPLORATION_CELL_PX;
-const LATTICE_WORLD_H = 32 * EXPLORATION_CELL_PX;
 const TAP_PATH_MAX_STEPS = 64;
 const MOVE_INTENT_PATTERN = /^move_(n|s|w|e|nw|ne|sw|se)$/;
 
@@ -158,7 +156,11 @@ export function mount(container, params = {}) {
     || (reducedMotionSetting !== 'full' && prefersReduced);
   playfield.setPulse(!reduceMotion);
 
-  const camera = createViewportCamera({ worldW: LATTICE_WORLD_W, worldH: LATTICE_WORLD_H });
+  const lattice = createLattice(floor, runState);
+  const camera = createViewportCamera({
+    worldW: lattice.getWidth() * EXPLORATION_CELL_PX,
+    worldH: lattice.getHeight() * EXPLORATION_CELL_PX
+  });
   let cameraDpr = 1;
   // Camera lock (SESSION-04): after every party move the camera snaps its
   // center to the party. User-initiated pan/zoom sets userAdjusted=true so the
@@ -229,7 +231,6 @@ export function mount(container, params = {}) {
     resizeObserver.observe(playfieldBody);
   }
 
-  const lattice = createLattice(floor, runState);
   // Empty-cache cull (SESSION-04): run before the first LOS refresh so the
   // culled containers never enter the discovery/interrupt path. Guarded because
   // headless tests may not supply the full game-data registry.
