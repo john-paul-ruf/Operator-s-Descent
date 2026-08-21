@@ -2782,3 +2782,14 @@ instead of one per room). No public API change; no PRNG draw added;
 determinism preserved.
 
 Verification: `vitest tests/rules/ tests/integration/combat-sim.test.js` → 553 pass / 17 files; `combat.test.js:751` (9–12 separation) still green (proves no-op-for-connected); `node --check src/rules/encounters.js` clean. Commits 2db0f48 (ckpt1) → 9172a81 (ckpt2).
+
+<!-- playtest-ux-hotfix-batch SESSION-02 (2026-08-21 — appended by Jikijitsu) -->
+### Front door — START reveal-and-hide + new default audio mix (playtest-ux-hotfix-batch SESSION-02)
+
+**M68 Title Screen (ui):** START no longer toggles the branch list. Clicking START now **reveals** the branches (`branchList.classList.remove('hidden-branches')`) and **hides itself** (`startButton.style.display = 'none'`) — one-way within a mount. Re-entering the title (fresh mount) shows START again. Applies to both `mountPortrait` and `mountWide`.
+
+**M45 Library (state):** `defaultSettings().layerVolumes` shipped mix is now `{ drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 }` (was uniform 75). `normalizeSettings` still merges stored `od_settings` over defaults, so existing users keep their saved values; only fresh state and untouched sliders read the new mix. `masterMute: false` / `masterVolume: 100` unchanged.
+
+**M52 Audio Engine (audio-glitch):** `pendingVolumes` fallback for the pre-`applySettings` window now matches the new library defaults `{ drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 }`. Runtime still applies library-loaded settings authoritatively via `startAudioEngine` → `applySettings`; this only affects the transient window before the first apply.
+
+Verification: `vitest tests/ui/front-door.test.js tests/state/library.test.js tests/audio/` → 124 pass / 6 files; `node --check` on title.js/library.js/engine.js OK. Playwright title-start-toggle e2e deferred to CI (jsdom front-door test is the gating check). Commits 5ea7b6a (ckpt1) → 3cf55e3 (ckpt2).
