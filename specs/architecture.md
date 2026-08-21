@@ -2654,3 +2654,16 @@ Rationale: eliminates literal-drift in tests that previously asserted `80` (the 
 ### M31 Shadowcast — dependency addendum (no signature change)
 
 Shadowcast now imports `{ GRID_W, GRID_H }` from `src/floor/archetypes.js` and derives `CELLS = GRID_W * GRID_H` internally. The three exported functions (`createFogState`, `updateFogOfWar`, `syncVisitedBitmap`) keep their existing signatures — the change is invisible to callers in `movement.js` and `exploration.js`. Dependency direction (exploration ← floor) matches the FORGE-CONFIG flow and follows the precedent set by `src/state/run-state.js:3`.
+
+<!-- upbeat-melodic-score SESSION-01 -->
+### M110 Conductor — generative composition rewrite (upbeat-melodic-score SESSION-01)
+
+- **Owns** now reads: single lookahead musical clock (25 ms poll, 120 ms horizon), functional-degree progression walk (no pattern pool), seeded motif engine + AABA phrase renderer (rendered per bar), rule-generated bass line + drum kit (no mask pool, no heartbeat), game-state director (intensity/sparkle/tempo with raised floors and combat-key normalization), bar-quantized changes, per-floor motif no-repeat ledger (cap 16). `DARK_POOL` / `BRIGHT_POOL` / `RHYTHM_MASKS` deleted.
+- **New named exports:** `motifFor`, `phraseBar`, `bassBar` (in addition to the preserved `SCALES`, `ROOTS`, `chordFor`, `progressionFor`, `drumPattern`, `directorTargets`, `createConductor`). `melodyBar` remains exported as a back-compat shim (`motifFor` + `phraseBar`) so `scripts/report-budget.js` `audioSchedulingProxy` keeps loading; new callers should use the motif/phrase API directly.
+- **Tick payload (frozen for S02):** `{ time, pos, tempo, secondsPerSixteenth, chord, scale, rootFreq, intensity, sparkle, combat, melody[16], bass[16], drums{kick,snare,hat} }`.
+  - `melody[i]` slot shape unchanged: `{ degree, octave: 0|1, velocity, lengthSlots ≤ 8 }` (sustains capped at 8, up from 4).
+  - `bass[i]` slot shape: `{ semi, octave: -1|0, velocity, lengthSlots }`.
+- **Director** now accepts combat under any of `combat`, `combatActive`, `combatState`; `updateState(gs)` MERGES rather than replacing `latestGameState` (a lone `{combat:true}` from `runtime.js` no longer erases depth/proximity). Intensity floor = `0.35 + clampedDepth/30 * 0.2`; sparkle floor = 0.25; tempo band 112–180 (`116 + clampedDepth*0.8 + intensity*22 + (combat ? 22 : 0)`).
+- **tierFor thresholds:** `<0.45 → 0`, `<0.6 → 1`, `<0.8 → 2`, else 3; combat pins 3.
+- Motif repetition contract: motifs never repeat across phrases within a floor (per-floor Set, cap 16); bars within a phrase deliberately repeat by design (`A A′ B A(half-cad) | A A″ B C(full-cad)`). Replaces "lead bars never repeat within a run."
+- `src/runtime.js` and the M52 engine public API are unchanged — all wiring fixes are receiver-side in M110.
