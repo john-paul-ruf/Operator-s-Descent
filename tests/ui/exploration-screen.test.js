@@ -129,7 +129,7 @@ function keyEvent(code) {
 }
 
 function floor(overrides = {}) {
-  const cells = makeGrid(20, 32, 1);
+  const cells = makeGrid(40, 64, 1);
   return {
     cells,
     entryPoint: { x: 10, y: 10 },
