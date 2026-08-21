@@ -62,3 +62,11 @@ Current M82 statically imports nearly the whole runtime, fetches all data, regis
 - **Runtime (M86):** subscribes `ui:layout-change` (from M100 `initLayoutController({bus})`) and re-mounts the current route with its original params (`currentRouteParams`). RunState is canonical, so nothing user-durable is lost on a class cross.
 - **Service worker (M81):** `PRODUCTION_ASSETS` += `styles/wide.css`, `src/ui/layout.js` (S01; 94 assets, manifest↔disk↔reference verified). `CACHE_VERSION` → `2026-08-15-adaptive-layouts-v1` (S05 — one bump for the whole feature). service-worker.test.js pins both the cache-name and the 94-entry manifest length.
 - **Boot note:** `ui:layout-change` is not in bus.js `EVENT_CONTRACTS` (unknown events pass validation by design; bus.js was in no session's lease).
+
+<!-- mobile-ux-and-combat-readout feature-end (Jikijitsu) -->
+
+## Combat-resume rehydrate + log pipeline — mobile-ux-and-combat-readout
+
+- **Runtime (M86) → M15 (S01):** `actorFromSnapshot` derives party `hpMax`/`chargeMax` from the base character's class + resolved loadout when the persisted stats block lacks explicit maxes, so combat-resume no longer copies `currentHP` into `hpMax`. Import of `deriveStats` added.
+- **Runtime log detail (M86):** `appendRuntimeLogEntry` now propagates the bounded `detail` string into both `runtimeLogEntries` and `recordEvent(payload)`, so the LOG feed shows full d20 breakdowns live or resumed.
+- **Persisted event schema (M33 run-state):** `normalizePersistedEvent` keeps a string `detail` bounded to 96 chars (`PERSISTED_EVENT_DETAIL_MAX`); non-string/empty/missing dropped. Non-breaking — the save-encode event trimmer still absorbs budget pressure; `stress:saves` max fragment 1360 < 1500 (Custom Rule 6 intact, no v7 bump — Design Decision 2).
