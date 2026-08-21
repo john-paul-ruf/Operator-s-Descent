@@ -2,6 +2,8 @@ import { bus } from '../state/bus.js';
 import { createSigilToken, createHPBar, createChargeBar, createManualLink } from './components.js';
 import { createIcon } from './icon.js';
 import { createLogEntryElement, collectLogEntries } from './console/log.js';
+import { deriveStats } from '../rules/attributes.js';
+import { resolveLoadout } from '../rules/equipment.js';
 
 // SESSION-06 — telemetry dock field labels each lead with a lucide sprite
 // so the wide-mode density pass reads as a proper "gauge dashboard" rather
@@ -58,18 +60,44 @@ function humanizeActorName(actor) {
   return String(actor.id ?? 'Actor');
 }
 
-function hpOf(actor) {
+// Fallback precedence for display maxes: explicit actor max → derived (from
+// deriveStats when the game-data registry is available) → current. Combat
+// actors carry true maxes after SESSION-01, so `derived` matters only for
+// exploration-strip party rows (see `derivedFor` below).
+function hpOf(actor, derived = null) {
+  const current = actor.currentHP ?? actor.hp ?? 0;
   return {
-    current: actor.currentHP ?? actor.hp ?? 0,
-    max: actor.maxHP ?? actor.hpMax ?? actor.currentHP ?? actor.hp ?? 0
+    current,
+    max: actor.maxHP ?? actor.hpMax ?? derived?.hpMax ?? current
   };
 }
 
-function chargeOf(actor) {
+function chargeOf(actor, derived = null) {
+  const current = actor.currentCHARGE ?? actor.charge ?? 0;
   return {
-    current: actor.currentCHARGE ?? actor.charge ?? 0,
-    max: actor.maxCHARGE ?? actor.chargeMax ?? actor.currentCHARGE ?? actor.charge ?? 0
+    current,
+    max: actor.maxCHARGE ?? actor.chargeMax ?? derived?.chargeMax ?? current
   };
+}
+
+// Mirrors classDataFor in ./console/party.js — duplicated (not imported) to
+// respect the sibling-import boundary; keep in sync.
+function classDataFor(data, character) {
+  return data?.classes?.classes?.find((entry) => entry.id === character?.classId) || null;
+}
+
+// Compute a display-side derived-stat record for a party character when the
+// game-data registry is available (SESSION-01 wired `{ data }` into every
+// createStatusBar/createTelemetryDock call site). Returns null when data is
+// missing (unit tests without a registry) so hpOf/chargeOf fall back to the
+// current value — preserving the pre-SESSION-02 behavior for those callers.
+function derivedFor(character, data) {
+  if (!data || !character) return null;
+  const classData = classDataFor(data, character);
+  try {
+    const loadout = resolveLoadout(character, data.equipment, data.affixes) || character?.equipment || {};
+    return deriveStats(character, classData, loadout);
+  } catch { return null; }
 }
 
 function roleOf(actor) {
@@ -112,7 +140,7 @@ function truncatedSeed(seed) {
   return text.length > 10 ? `${text.slice(0, 6)}…${text.slice(-4)}` : text;
 }
 
-function appendActorSummary(strip, actor, active = false) {
+function appendActorSummary(strip, actor, active = false, derived = null) {
   const summary = document.createElement('div');
   summary.className = active ? 'status-active-actor' : 'status-party-member';
   summary.style.display = 'flex';
@@ -122,7 +150,7 @@ function appendActorSummary(strip, actor, active = false) {
   const sigil = createSigilToken(sigilOf(actor), 34, { role, label: `${role} sigil ${humanizeActorName(actor)}` });
   sigil.classList.add(active ? 'status-active-sigil' : 'status-party-sigil');
   summary.appendChild(sigil);
-  const hp = hpOf(actor);
+  const hp = hpOf(actor, derived);
   const hpBar = createHPBar(hp.current, hp.max);
   hpBar.classList.add('status-mini-hp');
   summary.appendChild(hpBar);
@@ -132,22 +160,30 @@ function appendActorSummary(strip, actor, active = false) {
   return { hp, summary };
 }
 
-export function createStatusBar(runState, combatState = null) {
+// SESSION-02 — third-arg `options.data` is the M87 game-data registry, wired
+// by SESSION-01 at every call site (screens/combat, screens/exploration, and
+// the combat turn-rebuild path). It gives us the classes/equipment/affixes
+// needed to derive display maxes for the exploration party row (`derivedFor`).
+// It is also the registry read by createTelemetryDock's dock/log paths. When
+// missing (unit tests without a registry) all derivations no-op and existing
+// fallbacks apply.
+export function createStatusBar(runState, combatState = null, options = {}) {
   const strip = document.createElement('div');
   strip.className = 'status-strip';
   strip.setAttribute('role', 'status');
   strip.setAttribute('aria-live', 'polite');
   strip.setAttribute('aria-atomic', 'true');
   const cleanups = [];
+  const data = options.data || null;
 
   if (combatState) {
     strip.classList.add('status-strip-combat');
     strip.style.display = 'grid';
     strip.style.gridTemplateColumns = 'auto auto auto minmax(0, 1fr)';
     strip.style.gap = '6px 12px';
-    renderCombatStatus(strip, runState, combatState);
+    renderCombatStatus(strip, runState, combatState, data);
   } else {
-    cleanups.push(renderExplorationStatus(strip, runState));
+    cleanups.push(renderExplorationStatus(strip, runState, data));
   }
 
   // Manual `?` chip — the last in-flow item of the strip so it never overlaps
@@ -158,11 +194,33 @@ export function createStatusBar(runState, combatState = null) {
   chip.style.flexShrink = '0';
   cleanups.push(() => chip.cleanup?.());
 
+  // Portrait collapse toggle (SESSION-02). Sits beside the manual chip and
+  // adds/removes `status-collapsed` on the strip; CSS hides everything except
+  // the summary row when collapsed. State is per-mount — the strip re-renders
+  // per turn in combat, so persistence across turns is a future concern.
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'status-collapse-toggle';
+  toggle.dataset.testid = 'status-collapse';
+  toggle.setAttribute('aria-controls', 'status-strip');
+  toggle.setAttribute('aria-label', combatState ? 'Collapse combat status' : 'Collapse exploration status');
+  toggle.setAttribute('aria-expanded', 'true');
+  toggle.textContent = '▴';
+  toggle.style.marginLeft = '4px';
+  toggle.style.flexShrink = '0';
+  toggle.addEventListener('click', () => {
+    const collapsed = !strip.classList.contains('status-collapsed');
+    strip.classList.toggle('status-collapsed', collapsed);
+    toggle.textContent = collapsed ? '▾' : '▴';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  });
+  strip.appendChild(toggle);
+
   strip.cleanup = () => cleanups.forEach((cleanup) => cleanup?.());
   return strip;
 }
 
-function renderExplorationStatus(strip, runState) {
+function renderExplorationStatus(strip, runState, data = null) {
   appendText(createGroup(strip, 'status-depth', 'DEPTH'), 'status-depth', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
   appendText(createGroup(strip, 'status-seed', 'SEED'), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
   const partyGroup = createGroup(strip, 'status-party', 'PARTY');
@@ -171,7 +229,7 @@ function renderExplorationStatus(strip, runState) {
   party.style.display = 'flex';
   party.style.gap = '4px';
   partyGroup.appendChild(party);
-  for (const character of runState.party || []) appendActorSummary(party, character);
+  for (const character of runState.party || []) appendActorSummary(party, character, false, derivedFor(character, data));
   appendText(createGroup(strip, 'status-danger', 'DANGER'), 'status-corruption', `COR ${Number(runState.corruption || 0).toFixed(2)}`, `Corruption ${Number(runState.corruption || 0).toFixed(2)}`);
   const clockEl = appendText(createGroup(strip, 'status-clock', 'CLK'), 'status-clock', Number(runState.dangerClockProgress || 0).toFixed(2), `Danger clock ${Number(runState.dangerClockProgress || 0).toFixed(2)}`);
   return bus.on('state:danger-clock-tick', (payload = {}) => {
@@ -181,7 +239,7 @@ function renderExplorationStatus(strip, runState) {
   });
 }
 
-function renderCombatStatus(strip, runState, combatState) {
+function renderCombatStatus(strip, runState, combatState, data = null) {
   appendText(createGroup(strip, 'status-depth-combat', 'DEPTH'), 'status-depth-combat', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
   appendText(createGroup(strip, 'status-round', 'ROUND'), 'status-round', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`);
   appendText(createGroup(strip, 'status-seed-combat', 'SEED'), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
@@ -214,8 +272,14 @@ function renderCombatStatus(strip, runState, combatState) {
   activeGroup.style.gridColumn = '4';
   activeGroup.style.gridRow = '1';
   activeGroup.style.minWidth = '0';
-  appendActorSummary(activeGroup, active, true);
-  const charge = chargeOf(active);
+  // Combat actors already carry true maxHP/maxCHARGE after SESSION-01 (M71
+  // normalizeCombatActor + M86 rehydrate). Derived is a defensive fallback
+  // if a party member is somehow present without a derived max — the runState
+  // party character (matched by id) still has attributes we can derive from.
+  const partyMatch = (runState.party || []).find((c) => c.id === active.id);
+  const derived = active.side === 'party' && partyMatch ? derivedFor(partyMatch, data) : null;
+  appendActorSummary(activeGroup, active, true, derived);
+  const charge = chargeOf(active, derived);
   const chargeBar = createChargeBar(charge.current, charge.max);
   chargeBar.classList.add('status-mini-charge');
   activeGroup.appendChild(chargeBar);
@@ -254,7 +318,7 @@ function textSpan(className, text, ariaLabel = null) {
   return el;
 }
 
-function renderPartySigils(runState) {
+function renderPartySigils(runState, data = null) {
   const wrap = document.createElement('span');
   wrap.className = 'wide-telemetry-party';
   wrap.style.display = 'flex';
@@ -264,7 +328,7 @@ function renderPartySigils(runState) {
     const role = roleOf(character);
     const sigil = createSigilToken(sigilOf(character), 34, { role, label: `${role} sigil ${humanizeActorName(character)}` });
     sigil.classList.add('wide-telemetry-party-sigil');
-    const hp = hpOf(character);
+    const hp = hpOf(character, derivedFor(character, data));
     const bar = createHPBar(hp.current, hp.max);
     bar.classList.add('wide-telemetry-party-hp');
     wrap.append(sigil, bar);
@@ -272,7 +336,7 @@ function renderPartySigils(runState) {
   return wrap;
 }
 
-function renderCombatDock(dock, runState, combatState) {
+function renderCombatDock(dock, runState, combatState, data = null) {
   const actors = actorList(combatState);
   const activeId = combatState.turnOrder?.[combatState.currentTurn];
   const active = actors.find((actor) => actor.id === activeId) || null;
@@ -362,13 +426,17 @@ function renderCombatDock(dock, runState, combatState) {
   header.appendChild(apEl);
   activeBlock.appendChild(header);
 
-  const hp = hpOf(active);
+  // Combat actors carry true maxes after SESSION-01, but keep a derived
+  // fallback for a party-side active whose combat record was missing them.
+  const partyMatch = (runState.party || []).find((c) => c.id === active.id);
+  const derived = active.side === 'party' && partyMatch ? derivedFor(partyMatch, data) : null;
+  const hp = hpOf(active, derived);
   const hpRow = document.createElement('div');
   hpRow.className = 'wide-active-bar-row';
   hpRow.append(textSpan('wide-active-hp-label', 'HP'), createHPBar(hp.current, hp.max), textSpan('wide-active-hp-value', `${hp.current} / ${hp.max}`));
   activeBlock.appendChild(hpRow);
 
-  const charge = chargeOf(active);
+  const charge = chargeOf(active, derived);
   const chargeRow = document.createElement('div');
   chargeRow.className = 'wide-active-bar-row';
   chargeRow.append(textSpan('wide-active-charge-label accent-text', 'CHG'), createChargeBar(charge.current, charge.max), textSpan('wide-active-charge-value accent-text', `${charge.current} / ${charge.max}`));
@@ -387,7 +455,8 @@ function renderCombatDock(dock, runState, combatState) {
   dock.appendChild(activeBlock);
 }
 
-export function createTelemetryDock(runState, combatState = null) {
+export function createTelemetryDock(runState, combatState = null, options = {}) {
+  const data = options.data || null;
   const dock = document.createElement('aside');
   dock.className = 'wide-telemetry-dock';
   dock.setAttribute('role', 'status');
@@ -411,7 +480,7 @@ export function createTelemetryDock(runState, combatState = null) {
     appendDockField(header, 'Round', () => textSpan('', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`));
   }
   appendDockField(header, 'Seed', () => textSpan('', truncatedSeed(runState?.worldSeed), `World seed ${runState?.worldSeed}`));
-  appendDockField(header, 'Party', () => renderPartySigils(runState));
+  appendDockField(header, 'Party', () => renderPartySigils(runState, data));
 
   const clockValue = String(Number(runState?.dangerClockProgress || 0).toFixed(2));
   const clockField = appendDockField(header, 'Danger Clock', () => {
@@ -427,7 +496,7 @@ export function createTelemetryDock(runState, combatState = null) {
 
   appendDockField(header, 'Corruption', () => textSpan('', Number(runState?.corruption || 0).toFixed(2), `Corruption ${Number(runState?.corruption || 0).toFixed(2)}`));
 
-  if (combatState) renderCombatDock(dock, runState, combatState);
+  if (combatState) renderCombatDock(dock, runState, combatState, data);
 
   const feed = document.createElement('div');
   feed.className = 'wide-log-feed';

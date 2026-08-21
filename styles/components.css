@@ -1084,6 +1084,70 @@ button.protocol-card[aria-selected="true"],
   border-color: currentColor;
 }
 
+/* Portrait strip full-bleed (SESSION-02) — the strip already runs edge-to-edge
+   in production; the explicit width guards against a future parent gaining a
+   horizontal inset without noticing. Wide dock overrides live in wide.css. */
+:root:not([data-layout="wide"]) .status-strip {
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Collapse toggle affordance — text glyph (▴/▾) matching the d-pad's unicode
+   arrow precedent; no icon-sprite rebuild. Minimum 44×44 tap target per M97
+   check-touch-targets. */
+.status-collapse-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-dim);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-collapse-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.status-collapse-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Collapsed portrait strip — a slim summary row. The toggle button and the
+   trailing manual chip stay visible; every readout group hides via the
+   `.status-group` marker (createGroup applies it to every group container).
+   Combat variant keeps the `.status-active-actor` block visible so DEPTH,
+   ROUND, and the active sigil + mini HP + AP stay legible; the initiative
+   rail (`.status-initiative` group) is hidden by the group rule. Exploration
+   variant keeps DEPTH + the party sigils row visible. */
+.status-strip.status-collapsed {
+  min-height: 48px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.status-strip.status-collapsed .status-seed-group,
+.status-strip.status-collapsed .status-seed-combat-group,
+.status-strip.status-collapsed .status-initiative-group,
+.status-strip.status-collapsed .status-danger-group,
+.status-strip.status-collapsed .status-clock-group {
+  display: none;
+}
+
+.status-strip.status-collapsed .status-active-actor .status-mini-charge,
+.status-strip.status-collapsed .status-active-actor .status-move {
+  display: none;
+}
+
 /* Portrait console bar. Height is now a percentage of the portrait frame
    (.console-bar is absolute against #app-root; #app-root fills the frame).
    The 3-state tap cycle (collapsed → half → full → collapsed) lives in

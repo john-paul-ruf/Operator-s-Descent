@@ -163,6 +163,92 @@ describe('status strip', () => {
     combatStrip.cleanup();
   });
 
+  test('renders a portrait collapse toggle in exploration and combat that flips ▴/▾ + aria-expanded and hides non-summary groups', () => {
+    // Exploration variant — toggle appears next to the manual chip.
+    const runState = { depth: 3, worldSeed: 'seed42', dangerClockProgress: 0.5, corruption: 0.1, party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 8, maxHP: 10 }] };
+    const explorationStrip = createStatusBar(runState);
+    const toggle = byTestId(explorationStrip, 'status-collapse');
+    expect(toggle).not.toBe(null);
+    expect(toggle.tagName).toBe('BUTTON');
+    expect(toggle.textContent).toBe('▴');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(explorationStrip.classList.contains('status-collapsed')).toBe(false);
+
+    toggle.dispatchEvent('click');
+    expect(explorationStrip.classList.contains('status-collapsed')).toBe(true);
+    expect(toggle.textContent).toBe('▾');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.dispatchEvent('click');
+    expect(explorationStrip.classList.contains('status-collapsed')).toBe(false);
+    expect(toggle.textContent).toBe('▴');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    // Combat variant — same toggle, distinct aria-label.
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
+      ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
+    ]);
+    const combatStrip = createStatusBar({ depth: 7 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
+    const combatToggle = byTestId(combatStrip, 'status-collapse');
+    expect(combatToggle).not.toBe(null);
+    expect(combatToggle.getAttribute('aria-label')).toBe('Collapse combat status');
+
+    combatToggle.dispatchEvent('click');
+    expect(combatStrip.classList.contains('status-collapsed')).toBe(true);
+    // DEPTH and ROUND stay legible in the collapsed summary row (they are not
+    // in the hidden group list); ACTIVE stays because status-active-group is
+    // not hidden — only initiative, seed, danger, clock are removed. AP stays;
+    // charge bar + move flag are hidden inside the active-actor block.
+    expect(findByClass(combatStrip, 'status-depth-combat')).not.toBe(null);
+    expect(findByClass(combatStrip, 'status-round')).not.toBe(null);
+    expect(findByClass(combatStrip, 'status-active-actor')).not.toBe(null);
+
+    explorationStrip.cleanup();
+    combatStrip.cleanup();
+  });
+
+  test('exploration party HP renders the derived max when actor lacks maxHP and options.data is supplied', () => {
+    // Injured party character with NO stored maxHP (the SESSION-01 bug):
+    // deriveStats returns hpMax based on class VIT + attributes; the strip
+    // must show the derived max, never "9/9". The classes fixture below is a
+    // minimum-viable game-data registry — deriveStats only needs the base VIT
+    // for the class + attribute modifiers on the character.
+    const character = {
+      id: 'p1', sigilCodepoint: 0xE000, classId: 'breacher', currentHP: 9,
+      attributes: { mgt: 0, fin: 0, vit: 3, res: 0, foc: 0, sig: 0 }
+    };
+    const runState = { depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [character] };
+    const data = { classes: { classes: [{ id: 'breacher', name: 'Breacher', baseAttributes: { mgt: 2, fin: 1, vit: 3, res: 1, foc: 0, sig: 1 } }] }, equipment: {}, affixes: {} };
+
+    const strip = createStatusBar(runState, null, { data });
+    const bar = findByClass(strip, 'status-mini-hp');
+    expect(bar).not.toBe(null);
+    // createHPBar writes `${current}/${max}` into aria-valuetext + the text
+    // child. Derived max MUST exceed current HP (9) — anything else means the
+    // "max = current" bug survived.
+    const label = bar.getAttribute('aria-valuetext') || '';
+    const match = /(\d+)\s*\/\s*(\d+)/.exec(label);
+    expect(match, `expected NN/MM in aria-valuetext but got "${label}"`).toBeTruthy();
+    const [, cur, max] = match;
+    expect(Number(cur)).toBe(9);
+    expect(Number(max)).toBeGreaterThan(9);
+    strip.cleanup();
+  });
+
+  test('no-data status bar keeps the pre-SESSION-02 fallback (max = current when actor lacks max)', () => {
+    const character = { id: 'p1', sigilCodepoint: 0xE000, currentHP: 8 };
+    const runState = { depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [character] };
+    const strip = createStatusBar(runState);
+    const bar = findByClass(strip, 'status-mini-hp');
+    const label = bar.getAttribute('aria-valuetext') || '';
+    const match = /(\d+)\s*\/\s*(\d+)/.exec(label);
+    expect(match).toBeTruthy();
+    // Without data, hpOf falls back to current for max — legacy behavior.
+    expect(match[1]).toBe(match[2]);
+    strip.cleanup();
+  });
+
   test('marks enemy initiative slots with the enemy class and stacks it with active', () => {
     const combatants = new Map([
       ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }],
