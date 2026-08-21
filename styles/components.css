@@ -1642,10 +1642,15 @@ button.protocol-card[aria-selected="true"],
 .combat-active-panel { padding: 8px; margin-bottom: 12px; border: 1px solid var(--border-dim); background: var(--bg-panel); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .combat-active-name { font-size: 11px; color: var(--accent); font-weight: bold; }
 .combat-ap { font-size: 10px; color: var(--text-secondary); }
-.combat-action-list { margin-bottom: 12px; }
-.combat-action { padding: 6px 12px; font-size: 10px; }
-.combat-direction-grid { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; justify-content: center; margin-bottom: 12px; }
-.combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; }
+/* CMBT action density (SESSION-02). Portrait: one full-width action per row so
+   the seven action buttons stay tappable on a phone. `.combat-action-list` /
+   `.combat-action` only exist inside `.console-bar` (the portrait console);
+   the wide dock uses its own action grid. Direction pad stays 3×3 with 48px+
+   cells (M97 touch-target floor). */
+.combat-action-list { margin-bottom: 8px; display: grid; grid-template-columns: 1fr; gap: 8px; }
+.combat-action { width: 100%; min-height: 48px; padding: 8px 12px; font-size: 11px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+.combat-direction-grid { display: grid; grid-template-columns: repeat(3, minmax(48px, 1fr)); grid-template-rows: repeat(3, minmax(48px, 56px)); gap: 4px; justify-content: center; margin-bottom: 12px; }
+.combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; min-height: 48px; }
 .combat-protocol-list { margin-bottom: 12px; }
 .combat-item-list { margin-bottom: 12px; }
 .combat-item { padding: 6px 12px; font-size: 10px; }

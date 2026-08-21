@@ -110,6 +110,79 @@ function renderContext({ active, enemies, selection, previewFor }) {
 
 beforeEach(() => installDocument());
 
+// SESSION-02 (mobile-ux) — the action list and direction pad must carry stable
+// classes so the portrait CSS density rules (1fr grid, 48px min-height) apply
+// without special-casing. Testids are preserved for touch-flow.spec.js.
+describe('console/combat.js — portrait action-list + direction-pad density scaffolding (SESSION-02)', () => {
+  const ALL_ACTIONS = ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'wait', 'end-turn'];
+
+  function makePartyContext({ active, legalActions, items = [], protocolsData = { schools: {} } }) {
+    const combatants = new Map([[active.id, active]]);
+    return {
+      combatState: { combatants, turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => legalActions,
+      combatGetTargets: () => [],
+      combatGetPreview: () => null,
+      combatGetItems: () => items,
+      combatChooseAction: () => {},
+      combatGetPathSteps: () => ['n', 's', 'e', 'w'],
+      combatStepPath: () => {},
+      protocolsData
+    };
+  }
+
+  it('the action list renders every button with the `combat-action` + `console-row` classes and a stable testid', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: [] }
+    }));
+
+    const list = byTestId(container, 'combat-actions');
+    expect(list).not.toBe(null);
+    expect(list.className.split(/\s+/)).toContain('combat-action-list');
+
+    for (const id of ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'end-turn']) {
+      const button = byTestId(container, `combat-action-${id}`);
+      expect(button, `combat-action-${id} exists`).toBeTruthy();
+      const classes = button.className.split(/\s+/);
+      expect(classes, `combat-action-${id} carries .combat-action`).toContain('combat-action');
+      expect(classes, `combat-action-${id} carries .console-row`).toContain('console-row');
+      // No inline styles fighting the density CSS — width/min-height come from
+      // components.css `.combat-action { width: 100%; min-height: 48px; ... }`.
+      expect(button.style.width).toBeFalsy();
+      expect(button.style.minHeight).toBeFalsy();
+    }
+  });
+
+  it('the direction pad renders under `combat-direction-grid` with 8 direction buttons + a center readout', () => {
+    const active = makeActive({ ap: 2 });
+    const context = makePartyContext({
+      active,
+      legalActions: { actions: ALL_ACTIONS, legalMoveDirections: ['n', 's', 'e', 'w'] }
+    });
+    context.selection = { phase: 'choose-path', actionType: 'move', movePath: [] };
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+
+    const grid = byTestId(container, 'combat-directions');
+    expect(grid).not.toBe(null);
+    expect(grid.className.split(/\s+/)).toContain('combat-direction-grid');
+
+    for (const dir of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
+      const button = byTestId(container, `combat-dir-${dir}`);
+      expect(button, `combat-dir-${dir} exists`).toBeTruthy();
+      expect(button.className.split(/\s+/)).toContain('combat-direction');
+    }
+    const center = byTestId(container, 'combat-dir-center');
+    expect(center).not.toBe(null);
+    expect(center.className.split(/\s+/)).toContain('combat-direction');
+  });
+});
+
 describe('console/combat.js — action button icons (SESSION-05 checkpoint 4)', () => {
   it('every combat-action button contains an <svg> icon child with the icon class', () => {
     const active = makeActive();
