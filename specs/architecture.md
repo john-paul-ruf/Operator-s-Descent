@@ -2675,3 +2675,8 @@ Shadowcast now imports `{ GRID_W, GRID_H }` from `src/floor/archetypes.js` and d
 - **Owns:** Dev-only listening rig for the audio engine — drives `updateState`/`setLayerVolume`/`setMasterVolume`/`setMute` from a dark HTML/JS UI, polls `getGraphState()` at 250ms into a telemetry pane; five scenario presets (Calm Explore / Loot Near / Hunted / Deep Floor / Combat).
 - **Depends on:** M52 engine public API (frozen), M110 `SCALES` export only.
 - **Never ships:** not linked from `index.html`, not in `service-worker.js` `ASSETS`, no imports from `src/` reach it (Custom Rules 1 & 12).
+
+<!-- player-mix-controls SESSION-01 (2026-08-21 — appended by Jikijitsu) -->
+- **M45 Library** — `defaultSettings()` / `normalizeSettings()` gain `masterVolume` (int, default 100, clamp 0–100 via `Math.max(0, Math.min(100, Math.round(x)))` with `Number.isFinite` guard). Field is preserved through the `saveSettings`/`loadSettings` round-trip.
+- **M52 Audio Engine** — `applySettings(settings)` widens to accept optional `masterVolume`; a `Number.isFinite(Number(settings.masterVolume))` guard makes absent-key = no-change (prevents `setMasterVolume(undefined)` → 0). `setMasterVolume` signature untouched; `pendingVolumes` remains layers-only (`master` is never a layer key).
+- **M86 Hot Runtime** — `updateRuntimeSettings` gains a `key === 'masterVolume'` branch that clamps to 0–100 int and calls `audioEngine?.setMasterVolume(volume)` (optional chaining ⇒ no-throw before engine exists). `getRuntimeSnapshot()` returns a new `masterVolume` field (`audioEngine?.getGraphState?.().masterVolume ?? null`) so tests and dev tools can observe engine gain without depending on `FakeContext` internals.
