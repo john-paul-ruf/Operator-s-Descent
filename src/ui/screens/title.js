@@ -73,7 +73,10 @@ function mountPortrait(container, cleanups) {
   tagline.dataset.testid = 'title-tagline';
 
   const startButton = createButton('START', {
-    onClick: () => branchList.classList.toggle('hidden-branches')
+    onClick: () => {
+      branchList.classList.remove('hidden-branches');
+      startButton.style.display = 'none';
+    }
   });
   startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';
@@ -177,7 +180,10 @@ function mountWide(container, cleanups) {
   lockup.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline);
 
   const startButton = createButton('START', {
-    onClick: () => branchList.classList.toggle('hidden-branches')
+    onClick: () => {
+      branchList.classList.remove('hidden-branches');
+      startButton.style.display = 'none';
+    }
   });
   startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';

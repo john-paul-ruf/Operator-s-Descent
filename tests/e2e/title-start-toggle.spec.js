@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('START toggles branch-list visibility on the title screen', async ({ page }) => {
+test('START reveals the branch list and hides itself on the title screen', async ({ page }) => {
   await page.goto('/');
 
   const start = page.getByTestId('title-start');
@@ -13,7 +13,5 @@ test('START toggles branch-list visibility on the title screen', async ({ page }
   await start.click();
   await expect(branches).toBeVisible();
   await expect(page.getByTestId('title-begin-new-run')).toBeVisible();
-
-  await start.click();
-  await expect(branches).toBeHidden();
+  await expect(start).toBeHidden();
 });

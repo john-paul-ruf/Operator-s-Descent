@@ -152,7 +152,7 @@ afterEach(() => {
 });
 
 describe('title screen', () => {
-  it('renders the title with a hidden branch list that START toggles', async () => {
+  it('renders the title with a hidden branch list that START reveals and hides itself', async () => {
     const seen = [];
     const offNavigate = bus.on('ui:navigate', (payload) => seen.push(payload));
     const { mount } = await import('../../src/ui/screens/title.js');
@@ -183,16 +183,13 @@ describe('title screen', () => {
 
     const branches = byTestId(container, 'title-branches');
     expect(branches.classList.contains('hidden-branches')).toBe(false);
+    expect(start.style.display).toBe('none');
     expect(allText(container)).toContain('◈ BEGIN NEW RUN');
     expect(byTestId(container, 'title-secondary-branches').children).toHaveLength(2);
     expect(byTestId(container, 'title-manual').textContent).toBe('MANUAL');
     expect(byTestId(container, 'title-tutorial')).toBeNull();
     expect(byTestId(container, 'title-settings').textContent).toBe('SETTINGS');
 
-    await start.click();
-    expect(branches.classList.contains('hidden-branches')).toBe(true);
-
-    await start.click();
     await byTestId(container, 'title-run-library').click();
     expect(seen.at(-1)).toEqual({ screen: 'library', params: {} });
 
