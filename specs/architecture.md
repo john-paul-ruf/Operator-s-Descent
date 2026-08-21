@@ -2726,3 +2726,24 @@ blocked in production until `src/state/bus.js` `SETTING_KEYS` gains
 - `src/ui/console/log.js` `collectLogs` dedupes the merged `recentEvents ++ context.logEntries` stream by `(type, sequence, message)`, preferring the richer entry (one carrying `detail`/nested `entry`); result stays `.slice(-64)`-clamped.
 
 Verification: full vitest **2708** pass (2698 baseline + 10 new); `node --check` on 5 touched src files OK; `stress:saves` exit 0 (max fragment 1360 < 1500). Commits c230fd0 (ckpt1) → 3b1ad26 (ckpt2) → 29b1898 (ckpt3) → 253a234 (ckpt4).
+
+<!-- mobile-ux-and-combat-readout SESSION-02 (2026-08-21 — appended by Jikijitsu) -->
+### Portrait mobile UX — console 3-state expand, status-strip collapse + derived maxes, CMBT density
+
+**New module edges (M59 Status Strip):**
+- **M59 → M15 Attributes Rules.** `createStatusBar`/`createTelemetryDock` derive display maxes via `deriveStats` when the actor lacks explicit `maxHP`/`maxCHARGE`, using the `options.data` (M87 registry) wired by S01 — fixes the "9/9 instead of 9/16" injured-party render.
+- **M59 → M18 Equipment Rules.** The same path calls `resolveLoadout(character, data.equipment, data.affixes)` before `deriveStats` so armor/offhand bonuses feed derived hpMax/chargeMax.
+
+**M60 Console Shell — portrait 3-state expand model:**
+- `.console-bar` cycles `collapsed → half → full → collapsed`. Legacy `.expanded`/`.collapsed` classes stay applied (mocks, keyboard-flow `/expanded/` regex, M97 `check-mock-classes` depend on them); new `.expanded-half`/`.expanded-full` + `container.dataset.expandState = 'collapsed'|'half'|'full'` disambiguate size.
+- Public API: `console.expand({ size })` (no-arg opens to `half`); `console.expandState` getter; `console.expanded` now derived (`expandState !== 'collapsed'`). Intents `CONSOLE_INTENTS.expand`/`collapse` carry `{ mode, size }`. Wide dock (`variant: 'dock'`) unaffected — `expandState` stays `'full'`, no portrait classes leak.
+
+**M59 Status Strip — portrait collapse toggle:**
+- `.status-collapse-toggle` button (text glyph `▴`/`▾`, 44×44 M97 floor) toggles `status-collapsed` + `aria-expanded` on both exploration and combat portrait variants. Per-mount state (no cross-mount persistence — follow-up). Collapsed hides seed/initiative/danger/clock + active charge bar + move flag; keeps DEPTH, ROUND, active sigil+mini-HP, AP.
+
+**M79 Components CSS (portrait):**
+- Deleted `.console-bar.expanded { height/max-height: 720px }`; added `.expanded-half { height: 50% }` / `.expanded-full { height: 100% }` (% of `#app-root`; bar is `position: absolute`). `.console-tab-bar` min-height 96→64px (`.mode-tab` unchanged 48px > 44px floor). `.console-content` padding 16→12px. `.combat-action-list` → 1fr grid; `.combat-action` full-width min-height 48px; `.combat-direction-grid` → `repeat(3, minmax(48px, 1fr))`.
+
+**specs/design.md:** additive-only "Portrait Console Expand States" subsection (between "Class namespace" and "Screen Layouts by Class").
+
+Verification: `vitest tests/ui/` 519 pass (+13); `design:scan` PASS (0 err / 9 warn / 2 info, unchanged from baseline); keyboard-flow e2e 8/8. Commits 5491d6e (ckpt1) → 0412cc4 → b0212d8 → be11b4b → 8c227a6 (ckpt5). Known follow-up (out of every session's lease): `tests/tooling/check-tokens.test.js` hardcodes the touch-target warning count at 3 and now sees 5 (both new findings warning-level, not error); bump to 5 or filter on `level==='error'`.
