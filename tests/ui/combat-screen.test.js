@@ -698,6 +698,15 @@ describe('combat screen controller', () => {
     }
   });
 
+  it('unmount detaches the ui:console-collapse listener — post-unmount dispatches are no-ops', async () => {
+    const { container, controller } = await mountCombat();
+    const consoleEl = byClass(container, 'console-bar');
+    expect(consoleEl.dataset.expandState).toBe('half');
+    controller.unmount();
+    // After unmount the listener is gone; a stray bus dispatch must not throw or resurrect state.
+    expect(() => bus.dispatch('ui:console-collapse')).not.toThrow();
+  });
+
   it('wide mount never mutates console size regardless of turn state', async () => {
     installMatchMedia(true);
     vi.useFakeTimers();
