@@ -6,6 +6,7 @@ import {
   directorTargets,
   drumPattern,
   melodyBar,
+  motifFor,
   progressionFor,
   ROOTS,
   SCALES
@@ -36,16 +37,89 @@ describe('conductor.progressionFor', () => {
     expect(second.key).not.toBe(first.key);
   });
 
-  test('deep runs bias toward DARK pool (bright theme, depth 30, ≥16/32 phrases dark)', () => {
-    const DARK_KEYS = new Set([
-      '0-5-3-6', '0-3-4-0', '0-6-5-6', '0-2-5-4', '0-4-5-3', '0-6-2-4'
-    ]);
-    let darkHits = 0;
-    for (let i = 0; i < 32; i++) {
-      const p = progressionFor({ worldSeed: 99, depth: 30, floorId: 'deep', phraseIndex: i, audioMode: 'organic-green' });
-      if (DARK_KEYS.has(p.key)) darkHits++;
+  test('degree 0 is fixed at tonic; degree 3 comes from the cadence set', () => {
+    const cadenceSet = new Set([4, 6, 3]);
+    for (let i = 0; i < 12; i++) {
+      const p = progressionFor({ worldSeed: 3, depth: 4, floorId: 'w', phraseIndex: i, audioMode: 'flowing-cyan' });
+      const degrees = p.key.split('-').map(Number);
+      expect(degrees).toHaveLength(4);
+      expect(degrees[0]).toBe(0);
+      expect(cadenceSet.has(degrees[3])).toBe(true);
     }
-    expect(darkHits).toBeGreaterThanOrEqual(16);
+  });
+
+  test('deep runs lean toward minor-flavored degrees {3,5,6} at position 1 more than shallow runs', () => {
+    const minorSet = new Set([3, 5, 6]);
+    let shallowHits = 0;
+    let deepHits = 0;
+    for (let i = 0; i < 40; i++) {
+      const shallow = progressionFor({ worldSeed: 99, depth: 1, floorId: 'shallow', phraseIndex: i, audioMode: 'organic-green' });
+      const deep = progressionFor({ worldSeed: 99, depth: 30, floorId: 'deep', phraseIndex: i, audioMode: 'organic-green' });
+      if (minorSet.has(Number(shallow.key.split('-')[1]))) shallowHits++;
+      if (minorSet.has(Number(deep.key.split('-')[1]))) deepHits++;
+    }
+    expect(deepHits).toBeGreaterThan(shallowHits);
+  });
+});
+
+describe('conductor.motifFor', () => {
+  test('deterministic for identical args', () => {
+    const args = { worldSeed: 3, depth: 4, floorId: 'f', phraseIndex: 1, intensity: 0.5, scale: SCALES['flowing-cyan'] };
+    expect(motifFor(args)).toEqual(motifFor(args));
+  });
+
+  test('slot 0 is present and rhythm count scales with intensity (4..7)', () => {
+    for (const intensity of [0, 0.5, 1]) {
+      const m = motifFor({ worldSeed: 2, depth: 6, floorId: 'r', phraseIndex: 0, intensity, scale: SCALES['cold-ambient'] });
+      expect(m.rhythm[0]).toBe(0);
+      expect(m.rhythm.length).toBeGreaterThanOrEqual(4);
+      expect(m.rhythm.length).toBeLessThanOrEqual(7);
+      expect(m.rhythm.length).toBe(m.steps.length);
+    }
+  });
+
+  test('rhythm slots are unique, sorted, and 0..15', () => {
+    const m = motifFor({ worldSeed: 7, depth: 12, floorId: 'a', phraseIndex: 3, intensity: 0.9, scale: SCALES['organic-green'] });
+    const set = new Set(m.rhythm);
+    expect(set.size).toBe(m.rhythm.length);
+    for (let i = 1; i < m.rhythm.length; i++) expect(m.rhythm[i]).toBeGreaterThan(m.rhythm[i - 1]);
+    for (const s of m.rhythm) { expect(s).toBeGreaterThanOrEqual(0); expect(s).toBeLessThanOrEqual(15); }
+  });
+
+  test('starting step is a chord-tone step {0,2,4}', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const m = motifFor({ worldSeed: seed, depth: 8, floorId: 's', phraseIndex: 0, intensity: 0.5, scale: SCALES['cold-ambient'] });
+      expect([0, 2, 4]).toContain(m.steps[0]);
+    }
+  });
+
+  test('steps stay inside the reflected bounds [-2, 9]', () => {
+    for (let seed = 1; seed <= 24; seed++) {
+      const m = motifFor({ worldSeed: seed, depth: 5, floorId: 'b', phraseIndex: seed, intensity: 1, scale: SCALES['flowing-cyan'] });
+      for (const s of m.steps) {
+        expect(s).toBeGreaterThanOrEqual(-2);
+        expect(s).toBeLessThanOrEqual(9);
+      }
+    }
+  });
+
+  test('≥55% of consecutive motif moves are steps (|Δstep| ≤ 1) across a sample', () => {
+    let steps = 0, total = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const m = motifFor({ worldSeed: seed, depth: 7, floorId: 'c', phraseIndex: 0, intensity: 0.6, scale: SCALES['organic-green'] });
+      for (let i = 1; i < m.steps.length; i++) {
+        total++;
+        if (Math.abs(m.steps[i] - m.steps[i - 1]) <= 1) steps++;
+      }
+    }
+    expect(steps / total).toBeGreaterThanOrEqual(0.55);
+  });
+
+  test('signature encodes both rhythm and steps and matches identical calls', () => {
+    const m1 = motifFor({ worldSeed: 8, depth: 3, floorId: 'g', phraseIndex: 2, intensity: 0.5, scale: SCALES['cold-ambient'] });
+    const m2 = motifFor({ worldSeed: 8, depth: 3, floorId: 'g', phraseIndex: 2, intensity: 0.5, scale: SCALES['cold-ambient'] });
+    expect(m1.signature).toBe(m2.signature);
+    expect(m1.signature).toContain('|');
   });
 });
 

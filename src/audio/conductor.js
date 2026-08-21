@@ -30,23 +30,52 @@ export const ROOTS = {
   'ancient-bone': -1
 };
 
-const DARK_POOL = [
-  [0, 5, 3, 6],
-  [0, 3, 4, 0],
-  [0, 6, 5, 6],
-  [0, 2, 5, 4],
-  [0, 4, 5, 3],
-  [0, 6, 2, 4]
-];
+const DEG_BASE = { 1: 2, 2: 3, 3: 2, 4: 3, 5: 3, 6: 1 };
+const DEG_DARK_SHIFT = { 1: -1, 2: -2, 3: 2, 4: -1, 5: 2, 6: 2 };
+const CADENCE_DEGREES = [4, 6, 3];
+const CADENCE_BASE = { 4: 3, 6: 1, 3: 1 };
+const CADENCE_DARK_SHIFT = { 4: -1, 6: 2, 3: 2 };
 
-const BRIGHT_POOL = [
-  [0, 4, 5, 3],
-  [0, 3, 4, 3],
-  [0, 5, 3, 4],
-  [0, 2, 3, 4],
-  [0, 4, 0, 4],
-  [0, 3, 0, 4]
-];
+function pickWeighted(h, candidates) {
+  let total = 0;
+  for (const c of candidates) total += c.w;
+  if (total <= 0) return candidates[0].d;
+  const roll = ((h >>> 0) % 4096) / 4096 * total;
+  let acc = 0;
+  for (const c of candidates) {
+    acc += c.w;
+    if (roll < acc) return c.d;
+  }
+  return candidates[candidates.length - 1].d;
+}
+
+function nextDegree(h, prev, darkness) {
+  const candidates = [];
+  for (let d = 1; d <= 6; d++) {
+    if (d === prev) continue;
+    const w = Math.max(0.1, DEG_BASE[d] + darkness * DEG_DARK_SHIFT[d]);
+    candidates.push({ d, w });
+  }
+  return pickWeighted(h, candidates);
+}
+
+function cadenceDegree(h, darkness) {
+  const candidates = CADENCE_DEGREES.map((d) => ({
+    d,
+    w: Math.max(0.1, CADENCE_BASE[d] + darkness * CADENCE_DARK_SHIFT[d])
+  }));
+  return pickWeighted(h, candidates);
+}
+
+function snapToChordToneStep(step) {
+  const rounded = Math.round(step);
+  for (const delta of [0, 1, -1, 2, -2, 3, -3]) {
+    const cand = rounded + delta;
+    const mod = ((cand % 7) + 7) % 7;
+    if (mod === 0 || mod === 2 || mod === 4) return cand;
+  }
+  return rounded;
+}
 
 const RHYTHM_MASKS = {
   low: [
@@ -90,21 +119,95 @@ export function progressionFor({
   const scale = SCALES[audioMode] || SCALES['cold-ambient'];
   const darkness = Math.min(Math.max(depth, 0), 30) / 30;
   const avoidSet = new Set(avoid);
+  let last = null;
   for (let perturb = 0; perturb < PROGRESSION_MAX_PERTURB; perturb++) {
-    const h = hash(worldSeed, depth, floorId, phraseIndex, 'progression', perturb);
-    const roll = ((h >>> 8) & 0xff) / 256;
-    const useDark = roll < darkness;
-    const pool = useDark ? DARK_POOL : BRIGHT_POOL;
-    const degrees = pool[(h >>> 16) % pool.length];
+    const degrees = [0];
+    for (let i = 1; i <= 2; i++) {
+      const h = hash(worldSeed, depth, floorId, phraseIndex, 'prog-step', i, perturb);
+      degrees.push(nextDegree(h, degrees[i - 1], darkness));
+    }
+    const hC = hash(worldSeed, depth, floorId, phraseIndex, 'prog-cadence', perturb);
+    degrees.push(cadenceDegree(hC, darkness));
     const key = degrees.join('-');
+    last = { key, degrees };
     if (!avoidSet.has(key)) {
       return { key, chords: degrees.map((d) => chordFor(scale, d)) };
     }
   }
-  const h = hash(worldSeed, depth, floorId, phraseIndex, 'progression', PROGRESSION_MAX_PERTURB);
-  const pool = darkness >= 0.5 ? DARK_POOL : BRIGHT_POOL;
-  const degrees = pool[h % pool.length];
+  const degrees = last ? last.degrees : [0, 2, 4, 5];
   return { key: degrees.join('-'), chords: degrees.map((d) => chordFor(scale, d)) };
+}
+
+export function motifFor({
+  worldSeed = 0,
+  depth = 1,
+  floorId = '',
+  phraseIndex = 0,
+  intensity = 0.5,
+  scale = SCALES['cold-ambient'],
+  perturb = 0
+} = {}) {
+  const clampedIntensity = Math.min(Math.max(intensity, 0), 1);
+  const count = 4 + Math.round(clampedIntensity * 3);
+  const eighthGrid = [2, 4, 6, 8, 10, 12, 14];
+  const remaining = eighthGrid.slice();
+  const rhythmH = hash(worldSeed, depth, floorId, phraseIndex, 'motif-rhythm', perturb);
+  const rhythmSet = new Set([0]);
+  for (let i = 0; i < count - 1 && remaining.length; i++) {
+    const idx = (rhythmH >>> (i * 3)) % remaining.length;
+    rhythmSet.add(remaining.splice(idx, 1)[0]);
+  }
+  const rhythm = [...rhythmSet].sort((a, b) => a - b);
+
+  const syncH = hash(worldSeed, depth, floorId, phraseIndex, 'motif-sync', perturb);
+  const syncRoll = ((syncH >>> 0) & 0xffff) / 65536;
+  if (syncRoll < clampedIntensity) {
+    const strongIdxList = [];
+    for (let i = 0; i < rhythm.length; i++) {
+      const s = rhythm[i];
+      if (s === 4 || s === 8 || s === 12) strongIdxList.push(i);
+    }
+    if (strongIdxList.length) {
+      const pickIdx = strongIdxList[(syncH >>> 16) % strongIdxList.length];
+      const displaced = rhythm[pickIdx] + 1;
+      if (displaced <= 15 && !rhythm.includes(displaced)) {
+        rhythm[pickIdx] = displaced;
+        rhythm.sort((a, b) => a - b);
+      }
+    }
+  }
+
+  const startH = hash(worldSeed, depth, floorId, phraseIndex, 'motif-start', perturb);
+  const startChoices = [0, 2, 4];
+  const steps = [startChoices[startH % startChoices.length]];
+  let cur = steps[0];
+  for (let i = 1; i < rhythm.length; i++) {
+    const h = hash(worldSeed, depth, floorId, phraseIndex, 'motif-note', i, perturb);
+    const roll = ((h >>> 0) & 0xffff) / 65536;
+    const dir = ((h >>> 16) & 1) ? 1 : -1;
+    let next;
+    if (roll < 0.55) {
+      next = cur + dir;
+    } else if (roll < 0.70) {
+      next = cur;
+    } else {
+      const leap = 2 + (((h >>> 20) & 3) % 3);
+      next = snapToChordToneStep(cur + dir * leap);
+    }
+    if (next < -2) next = -2 + (-2 - next);
+    if (next > 9) next = 9 - (next - 9);
+    if (next < -2) next = -2;
+    if (next > 9) next = 9;
+    if (rhythm[i] === 0 || rhythm[i] === 8) next = snapToChordToneStep(next);
+    if (next < -2) next = -2;
+    if (next > 9) next = 9;
+    steps.push(next);
+    cur = next;
+  }
+
+  // scale kept in signature so tests can reason about scale changes if desired later
+  const signature = `${rhythm.join(',')}|${steps.join(',')}`;
+  return { rhythm, steps, signature, scaleLength: scale.length };
 }
 
 export function melodyBar({
