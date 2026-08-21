@@ -165,13 +165,22 @@ function localPoint(element, clientX, clientY) {
 export function attachViewportGestures(element, camera, { onChange, onTap } = {}) {
   if (!element || !camera) return () => {};
   const pointers = new Map();
+  // dragOrigin is the fixed press position for threshold classification and
+  // must NEVER be reassigned until the next beginDrag. dragLast rolls forward
+  // each move so incremental pan deltas stay stable.
   let dragPointerId = null;
-  let dragStart = null;
+  let dragOrigin = null;
+  let dragLast = null;
   let dragMoved = false;
   let pinchStartDist = 0;
   let pinchStartMid = null;
   let pinchActive = false;
   let tapCandidate = null;
+  // Latch survives pointer-count transitions inside a gesture. Once pinch,
+  // cancel, lostpointercapture, or threshold-crossing occurs, no remaining
+  // pointer release in this gesture may fire a tap. Reset when a fresh gesture
+  // starts (pointerdown into an empty pointer set).
+  let disqualified = false;
 
   const originalTouchAction = element.style?.touchAction;
   if (element.style) element.style.touchAction = 'none';
@@ -182,11 +191,45 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
 
   function beginDrag(pointerId, point) {
     dragPointerId = pointerId;
-    dragStart = { x: point.x, y: point.y };
+    dragOrigin = { x: point.x, y: point.y };
+    dragLast = { x: point.x, y: point.y };
     dragMoved = false;
   }
 
-  function endGesture(pointerId) {
+  function clearDragState() {
+    dragPointerId = null;
+    dragOrigin = null;
+    dragLast = null;
+  }
+
+  function crossesThreshold(dx, dy) {
+    // Squared compare avoids Math.hypot and treats exactly-at-threshold as drag.
+    return (dx * dx + dy * dy) >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
+  }
+
+  function classifyAndPan(point) {
+    if (!dragOrigin || !dragLast) return;
+    if (!dragMoved) {
+      const originDx = point.x - dragOrigin.x;
+      const originDy = point.y - dragOrigin.y;
+      if (crossesThreshold(originDx, originDy)) {
+        dragMoved = true;
+        disqualified = true;
+        tapCandidate = null;
+      }
+    }
+    if (dragMoved) {
+      const stepX = point.x - dragLast.x;
+      const stepY = point.y - dragLast.y;
+      if (stepX !== 0 || stepY !== 0) {
+        camera.panBy(-stepX, -stepY);
+        notify();
+      }
+    }
+    dragLast = { x: point.x, y: point.y };
+  }
+
+  function endGesture(pointerId, releasePoint, releaseClient) {
     pointers.delete(pointerId);
     if (pinchActive && pointers.size < 2) {
       pinchActive = false;
@@ -194,20 +237,28 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
       pinchStartMid = null;
       tapCandidate = null;
       if (pointers.size === 1) {
+        // Single-finger pan continuation; disqualified stays latched so this
+        // pointer can never regain tap eligibility on release.
         const [remainingId, remaining] = pointers.entries().next().value;
         beginDrag(remainingId, remaining);
       } else {
-        dragPointerId = null;
-        dragStart = null;
+        clearDragState();
       }
       return;
     }
     if (dragPointerId === pointerId) {
-      const wasTap = !dragMoved && tapCandidate;
-      dragPointerId = null;
-      dragStart = null;
+      // Release-time classification: fold the release coordinates into the
+      // gesture so a threshold-crossing release with no prior pointermove still
+      // pans and suppresses the tap.
+      if (releasePoint) classifyAndPan(releasePoint);
+      const wasTap = !dragMoved && !disqualified && tapCandidate;
+      clearDragState();
       if (wasTap && typeof onTap === 'function') {
-        onTap({ clientX: tapCandidate.clientX, clientY: tapCandidate.clientY });
+        // Fire the tap with the release client coordinates so a jitter between
+        // press and release lands at the user's actual final finger position.
+        const cx = releaseClient?.clientX ?? tapCandidate.clientX;
+        const cy = releaseClient?.clientY ?? tapCandidate.clientY;
+        onTap({ clientX: cx, clientY: cy });
       }
       dragMoved = false;
       tapCandidate = null;
@@ -215,12 +266,17 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
   }
 
   function onPointerDown(event) {
-    const point = localPoint(element, event.clientX ?? 0, event.clientY ?? 0);
+    const clientX = event.clientX ?? 0;
+    const clientY = event.clientY ?? 0;
+    const point = localPoint(element, clientX, clientY);
+    const wasEmpty = pointers.size === 0;
     pointers.set(event.pointerId, { x: point.x, y: point.y });
     element.setPointerCapture?.(event.pointerId);
-    if (pointers.size === 1) {
+    if (wasEmpty) {
+      // Fresh gesture — release the disqualified latch from any prior gesture.
+      disqualified = false;
       beginDrag(event.pointerId, point);
-      tapCandidate = { x: point.x, y: point.y, clientX: event.clientX ?? 0, clientY: event.clientY ?? 0 };
+      tapCandidate = { x: point.x, y: point.y, clientX, clientY };
     } else if (pointers.size === 2) {
       const values = [...pointers.values()];
       const dx = values[0].x - values[1].x;
@@ -228,9 +284,11 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
       pinchStartDist = Math.hypot(dx, dy) || 1;
       pinchStartMid = { x: (values[0].x + values[1].x) / 2, y: (values[0].y + values[1].y) / 2 };
       pinchActive = true;
+      // Pinch permanently disqualifies this gesture from tapping; the latch
+      // outlives the pinch and any single-finger continuation that follows.
+      disqualified = true;
       tapCandidate = null;
-      dragPointerId = null;
-      dragStart = null;
+      clearDragState();
       dragMoved = false;
     }
   }
@@ -254,30 +312,37 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
       notify();
       return;
     }
-    if (dragPointerId !== event.pointerId || !dragStart) return;
-    const dx = point.x - dragStart.x;
-    const dy = point.y - dragStart.y;
-    if (!dragMoved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-    dragMoved = true;
-    tapCandidate = null;
-    camera.panBy(-dx, -dy);
-    dragStart = { x: point.x, y: point.y };
-    notify();
+    if (dragPointerId !== event.pointerId) return;
+    classifyAndPan(point);
   }
 
   function onPointerUp(event) {
     element.releasePointerCapture?.(event.pointerId);
-    endGesture(event.pointerId);
+    const clientX = event.clientX ?? 0;
+    const clientY = event.clientY ?? 0;
+    const point = localPoint(element, clientX, clientY);
+    endGesture(event.pointerId, point, { clientX, clientY });
   }
 
   function onPointerCancel(event) {
     element.releasePointerCapture?.(event.pointerId);
     pointers.delete(event.pointerId);
-    dragPointerId = null;
-    dragStart = null;
+    if (dragPointerId === event.pointerId) clearDragState();
     dragMoved = false;
     tapCandidate = null;
     pinchActive = false;
+    pinchStartDist = 0;
+    pinchStartMid = null;
+    disqualified = true;
+  }
+
+  function onLostPointerCapture(event) {
+    // Browser-initiated capture loss (e.g. scroll takeover). Treat like a
+    // cancel: drop the pointer and latch the gesture so no stray release taps.
+    pointers.delete(event.pointerId);
+    if (dragPointerId === event.pointerId) clearDragState();
+    tapCandidate = null;
+    disqualified = true;
   }
 
   function onWheel(event) {
@@ -296,6 +361,7 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
   element.addEventListener('pointermove', onPointerMove);
   element.addEventListener('pointerup', onPointerUp);
   element.addEventListener('pointercancel', onPointerCancel);
+  element.addEventListener('lostpointercapture', onLostPointerCapture);
   element.addEventListener('wheel', onWheel, { passive: false });
   element.addEventListener('touchmove', onTouchMove, { passive: false });
 
@@ -304,15 +370,18 @@ export function attachViewportGestures(element, camera, { onChange, onTap } = {}
     element.removeEventListener('pointermove', onPointerMove);
     element.removeEventListener('pointerup', onPointerUp);
     element.removeEventListener('pointercancel', onPointerCancel);
+    element.removeEventListener('lostpointercapture', onLostPointerCapture);
     element.removeEventListener('wheel', onWheel);
     element.removeEventListener('touchmove', onTouchMove);
     if (element.style) element.style.touchAction = originalTouchAction ?? '';
     pointers.clear();
-    dragPointerId = null;
-    dragStart = null;
+    clearDragState();
     dragMoved = false;
     tapCandidate = null;
     pinchActive = false;
+    pinchStartDist = 0;
+    pinchStartMid = null;
+    disqualified = false;
   };
 }
 

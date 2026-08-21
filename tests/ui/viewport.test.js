@@ -227,17 +227,19 @@ describe('attachViewportGestures', () => {
     };
   }
 
-  test('drag below threshold fires onTap; above threshold pans and suppresses tap', () => {
+  test('drag below threshold fires onTap with release coords; above threshold pans and suppresses tap', () => {
     const element = makeElement();
     const camera = makeCamera();
     const taps = [];
     let changes = 0;
     const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event), onChange: () => { changes++; } });
-    // Below-threshold press+release → tap with clientX/clientY.
+    // Below-threshold press+release. Tap fires with RELEASE clientX/clientY so
+    // a stationary press that jitters between press and release lands where
+    // the finger actually lifted, not where it first pressed.
     element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 30, clientY: 40 }));
     element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 31, clientY: 40 }));
-    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 31, clientY: 40 }));
-    expect(taps).toEqual([{ clientX: 30, clientY: 40 }]);
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 32, clientY: 41 }));
+    expect(taps).toEqual([{ clientX: 32, clientY: 41 }]);
     expect(camera.calls).toEqual([]);
     // Above threshold → drag, no tap.
     element.dispatch('pointerdown', pointerEvent({ pointerId: 2, clientX: 100, clientY: 100 }));
@@ -246,6 +248,87 @@ describe('attachViewportGestures', () => {
     expect(camera.calls.some((c) => c[0] === 'panBy')).toBe(true);
     expect(taps).toHaveLength(1);
     expect(changes).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  test('release displacement above threshold with no intermediate move still pans and suppresses tap', () => {
+    // Some browsers coalesce or drop the final pointermove before pointerup.
+    // The release coordinates must feed the classifier so a threshold-crossing
+    // release never falls through to onTap.
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 50, clientY: 50 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 50 + DRAG_THRESHOLD_PX + 2, clientY: 50 }));
+    expect(taps).toEqual([]);
+    const pan = camera.calls.find((c) => c[0] === 'panBy');
+    expect(pan).toBeTruthy();
+    expect(pan[1]).toBe(-(DRAG_THRESHOLD_PX + 2));
+    expect(pan[2]).toBeCloseTo(0, 10);
+    cleanup();
+  });
+
+  test('exactly-at-threshold displacement classifies as drag, not tap', () => {
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 100 + DRAG_THRESHOLD_PX, clientY: 100 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 100 + DRAG_THRESHOLD_PX, clientY: 100 }));
+    expect(taps).toEqual([]);
+    expect(camera.calls.some((c) => c[0] === 'panBy')).toBe(true);
+    cleanup();
+  });
+
+  test('below-threshold displacement never crosses even after multiple micro-moves back to origin', () => {
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+    // Every intermediate frame sits ≤ 4px off origin so we stay a tap.
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 103, clientY: 100 }));
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 102, clientY: 101 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 101, clientY: 100 }));
+    expect(taps).toEqual([{ clientX: 101, clientY: 100 }]);
+    expect(camera.calls).toEqual([]);
+    cleanup();
+  });
+
+  test('cumulative sub-step micro-moves that exceed the threshold from origin pan and suppress tap', () => {
+    // Each pointermove step is < DRAG_THRESHOLD_PX from the previous position,
+    // so a naive last-position threshold check would never fire; classification
+    // must measure displacement from the fixed press origin.
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+    for (let step = 2; step <= 10; step += 2) {
+      element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 100 + step, clientY: 100 }));
+    }
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 110, clientY: 100 }));
+    expect(taps).toEqual([]);
+    expect(camera.calls.some((c) => c[0] === 'panBy')).toBe(true);
+    cleanup();
+  });
+
+  test('returning near the origin after crossing the threshold keeps the gesture disqualified from tapping', () => {
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+    // First move blows past the threshold.
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 130, clientY: 100 }));
+    // Sub-threshold return trip; the drag latch must survive it.
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 101, clientY: 100 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+    expect(taps).toEqual([]);
+    expect(camera.calls.filter((c) => c[0] === 'panBy').length).toBeGreaterThanOrEqual(2);
     cleanup();
   });
 
