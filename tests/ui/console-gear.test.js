@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
 import { render as renderGear } from '../../src/ui/console/gear.js';
+import { bus, validateEventPayload } from '../../src/state/bus.js';
 import { loadData } from '../helpers/data.js';
 
 const data = {
@@ -207,6 +208,36 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     const inventoryEvents = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
     expect(inventoryEvents).toHaveLength(1);
     expect(inventoryEvents[0][1]).toEqual({ runState });
+    // SESSION-05 — the emitted payload must satisfy the exported bus contract
+    // (validateEventPayload = hasRunState) so runtime autosave never drops it.
+    expect(validateEventPayload('state:inventory-change', inventoryEvents[0][1])).toBe(true);
+  });
+
+  it('SESSION-05 — a successful equip through the real bus reaches subscribers and returns true', () => {
+    const runState = run([item('real-bus-sidearm', 'sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const seen = [];
+    const off = bus.on('state:inventory-change', (payload) => seen.push(payload));
+    // Track dispatch return values so we can assert the contract accepts the
+    // real payload (rejected dispatches return false and never invoke listeners).
+    const results = [];
+    const context = {
+      runState,
+      data,
+      bus: { dispatch: (event, payload) => { const ok = bus.dispatch(event, payload); results.push({ event, ok }); return ok; } },
+      refresh: () => renderGear(container, context)
+    };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-equip-real-bus-sidearm').click();
+
+    const inventoryEvents = seen;
+    expect(inventoryEvents).toHaveLength(1);
+    expect(inventoryEvents[0]).toEqual({ runState });
+    const inventoryResults = results.filter((entry) => entry.event === 'state:inventory-change');
+    expect(inventoryResults).toHaveLength(1);
+    expect(inventoryResults[0].ok).toBe(true);
+    off();
   });
 
   it('SESSION-03 — a junk-toggle dispatches state:inventory-change on success and not on failure', () => {
@@ -220,11 +251,32 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     let events = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
     expect(events).toHaveLength(1);
     expect(events[0][1]).toEqual({ runState });
+    // SESSION-05 — payload must satisfy the exported contract on every success.
+    expect(validateEventPayload('state:inventory-change', events[0][1])).toBe(true);
 
     // Untag the same item — another successful toggle → second dispatch.
     byTestId(container, 'gear-junk-inv-junk').click();
     events = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
     expect(events).toHaveLength(2);
+    expect(validateEventPayload('state:inventory-change', events[1][1])).toBe(true);
+  });
+
+  it('SESSION-05 — a junk-toggle failure (missing item) emits no state:inventory-change event', () => {
+    // toggleJunkTag returns { success: false } when the item id is absent, so
+    // requestJunkToggle takes the error branch and must NOT dispatch. Renders
+    // the button by placing a matching item, then removes it from inventory
+    // before clicking so the click hits a stale row.
+    const runState = run([item('stale-item', 'sidearm')]);
+    const container = new FakeElement('div');
+    const dispatch = vi.fn();
+    const context = { runState, data, bus: { dispatch }, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    runState.inventory = [];
+
+    byTestId(container, 'gear-junk-stale-item').click();
+    const events = dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change');
+    expect(events).toHaveLength(0);
   });
 
   it('a disabled icon-prefixed UNEQUIP does not fire its handler on click', () => {

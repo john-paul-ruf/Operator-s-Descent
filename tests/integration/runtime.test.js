@@ -519,16 +519,20 @@ describe('runtime autosave checkpoints', () => {
     // (release-budget scan, docs, tests) see the full frozen list.
     expect(api.AUTOSAVE_CHECKPOINTS.includes('inventory-change')).toBe(true);
 
-    bus.dispatch('state:inventory-change', { runState: state });
-
+    // SESSION-05 — state:inventory-change is a formal bus contract now; a
+    // valid payload dispatches true and lands exactly one inventory-change
+    // autosave through the runtime listener.
+    expect(bus.dispatch('state:inventory-change', { runState: state })).toBe(true);
     expect(autosaves).toHaveLength(1);
     expect(autosaves[0].reason).toBe('inventory-change');
 
-    // Guard: no runState → no autosave. The event has no bus contract so
-    // dispatch itself is a no-op-plus-emit (returns true); the listener's
-    // `if (!runState) return` is what protects the save chokepoint.
-    bus.dispatch('state:inventory-change', {});
+    // Guard: an invalid payload (missing runState) is rejected at the bus
+    // contract layer — dispatch returns false and no listener runs, so the
+    // autosave count is unchanged.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(bus.dispatch('state:inventory-change', {})).toBe(false);
     expect(autosaves).toHaveLength(1);
+    warn.mockRestore();
     off();
   });
 
