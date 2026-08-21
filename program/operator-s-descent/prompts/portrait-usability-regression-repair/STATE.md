@@ -14,7 +14,7 @@
 
 | Session | Status | Depends on | Checkpoint | Owns summary | Notes |
 |---|---|---|---:|---|---|
-| SESSION-01 | in-progress | — | 0/3 | Combat/status DOM + unit tests | Remove critical-data collapse and turn-driven console sizing; add feedback rail. |
+| SESSION-01 | done | — | 3/3 | Combat/status DOM + unit tests | Removed status-strip collapse toggle; portrait combat feedback now lives on a screen-owned live-region rail between playfield and console; console opens once at 'half' and is never resized by playback or turn boundaries. |
 | SESSION-02 | in-progress | — | 0/3 | Viewport gestures + touch-flow test | Harden release classification and replace stale post-wheel geometry. |
 | SESSION-03 | pending | — | 0/2 | RunState log policy + log tests | Keep rich live detail; canonicalize persisted events to slim rows. |
 | SESSION-04 | pending | — | 0/2 | Title state + navigation E2E | Manual close restores START without history mutation. |
@@ -71,4 +71,8 @@ flowchart TD
 
 ## Handoff Notes
 
-No Mu handoffs yet. Jikijitsu appends each session's exit-contract notes here and updates checkpoint/status cells. If a session needs any file outside its `Owns`, it returns `blocked` rather than widening its lease.
+### SESSION-01
+
+- **Completed:** 2026-08-21
+- **Notes (verbatim):** Removed status-strip collapse toggle; portrait combat feedback now lives on a screen-owned live-region rail between playfield and console; console opens once at 'half' and is never resized by playback or turn boundaries.
+- **Follow-up (verbatim):** DOM/class contract for SESSION-06 to consume: (a) portrait feedback rail is `<div class='combat-feedback-rail' data-testid='combat-feedback' role='status' aria-live='polite' aria-atomic='true'>` between playfield and console; children `<div class='combat-feedback-notice' data-testid='combat-notice' hidden>` and `<div class='combat-feedback-error' data-testid='combat-error' hidden>`, each shown by clearing `hidden` when text is present. (b) Portrait status-strip no longer emits any `.status-collapsed` class — density styling must come from CSS/layout, not JS hide. (c) Wide dock renders `combat-notice`/`combat-error` before `combat-actions` and `combat-targets` inside `.wide-console-content-body` (portrait has zero of these testids). (d) Portrait playfield no longer sets `style.marginBottom = '96px'`; the console is now a bounded in-flow tray and the rail sits directly below the playfield.
