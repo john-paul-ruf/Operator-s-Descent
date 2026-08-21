@@ -297,6 +297,10 @@ describe('settings screen', () => {
     muteInput.checked = true;
     await muteInput.dispatch('change');
 
+    const masterInput = byTestId(container, 'settings-master-volume-input');
+    masterInput.value = '40';
+    await masterInput.dispatch('input');
+
     const droneInput = byTestId(container, 'settings-volume-drone-input');
     droneInput.value = '23';
     await droneInput.dispatch('input');
@@ -309,11 +313,16 @@ describe('settings screen', () => {
 
     expect(loadSettings()).toMatchObject({
       masterMute: true,
+      masterVolume: 40,
       layerVolumes: { drone: 23, pulse: 75, sparkle: 75, lead: 75, noiseBed: 75 },
       glitchEnabled: true,
       reducedMotion: 'full',
       scanlineGrainEnabled: false
     });
+    // masterVolume live-dispatch coverage is pending a bus.js SETTING_KEYS
+    // widen (out of lease this session); persistence above proves the slider
+    // callback + saveSettings path. Follow-up: add { key: 'masterVolume',
+    // value: 40 } here once bus.js gains 'masterVolume'.
     expect(changes).toEqual(expect.arrayContaining([
       { key: 'mute', value: true },
       { key: 'volume:drone', value: 23 },
@@ -342,6 +351,11 @@ describe('settings screen', () => {
     expect(byTestId(container, 'settings-audio-column').classList.contains('wide-settings-column')).toBe(true);
     expect(byTestId(container, 'settings-visual-column').classList.contains('wide-settings-column')).toBe(true);
     expect(byTestId(container, 'settings-master-mute').parentNode.classList.contains('panel')).toBe(true);
+    const master = byTestId(container, 'settings-master-volume');
+    expect(master).toBeTruthy();
+    let node = master.parentNode;
+    while (node && node.dataset?.testid !== 'settings-audio-column') node = node.parentNode;
+    expect(node?.dataset?.testid).toBe('settings-audio-column');
     expect(byTestId(container, 'settings-glitch').parentNode.classList.contains('panel')).toBe(true);
   });
 

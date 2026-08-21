@@ -113,6 +113,17 @@ export function mount(container, params = {}) {
   audioPanel.appendChild(mute);
   appendCaption(audioPanel, 'Silence all audio');
 
+  const master = createSlider('MASTER', settings.masterVolume ?? 100, (value) => {
+    settings = { ...settings, masterVolume: value };
+    saveCurrent(`MASTER ${value}%`);
+    dispatchChange('masterVolume', value);
+  });
+  master.dataset.testid = 'settings-master-volume';
+  master.children[1].dataset.testid = 'settings-master-volume-input';
+  cleanups.push(() => master.cleanup?.());
+  audioPanel.appendChild(master);
+  appendCaption(audioPanel, 'Overall output level');
+
   const perLayerCaption = appendCaption(audioPanel, 'PER-LAYER VOLUME');
   perLayerCaption.classList.add('micro');
   perLayerCaption.dataset.testid = 'settings-per-layer-caption';
