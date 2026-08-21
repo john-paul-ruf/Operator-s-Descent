@@ -24,6 +24,26 @@ function openManual(source) {
   bus.dispatch('ui:manual-open', { target: null, source });
 }
 
+// Local reveal/reset for the title's START ↔ branches toggle. Both the START
+// click handler and the ui:manual-close listener drive the same two DOM nodes,
+// so the reveal and reset live here instead of being duplicated inline in each
+// layout builder.
+function revealBranches(startButton, branchList) {
+  if (!startButton || !branchList) return;
+  branchList.classList.remove('hidden-branches');
+  startButton.style.display = 'none';
+}
+
+function resetToStart(startButton, branchList) {
+  if (!startButton || !branchList) return;
+  branchList.classList.add('hidden-branches');
+  startButton.style.display = '';
+  // The modal restores its invoker (typically the MANUAL branch) BEFORE
+  // dispatching ui:manual-close, so focus lands on a now-hidden control unless
+  // this listener pulls it back to the freshly visible START.
+  startButton.focus?.();
+}
+
 function mountPortrait(container, cleanups) {
   const screen = document.createElement('section');
   screen.className = 'title-screen';
@@ -73,10 +93,7 @@ function mountPortrait(container, cleanups) {
   tagline.dataset.testid = 'title-tagline';
 
   const startButton = createButton('START', {
-    onClick: () => {
-      branchList.classList.remove('hidden-branches');
-      startButton.style.display = 'none';
-    }
+    onClick: () => revealBranches(startButton, branchList)
   });
   startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';
@@ -111,6 +128,8 @@ function mountPortrait(container, cleanups) {
     secondaryRow.appendChild(button);
   }
   branchList.appendChild(secondaryRow);
+
+  cleanups.push(bus.on('ui:manual-close', () => resetToStart(startButton, branchList)));
 
   const notice = document.createElement('p');
   notice.className = 'console-note';
@@ -180,10 +199,7 @@ function mountWide(container, cleanups) {
   lockup.append(ornamentTop, titleTop, titleBottom, ornamentBottom, tagline);
 
   const startButton = createButton('START', {
-    onClick: () => {
-      branchList.classList.remove('hidden-branches');
-      startButton.style.display = 'none';
-    }
+    onClick: () => revealBranches(startButton, branchList)
   });
   startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';
@@ -214,6 +230,8 @@ function mountWide(container, cleanups) {
     branchRow.appendChild(button);
   }
   branchList.appendChild(branchRow);
+
+  cleanups.push(bus.on('ui:manual-close', () => resetToStart(startButton, branchList)));
 
   body.append(lockup, startButton, branchList);
 
