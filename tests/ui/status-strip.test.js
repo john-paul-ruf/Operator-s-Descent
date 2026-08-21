@@ -160,54 +160,96 @@ describe('status strip', () => {
     expect(findByClass(strip, 'init-rail').style.padding).toBe('2px 4px');
   });
 
-  test('combat collapse persists across per-turn strip rebuilds; a fresh combatState starts expanded', () => {
+  test('the status-collapse control and status-collapsed class are removed in every variant', () => {
+    // Portrait-usability-regression-repair SESSION-01: hidden telemetry is no
+    // longer allowed. No collapse toggle may be rendered, no `status-collapsed`
+    // class may be added, and both variants must retain every critical readout
+    // across repeated rebuilds — the sequence the encounter code re-mounts the
+    // strip on every turn resolution.
     const combatants = new Map([
       ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
       ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
     ]);
-    const runState = { depth: 3 };
-    // Same combatState reference across rebuilds mirrors production: combat
-    // creates one state via initiateCombat and re-mounts the strip each turn.
+    const exploreState = { depth: 3, worldSeed: 'seed', dangerClockProgress: 0, corruption: 0, party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 8, maxHP: 10 }] };
     const combatState = { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 1 };
 
-    const first = createStatusBar(runState, combatState);
-    expect(first.classList.contains('status-collapsed')).toBe(false);
-    byTestId(first, 'status-collapse').dispatchEvent('click');
-    expect(first.classList.contains('status-collapsed')).toBe(true);
-    first.cleanup();
-
-    // Per-turn rebuild — must restore collapsed state, glyph and aria-expanded.
-    const rebuilt = createStatusBar(runState, combatState);
-    expect(rebuilt.classList.contains('status-collapsed')).toBe(true);
-    const rebuiltToggle = byTestId(rebuilt, 'status-collapse');
-    expect(rebuiltToggle.textContent).toBe('▾');
-    expect(rebuiltToggle.getAttribute('aria-expanded')).toBe('false');
-
-    // Toggling back to expanded is also remembered on the next rebuild.
-    rebuiltToggle.dispatchEvent('click');
-    expect(rebuilt.classList.contains('status-collapsed')).toBe(false);
-    rebuilt.cleanup();
-    const reExpanded = createStatusBar(runState, combatState);
-    expect(reExpanded.classList.contains('status-collapsed')).toBe(false);
-    reExpanded.cleanup();
-
-    // A different combatState (new encounter) — independent memory, starts expanded.
-    const nextCombat = { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 1 };
-    const fresh = createStatusBar(runState, nextCombat);
-    expect(fresh.classList.contains('status-collapsed')).toBe(false);
-    fresh.cleanup();
+    const strips = [
+      createStatusBar(exploreState),
+      createStatusBar({ depth: 3 }, combatState),
+      createStatusBar(exploreState),
+      createStatusBar({ depth: 3 }, combatState)
+    ];
+    for (const strip of strips) {
+      expect(byTestId(strip, 'status-collapse')).toBe(null);
+      expect(strip.classList.contains('status-collapsed')).toBe(false);
+    }
+    for (const strip of strips) strip.cleanup();
   });
 
-  test('exploration collapse stays per-mount — no cross-mount persistence for the exploration strip', () => {
-    const runState = { depth: 3, worldSeed: 'seed', dangerClockProgress: 0, corruption: 0, party: [] };
-    const first = createStatusBar(runState);
-    byTestId(first, 'status-collapse').dispatchEvent('click');
-    expect(first.classList.contains('status-collapsed')).toBe(true);
-    first.cleanup();
+  test('every exploration-critical field remains rendered across rebuilds', () => {
+    const runState = {
+      depth: 4, worldSeed: 'seed42', corruption: 0.4, dangerClockProgress: 0.25,
+      party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 6, maxHP: 10 }]
+    };
+    for (let iteration = 0; iteration < 3; iteration++) {
+      const strip = createStatusBar(runState);
+      expect(findByClass(strip, 'status-depth')).not.toBe(null);
+      expect(findByClass(strip, 'status-seed')).not.toBe(null);
+      expect(findByClass(strip, 'status-party-list')).not.toBe(null);
+      expect(findByClass(strip, 'status-mini-hp')).not.toBe(null);
+      expect(findByClass(strip, 'status-corruption')).not.toBe(null);
+      expect(findByClass(strip, 'status-clock')).not.toBe(null);
+      strip.cleanup();
+    }
+  });
 
-    const rebuilt = createStatusBar(runState);
-    expect(rebuilt.classList.contains('status-collapsed')).toBe(false);
-    rebuilt.cleanup();
+  test('every combat-critical field remains rendered across repeated rebuilds and active-turn changes', () => {
+    // Simulates the encounter loop: same combatState identity re-passed on every
+    // rebuild, currentTurn advancing between rebuilds. Every rebuild must fully
+    // populate HP / CHARGE / AP / MOVE and the initiative rail — the strip is
+    // now the sole owner of that telemetry in portrait.
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
+      ['p2', { id: 'p2', side: 'party', sigilCodepoint: 0xE001, currentHP: 7, maxHP: 12, currentCHARGE: 2, maxCHARGE: 6, ap: 2, moveAvailable: true }],
+      ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
+    ]);
+    const combatState = { combatants, turnOrder: ['p1', 'e1', 'p2'], currentTurn: 0, round: 1 };
+    for (const currentTurn of [0, 1, 2, 0]) {
+      combatState.currentTurn = currentTurn;
+      const strip = createStatusBar({ depth: 3 }, combatState);
+      expect(findByClass(strip, 'status-depth-combat')).not.toBe(null);
+      expect(findByClass(strip, 'status-round')).not.toBe(null);
+      expect(findByClass(strip, 'status-seed')).not.toBe(null);
+      expect(findByClass(strip, 'init-rail')).not.toBe(null);
+      expect(findByClass(strip, 'status-active-actor')).not.toBe(null);
+      expect(findByClass(strip, 'status-mini-hp')).not.toBe(null);
+      expect(findByClass(strip, 'status-mini-charge')).not.toBe(null);
+      expect(findByClass(strip, 'status-ap')).not.toBe(null);
+      expect(findByClass(strip, 'status-move')).not.toBe(null);
+      strip.cleanup();
+    }
+  });
+
+  test('cleanup detaches the danger-clock listener and the manual link handler', () => {
+    // Confirms the tri-consumer cleanup contract survives the removal of the
+    // collapse toggle: danger-clock subscription + manual chip listener still
+    // both get torn down when strip.cleanup() runs.
+    const runState = { depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] };
+    const strip = createStatusBar(runState);
+    const clock = findByClass(strip, 'status-clock');
+    const chip = byTestId(strip, 'status-manual');
+    expect(chip).not.toBe(null);
+
+    strip.cleanup();
+
+    bus.dispatch('state:danger-clock-tick', { progress: 0.42 });
+    expect(clock.textContent).not.toBe('0.42');
+    // Manual chip click must not raise a bus event after cleanup.
+    const events = [];
+    const off = bus.on('ui:manual-open', (payload) => events.push(payload));
+    chip.click();
+    expect(events).toEqual([]);
+    off();
   });
 
   test('renders the manual `?` chip in exploration and combat portrait strips and dispatches ui:manual-open on click', () => {
@@ -238,51 +280,6 @@ describe('status strip', () => {
       { target: null, source: 'status-strip' }
     ]);
     off();
-    explorationStrip.cleanup();
-    combatStrip.cleanup();
-  });
-
-  test('renders a portrait collapse toggle in exploration and combat that flips ▴/▾ + aria-expanded and hides non-summary groups', () => {
-    // Exploration variant — toggle appears next to the manual chip.
-    const runState = { depth: 3, worldSeed: 'seed42', dangerClockProgress: 0.5, corruption: 0.1, party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 8, maxHP: 10 }] };
-    const explorationStrip = createStatusBar(runState);
-    const toggle = byTestId(explorationStrip, 'status-collapse');
-    expect(toggle).not.toBe(null);
-    expect(toggle.tagName).toBe('BUTTON');
-    expect(toggle.textContent).toBe('▴');
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(explorationStrip.classList.contains('status-collapsed')).toBe(false);
-
-    toggle.dispatchEvent('click');
-    expect(explorationStrip.classList.contains('status-collapsed')).toBe(true);
-    expect(toggle.textContent).toBe('▾');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-
-    toggle.dispatchEvent('click');
-    expect(explorationStrip.classList.contains('status-collapsed')).toBe(false);
-    expect(toggle.textContent).toBe('▴');
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-
-    // Combat variant — same toggle, distinct aria-label.
-    const combatants = new Map([
-      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
-      ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
-    ]);
-    const combatStrip = createStatusBar({ depth: 7 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
-    const combatToggle = byTestId(combatStrip, 'status-collapse');
-    expect(combatToggle).not.toBe(null);
-    expect(combatToggle.getAttribute('aria-label')).toBe('Collapse combat status');
-
-    combatToggle.dispatchEvent('click');
-    expect(combatStrip.classList.contains('status-collapsed')).toBe(true);
-    // DEPTH and ROUND stay legible in the collapsed summary row (they are not
-    // in the hidden group list); ACTIVE stays because status-active-group is
-    // not hidden — only initiative, seed, danger, clock are removed. AP stays;
-    // charge bar + move flag are hidden inside the active-actor block.
-    expect(findByClass(combatStrip, 'status-depth-combat')).not.toBe(null);
-    expect(findByClass(combatStrip, 'status-round')).not.toBe(null);
-    expect(findByClass(combatStrip, 'status-active-actor')).not.toBe(null);
-
     explorationStrip.cleanup();
     combatStrip.cleanup();
   });
