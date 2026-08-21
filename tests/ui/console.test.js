@@ -73,6 +73,84 @@ describe('console shell', () => {
     expect(root.children[1].children[1].classList.contains('disabled')).toBe(true);
     expect(root.children[2].className).toContain('scroll-area');
     expect(root.getAttribute('aria-expanded')).toBe('false');
+    // Portrait console seeds data-expand-state at construction time so callers
+    // reading the dataset before any expand() call see 'collapsed'.
+    expect(root.dataset.expandState).toBe('collapsed');
+    expect(consoleShell.expandState).toBe('collapsed');
+  });
+
+  test('portrait tab-tap on the active tab cycles collapsed → half → full → collapsed → half', () => {
+    const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
+    const root = consoleShell.render();
+    const moveTab = root.children[1].children[0];
+
+    // Baseline: collapsed after render.
+    expect(consoleShell.expandState).toBe('collapsed');
+    expect(root.dataset.expandState).toBe('collapsed');
+    expect(root.classList.contains('collapsed')).toBe(true);
+
+    // Tap 1: collapsed → half.
+    moveTab.dispatch('click');
+    expect(consoleShell.expandState).toBe('half');
+    expect(consoleShell.expanded).toBe(true);
+    expect(root.dataset.expandState).toBe('half');
+    expect(root.classList.contains('expanded')).toBe(true);
+    expect(root.classList.contains('expanded-half')).toBe(true);
+    expect(root.classList.contains('expanded-full')).toBe(false);
+    expect(root.classList.contains('collapsed')).toBe(false);
+
+    // Tap 2: half → full.
+    moveTab.dispatch('click');
+    expect(consoleShell.expandState).toBe('full');
+    expect(root.dataset.expandState).toBe('full');
+    expect(root.classList.contains('expanded-full')).toBe(true);
+    expect(root.classList.contains('expanded-half')).toBe(false);
+
+    // Tap 3: full → collapsed.
+    moveTab.dispatch('click');
+    expect(consoleShell.expandState).toBe('collapsed');
+    expect(consoleShell.expanded).toBe(false);
+    expect(root.dataset.expandState).toBe('collapsed');
+    expect(root.classList.contains('collapsed')).toBe(true);
+    expect(root.classList.contains('expanded')).toBe(false);
+
+    // Tap 4: collapsed → half again (cycle wraps).
+    moveTab.dispatch('click');
+    expect(consoleShell.expandState).toBe('half');
+  });
+
+  test('portrait: tapping an inactive tab opens the console at half when collapsed and preserves size when expanded', () => {
+    const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
+    const root = consoleShell.render();
+    const tabs = root.children[1].children;
+    const partyTab = tabs[2];
+    const gearTab = tabs[3];
+
+    // Collapsed + tap on inactive PARTY tab → mode switches AND expands to half.
+    partyTab.dispatch('click');
+    expect(consoleShell.currentMode).toBe('party');
+    expect(consoleShell.expandState).toBe('half');
+
+    // Cycle PARTY tab from half → full.
+    partyTab.dispatch('click');
+    expect(consoleShell.expandState).toBe('full');
+
+    // Tap on inactive GEAR tab while full → mode switches, size stays 'full'.
+    gearTab.dispatch('click');
+    expect(consoleShell.currentMode).toBe('gear');
+    expect(consoleShell.expandState).toBe('full');
+  });
+
+  test('explicit expand({size:"full"}) jumps sizes without walking through half', () => {
+    const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
+    consoleShell.render();
+
+    consoleShell.expand({ size: 'full' });
+    expect(consoleShell.expandState).toBe('full');
+    consoleShell.expand({ size: 'half' });
+    expect(consoleShell.expandState).toBe('half');
+    consoleShell.collapse();
+    expect(consoleShell.expandState).toBe('collapsed');
   });
 
   test('renders an in-tab key badge instead of a native title tooltip, with the shortcut in aria-label', () => {
@@ -181,6 +259,25 @@ describe('console dock variant (wide)', () => {
 
     inputHandler.triggerAction('cancel');
     expect(consoleShell.expanded).toBe(true);
+  });
+
+  test('dock stays at expandState "full" regardless of tap or expand cycles', () => {
+    const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000 }], inventory: [] } }, { variant: 'dock' });
+    const root = consoleShell.render();
+    const partyTab = root.children[0].children[2];
+
+    expect(consoleShell.expandState).toBe('full');
+    partyTab.dispatch('click');
+    partyTab.dispatch('click');
+    partyTab.dispatch('click');
+    // The dock never toggles expand state; only mode changes.
+    expect(consoleShell.expandState).toBe('full');
+    expect(consoleShell.expanded).toBe(true);
+    // No portrait-only classes leak onto the dock container.
+    expect(root.classList.contains('expanded-half')).toBe(false);
+    expect(root.classList.contains('expanded-full')).toBe(false);
+    expect(root.classList.contains('collapsed')).toBe(false);
+    expect(root.dataset.expandState).toBe(undefined);
   });
 
   test('emits ui:mode-change identically in the dock variant', () => {

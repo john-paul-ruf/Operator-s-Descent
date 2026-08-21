@@ -83,10 +83,28 @@ export function createConsole(state, options = {}) {
   notice.setAttribute('aria-live', 'polite');
 
   let currentMode = firstAvailableMode(state);
-  let expanded = isDock;
+  // Portrait console cycles through three sizes; dock is always the full-size
+  // wide dock. `expanded` is derived (`expandState !== 'collapsed'`) so every
+  // existing consumer of `.expanded` / `aria-expanded` keeps working while the
+  // tab-tap cycle walks `collapsed → half → full → collapsed`.
+  let expandState = isDock ? 'full' : 'collapsed';
   let mountedCleanup = null;
   let inputCleanup = null;
   let rendered = false;
+
+  const EXPAND_CYCLE = { collapsed: 'half', half: 'full', full: 'collapsed' };
+
+  function isExpanded() { return expandState !== 'collapsed'; }
+
+  function applyExpandState(next) {
+    expandState = next;
+    if (isDock) return;
+    container.classList.toggle('collapsed', next === 'collapsed');
+    container.classList.toggle('expanded', next !== 'collapsed');
+    container.classList.toggle('expanded-half', next === 'half');
+    container.classList.toggle('expanded-full', next === 'full');
+    container.dataset.expandState = next;
+  }
 
   const modeTabs = MODE_REGISTRY.map((mode, index) => {
     const tab = document.createElement('button');
@@ -107,17 +125,19 @@ export function createConsole(state, options = {}) {
     tab.dataset.testid = `console-tab-${mode.id}`;
     tab.addEventListener('click', () => {
       const wasActive = currentMode === mode.id;
-      const wasExpanded = expanded;
+      const wasExpanded = isExpanded();
       if (!setMode(mode.id, { source: 'touch' })) return;
       if (isDock) return;
-      if (wasActive && wasExpanded) collapse();
-      else expand();
+      // Active tab while open → cycle to the next size in EXPAND_CYCLE.
+      // Inactive tab (setMode switched mode) → open at half if collapsed, else keep size.
+      if (wasActive && wasExpanded) cycleExpandState();
+      else if (!wasExpanded) expand();
     });
     return { tab, mode };
   });
 
   function createModeContext() {
-    return { ...state, bus, refresh: refreshCurrentMode, expanded, layout, console: api };
+    return { ...state, bus, refresh: refreshCurrentMode, expanded: isExpanded(), layout, console: api };
   }
 
   function setNotice(text) {
@@ -126,6 +146,7 @@ export function createConsole(state, options = {}) {
   }
 
   function updateTabs() {
+    const expanded = isExpanded();
     container.dataset.mode = currentMode;
     container.setAttribute('aria-expanded', String(expanded));
     contentArea.setAttribute('aria-hidden', String(!expanded));
@@ -191,28 +212,41 @@ export function createConsole(state, options = {}) {
     return true;
   }
 
-  function expand() {
-    if (expanded) return;
-    expanded = true;
-    if (!isDock) {
-      container.classList.remove('collapsed');
-      container.classList.add('expanded');
-    }
+  // Portrait size transitions funnel through here so every landing state fires
+  // the same intent + camera events. `size` is 'collapsed' | 'half' | 'full'.
+  function setExpandSize(size) {
+    if (isDock) return;
+    if (expandState === size) return;
+    applyExpandState(size);
     updateTabs();
-    contentArea.focus?.({ preventScroll: true });
-    bus.dispatch('ui:console-expand');
-    bus.dispatch(CONSOLE_INTENTS.expand, { mode: currentMode });
-    bus.dispatch('ui:camera-request', { reason: 'console-expand', mode: currentMode });
+    if (size === 'collapsed') {
+      bus.dispatch('ui:console-collapse');
+      bus.dispatch(CONSOLE_INTENTS.collapse, { mode: currentMode, size });
+    } else {
+      contentArea.focus?.({ preventScroll: true });
+      bus.dispatch('ui:console-expand');
+      bus.dispatch(CONSOLE_INTENTS.expand, { mode: currentMode, size });
+      bus.dispatch('ui:camera-request', { reason: 'console-expand', mode: currentMode });
+    }
+  }
+
+  function expand(options = {}) {
+    if (isDock) return;
+    // No-arg expand from collapsed opens to 'half' (compat with existing
+    // console.expand() callers). Explicit `options.size` is respected — a
+    // caller may jump directly to 'full' or step back to 'half'.
+    const requested = options.size || (isExpanded() ? expandState : 'half');
+    setExpandSize(requested);
   }
 
   function collapse() {
-    if (isDock || !expanded) return;
-    expanded = false;
-    container.classList.remove('expanded');
-    container.classList.add('collapsed');
-    updateTabs();
-    bus.dispatch('ui:console-collapse');
-    bus.dispatch(CONSOLE_INTENTS.collapse, { mode: currentMode });
+    if (isDock) return;
+    setExpandSize('collapsed');
+  }
+
+  function cycleExpandState() {
+    if (isDock) return;
+    setExpandSize(EXPAND_CYCLE[expandState] || 'half');
   }
 
   function handleInput(action, details = {}) {
@@ -220,11 +254,14 @@ export function createConsole(state, options = {}) {
     const focusedTab = details.event?.target?.dataset?.testid?.match?.(/^console-tab-(.+)$/)?.[1];
     if ((normalized === 'confirm' || normalized === ' ') && focusedTab) {
       const wasActive = currentMode === focusedTab;
-      const wasExpanded = expanded;
+      const wasExpanded = isExpanded();
       if (!setMode(focusedTab, { source: details.source || 'keyboard' })) return false;
       if (isDock) return true;
-      if (wasActive && wasExpanded) collapse();
-      else expand();
+      // Keyboard focus + confirm mirrors the tab-tap cycle: active tab cycles
+      // size; a mode switch either opens to half (was collapsed) or leaves the
+      // current size alone (was already expanded).
+      if (wasActive && wasExpanded) cycleExpandState();
+      else if (!wasExpanded) expand();
       return true;
     }
     const modeKey = normalized.match(/^mode_(\d)$/);
@@ -289,6 +326,10 @@ export function createConsole(state, options = {}) {
     rendered = false;
   }
 
-  const api = { setMode, expand, collapse, refresh, render, destroy, container, variant, get currentMode() { return currentMode; }, get expanded() { return expanded; }, getRegistry() { return MODE_REGISTRY; } };
+  // Seed the portrait dataset early so consumers reading `data-expand-state`
+  // before any render/expand call see a stable value.
+  applyExpandState(expandState);
+
+  const api = { setMode, expand, collapse, refresh, render, destroy, container, variant, get currentMode() { return currentMode; }, get expanded() { return isExpanded(); }, get expandState() { return expandState; }, getRegistry() { return MODE_REGISTRY; } };
   return api;
 }
