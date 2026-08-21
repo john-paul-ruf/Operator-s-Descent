@@ -693,4 +693,80 @@ describe('exploration screen controller', () => {
     expect(cx).toBeCloseTo(240, 1);
     expect(cy).toBeCloseTo(384, 1);
   });
+
+  // camera-world-size SESSION-01 pinning tests. Before this feature, the camera
+  // world was hardcoded to 20×32 cells even though the lattice grew to 40×64
+  // (playtest-clarity-and-4x-floors). Each of these tests fails under the
+  // legacy constants and passes when the camera derives worldW/worldH from
+  // lattice.getWidth()/getHeight(). Unit env: canvas 480×768, dpr 1, world
+  // 40×24 by 64×24 → fitScale 0.5 and zoomToCells(24,40) → 5/3.
+  function lastViewTransform(container) {
+    const ctx = byTestId(container, 'exploration-canvas').getContext('2d');
+    const transforms = ctx.calls.filter(([n]) => n === 'setTransform');
+    // renderExploration ends with a resetTransform() identity; strip identities.
+    const viewTransforms = transforms.filter((c) => !(c[1] === 1 && c[5] === 0 && c[6] === 0));
+    return viewTransforms.at(-1);
+  }
+
+  it('min zoom fits the entire 40×64 map (fitScale 0.5, centered)', async () => {
+    const { container } = await mountExploration();
+    const playfieldBody = byClass(container, 'exploration-playfield');
+    // One large wheel step clamps to fitScale = min(480/960, 768/1536) = 0.5.
+    playfieldBody.dispatch('wheel', { deltaY: 10000, clientX: 240, clientY: 384, preventDefault() {} });
+    // At scale 0.5 the world exactly fills the view; clampAxis centers both axes at 0.
+    const last = lastViewTransform(container);
+    expect(last).toBeDefined();
+    expect(last[1]).toBeCloseTo(0.5, 5); // scaleX
+    expect(last[4]).toBeCloseTo(0.5, 5); // scaleY
+    expect(last[5]).toBeCloseTo(0, 5); // dx
+    expect(last[6]).toBeCloseTo(0, 5); // dy
+  });
+
+  it('camera auto-follow keeps a far-southeast party (35,60) on screen', async () => {
+    const farFloor = floor({ entryPoint: { x: 35, y: 60 } });
+    const character = makeCharacter({
+      id: 'breacher-1', classId: 'breacher', sigilId: 'pua-e000',
+      currentHP: 30, currentCHARGE: 10, protocolDeck: []
+    });
+    const farState = createRunState(1234, [character], { partyPosition: { x: 35, y: 60 } });
+    const { container } = await mountExploration({ runState: farState, floor: farFloor });
+    // primeCamera → zoomToCells(24,40) → scale 5/3 → centerOn(852,1452) →
+    // clampAxis floors: x = clamp(708, 0, 672) = 672; y = clamp(1221.6, 0, 1075.2) = 1075.2.
+    const last = lastViewTransform(container);
+    expect(last).toBeDefined();
+    const scale = last[1];
+    const dx = last[5];
+    const dy = last[6];
+    expect(scale).toBeCloseTo(5 / 3, 5);
+    expect(dx).toBeCloseTo(-1120, 1); // -672 * 5/3
+    expect(dy).toBeCloseTo(-1792, 1); // -1075.2 * 5/3
+    // Readability: party world center (852, 1452) sits inside the 480×768 view.
+    const screenX = 852 * scale + dx;
+    const screenY = 1452 * scale + dy;
+    expect(screenX).toBeCloseTo(300, 1);
+    expect(screenY).toBeCloseTo(628, 1);
+    expect(screenX).toBeGreaterThanOrEqual(0);
+    expect(screenX).toBeLessThanOrEqual(480);
+    expect(screenY).toBeGreaterThanOrEqual(0);
+    expect(screenY).toBeLessThanOrEqual(768);
+  });
+
+  it('drag pans past the legacy 20×32 boundary without moving the party', async () => {
+    const { container, runState: state } = await mountExploration();
+    const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
+    // Camera starts centered on party (10,10): state.x=108, state.y=21.6.
+    // Drag −400px right, −700px down at the pointer → panBy(400, 700) at scale 5/3
+    // moves camera by (240, 420) world px → state.x=348, state.y=441.6 —
+    // legal only in the 40×64 world (legacy clamps: 192, 307.2).
+    playfieldBody.dispatch('pointerdown', { pointerId: 9, clientX: 400, clientY: 700 });
+    playfieldBody.dispatch('pointermove', { pointerId: 9, clientX: 0, clientY: 0 });
+    playfieldBody.dispatch('pointerup', { pointerId: 9 });
+    const last = lastViewTransform(container);
+    expect(last).toBeDefined();
+    expect(last[1]).toBeCloseTo(5 / 3, 5); // scaleX
+    expect(last[4]).toBeCloseTo(5 / 3, 5); // scaleY
+    expect(last[5]).toBeCloseTo(-580, 1); // dx = -348 * 5/3
+    expect(last[6]).toBeCloseTo(-736, 1); // dy = -441.6 * 5/3
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+  });
 });
