@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | **Feature** | `portrait-usability-regression-repair` |
-| **Status** | In Progress |
+| **Status** | Blocked |
 | **Started** | 2026-08-21 15:43 CDT |
 | **Completed** | — |
 | **Authoritative plan** | `./program/operator-s-descent/prompts/portrait-usability-regression-repair/MASTER.md` |
@@ -20,7 +20,7 @@
 | SESSION-04 | done | — | 2/2 | Title state + navigation E2E | Title screen now subscribes to ui:manual-close and locally resets START ↔ branches to its canonical START-visible/branches-hidden view with focus on START; no history mutation, no route remount, no fragment change. |
 | SESSION-05 | blocked | — | 3/3 | Bus contracts + integration tests | Lease violation: checkpoint 1 commit `05af9ec` included `./README.MD` outside `Owns`; the committed user state was not altered or reverted by Jikijitsu. |
 | SESSION-06 | done | SESSION-01 | 4/4 | CSS/design/tooling + adaptive/combat E2E | Portrait console-bar now an in-flow flex child (no overlay, no dim layer); every touch-capable row hits the 96px floor; --hp added to design.md palette; deploy-p/deploy-e classes production-defined; design scan 0 warnings. |
-| SESSION-07 | pending | SESSION-01–06 | 0/3 | New integrated acceptance specification | Geometry, screenshots, and full release checks. |
+| SESSION-07 | pending | SESSION-01–06 | 0/3 | New integrated acceptance specification | Stalled: SESSION-05 is blocked by a write-lease violation, so the all-dependencies-done gate is not satisfied. |
 
 ## Wave Plan
 
@@ -107,3 +107,8 @@ flowchart TD
 - **Completed:** 2026-08-21
 - **Notes (verbatim):** Portrait console-bar now an in-flow flex child (no overlay, no dim layer); every touch-capable row hits the 96px floor; --hp added to design.md palette; deploy-p/deploy-e classes production-defined; design scan 0 warnings.
 - **Follow-up (verbatim):** SESSION-07 should re-verify at the failing portrait engines (chromium-phone-touch 412×915, chromium-portrait 1080×1920) that the in-flow console + feedback rail geometry stays as tested — the new assertPortraitLayoutRegions helper in tests/e2e/combat-touch.spec.js can be lifted for reuse. The wide 48px densification is now scoped to `.wide-console-content-body` only under `@media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse))`; any new wide surface that needs pointer-only densification must add itself to that block and never let it match on coarse-pointer / touch-wide. The corner-radius scan continues to report 2 informational findings (Panels/console and Sigil cells at 0px) with no tracked utility class — SESSION-07 may either add radius-panel/.radius-sigil utility classes or accept the info-level status quo. The wide-settings screenshot from checkpoint 3 attaches to Playwright test-results and shows a clean two-column form with stable slider tracks — visually confirmed no overlaps, no wrapping. Also: the pre-existing README.MD staged addition and .DS_Store untracked file remained untouched (both outside every lease this session).
+
+### Orchestration Stop
+
+- **Date:** 2026-08-21
+- **Reason:** SESSION-05 was marked blocked after checkpoint 1 commit `05af9ec` included `./README.MD` outside its write lease. SESSION-07 requires SESSION-01–06 all done and therefore was not launched.
