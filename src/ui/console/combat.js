@@ -15,14 +15,19 @@ const MOVE_RANGE = 5;
 // Icon ids come from the sprite compiled at dev time (assets/icons.svg) — see
 // tools/icons/subset.json + src/ui/icon.js ICON_IDS. Adding a new action icon here
 // requires updating both, which the icon.test.js lockstep assertion enforces.
+// SESSION-01 (mobile-combat-pass): `primary: true` marks the thumb-reach set
+// (move, attack, end-turn). renderActions emits primaries first in ACTIONS
+// order, then the rest in ACTIONS order — so DOM order = visual order = focus
+// order without CSS `order` reflow. S04 styles `.combat-action--primary` as
+// full-width spans in the portrait 2-col action grid.
 const ACTIONS = [
-  { id: 'move', label: 'Move', needs: `up to ${MOVE_RANGE} cells`, icon: 'arrow-down-right' },
-  { id: 'attack', label: 'Attack', needs: '1 AP', icon: 'sword' },
+  { id: 'move', label: 'Move', needs: `up to ${MOVE_RANGE} cells`, icon: 'arrow-down-right', primary: true },
+  { id: 'attack', label: 'Attack', needs: '1 AP', icon: 'sword', primary: true },
   { id: 'cast', label: 'Protocol', needs: '1 AP + CHARGE', icon: 'wand-sparkles' },
   { id: 'overclock', label: 'Overclock', needs: '1 AP + overclock CHARGE', icon: 'zap' },
   { id: 'item', label: 'Item', needs: '1 AP', icon: 'flame' },
   { id: 'retreat', label: 'Retreat', needs: '1 AP', icon: 'arrow-up-right' },
-  { id: 'end-turn', label: 'End Turn', needs: 'explicit', icon: 'clock' }
+  { id: 'end-turn', label: 'End Turn', needs: 'explicit', icon: 'clock', primary: true }
 ];
 const DIRECTION_GRID = [
   ['nw', '↖'], ['n', '↑'], ['ne', '↗'],
@@ -238,7 +243,11 @@ function renderActions(container, context, legalActions) {
   list.dataset.testid = 'combat-actions';
   const selection = context.selection || {};
   const active = context.combatGetActiveActor?.() || null;
-  for (const action of ACTIONS) {
+  // Emit primaries first, then non-primaries — each group keeps its ACTIONS
+  // order so keyboard focus order matches visual order without relying on CSS
+  // `order`. Everything else about the per-button build stays identical.
+  const ordered = [...ACTIONS.filter((a) => a.primary), ...ACTIONS.filter((a) => !a.primary)];
+  for (const action of ordered) {
     const reason = combatActionDisabledReason(action, context, active, legalActions);
     const disabled = Boolean(reason);
     const button = createButton(`${action.label.toUpperCase()} · ${action.needs.toUpperCase()}`, {
@@ -251,7 +260,7 @@ function renderActions(container, context, legalActions) {
       // onClick keeps the click inert.
       onClick: disabled ? undefined : () => context.combatChooseAction?.(action.id)
     });
-    button.className = selectedClass(`combat-action action-btn console-row${action.id === 'retreat' ? ' danger' : ''}`, selection.actionType === action.id);
+    button.className = selectedClass(`combat-action action-btn console-row${action.id === 'retreat' ? ' danger' : ''}${action.primary ? ' combat-action--primary' : ''}`, selection.actionType === action.id);
     button.dataset.testid = `combat-action-${action.id}`;
     // components.js:createButton exposes `description` via aria-description only.
     // Set `title` here so the browser tooltip surfaces the reason to sighted
