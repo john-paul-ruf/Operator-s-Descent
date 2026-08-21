@@ -276,13 +276,78 @@ test('settings screen wide: two columns with 96px row floor and back returns to 
   await expect(page.getByTestId('settings-visual-column')).toBeVisible();
 
   if (testInfo.project.name === 'chromium-wide-square') {
-    // Touch floor lands on the row containers (.toggle-row / .slider-row / .motion-options)
-    // per wide.css, not on individual radio buttons within .motion-options.
-    const heights = await page.locator('.wide-settings-body .toggle-row, .wide-settings-body .slider-row, .wide-settings-body .motion-options').evaluateAll(
-      (els) => els.map((el) => Math.round(el.getBoundingClientRect().height))
-    );
+    // SESSION-06 — extend the touch-floor guard with layout assertions so the
+    // wide settings dock at 1024×1024 (a) hits 96px on every touch-capable row
+    // container, (b) contains every row and its interactive children inside
+    // the column/viewport, (c) never overlaps a slider's label / range input /
+    // value rectangles, and (d) never overlaps consecutive rows. Screenshot
+    // attaches for the handoff.
+    const rows = page.locator('.wide-settings-body .toggle-row, .wide-settings-body .slider-row, .wide-settings-body .motion-options');
+    const heights = await rows.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
     expect(heights.length).toBeGreaterThan(0);
     expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
+
+    // Every row's rect stays inside its column rect AND inside the viewport.
+    const viewport = page.viewportSize();
+    const columnRects = await page.locator('.wide-settings-column').evaluateAll(
+      (els) => els.map((el) => el.getBoundingClientRect().toJSON())
+    );
+    expect(columnRects.length).toBeGreaterThanOrEqual(2);
+    const rowInfo = await rows.evaluateAll((els) => els.map((el) => {
+      const rect = el.getBoundingClientRect();
+      const columnEl = el.closest('.wide-settings-column');
+      const columnRect = columnEl ? columnEl.getBoundingClientRect() : null;
+      return {
+        rect: rect.toJSON(),
+        columnRect: columnRect ? columnRect.toJSON() : null
+      };
+    }));
+    for (const info of rowInfo) {
+      expect(info.columnRect).not.toBeNull();
+      expect(info.rect.left).toBeGreaterThanOrEqual(info.columnRect.left - 1);
+      expect(info.rect.right).toBeLessThanOrEqual(info.columnRect.right + 1);
+      expect(info.rect.left).toBeGreaterThanOrEqual(0);
+      expect(info.rect.right).toBeLessThanOrEqual(viewport.width + 1);
+      expect(info.rect.top).toBeGreaterThanOrEqual(0);
+      expect(info.rect.bottom).toBeLessThanOrEqual(viewport.height + 1);
+    }
+
+    // For every slider row: label rect / range input rect / value rect must
+    // not intersect each other (each has zero horizontal overlap after gap).
+    const sliderChildRects = await page.locator('.wide-settings-body .slider-row').evaluateAll((rows) => rows.map((row) => {
+      const label = row.querySelector('.slider-label')?.getBoundingClientRect().toJSON() || null;
+      const input = row.querySelector('input[type="range"]')?.getBoundingClientRect().toJSON() || null;
+      const value = row.querySelector('.slider-value')?.getBoundingClientRect().toJSON() || null;
+      return { label, input, value };
+    }));
+    expect(sliderChildRects.length).toBeGreaterThan(0);
+    const intersectsX = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1;
+    for (const trio of sliderChildRects) {
+      expect(trio.label).not.toBeNull();
+      expect(trio.input).not.toBeNull();
+      expect(trio.value).not.toBeNull();
+      expect(intersectsX(trio.label, trio.input)).toBe(false);
+      expect(intersectsX(trio.input, trio.value)).toBe(false);
+      expect(intersectsX(trio.label, trio.value)).toBe(false);
+    }
+
+    // Consecutive row rects within the same column do not overlap vertically
+    // (bottom of row N ≤ top of row N+1). Group by column, then compare.
+    const rowRectsByColumn = new Map();
+    for (const info of rowInfo) {
+      const key = `${info.columnRect.left}:${info.columnRect.top}`;
+      if (!rowRectsByColumn.has(key)) rowRectsByColumn.set(key, []);
+      rowRectsByColumn.get(key).push(info.rect);
+    }
+    for (const rects of rowRectsByColumn.values()) {
+      rects.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < rects.length; i++) {
+        expect(rects[i - 1].bottom).toBeLessThanOrEqual(rects[i].top + 1);
+      }
+    }
+
+    const shot = await page.locator('.wide-settings-shell').screenshot();
+    await testInfo.attach('wide-settings-1024x1024.png', { body: shot, contentType: 'image/png' });
   }
 
   await page.getByTestId('settings-back').click();

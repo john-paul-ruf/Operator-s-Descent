@@ -9,18 +9,20 @@
     aspect-ratio: auto;
   }
 
-  /* Wide-layout row densification (SESSION-06) — 48px minimum, pointer-only.
-     The inner `@media (hover: hover) and (pointer: fine) and not (any-pointer:
-     coarse)` guard ensures this NEVER matches when any coarse pointer is
-     available (touch tablets, hybrid laptops, etc.), so wide surfaces with a
-     touch pointer keep the 96px touch floor from styles/components.css. */
+  /* Wide-layout row densification (SESSION-06) — 48px minimum, dock-only,
+     pointer-only. The inner `@media (hover: hover) and (pointer: fine) and
+     not (any-pointer: coarse)` guard ensures this NEVER matches when any
+     coarse pointer is available (touch tablets, hybrid laptops, etc.), so
+     wide surfaces with a touch pointer keep the 96px touch floor from
+     styles/components.css. Scope is limited to `.wide-console-content-body`
+     so `.wide-settings-body` rows always hit their 96px floor regardless
+     of pointer capability. */
   @media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
     .wide-console-content-body .console-row,
     .wide-console-content-body .action-btn,
     .wide-console-content-body .item-card,
     .wide-console-content-body .equipment-card,
-    .wide-console-content-body .protocol-card,
-    .wide-settings-body .settings-row {
+    .wide-console-content-body .protocol-card {
       min-height: 48px;
     }
   }
@@ -668,15 +670,42 @@
   .wide-settings-body .toggle-row,
   .wide-settings-body .slider-row {
     min-height: 96px;
-    padding: 8px 12px;
+    padding: 10px 12px;
     border-top: 1px solid var(--border-dim);
+    align-items: center;
+    gap: 16px;
   }
   .wide-settings-body .panel > .toggle-row:first-child,
   .wide-settings-body .panel > .slider-row:first-child { border-top: 0; }
   .wide-settings-body .motion-options {
     min-height: 96px;
-    padding: 8px 12px;
+    padding: 10px 12px;
     border-top: 1px solid var(--border-dim);
+  }
+  /* Slider row column contract (SESSION-06) — stable label / flexible input /
+     value tracks so labels don't collapse under captions and the value chip
+     always stays legible. `min-width: 0` on the label prevents flex overflow
+     from pushing the input off-track at narrow dock widths. */
+  .wide-settings-body .slider-row .slider-label {
+    flex: 0 0 auto;
+    min-width: 80px;
+    max-width: 40%;
+  }
+  .wide-settings-body .slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .wide-settings-body .slider-row .slider-value {
+    flex: 0 0 auto;
+    min-width: 48px;
+    text-align: right;
+  }
+  /* Caption spacing between panel rows — keeps helper text off the row it
+     describes. */
+  .wide-settings-body .panel > .caption {
+    display: block;
+    padding: 4px 12px 8px;
+    color: var(--text-dim);
   }
   .settings-row {
     display: flex;
