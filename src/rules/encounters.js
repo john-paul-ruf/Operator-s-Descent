@@ -377,10 +377,14 @@ function nearestUnassigned(anchor, openCells, assigned, count) {
 }
 
 // Places party/hostile bands on legal, distinct cells, maximizing separation whenever geometry allows it.
-// Never invents cells outside the carved window; if the window is too small the bands simply end up closer.
+// Reachability guarantee: confine BOTH bands to a single connected open region so party and
+// hostiles can always path to each other. openRegionsOf is sorted largest-first; row-major
+// sorting makes the single-region case byte-identical to the old openCellsOf(window) order,
+// so fully-connected windows deploy exactly as before — only disconnected windows change.
 export function deployBands(window, partyCount, hostileCount) {
-  const openCells = openCellsOf(window);
-  if (openCells.length === 0) return { partyPositions: [], hostilePositions: [] };
+  const regions = openRegionsOf(window.cells);
+  if (regions.length === 0) return { partyPositions: [], hostilePositions: [] };
+  const openCells = regions[0].slice().sort((a, b) => a.y - b.y || a.x - b.x);
   const [partyAnchor, hostileAnchor] = anchorPair(openCells);
   const assigned = new Set();
   const partyPositions = nearestUnassigned(partyAnchor, openCells, assigned, partyCount);
