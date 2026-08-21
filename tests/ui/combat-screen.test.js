@@ -638,6 +638,87 @@ describe('combat screen controller', () => {
     expect(spy.zoomToCells.length).toBe(0);
   });
 
+  // Portrait console presence: expand on the party's turn, collapse during enemy playback.
+  // Party-first mount lands at 'half' so actions are immediately reachable without a tap.
+  it('portrait party-first mount ends with the console expanded at half', async () => {
+    const { container, controller } = await mountCombat();
+    const consoleEl = byClass(container, 'console-bar');
+    expect(consoleEl).not.toBe(null);
+    expect(consoleEl.dataset.expandState).toBe('half');
+    controller.unmount();
+  });
+
+  it('during enemy playback the console collapses and re-expands on the next party turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const combat = combatState([partyActor(), enemyActor({ id: 0, position: { x: 2, y: 1 } })], ['hero', 0]);
+      const { container, controller } = await mountCombat({ combat });
+      const consoleEl = byClass(container, 'console-bar');
+      expect(consoleEl.dataset.expandState).toBe('half');
+
+      // End the party turn — enemy playback begins with selection.resolving = true, so
+      // presentConsoleForTurn collapses to reveal the map.
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      expect(consoleEl.dataset.expandState).toBe('collapsed');
+
+      // Drain the enemy playback timers. finalizeAfterAction runs, clears the flag, re-presents.
+      vi.runAllTimers();
+      expect(consoleEl.dataset.expandState).toBe('half');
+      controller.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('user collapse via Escape persists through enemy playback and re-expands on the next party turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const combat = combatState([partyActor(), enemyActor({ id: 0, position: { x: 2, y: 1 } })], ['hero', 0]);
+      const { container, controller } = await mountCombat({ combat });
+      const consoleEl = byClass(container, 'console-bar');
+      expect(consoleEl.dataset.expandState).toBe('half');
+
+      // Portrait cancel goes straight to console.collapse(), which dispatches ui:console-collapse.
+      // Our screen-scoped listener records the user's override so auto-expand doesn't re-fire.
+      container.dispatch('keydown', keyEvent('Escape'));
+      expect(consoleEl.dataset.expandState).toBe('collapsed');
+
+      // End turn → enemy playback pass → user-collapse persists (no re-expand mid-cycle).
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      expect(consoleEl.dataset.expandState).toBe('collapsed');
+
+      // New party turn starts → the flag resets so the console re-presents at 'half'.
+      vi.runAllTimers();
+      expect(consoleEl.dataset.expandState).toBe('half');
+      controller.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('wide mount never mutates console size regardless of turn state', async () => {
+    installMatchMedia(true);
+    vi.useFakeTimers();
+    try {
+      const combat = combatState([partyActor(), enemyActor({ id: 0, position: { x: 2, y: 1 } })], ['hero', 0]);
+      const { container, controller } = await mountCombat({ combat });
+      // Wide dock has no `console-bar` element — the dock is `wide-console-dock` and always open.
+      expect(byClass(container, 'console-bar')).toBe(null);
+      const dock = byClass(container, 'wide-console-dock');
+      expect(dock).not.toBe(null);
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      vi.runAllTimers();
+      // Dock remains rendered; the presence controller is a no-op for isWide=true.
+      expect(byClass(container, 'wide-console-dock')).not.toBe(null);
+      controller.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('unmount destroys the playfield pulse loop so no further rAF frames are scheduled', async () => {
     const raf = [];
     const cancels = [];

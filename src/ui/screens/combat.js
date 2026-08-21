@@ -386,6 +386,14 @@ export function mount(container, params = {}) {
   let logCursor = combatState.log.length;
   let userAdjusted = false;
   let currentDpr = 1;
+  // Portrait console presence controller. `userCollapsedThisTurn` sticks a player-initiated
+  // collapse for the rest of the current party turn so auto-expand never fights the user;
+  // it's reset at every party-turn boundary (mount `onDone` and `finalizeAfterAction`).
+  // `programmaticConsoleChange` gates the bus listener so our own collapse() calls during
+  // enemy playback don't get mistaken for a user tap.
+  let userCollapsedThisTurn = false;
+  let programmaticConsoleChange = false;
+  let consoleCollapseUnsub = null;
   // Log-replay playback state (M71). While `active`, `selection.resolving` gates input, the
   // playfield draws with position/active/flash overrides, and the console shows the current
   // entry's notice. `entries` is the sliced tail of combatState.log we're stepping through;
@@ -531,6 +539,15 @@ export function mount(container, params = {}) {
     container.appendChild(consoleController.render());
   }
   consoleController.setMode('combat');
+  if (!isWide) {
+    // Listen for user-initiated collapses (tab click, Escape). Programmatic collapses driven
+    // by presentConsoleForTurn are guarded so they don't set the sticky user-override flag.
+    consoleCollapseUnsub = bus.on('ui:console-collapse', () => {
+      if (programmaticConsoleChange) return;
+      userCollapsedThisTurn = true;
+    });
+  }
+  presentConsoleForTurn();
 
   // Canvas-space camera (M104) owns pan/zoom and hit-tests. The gesture controller emits
   // drag-pans (>= DRAG_THRESHOLD_PX) that set `userAdjusted` so the turn-change auto-center
@@ -576,6 +593,9 @@ export function mount(container, params = {}) {
   runResolveWithPlayback(() => {
     selection.resolving = false;
     syncSelectionActor();
+    // New party turn starting → clear any lingering user-collapse override and re-present.
+    userCollapsedThisTurn = false;
+    presentConsoleForTurn();
     renderAll();
     dispatchTerminal();
   });
@@ -600,6 +620,24 @@ export function mount(container, params = {}) {
   function isPartyTurn() {
     const actor = getActiveActor(combatState);
     return Boolean(actor && actor.side === 'party' && !combatState.ended && !selection.resolving);
+  }
+
+  // Portrait-only console presence. Expand to `half` on the party's turn (unless the player
+  // manually collapsed) so actions are immediately reachable; collapse during enemy playback so
+  // the map is visible while the AI moves. `expand`/`collapse` no-op when already at that size
+  // (console.js setExpandSize guard) so repeated calls are cheap. Wide dock is always open.
+  function presentConsoleForTurn() {
+    if (isWide) return;
+    programmaticConsoleChange = true;
+    try {
+      if (isPartyTurn() && !selection.resolving) {
+        if (!userCollapsedThisTurn) consoleController.expand({ size: 'half' });
+      } else {
+        consoleController.collapse();
+      }
+    } finally {
+      programmaticConsoleChange = false;
+    }
   }
 
   function targetsForAction(actionType = selection.actionType) {
@@ -973,6 +1011,9 @@ export function mount(container, params = {}) {
       selection.direction = null;
       selection.protocol = null;
       selection.itemId = null;
+      // Party is regaining control → clear the per-turn user-collapse override before re-presenting.
+      userCollapsedThisTurn = false;
+      presentConsoleForTurn();
     }
     renderAll();
     dispatchTerminal();
@@ -985,6 +1026,9 @@ export function mount(container, params = {}) {
   // Enemy-side deaths and terminal combat-end fire after playback so the user sees the actions
   // that caused them.
   function runResolveWithPlayback(onDone) {
+    // Enemy turn is starting (selection.resolving is already true) — reveal the map by collapsing
+    // the console. If it's already collapsed (or wide), this is a no-op.
+    presentConsoleForTurn();
     const startCursor = logCursor;
     const preResolvePositions = snapshotPositions();
     resolveTurn(combatState, rngCursor, rulesContext);
@@ -1426,6 +1470,7 @@ export function mount(container, params = {}) {
       gestureCleanup?.();
       resizeObserverInstance?.disconnect?.();
       widePanesCleanup?.();
+      consoleCollapseUnsub?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
       playfield.destroy();
