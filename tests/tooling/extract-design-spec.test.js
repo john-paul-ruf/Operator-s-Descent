@@ -13,6 +13,7 @@ describe('extract-design-spec', () => {
     expect(tokens.find((t) => t.token === '--bg-base')).toEqual({ token: '--bg-base', value: '#0a0612' });
     expect(tokens.find((t) => t.token === '--accent')).toEqual({ token: '--accent', value: '#7ec8e3' });
     expect(tokens.find((t) => t.token === '--border-active')).toEqual({ token: '--border-active', value: 'var(--accent)' });
+    expect(tokens.find((t) => t.token === '--text-disabled')).toEqual({ token: '--text-disabled', value: '#71659a' });
   });
 
   it('extracts corner radius rules', () => {
