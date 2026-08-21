@@ -391,6 +391,100 @@ describe('attachViewportGestures', () => {
     expect(taps).toEqual([]);
     cleanup();
   });
+
+  test('pinch → single-finger pan continuation pans but never regains tap eligibility', () => {
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 60, clientY: 60 }));
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 2, clientX: 120, clientY: 60 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 2, clientX: 120, clientY: 60 }));
+    // Remaining pointer 1 continues to pan; the disqualified latch must survive
+    // the pinch → single-finger transition and suppress any release-fire tap.
+    element.dispatch('pointermove', pointerEvent({ pointerId: 1, clientX: 80, clientY: 60 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 80, clientY: 60 }));
+    expect(taps).toEqual([]);
+    // Even a fresh press+release after the disqualified gesture re-enables tap.
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 9, clientX: 200, clientY: 200 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 9, clientX: 200, clientY: 200 }));
+    expect(taps).toEqual([{ clientX: 200, clientY: 200 }]);
+    cleanup();
+  });
+
+  test('pointercancel on one pointer latches disqualified for the remaining pointer release', () => {
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 50, clientY: 50 }));
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 2, clientX: 100, clientY: 50 }));
+    element.dispatch('pointercancel', pointerEvent({ pointerId: 2, clientX: 100, clientY: 50 }));
+    // Pointer 1 releases stationary — latched cancel must forbid the tap.
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 50, clientY: 50 }));
+    expect(taps).toEqual([]);
+    cleanup();
+  });
+
+  test('lostpointercapture disqualifies the current gesture and unbinds cleanly', () => {
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 40, clientY: 60 }));
+    element.dispatch('lostpointercapture', pointerEvent({ pointerId: 1, clientX: 40, clientY: 60 }));
+    // A late-arriving stationary release must not tap after the browser reclaimed capture.
+    element.dispatch('pointerup', pointerEvent({ pointerId: 1, clientX: 40, clientY: 60 }));
+    expect(taps).toEqual([]);
+    // Fresh gesture afterwards resets the latch.
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 2, clientX: 150, clientY: 150 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 2, clientX: 150, clientY: 150 }));
+    expect(taps).toEqual([{ clientX: 150, clientY: 150 }]);
+    cleanup();
+  });
+
+  test('non-primary pointer ordering: the second-down pointer releasing first still cleanly ends the pinch', () => {
+    // Pointers can arrive/depart in arbitrary id order; the first-down finger
+    // may release before the second on real hardware, in which case the pinch
+    // must hand off drag continuation to the still-held pointer, and neither
+    // subsequent release is allowed to tap.
+    const element = makeElement();
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 7, clientX: 60, clientY: 60 }));
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 3, clientX: 140, clientY: 60 }));
+    // First-down (id 7) releases while id 3 remains → pinch collapses onto id 3.
+    element.dispatch('pointerup', pointerEvent({ pointerId: 7, clientX: 60, clientY: 60 }));
+    // Second-down (id 3) releases stationary — no tap because the pinch latched.
+    element.dispatch('pointerup', pointerEvent({ pointerId: 3, clientX: 140, clientY: 60 }));
+    expect(taps).toEqual([]);
+    cleanup();
+  });
+
+  test('cleanup removes every listener including lostpointercapture and clears in-flight state', () => {
+    const element = makeElement();
+    element.style.touchAction = 'pan-y';
+    const camera = makeCamera();
+    const taps = [];
+    const cleanup = attachViewportGestures(element, camera, { onTap: (event) => taps.push(event) });
+    // Enter a pinch so every state field is populated before we tear down.
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 1, clientX: 50, clientY: 50 }));
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 2, clientX: 100, clientY: 50 }));
+    expect(element.listenerCount()).toBeGreaterThan(0);
+    cleanup();
+    // Every listener bucket empty — pointerdown/move/up/cancel/lostpointercapture/wheel/touchmove.
+    expect(element.listenerCount()).toBe(0);
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'wheel', 'touchmove']) {
+      expect(element.listeners.get(type) ?? []).toEqual([]);
+    }
+    expect(element.style.touchAction).toBe('pan-y');
+    // Dispatches after cleanup must be no-ops — state fields cleared, callbacks unbound.
+    element.dispatch('pointerdown', pointerEvent({ pointerId: 5, clientX: 10, clientY: 10 }));
+    element.dispatch('pointerup', pointerEvent({ pointerId: 5, clientX: 10, clientY: 10 }));
+    expect(taps).toEqual([]);
+    expect(camera.calls).toEqual([]);
+  });
 });
 
 describe('sizeCanvasToContainer', () => {
