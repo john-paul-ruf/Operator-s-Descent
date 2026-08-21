@@ -131,6 +131,35 @@ describe('status strip', () => {
     expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');
   });
 
+  test('portrait combat strip is compact — tighter grid gap, shrunk row-1 labels, slim initiative rail — and readout stays complete', () => {
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
+      ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
+    ]);
+    const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
+
+    // Compact grid — tighter than the pre-SESSION-02 `6px 12px`.
+    expect(strip.style.gap).toBe('4px 8px');
+
+    // Readout completeness: after SESSION-01 the strip is the sole copy, so
+    // none of HP / CHARGE / AP / MV may be dropped.
+    expect(findByClass(strip, 'status-mini-hp')).not.toBe(null);
+    expect(findByClass(strip, 'status-mini-charge')).not.toBe(null);
+    expect(findByClass(strip, 'status-ap')).not.toBe(null);
+    expect(findByClass(strip, 'status-move')).not.toBe(null);
+    expect(findByClass(strip, 'init-rail')).not.toBe(null);
+
+    // Row-1 labels (DEPTH/ROUND/SEED) and the initiative group label all
+    // shrink for phone density.
+    for (const groupClass of ['status-depth-combat-group', 'status-round-group', 'status-seed-combat-group', 'status-initiative-group']) {
+      const label = findByClass(strip, groupClass).firstChild;
+      expect(label.style.fontSize).toBe('8px');
+    }
+
+    // Initiative rail sits on a slim single line — reduced inline padding.
+    expect(findByClass(strip, 'init-rail').style.padding).toBe('2px 4px');
+  });
+
   test('renders the manual `?` chip in exploration and combat portrait strips and dispatches ui:manual-open on click', () => {
     const explorationStrip = createStatusBar({ depth: 1, worldSeed: 1, dangerClockProgress: 0, party: [] });
     const explorationChip = byTestId(explorationStrip, 'status-manual');

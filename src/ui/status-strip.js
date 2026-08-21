@@ -180,7 +180,10 @@ export function createStatusBar(runState, combatState = null, options = {}) {
     strip.classList.add('status-strip-combat');
     strip.style.display = 'grid';
     strip.style.gridTemplateColumns = 'auto auto auto minmax(0, 1fr)';
-    strip.style.gap = '6px 12px';
+    // SESSION-02 — tightened from `6px 12px` for phone density; the combat
+    // strip is now the single source of truth for HP/CHARGE/AP/MV (SESSION-01
+    // dropped the console-pane copy), so vertical room matters.
+    strip.style.gap = '4px 8px';
     renderCombatStatus(strip, runState, combatState, data);
   } else {
     cleanups.push(renderExplorationStatus(strip, runState, data));
@@ -239,19 +242,36 @@ function renderExplorationStatus(strip, runState, data = null) {
   });
 }
 
+// SESSION-02 — the combat strip is portrait-phone-tight and the sole owner of
+// HP/CHARGE/AP/MV, so its labels lose a pixel of type and its groups collapse
+// their internal gap. Applied only to the combat branch; exploration keeps
+// the createGroup defaults so its dense-info row stays legible.
+function compactLabel(group) {
+  group.style.gap = '1px';
+  const label = group.firstChild;
+  if (label && label.style) {
+    label.style.fontSize = '8px';
+    label.style.letterSpacing = '0.08em';
+  }
+  return group;
+}
+
 function renderCombatStatus(strip, runState, combatState, data = null) {
-  appendText(createGroup(strip, 'status-depth-combat', 'DEPTH'), 'status-depth-combat', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
-  appendText(createGroup(strip, 'status-round', 'ROUND'), 'status-round', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`);
-  appendText(createGroup(strip, 'status-seed-combat', 'SEED'), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
+  appendText(compactLabel(createGroup(strip, 'status-depth-combat', 'DEPTH')), 'status-depth-combat', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
+  appendText(compactLabel(createGroup(strip, 'status-round', 'ROUND')), 'status-round', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`);
+  appendText(compactLabel(createGroup(strip, 'status-seed-combat', 'SEED')), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
   const actors = actorList(combatState);
   const activeId = combatState.turnOrder?.[combatState.currentTurn];
   const active = actors.find((actor) => actor.id === activeId);
   const order = (combatState.turnOrder || []).slice(combatState.currentTurn || 0, (combatState.currentTurn || 0) + 6);
-  const initiative = createGroup(strip, 'status-initiative', '◈ INITIATIVE ORDER');
+  const initiative = compactLabel(createGroup(strip, 'status-initiative', '◈ INITIATIVE ORDER'));
   initiative.style.gridColumn = '1 / -1';
   initiative.style.gridRow = '2';
   const rail = document.createElement('div');
   rail.className = 'init-rail status-initiative';
+  // Slim the initiative rail to a single compact line (sigils remain 34px per
+  // accessibility tiers). CSS default is 4px 8px — halve it inline.
+  rail.style.padding = '2px 4px';
   rail.setAttribute('aria-label', `Initiative preview ${order.join(', ') || 'none'}`);
   for (const [index, id] of order.entries()) {
     const actor = actors.find((candidate) => candidate.id === id);
