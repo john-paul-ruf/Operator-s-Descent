@@ -63,23 +63,39 @@ test.describe('navigation history', () => {
   // push a history entry, so the back-stack behaviour becomes "title → title"
   // with no navigation in between. Deep-link `#a=tutorial` back-compat lives
   // in the separate test below.
+  // portrait-usability-regression-repair SESSION-04 — the title's local
+  // ui:manual-close listener resets the START ↔ branches toggle to its
+  // canonical START view, moves focus to START, and stays clickable — all
+  // WITHOUT changing the fragment or remounting the route.
   test('title → open manual modal → close → still at title, no history push', async ({ page }) => {
     await reachTitle(page);
-    await page.getByTestId('title-start').click();
-    await expect(page.getByTestId('title-branches')).toBeVisible();
+    const start = page.getByTestId('title-start');
+    const branches = page.getByTestId('title-branches');
+    const modal = page.getByTestId('manual-modal');
+
+    await start.click();
+    await expect(branches).toBeVisible();
     const hashBeforeOpen = await currentHash(page);
 
     await page.getByTestId('title-manual').click();
-    await expect(page.getByTestId('manual-modal')).toBeVisible();
+    await expect(modal).toBeVisible();
     // Modal open must NOT change the fragment.
     expect(await currentHash(page)).toBe(hashBeforeOpen);
 
     await page.getByTestId('manual-close').click();
-    await expect(page.getByTestId('manual-modal')).toBeHidden();
+    await expect(modal).toBeHidden();
     // Modal close must NOT change the fragment either.
     expect(await currentHash(page)).toBe(hashBeforeOpen);
-    // Title still mounted.
-    await expect(page.getByTestId('title-start')).toBeVisible();
+    // Title reset back to its canonical START view.
+    await expect(start).toBeVisible();
+    await expect(branches).toBeHidden();
+    await expect(start).toBeFocused();
+
+    // Reopening the branches after a manual close still works — the listener
+    // did not unmount the title controller or wipe the start-click handler.
+    await start.click();
+    await expect(branches).toBeVisible();
+    await expect(start).toBeHidden();
   });
 
   test('#a=tutorial back-compat: deep link mounts title AND opens the modal', async ({ page }) => {
@@ -90,6 +106,11 @@ test.describe('navigation history', () => {
     // With the modal closed the reader lands on the title screen — the retired
     // tutorial route never mounts a screen of its own.
     await expect(page.getByTestId('title-start')).toBeVisible();
+    // Every tutorial-owned testid must remain absent — a stray tutorial-page
+    // or tutorial-next would prove the retired screen slipped back in.
+    for (const testid of ['tutorial-status', 'tutorial-page', 'tutorial-page-title', 'tutorial-next', 'tutorial-prev', 'tutorial-done', 'tutorial-skip', 'tutorial-spread']) {
+      await expect(page.getByTestId(testid)).toHaveCount(0);
+    }
   });
 
   test('title → library → settings → back → library → back → title', async ({ page }) => {
