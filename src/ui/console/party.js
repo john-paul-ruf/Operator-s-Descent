@@ -44,22 +44,36 @@ function classDataFor(data, character) {
   return data?.classes?.classes?.find((entry) => entry.id === character?.classId) || null;
 }
 
+// SESSION-03 — max HP/CHARGE is derived, never stored. Callers pass this into
+// hpOf/chargeOf so the fallback chain resolves to derived before current.
+// Duplicated in tech.js / gear.js by design (sibling-import boundary per
+// src/ui/status-strip.js:46-47 precedent); three copies is the accepted ceiling.
+function derivedMaxesFor(character, data) {
+  const classData = classDataFor(data, character);
+  if (!classData) return null;
+  const loadout = resolveLoadout(character, data?.equipment, data?.affixes);
+  const derived = deriveStats(character, classData, loadout || character?.equipment || {});
+  return { hpMax: derived.hpMax, chargeMax: derived.chargeMax };
+}
+
 function combatActorFor(context, character) {
   const combatants = context?.combatState?.combatants;
   return combatants instanceof Map ? combatants.get(character?.id) || null : null;
 }
 
-function hpOf(character, combatActor) {
+function hpOf(character, combatActor, derived) {
+  const current = combatActor?.hp ?? character?.currentHP ?? character?.hp ?? 0;
   return {
-    current: combatActor?.hp ?? character?.currentHP ?? character?.hp ?? 0,
-    max: combatActor?.hpMax ?? character?.maxHP ?? character?.hpMax ?? character?.currentHP ?? character?.hp ?? 0
+    current,
+    max: combatActor?.hpMax ?? character?.maxHP ?? character?.hpMax ?? Math.max(derived?.hpMax ?? current, current)
   };
 }
 
-function chargeOf(character, combatActor) {
+function chargeOf(character, combatActor, derived) {
+  const current = combatActor?.charge ?? character?.currentCHARGE ?? character?.charge ?? 0;
   return {
-    current: combatActor?.charge ?? character?.currentCHARGE ?? character?.charge ?? 0,
-    max: combatActor?.chargeMax ?? character?.maxCHARGE ?? character?.chargeMax ?? character?.currentCHARGE ?? character?.charge ?? 0
+    current,
+    max: combatActor?.chargeMax ?? character?.maxCHARGE ?? character?.chargeMax ?? Math.max(derived?.chargeMax ?? current, current)
   };
 }
 
@@ -166,8 +180,9 @@ export function render(container, context = {}) {
   const cards = [];
   living.forEach((character, index) => {
     const combatActor = combatActorFor(context, character);
-    const hp = hpOf(character, combatActor);
-    const charge = chargeOf(character, combatActor);
+    const derived = derivedMaxesFor(character, context.data || {});
+    const hp = hpOf(character, combatActor, derived);
+    const charge = chargeOf(character, combatActor, derived);
     const selected = index === state.index;
     const card = document.createElement('div');
     card.className = `member-card console-row${selected ? ' selected' : ''}`;
@@ -222,8 +237,9 @@ function renderDetail(area, character, context) {
   const loadout = resolveLoadout(character, data.equipment, data.affixes);
   const derived = deriveStats(character, classData, loadout);
   const combatActor = combatActorFor(context, character);
-  const hp = hpOf(character, combatActor);
-  const charge = chargeOf(character, combatActor);
+  const derivedMaxes = { hpMax: derived.hpMax, chargeMax: derived.chargeMax };
+  const hp = hpOf(character, combatActor, derivedMaxes);
+  const charge = chargeOf(character, combatActor, derivedMaxes);
   const signature = getSignatureCapabilities(character, classData);
   const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
 

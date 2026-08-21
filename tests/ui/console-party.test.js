@@ -130,3 +130,66 @@ describe('PARTY mode — SESSION-06 icon coverage', () => {
     expect(collectSvgs(container).length).toBe(0);
   });
 });
+
+// SESSION-03 — roster cards must derive HP/CHG max, not fall back to current.
+// The screenshot bug ("HP 16/16" on an injured member) is the compactBar label
+// showing max=current when the member's true derived hpMax is higher.
+describe('PARTY mode — SESSION-03 derived maxes', () => {
+  function findBars(memberCard) {
+    return (memberCard.children || []).filter((c) => (c.className || '').split(/\s+/).includes('party-inline-bar'));
+  }
+  function labelOf(bar) {
+    return (bar.children || []).find((c) => (c.className || '').split(/\s+/).includes('stat-label'))?.textContent;
+  }
+  function fillOf(bar) {
+    const track = (bar.children || []).find((c) => (c.className || '').split(/\s+/).includes('party-inline-track'));
+    return track?.children?.[0]?.style?.properties?.width ?? track?.children?.[0]?.style?.width ?? null;
+  }
+
+  it('roster HP/CHG bars read current/derivedMax for an injured member (was N/N)', () => {
+    // breacher(vit 6) → hpMax = 6*4 + 16 = 40; (res 6) → chargeMax = 6*3 + 0 = 18.
+    const injured = { ...character(), currentHP: 9, currentCHARGE: 5 };
+    const runState = createRunState(77, [injured], { creationTimestamp: 1, inventory: [], scrapCounter: 0, corruption: 0 });
+    const container = new FakeElement('div');
+    renderParty(container, { runState, data });
+
+    const memberCard = byTestId(container, 'party-member-breacher');
+    expect(memberCard).toBeTruthy();
+    const bars = findBars(memberCard);
+    expect(bars).toHaveLength(2);
+    expect(labelOf(bars[0])).toBe('HP 9/40');
+    expect(labelOf(bars[1])).toBe('CHG 5/18');
+    // Fill widths reflect true ratio, not 100%.
+    expect(fillOf(bars[0])).toBe(`${(9 / 40) * 100}%`);
+    expect(fillOf(bars[1])).toBe(`${(5 / 18) * 100}%`);
+  });
+
+  it('explicit combat-actor hpMax/chargeMax still wins over derived', () => {
+    const injured = { ...character(), currentHP: 9, currentCHARGE: 5 };
+    const runState = createRunState(77, [injured], { creationTimestamp: 1, inventory: [], scrapCounter: 0, corruption: 0 });
+    const combatState = {
+      turnOrder: ['breacher'], currentTurn: 0,
+      combatants: new Map([['breacher', { id: 'breacher', side: 'party', hp: 9, hpMax: 25, charge: 5, chargeMax: 12, ap: 1, moveAvailable: true, swapAvailable: true, conditions: [] }]])
+    };
+    const container = new FakeElement('div');
+    renderParty(container, { runState, combatState, data });
+
+    const memberCard = byTestId(container, 'party-member-breacher');
+    const bars = findBars(memberCard);
+    expect(labelOf(bars[0])).toBe('HP 9/25');
+    expect(labelOf(bars[1])).toBe('CHG 5/12');
+  });
+
+  it('falls back to current when neither derived (no data) nor explicit max is available', () => {
+    const injured = { ...character(), currentHP: 9, currentCHARGE: 5 };
+    const runState = createRunState(77, [injured], { creationTimestamp: 1, inventory: [], scrapCounter: 0, corruption: 0 });
+    const container = new FakeElement('div');
+    // No `data` in context → derivedMaxesFor returns null → last-resort current fallback.
+    renderParty(container, { runState });
+
+    const memberCard = byTestId(container, 'party-member-breacher');
+    const bars = findBars(memberCard);
+    expect(labelOf(bars[0])).toBe('HP 9/9');
+    expect(labelOf(bars[1])).toBe('CHG 5/5');
+  });
+});
