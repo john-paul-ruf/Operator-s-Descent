@@ -257,7 +257,7 @@ beforeEach(() => { installDocument(); installMatchMedia(false); viewport.__viewp
 afterEach(() => { delete globalThis.document; delete globalThis.window; });
 
 describe('combat screen controller', () => {
-  it('composes mock-aligned status grid and COMBAT console regions', async () => {
+  it('composes mock-aligned status grid, playfield, feedback rail, and COMBAT console regions', async () => {
     const { container } = await mountCombat();
     const canvas = byTestId(container, 'combat-canvas');
     const playfield = byClass(container, 'combat-playfield');
@@ -266,14 +266,46 @@ describe('combat screen controller', () => {
     expect(container.children.map((child) => child.className)).toEqual([
       expect.stringContaining('combat-status'),
       expect.stringContaining('combat-grid'),
+      expect.stringContaining('combat-feedback-rail'),
       expect.stringContaining('console-bar')
     ]);
     expect(playfield.style.overflow).toBe('hidden');
+    // SESSION-01 (portrait-usability-regression-repair) — the synthetic 96px
+    // bottom margin used to push the playfield above an absolute console
+    // overlay is gone; the console is a bounded in-flow tray below the rail.
+    expect(playfield.style.marginBottom).toBeFalsy();
     expect(playfield.children).toEqual([canvas]);
     expect([canvas.width, canvas.height]).toEqual([384, 768]);
     expect(canvas.classList.contains('combat-grid-canvas')).toBe(true);
     expect(byTestId(container, 'console-tab-combat').getAttribute('aria-selected')).toBe('true');
     expect(byTestId(container, 'console-tab-move').disabled).toBe(true);
+  });
+
+  it('screen owns the feedback rail as a sibling of the console, outside .console-content', async () => {
+    const { container } = await mountCombat();
+    const rail = byTestId(container, 'combat-feedback');
+    expect(rail).not.toBe(null);
+    expect(rail.getAttribute('role')).toBe('status');
+    expect(rail.getAttribute('aria-live')).toBe('polite');
+    // Rail is a direct child of the screen container — not nested under the console.
+    expect(container.children.includes(rail)).toBe(true);
+    const consoleContent = byClass(container, 'console-content');
+    expect(consoleContent).not.toBe(null);
+    function containsNode(root, needle) {
+      if (root === needle) return true;
+      for (const child of root.children || []) if (containsNode(child, needle)) return true;
+      return false;
+    }
+    expect(containsNode(consoleContent, rail)).toBe(false);
+    // Feedback testids resolve to the rail's children, not to console rows.
+    const notice = byTestId(container, 'combat-notice');
+    const error = byTestId(container, 'combat-error');
+    expect(notice).not.toBe(null);
+    expect(error).not.toBe(null);
+    expect(containsNode(rail, notice)).toBe(true);
+    expect(containsNode(rail, error)).toBe(true);
+    expect(containsNode(consoleContent, notice)).toBe(false);
+    expect(containsNode(consoleContent, error)).toBe(false);
   });
 
   it('requires target selection and explicit confirmation before resolving an attack', async () => {
@@ -638,8 +670,10 @@ describe('combat screen controller', () => {
     expect(spy.zoomToCells.length).toBe(0);
   });
 
-  // Portrait console presence: expand on the party's turn, collapse during enemy playback.
-  // Party-first mount lands at 'half' so actions are immediately reachable without a tap.
+  // Portrait console presence (portrait-usability-regression-repair SESSION-01):
+  // open the console at 'half' once on mount so actions are immediately reachable,
+  // then never resize it again. Enemy playback does not toggle the console; an
+  // explicit user collapse stays collapsed until the user reopens it.
   it('portrait party-first mount ends with the console expanded at half', async () => {
     const { container, controller } = await mountCombat();
     const consoleEl = byClass(container, 'console-bar');
@@ -648,7 +682,7 @@ describe('combat screen controller', () => {
     controller.unmount();
   });
 
-  it('during enemy playback the console collapses and re-expands on the next party turn', async () => {
+  it('enemy playback does not resize the console — it stays at whatever size the user set', async () => {
     vi.useFakeTimers();
     try {
       const combat = combatState([partyActor(), enemyActor({ id: 0, position: { x: 2, y: 1 } })], ['hero', 0]);
@@ -656,14 +690,14 @@ describe('combat screen controller', () => {
       const consoleEl = byClass(container, 'console-bar');
       expect(consoleEl.dataset.expandState).toBe('half');
 
-      // End the party turn — enemy playback begins with selection.resolving = true, so
-      // presentConsoleForTurn collapses to reveal the map.
       byTestId(container, 'combat-action-end-turn').click();
       byTestId(container, 'combat-confirm').click();
-      expect(consoleEl.dataset.expandState).toBe('collapsed');
-
-      // Drain the enemy playback timers. finalizeAfterAction runs, clears the flag, re-presents.
+      // Enemy playback in progress — console must NOT collapse.
+      expect(consoleEl.dataset.expandState).toBe('half');
       vi.runAllTimers();
+      // After playback drains and a new party turn starts, the console is
+      // still at 'half' — but only because that's where it already was, not
+      // because a per-turn re-present forced it there.
       expect(consoleEl.dataset.expandState).toBe('half');
       controller.unmount();
     } finally {
@@ -671,7 +705,7 @@ describe('combat screen controller', () => {
     }
   });
 
-  it('user collapse via Escape persists through enemy playback and re-expands on the next party turn', async () => {
+  it('an explicit user collapse via Escape stays collapsed through enemy playback and later turns', async () => {
     vi.useFakeTimers();
     try {
       const combat = combatState([partyActor(), enemyActor({ id: 0, position: { x: 2, y: 1 } })], ['hero', 0]);
@@ -679,32 +713,77 @@ describe('combat screen controller', () => {
       const consoleEl = byClass(container, 'console-bar');
       expect(consoleEl.dataset.expandState).toBe('half');
 
-      // Portrait cancel goes straight to console.collapse(), which dispatches ui:console-collapse.
-      // Our screen-scoped listener records the user's override so auto-expand doesn't re-fire.
       container.dispatch('keydown', keyEvent('Escape'));
       expect(consoleEl.dataset.expandState).toBe('collapsed');
 
-      // End turn → enemy playback pass → user-collapse persists (no re-expand mid-cycle).
+      // End turn → enemy playback pass → user collapse persists.
       byTestId(container, 'combat-action-end-turn').click();
       byTestId(container, 'combat-confirm').click();
       expect(consoleEl.dataset.expandState).toBe('collapsed');
 
-      // New party turn starts → the flag resets so the console re-presents at 'half'.
+      // New party turn — still collapsed. The player reopens it explicitly.
       vi.runAllTimers();
-      expect(consoleEl.dataset.expandState).toBe('half');
+      expect(consoleEl.dataset.expandState).toBe('collapsed');
       controller.unmount();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('unmount detaches the ui:console-collapse listener — post-unmount dispatches are no-ops', async () => {
+  it('a stray ui:console-collapse bus dispatch after mount does not perturb combat state', async () => {
     const { container, controller } = await mountCombat();
     const consoleEl = byClass(container, 'console-bar');
     expect(consoleEl.dataset.expandState).toBe('half');
-    controller.unmount();
-    // After unmount the listener is gone; a stray bus dispatch must not throw or resurrect state.
     expect(() => bus.dispatch('ui:console-collapse')).not.toThrow();
+    controller.unmount();
+    expect(() => bus.dispatch('ui:console-collapse')).not.toThrow();
+  });
+
+  it('first destination tap sets the exact confirm-notice; the completed move clears the rail', async () => {
+    vi.useFakeTimers();
+    try {
+      const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+      const { container, controller } = await mountCombat({ combat });
+      const playfield = byClass(container, 'combat-playfield');
+
+      byTestId(container, 'combat-action-move').click();
+      playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+      playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
+
+      const notice = byTestId(container, 'combat-notice');
+      expect(notice.textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
+      expect(notice.hidden).toBe(false);
+
+      byTestId(container, 'combat-confirm').click();
+      vi.runAllTimers();
+
+      // finalizeAfterAction clears selection.notice — the rail syncs and hides.
+      const cleared = byTestId(container, 'combat-notice');
+      expect(cleared.textContent).toBe('');
+      expect(cleared.hidden).toBe(true);
+      controller.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('wide mount has no portrait feedback rail — no combat-feedback duplicate', async () => {
+    installMatchMedia(true);
+    const { container, controller } = await mountCombat();
+    expect(byTestId(container, 'combat-feedback')).toBe(null);
+    // The `combat-notice` / `combat-error` testids in wide belong to the dock's
+    // combat pane (rendered by src/ui/console/combat.js) — there is only one of
+    // each, and no portrait rail participates.
+    function collectByTestId(root, testid, matches = []) {
+      if (root.dataset?.testid === testid) matches.push(root);
+      for (const child of root.children || []) collectByTestId(child, testid, matches);
+      return matches;
+    }
+    // Neither node exists yet (no notice/error to show at mount) but the count
+    // must never exceed one when they do — confirmed by walking the wide dock.
+    expect(collectByTestId(container, 'combat-notice').length).toBeLessThanOrEqual(1);
+    expect(collectByTestId(container, 'combat-error').length).toBeLessThanOrEqual(1);
+    controller.unmount();
   });
 
   it('wide mount never mutates console size regardless of turn state', async () => {

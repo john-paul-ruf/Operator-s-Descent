@@ -386,14 +386,6 @@ export function mount(container, params = {}) {
   let logCursor = combatState.log.length;
   let userAdjusted = false;
   let currentDpr = 1;
-  // Portrait console presence controller. `userCollapsedThisTurn` sticks a player-initiated
-  // collapse for the rest of the current party turn so auto-expand never fights the user;
-  // it's reset at every party-turn boundary (mount `onDone` and `finalizeAfterAction`).
-  // `programmaticConsoleChange` gates the bus listener so our own collapse() calls during
-  // enemy playback don't get mistaken for a user tap.
-  let userCollapsedThisTurn = false;
-  let programmaticConsoleChange = false;
-  let consoleCollapseUnsub = null;
   // Log-replay playback state (M71). While `active`, `selection.resolving` gates input, the
   // playfield draws with position/active/flash overrides, and the console shows the current
   // entry's notice. `entries` is the sliced tail of combatState.log we're stepping through;
@@ -469,7 +461,10 @@ export function mount(container, params = {}) {
     playfieldBody.style.display = 'block';
     playfieldBody.style.flex = '1 1 auto';
     playfieldBody.style.minHeight = '0';
-    playfieldBody.style.marginBottom = '96px';
+    // Portrait-usability-regression-repair SESSION-01: the console is an in-flow
+    // bounded tray (SESSION-06), so the playfield no longer needs a synthetic
+    // bottom margin to escape an absolute overlay. The screen-owned feedback
+    // rail sits between the playfield and the console (see below).
     playfieldBody.style.overflow = 'hidden';
     playfieldBody.style.position = 'relative';
     container.appendChild(playfieldBody);
@@ -530,6 +525,33 @@ export function mount(container, params = {}) {
     combatConfirm: confirmSelection,
     combatCanConfirm: canConfirm
   };
+  // Screen-owned feedback rail. Sibling of the console (NOT a child of
+  // `.console-content`) so notices/errors stay visible regardless of console
+  // scroll position or expand state. Polite live region, portrait-only —
+  // wide keeps its feedback inside the dock (see console/combat.js).
+  let feedbackRail = null;
+  let noticeEl = null;
+  let errorEl = null;
+  if (!isWide) {
+    feedbackRail = document.createElement('div');
+    feedbackRail.className = 'combat-feedback-rail';
+    feedbackRail.dataset.testid = 'combat-feedback';
+    feedbackRail.setAttribute('role', 'status');
+    feedbackRail.setAttribute('aria-live', 'polite');
+    feedbackRail.setAttribute('aria-atomic', 'true');
+    feedbackRail.style.flex = '0 0 auto';
+    noticeEl = document.createElement('div');
+    noticeEl.className = 'combat-feedback-notice';
+    noticeEl.dataset.testid = 'combat-notice';
+    noticeEl.hidden = true;
+    errorEl = document.createElement('div');
+    errorEl.className = 'combat-feedback-error';
+    errorEl.dataset.testid = 'combat-error';
+    errorEl.hidden = true;
+    feedbackRail.append(noticeEl, errorEl);
+    container.appendChild(feedbackRail);
+  }
+
   const consoleController = createConsole(viewState, { variant: isWide ? 'dock' : 'bar' });
   let widePanesCleanup = null;
   if (isWide) {
@@ -539,15 +561,12 @@ export function mount(container, params = {}) {
     container.appendChild(consoleController.render());
   }
   consoleController.setMode('combat');
-  if (!isWide) {
-    // Listen for user-initiated collapses (tab click, Escape). Programmatic collapses driven
-    // by presentConsoleForTurn are guarded so they don't set the sticky user-override flag.
-    consoleCollapseUnsub = bus.on('ui:console-collapse', () => {
-      if (programmaticConsoleChange) return;
-      userCollapsedThisTurn = true;
-    });
-  }
-  presentConsoleForTurn();
+  // Portrait-usability-regression-repair SESSION-01: open the console at 'half'
+  // once on mount so actions are immediately reachable. Enemy playback, action
+  // completion, and party-turn boundaries never resize it — an explicit user
+  // collapse (tab click, Escape) stays collapsed until the user reopens it.
+  if (!isWide) consoleController.expand({ size: 'half' });
+  syncFeedbackRail();
 
   // Canvas-space camera (M104) owns pan/zoom and hit-tests. The gesture controller emits
   // drag-pans (>= DRAG_THRESHOLD_PX) that set `userAdjusted` so the turn-change auto-center
@@ -593,12 +612,23 @@ export function mount(container, params = {}) {
   runResolveWithPlayback(() => {
     selection.resolving = false;
     syncSelectionActor();
-    // New party turn starting → clear any lingering user-collapse override and re-present.
-    userCollapsedThisTurn = false;
-    presentConsoleForTurn();
     renderAll();
     dispatchTerminal();
   });
+
+  // Portrait feedback rail sync — mirrors selection.notice / selection.error onto
+  // the screen-owned live region so console scroll position / expand state can't
+  // hide the feedback. Wide mode owns its feedback inside the dock; this is a
+  // no-op there. Called from every path that can change selection.notice / error.
+  function syncFeedbackRail() {
+    if (!mounted || !feedbackRail) return;
+    const notice = selection.notice || '';
+    const error = selection.error || '';
+    if (noticeEl.textContent !== notice) noticeEl.textContent = notice;
+    noticeEl.hidden = !notice;
+    if (errorEl.textContent !== error) errorEl.textContent = error;
+    errorEl.hidden = !error;
+  }
 
   function syncCameraViewport() {
     const rect = playfieldBody.getBoundingClientRect?.();
@@ -620,24 +650,6 @@ export function mount(container, params = {}) {
   function isPartyTurn() {
     const actor = getActiveActor(combatState);
     return Boolean(actor && actor.side === 'party' && !combatState.ended && !selection.resolving);
-  }
-
-  // Portrait-only console presence. Expand to `half` on the party's turn (unless the player
-  // manually collapsed) so actions are immediately reachable; collapse during enemy playback so
-  // the map is visible while the AI moves. `expand`/`collapse` no-op when already at that size
-  // (console.js setExpandSize guard) so repeated calls are cheap. Wide dock is always open.
-  function presentConsoleForTurn() {
-    if (isWide) return;
-    programmaticConsoleChange = true;
-    try {
-      if (isPartyTurn() && !selection.resolving) {
-        if (!userCollapsedThisTurn) consoleController.expand({ size: 'half' });
-      } else {
-        consoleController.collapse();
-      }
-    } finally {
-      programmaticConsoleChange = false;
-    }
   }
 
   function targetsForAction(actionType = selection.actionType) {
@@ -1011,9 +1023,6 @@ export function mount(container, params = {}) {
       selection.direction = null;
       selection.protocol = null;
       selection.itemId = null;
-      // Party is regaining control → clear the per-turn user-collapse override before re-presenting.
-      userCollapsedThisTurn = false;
-      presentConsoleForTurn();
     }
     renderAll();
     dispatchTerminal();
@@ -1026,9 +1035,10 @@ export function mount(container, params = {}) {
   // Enemy-side deaths and terminal combat-end fire after playback so the user sees the actions
   // that caused them.
   function runResolveWithPlayback(onDone) {
-    // Enemy turn is starting (selection.resolving is already true) — reveal the map by collapsing
-    // the console. If it's already collapsed (or wide), this is a no-op.
-    presentConsoleForTurn();
+    // SESSION-01 (portrait-usability-regression-repair): enemy playback no longer
+    // toggles the console. The console is a bounded in-flow tray; the map stays
+    // visible above it whether the console is at 'half' or 'full', and an
+    // explicit user collapse stays collapsed until the user reopens it.
     const startCursor = logCursor;
     const preResolvePositions = snapshotPositions();
     resolveTurn(combatState, rngCursor, rulesContext);
@@ -1161,6 +1171,9 @@ export function mount(container, params = {}) {
       activeOverrideId: playback.activeOverrideId ?? undefined,
       flashCells: playback.flashCells.size ? playback.flashCells : undefined
     });
+    // Playback advances write selection.notice in noticeFor(); mirror onto the
+    // screen-owned rail so live-region announcements stay in sync with each entry.
+    syncFeedbackRail();
   }
 
   function beginPlayback(entries, preResolvePositions, onDone) {
@@ -1448,6 +1461,7 @@ export function mount(container, params = {}) {
       statusBar = nextStatusBar;
     }
     consoleController.refresh();
+    syncFeedbackRail();
   }
 
   return {
@@ -1470,7 +1484,6 @@ export function mount(container, params = {}) {
       gestureCleanup?.();
       resizeObserverInstance?.disconnect?.();
       widePanesCleanup?.();
-      consoleCollapseUnsub?.();
       statusBar?.cleanup?.();
       telemetryDock?.cleanup?.();
       playfield.destroy();
