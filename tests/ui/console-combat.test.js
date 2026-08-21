@@ -593,3 +593,112 @@ describe('console/combat.js — action button disabled reasons (SESSION-02)', ()
     expect(calls).toEqual([]);
   });
 });
+
+// SESSION-01 (mobile-combat-pass) — the portrait COMBAT pane hands the readout
+// to the pinned status strip (M59) and emits only the slim AP + conditions row.
+// Wide keeps the full pane (the wide dock has no top strip). The primary-action
+// class contract (`combat-action--primary` on move/attack/end-turn) is the
+// public surface S04 styles into a thumb-reachable 2-col grid.
+describe('console/combat.js — portrait readout de-dup (SESSION-01)', () => {
+  function hasClass(node, className) {
+    return (node.className || '').split(/\s+/).includes(className);
+  }
+
+  it('portrait render (no layout set) emits only the slim active-conditions row — no init-rail, no combat-active-panel', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 }, conditions: [{ id: 'jammed', duration: 2 }] });
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+
+    const slim = collectAll(container, (n) => hasClass(n, 'combat-active-conditions'));
+    expect(slim).toHaveLength(1);
+    expect(slim[0].dataset.testid).toBe('combat-active');
+    // AP is retained (glance-ability next to the action buttons).
+    expect(slim[0].textContent).toBe('');
+    const apLine = (slim[0].children || []).find((c) => hasClass(c, 'combat-ap'));
+    expect(apLine).toBeTruthy();
+    expect(apLine.textContent).toContain('AP 2');
+    // Conditions from the strip's blind spot render inside the slim row.
+    const conditionTags = collectAll(slim[0], (n) => hasClass(n, 'condition-tag'));
+    expect(conditionTags.length).toBeGreaterThan(0);
+    // No duplicated initiative or full active panel in portrait.
+    expect(collectAll(container, (n) => hasClass(n, 'init-rail'))).toHaveLength(0);
+    expect(collectAll(container, (n) => hasClass(n, 'combat-active-panel'))).toHaveLength(0);
+  });
+
+  it('wide render keeps the full initiative rail + active summary panel', () => {
+    const active = makeActive({ ap: 2 });
+    const context = renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+    context.layout = 'wide';
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+
+    expect(collectAll(container, (n) => hasClass(n, 'init-rail'))).toHaveLength(1);
+    expect(collectAll(container, (n) => hasClass(n, 'combat-active-panel'))).toHaveLength(1);
+    // Portrait's slim row must NOT appear in wide.
+    expect(collectAll(container, (n) => hasClass(n, 'combat-active-conditions'))).toHaveLength(0);
+  });
+});
+
+describe('console/combat.js — primary-action contract (SESSION-01)', () => {
+  function hasClass(node, className) {
+    return (node.className || '').split(/\s+/).includes(className);
+  }
+
+  it('move, attack, and end-turn buttons carry combat-action--primary; cast/overclock/item/retreat do not', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+
+    for (const id of ['move', 'attack', 'end-turn']) {
+      const button = byTestId(container, `combat-action-${id}`);
+      expect(hasClass(button, 'combat-action--primary'), `combat-action-${id} carries --primary`).toBe(true);
+      // Existing classes preserved.
+      expect(hasClass(button, 'combat-action')).toBe(true);
+      expect(hasClass(button, 'action-btn')).toBe(true);
+      expect(hasClass(button, 'console-row')).toBe(true);
+    }
+    for (const id of ['cast', 'overclock', 'item', 'retreat']) {
+      const button = byTestId(container, `combat-action-${id}`);
+      expect(hasClass(button, 'combat-action--primary'), `combat-action-${id} is NOT --primary`).toBe(false);
+    }
+    // Retreat still carries its danger modifier.
+    expect(hasClass(byTestId(container, 'combat-action-retreat'), 'danger')).toBe(true);
+  });
+
+  it('DOM order emits primaries first (move, attack, end-turn) then non-primaries in ACTIONS order (cast, overclock, item, retreat)', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+    const list = byTestId(container, 'combat-actions');
+    const testids = (list.children || []).map((c) => c.dataset.testid);
+    expect(testids).toEqual([
+      'combat-action-move',
+      'combat-action-attack',
+      'combat-action-end-turn',
+      'combat-action-cast',
+      'combat-action-overclock',
+      'combat-action-item',
+      'combat-action-retreat'
+    ]);
+  });
+});
