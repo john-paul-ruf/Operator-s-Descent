@@ -16,7 +16,7 @@
 |---|---|---|---:|---|---|
 | SESSION-01 | done | — | 3/3 | Combat/status DOM + unit tests | Removed status-strip collapse toggle; portrait combat feedback now lives on a screen-owned live-region rail between playfield and console; console opens once at 'half' and is never resized by playback or turn boundaries. |
 | SESSION-02 | done | — | 3/3 | Viewport gestures + touch-flow test | Release-time gesture classification with a fixed origin, disqualified latch surviving pinch/cancel/lostpointercapture, and a live-canvas-derived post-wheel cell step for the phone drag proof. |
-| SESSION-03 | pending | — | 0/2 | RunState log policy + log tests | Keep rich live detail; canonicalize persisted events to slim rows. |
+| SESSION-03 | in-progress | — | 0/2 | RunState log policy + log tests | Keep rich live detail; canonicalize persisted events to slim rows. |
 | SESSION-04 | pending | — | 0/2 | Title state + navigation E2E | Manual close restores START without history mutation. |
 | SESSION-05 | in-progress | — | 0/3 | Bus contracts + integration tests | Make masterVolume and inventory-change reachable and validated. |
 | SESSION-06 | pending | SESSION-01 | 0/4 | CSS/design/tooling + adaptive/combat E2E | In-flow responsive console, 96px touch floors, clean scan. |
