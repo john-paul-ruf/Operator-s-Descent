@@ -243,7 +243,7 @@
     /* ═══ SETTINGS-SPECIFIC (WIDE TWO-COLUMN FORM) ═══ */
 
     /* Per spec §Screen Layouts by Class row 11:
-       "two-column form — left column = audio (master mute + five volume sliders),
+       "two-column form — left column = audio (master mute + master volume + five per-layer sliders),
        right column = visual (glitch toggle, reduced-motion override, scanline/grain toggle)
        + back action spanning both columns."
        96px touch-row minimum applies on every settings row per spec, even in wide. */
@@ -371,6 +371,14 @@
               <div class="row-hint">Silence all audio</div>
             </div>
             <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+          </div>
+          <!-- Master volume -->
+          <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <div class="slider-row">
+              <span class="slider-label">Master</span>
+              <input type="range" min="0" max="100" value="100">
+              <span class="slider-value">100%</span>
+            </div>
           </div>
           <!-- Per-layer volume sliders (5) -->
           <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
