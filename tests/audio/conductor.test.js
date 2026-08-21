@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { FakeContext } from '../helpers/fake-audio.js';
 import {
+  bassBar,
   chordFor,
   createConductor,
   directorTargets,
   drumPattern,
-  melodyBar,
   motifFor,
+  phraseBar,
   progressionFor,
   ROOTS,
   SCALES
@@ -123,82 +124,185 @@ describe('conductor.motifFor', () => {
   });
 });
 
-describe('conductor.melodyBar', () => {
+describe('conductor.phraseBar', () => {
+  function makeMotif(overrides = {}) {
+    return motifFor({
+      worldSeed: 3, depth: 4, floorId: 'p', phraseIndex: 1, intensity: 0.6, scale: SCALES['flowing-cyan'],
+      ...overrides
+    });
+  }
+
   test('deterministic for identical args', () => {
-    const args = {
-      worldSeed: 3,
-      depth: 4,
-      floorId: 'f',
-      phraseIndex: 1,
-      barInPhrase: 2,
-      chord: chordFor(SCALES['flowing-cyan'], 0),
-      scale: SCALES['flowing-cyan'],
-      intensity: 0.5
-    };
-    expect(melodyBar(args)).toEqual(melodyBar(args));
+    const motif = makeMotif();
+    const chord = chordFor(SCALES['flowing-cyan'], 0);
+    const args = { motif, chord, scale: SCALES['flowing-cyan'], barInPhrase: 0, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex: 1 };
+    expect(phraseBar(args)).toEqual(phraseBar(args));
   });
 
-  test('downbeat onsets pick from chord tones, off-downbeats from scale tones', () => {
+  test('slot 0 (and slot 8 when present) is a chord tone', () => {
     const scale = SCALES['flowing-cyan'];
-    const chord = chordFor(scale, 0);
-    const bar = melodyBar({ worldSeed: 11, depth: 10, floorId: 'g', phraseIndex: 0, barInPhrase: 0, chord, scale, intensity: 1.0 });
-    const chordSet = new Set(chord.semis);
-    const scaleSet = new Set(scale);
-    for (let i = 0; i < 16; i++) {
-      const slot = bar[i];
-      if (!slot) continue;
-      if (i === 0 || i === 4 || i === 8 || i === 12) {
-        expect(chordSet.has(slot.degree)).toBe(true);
-      } else {
-        expect(scaleSet.has(slot.degree)).toBe(true);
+    for (let phraseIndex = 0; phraseIndex < 4; phraseIndex++) {
+      const motif = makeMotif({ phraseIndex, intensity: 0.9 });
+      for (const chordDeg of [0, 2, 3, 5]) {
+        const chord = chordFor(scale, chordDeg);
+        for (const bar of [0, 1, 2, 4, 5, 6]) {
+          const slots = phraseBar({ motif, chord, scale, barInPhrase: bar, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex });
+          const s0 = slots[0];
+          expect(s0).not.toBeNull();
+          expect(scale.includes(((s0.degree % 12) + 12) % 12)).toBe(true);
+          const chordPC = new Set(chord.semis.map((v) => ((v % 12) + 12) % 12));
+          expect(chordPC.has(((s0.degree % 12) + 12) % 12)).toBe(true);
+          if (slots[8]) {
+            const s8pc = ((slots[8].degree % 12) + 12) % 12;
+            expect(chordPC.has(s8pc)).toBe(true);
+          }
+        }
       }
     }
   });
 
-  test('cadence: barInPhrase >= 6 forces final onset to chord root', () => {
+  test('bar 3 half-cadence sustains the final note (lengthSlots >= 4)', () => {
     const scale = SCALES['organic-green'];
-    const chord = chordFor(scale, 2);
-    for (const barInPhrase of [6, 7]) {
-      const bar = melodyBar({ worldSeed: 4, depth: 8, floorId: 'y', phraseIndex: 0, barInPhrase, chord, scale, intensity: 0.8 });
-      const lastOnset = [...bar].reverse().find((s) => s !== null);
-      if (lastOnset) expect(lastOnset.degree).toBe(chord.semis[0]);
+    const motif = makeMotif({ phraseIndex: 2 });
+    const chord = chordFor(scale, 4);
+    const slots = phraseBar({ motif, chord, scale, barInPhrase: 3, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex: 2 });
+    const last = [...slots].reverse().find((s) => s !== null);
+    expect(last).toBeTruthy();
+    expect(last.lengthSlots).toBeGreaterThanOrEqual(4);
+  });
+
+  test('bar 7 full-cadence lands on chord root with lengthSlots >= 6', () => {
+    const scale = SCALES['organic-green'];
+    const motif = makeMotif({ phraseIndex: 5 });
+    const chord = chordFor(scale, 3);
+    const slots = phraseBar({ motif, chord, scale, barInPhrase: 7, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex: 5 });
+    let lastIdx = -1;
+    for (let i = 15; i >= 0; i--) if (slots[i]) { lastIdx = i; break; }
+    expect(lastIdx).toBeGreaterThanOrEqual(0);
+    const last = slots[lastIdx];
+    const rootPC = ((chord.semis[0] % 12) + 12) % 12;
+    expect(((last.degree % 12) + 12) % 12).toBe(rootPC);
+    expect(last.lengthSlots).toBeGreaterThanOrEqual(6);
+  });
+
+  test('lengthSlots cap at 8', () => {
+    const scale = SCALES['cold-ambient'];
+    const motif = makeMotif();
+    const chord = chordFor(scale, 0);
+    for (const bar of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      const slots = phraseBar({ motif, chord, scale, barInPhrase: bar, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex: 1 });
+      for (const s of slots) if (s) expect(s.lengthSlots).toBeLessThanOrEqual(8);
     }
   });
 
-  test('lengthSlots caps at 4', () => {
-    const scale = SCALES['cold-ambient'];
-    const chord = chordFor(scale, 0);
-    const bar = melodyBar({ worldSeed: 1, depth: 1, floorId: 'a', phraseIndex: 0, barInPhrase: 0, chord, scale, intensity: 0.1 });
-    for (const slot of bar) {
-      if (slot) expect(slot.lengthSlots).toBeLessThanOrEqual(4);
+  test('bar 0 vs bar 1 (A vs A′) share ≥60% onsets and ≥50% pitches', () => {
+    const scale = SCALES['flowing-cyan'];
+    for (let phraseIndex = 0; phraseIndex < 4; phraseIndex++) {
+      const motif = makeMotif({ phraseIndex, intensity: 0.7 });
+      const chord0 = chordFor(scale, 0);
+      const bar0 = phraseBar({ motif, chord: chord0, scale, barInPhrase: 0, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex });
+      const bar1 = phraseBar({ motif, chord: chord0, scale, barInPhrase: 1, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex });
+      const set0 = new Set(); const set1 = new Set();
+      for (let i = 0; i < 16; i++) { if (bar0[i]) set0.add(i); if (bar1[i]) set1.add(i); }
+      const onsetOverlap = [...set0].filter((i) => set1.has(i)).length / set0.size;
+      expect(onsetOverlap).toBeGreaterThanOrEqual(0.6);
+      const pitches0 = new Set(bar0.filter(Boolean).map((s) => s.degree));
+      const pitches1 = new Set(bar1.filter(Boolean).map((s) => s.degree));
+      const pitchOverlap = [...pitches0].filter((p) => pitches1.has(p)).length / pitches0.size;
+      expect(pitchOverlap).toBeGreaterThanOrEqual(0.5);
+    }
+  });
+
+  test('bar 4 vs bar 5 (A vs A″) share ≥60% onsets and ≥50% pitches', () => {
+    const scale = SCALES['organic-green'];
+    for (let phraseIndex = 0; phraseIndex < 4; phraseIndex++) {
+      const motif = makeMotif({ phraseIndex, intensity: 0.8, scale });
+      const chord = chordFor(scale, 4);
+      const bar4 = phraseBar({ motif, chord, scale, barInPhrase: 4, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex });
+      const bar5 = phraseBar({ motif, chord, scale, barInPhrase: 5, worldSeed: 3, depth: 4, floorId: 'p', phraseIndex });
+      const set4 = new Set(); const set5 = new Set();
+      for (let i = 0; i < 16; i++) { if (bar4[i]) set4.add(i); if (bar5[i]) set5.add(i); }
+      const onsetOverlap = [...set4].filter((i) => set5.has(i)).length / set4.size;
+      expect(onsetOverlap).toBeGreaterThanOrEqual(0.6);
+      const pitches4 = new Set(bar4.filter(Boolean).map((s) => s.degree));
+      const pitches5 = new Set(bar5.filter(Boolean).map((s) => s.degree));
+      const pitchOverlap = [...pitches4].filter((p) => pitches5.has(p)).length / pitches4.size;
+      expect(pitchOverlap).toBeGreaterThanOrEqual(0.5);
     }
   });
 });
 
-describe('conductor.drumPattern', () => {
-  test('tier 0 heartbeat: kick on [0,3] only, no snare, no hat', () => {
-    const p = drumPattern({ tier: 0, barInPhrase: 0, h: 0 });
-    expect(p.kick.filter(Boolean).length).toBe(2);
-    expect(p.kick[0] && p.kick[3]).toBe(true);
-    expect(p.snare.some(Boolean)).toBe(false);
-    expect(p.hat.some(Boolean)).toBe(false);
+describe('conductor.bassBar', () => {
+  test('16-slot array with valid shape at every onset', () => {
+    const scale = SCALES['flowing-cyan'];
+    const chord = chordFor(scale, 0);
+    const nextChord = chordFor(scale, 4);
+    for (const tier of [0, 1, 2, 3]) {
+      const bar = bassBar({ chord, nextChord, tier, barInPhrase: 0, h: 12345 });
+      expect(bar.length).toBe(16);
+      for (const slot of bar) {
+        if (!slot) continue;
+        expect(typeof slot.semi).toBe('number');
+        expect([-1, 0]).toContain(slot.octave);
+        expect(slot.velocity).toBeGreaterThan(0);
+        expect(slot.velocity).toBeLessThanOrEqual(1);
+        expect(slot.lengthSlots).toBeGreaterThan(0);
+      }
+    }
   });
 
-  test('density monotonic across tiers with fixed h=0', () => {
+  test('tier 0 approach note at slot 14 targets nextChord root ±1 semitone', () => {
+    const scale = SCALES['cold-ambient'];
+    const chord = chordFor(scale, 0);
+    const nextChord = chordFor(scale, 4);
+    for (const h of [0, 1, 42, 999]) {
+      const bar = bassBar({ chord, nextChord, tier: 0, barInPhrase: 0, h });
+      expect(bar[14]).toBeTruthy();
+      expect(Math.abs(bar[14].semi - nextChord.semis[0])).toBe(1);
+    }
+  });
+
+  test('root and fifth alternate on downbeats at tier 0', () => {
+    const scale = SCALES['organic-green'];
+    const chord = chordFor(scale, 1);
+    const nextChord = chordFor(scale, 3);
+    const bar = bassBar({ chord, nextChord, tier: 0, barInPhrase: 0, h: 0 });
+    expect(bar[0].semi).toBe(chord.semis[0]);
+    expect(bar[4].semi).toBe(chord.semis[2]);
+    expect(bar[8].semi).toBe(chord.semis[0]);
+    expect(bar[12].semi).toBe(chord.semis[2]);
+  });
+});
+
+describe('conductor.drumPattern', () => {
+  test('tier 0 has hats and a kick — no static heartbeat', () => {
+    const p = drumPattern({ tier: 0, barInPhrase: 0, h: 0 });
+    expect(p.hat.some(Boolean)).toBe(true);
+    expect(p.kick.some(Boolean)).toBe(true);
+    expect(p.snare.some(Boolean)).toBe(false);
+  });
+
+  test('density monotonic across tiers with fixed h=0, barInPhrase=0', () => {
     const counts = [0, 1, 2, 3].map((tier) => {
       const p = drumPattern({ tier, barInPhrase: 0, h: 0 });
       return p.kick.filter(Boolean).length + p.snare.filter(Boolean).length + p.hat.filter(Boolean).length;
     });
-    for (let i = 1; i < counts.length; i++) {
-      expect(counts[i]).toBeGreaterThan(counts[i - 1]);
+    for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeGreaterThan(counts[i - 1]);
+  });
+
+  test('bar 3 half-cadence fill: snare 14,15', () => {
+    for (const tier of [1, 2, 3]) {
+      const p = drumPattern({ tier, barInPhrase: 3, h: 0 });
+      expect(p.snare[14] && p.snare[15]).toBe(true);
     }
   });
 
-  test('tier >= 2 bar 7 adds snare fill on [12..15]', () => {
-    const p = drumPattern({ tier: 2, barInPhrase: 7, h: 0 });
-    expect(p.snare[12] && p.snare[13] && p.snare[14] && p.snare[15]).toBe(true);
-    const p3 = drumPattern({ tier: 3, barInPhrase: 7, h: 0 });
-    expect(p3.snare[12] && p3.snare[13] && p3.snare[14] && p3.snare[15]).toBe(true);
+  test('bar 7 full-cadence fill: snare 12..15 and kick 12', () => {
+    for (const tier of [1, 2, 3]) {
+      const p = drumPattern({ tier, barInPhrase: 7, h: 0 });
+      expect(p.snare[12] && p.snare[13] && p.snare[14] && p.snare[15]).toBe(true);
+      expect(p.kick[12]).toBe(true);
+    }
   });
 });
 

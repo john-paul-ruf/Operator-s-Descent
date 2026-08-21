@@ -77,26 +77,8 @@ function snapToChordToneStep(step) {
   return rounded;
 }
 
-const RHYTHM_MASKS = {
-  low: [
-    [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-    [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]
-  ],
-  mid: [
-    [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1],
-    [1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-    [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0]
-  ],
-  high: [
-    [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
-    [1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0],
-    [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1]
-  ]
-};
-
 const PROGRESSION_MAX_PERTURB = 24;
-const MELODY_MAX_PERTURB = 12;
+const MOTIF_MAX_PERTURB = 12;
 
 export function chordFor(scale, degree) {
   const semis = [];
@@ -210,48 +192,168 @@ export function motifFor({
   return { rhythm, steps, signature, scaleLength: scale.length };
 }
 
-export function melodyBar({
+function scaleStepToSemi(step, scale, chordDegree) {
+  const absStep = chordDegree + step;
+  const wrap = Math.floor(absStep / scale.length);
+  const idx = ((absStep % scale.length) + scale.length) % scale.length;
+  return scale[idx] + 12 * wrap;
+}
+
+function fitRegister(semi) {
+  let value = semi;
+  let octave = 0;
+  if (value < -6) { value += 12; }
+  while (value > 18) value -= 12;
+  while (value < -6) value += 12;
+  return { degree: value, octave };
+}
+
+function applyVariation(rhythm, steps, varH, variant) {
+  const rhy = rhythm.slice();
+  const stp = steps.slice();
+  if (variant === 0 && stp.length >= 1) {
+    const dir = ((varH >>> 4) & 1) ? 1 : -1;
+    stp[stp.length - 1] = stp[stp.length - 1] + dir;
+  } else if (variant === 1 && rhy.length >= 2) {
+    const idx = 1 + ((varH >>> 4) % (rhy.length - 1));
+    const disp = rhy[idx] + 1;
+    if (disp <= 15 && !rhy.includes(disp)) {
+      rhy[idx] = disp;
+      const paired = rhy.map((s, i) => ({ s, step: stp[i] })).sort((a, b) => a.s - b.s);
+      for (let i = 0; i < paired.length; i++) { rhy[i] = paired[i].s; stp[i] = paired[i].step; }
+    }
+  } else if (variant === 2 && stp.length >= 2) {
+    stp[stp.length - 1] = stp[stp.length - 1] + 7;
+    stp[stp.length - 2] = stp[stp.length - 2] + 7;
+  }
+  return { rhythm: rhy, steps: stp };
+}
+
+function invertTail(steps) {
+  const out = steps.slice();
+  const mid = Math.floor(out.length / 2);
+  for (let i = mid + 1; i < out.length; i++) {
+    const delta = out[i] - out[i - 1];
+    out[i] = out[i - 1] - delta;
+  }
+  return out;
+}
+
+export function phraseBar({
+  motif,
+  chord,
+  scale = SCALES['cold-ambient'],
+  barInPhrase = 0,
   worldSeed = 0,
   depth = 1,
   floorId = '',
-  phraseIndex = 0,
-  barInPhrase = 0,
-  chord = { degree: 0, semis: [0, 4, 7] },
-  scale = SCALES['cold-ambient'],
-  intensity = 0.15,
-  perturb = 0
+  phraseIndex = 0
 } = {}) {
-  const band = intensity < 0.35 ? 'low' : intensity < 0.7 ? 'mid' : 'high';
-  const masks = RHYTHM_MASKS[band];
-  const maskHash = hash(worldSeed, depth, floorId, phraseIndex, barInPhrase, 'mask', perturb);
-  const mask = masks[maskHash % masks.length].slice();
-  const zeros = [];
-  for (let i = 0; i < 16; i++) if (!mask[i]) zeros.push(i);
-  const flipCount = (maskHash >>> 4) % 3;
-  for (let f = 0; f < flipCount && zeros.length; f++) {
-    const pickIndex = (maskHash >>> (8 + f * 4)) % zeros.length;
-    const slot = zeros.splice(pickIndex, 1)[0];
-    mask[slot] = 1;
-  }
-  const onsets = [];
-  for (let i = 0; i < 16; i++) if (mask[i]) onsets.push(i);
   const slots = new Array(16).fill(null);
-  const chordSemis = chord.semis;
-  for (let idx = 0; idx < onsets.length; idx++) {
-    const i = onsets[idx];
-    const noteHash = hash(worldSeed, depth, floorId, phraseIndex, barInPhrase, 'note', i, perturb);
-    const isDownbeat = i === 0 || i === 4 || i === 8 || i === 12;
-    let degree = isDownbeat
-      ? chordSemis[noteHash % chordSemis.length]
-      : scale[noteHash % scale.length];
-    if (barInPhrase >= 6 && idx === onsets.length - 1) degree = chordSemis[0];
-    const octave = (noteHash >>> 8) & 1;
-    const velocity = 0.4 + ((noteHash >>> 12) & 0xf) / 15 * 0.5;
-    const next = onsets[idx + 1] ?? 16;
-    const lengthSlots = Math.min(4, next - i);
-    slots[i] = { degree, octave, velocity, lengthSlots };
+  if (!motif || !chord) return slots;
+  const varH = hash(worldSeed, depth, floorId, phraseIndex, 'phrase-var', barInPhrase);
+
+  let rhythm = motif.rhythm.slice();
+  let steps = motif.steps.slice();
+
+  const role = ({
+    0: 'A', 1: 'A1', 2: 'B', 3: 'A_half',
+    4: 'A', 5: 'A2', 6: 'B', 7: 'C_full'
+  })[barInPhrase] || 'A';
+
+  if (role === 'A1' || role === 'A2') {
+    const variant = varH % 3;
+    ({ rhythm, steps } = applyVariation(rhythm, steps, varH, variant));
+  } else if (role === 'B') {
+    steps = invertTail(steps);
+  } else if (role === 'A_half') {
+    if (steps.length >= 1) steps[steps.length - 1] = ((varH >>> 4) & 1) ? 4 : 2;
+  } else if (role === 'C_full') {
+    if (steps.length >= 1) steps[steps.length - 1] = 0;
+  }
+
+  for (let idx = 0; idx < rhythm.length; idx++) {
+    if (rhythm[idx] === 0 || rhythm[idx] === 8) steps[idx] = snapToChordToneStep(steps[idx] ?? 0);
+  }
+
+  const chordDegree = chord.degree ?? 0;
+  for (let idx = 0; idx < rhythm.length; idx++) {
+    const slotIdx = rhythm[idx];
+    if (slotIdx < 0 || slotIdx > 15) continue;
+    const step = steps[idx] ?? 0;
+    const semi = scaleStepToSemi(step, scale, chordDegree);
+    const { degree, octave } = fitRegister(semi);
+
+    let velocity = 0.55;
+    if (slotIdx === 0 || slotIdx === 8) velocity += 0.15;
+    if (barInPhrase >= 4 && barInPhrase <= 6) velocity += 0.05 * (barInPhrase - 3);
+    if (barInPhrase === 7) velocity = 0.6;
+    velocity = Math.max(0.3, Math.min(1, velocity));
+
+    const nextSlot = rhythm[idx + 1] ?? 16;
+    let lengthSlots = Math.min(8, nextSlot - slotIdx);
+    if (role === 'A_half' && idx === rhythm.length - 1) lengthSlots = Math.max(lengthSlots, 4);
+    if (role === 'C_full' && idx === rhythm.length - 1) lengthSlots = Math.max(lengthSlots, 6);
+    lengthSlots = Math.min(8, lengthSlots);
+
+    slots[slotIdx] = { degree, octave, velocity, lengthSlots };
   }
   return slots;
+}
+
+export function bassBar({ chord, nextChord, tier = 0, barInPhrase = 0, h = 0 } = {}) {
+  const slots = new Array(16).fill(null);
+  if (!chord) return slots;
+  const rootSemi = chord.semis[0];
+  const fifthSemi = chord.semis[2];
+  const nextRootSemi = nextChord?.semis?.[0] ?? rootSemi;
+  const approachSemi = nextRootSemi + (((h >>> 0) & 1) ? -1 : 1);
+  const accent = (idx) => (idx === 0 || idx === 8) ? 0.9 : 0.7;
+
+  if (tier <= 0) {
+    const slotList = [0, 4, 8, 12];
+    const pattern = [rootSemi, fifthSemi, rootSemi, fifthSemi];
+    for (let i = 0; i < slotList.length; i++) {
+      slots[slotList[i]] = { semi: pattern[i], octave: -1, velocity: accent(slotList[i]), lengthSlots: 4 };
+    }
+    slots[14] = { semi: approachSemi, octave: -1, velocity: 0.65, lengthSlots: 2 };
+  } else if (tier === 1) {
+    const eighths = [0, 2, 4, 6, 8, 10, 12];
+    const pattern = [rootSemi, rootSemi, fifthSemi, rootSemi, rootSemi, rootSemi, fifthSemi];
+    for (let i = 0; i < eighths.length; i++) {
+      const slotIdx = eighths[i];
+      const pop = ((h >>> (i + 4)) & 1) === 1;
+      const octave = (pop && (slotIdx === 6 || slotIdx === 10)) ? 0 : -1;
+      slots[slotIdx] = { semi: pattern[i], octave, velocity: accent(slotIdx), lengthSlots: 2 };
+    }
+    slots[14] = { semi: approachSemi, octave: -1, velocity: 0.75, lengthSlots: 2 };
+  } else {
+    const eighths = [0, 2, 4, 6, 8, 10, 12];
+    for (let i = 0; i < eighths.length; i++) {
+      const slotIdx = eighths[i];
+      const octave = (i % 2 === 0) ? -1 : 0;
+      slots[slotIdx] = { semi: rootSemi, octave, velocity: accent(slotIdx), lengthSlots: 2 };
+    }
+    slots[14] = { semi: approachSemi, octave: -1, velocity: 0.8, lengthSlots: 2 };
+  }
+  return slots;
+}
+
+// Back-compat: `melodyBar` remains exported so `scripts/report-budget.js` (its
+// audioSchedulingProxy hot path) keeps loading. New callers should use motifFor
+// + phraseBar directly. The shim renders a single bar from a fresh motif.
+export function melodyBar(args = {}) {
+  const motif = motifFor(args);
+  return phraseBar({
+    motif,
+    chord: args.chord,
+    scale: args.scale,
+    barInPhrase: args.barInPhrase ?? 0,
+    worldSeed: args.worldSeed,
+    depth: args.depth,
+    floorId: args.floorId,
+    phraseIndex: args.phraseIndex ?? 0
+  });
 }
 
 export function drumPattern({ tier = 0, barInPhrase = 0, h = 0 } = {}) {
@@ -259,27 +361,37 @@ export function drumPattern({ tier = 0, barInPhrase = 0, h = 0 } = {}) {
   const snare = new Array(16).fill(false);
   const hat = new Array(16).fill(false);
   const set = (arr, indices) => { for (const i of indices) arr[i] = true; };
+  const eighths = [0, 2, 4, 6, 8, 10, 12, 14];
+  const sixteenths = Array.from({ length: 16 }, (_, i) => i);
+
   if (tier <= 0) {
-    set(kick, [0, 3]);
+    set(kick, [0, 8]);
+    set(hat, eighths);
   } else if (tier === 1) {
     set(kick, [0, 8]);
-    set(hat, [4, 12]);
-  } else if (tier === 2) {
-    set(kick, [0, 6, 8]);
-    set(snare, [8]);
-    for (let i = 0; i < 16; i += 2) hat[i] = true;
-  } else {
-    const kickChoices = [[0, 4, 8, 12], [0, 3, 6, 10]];
-    set(kick, kickChoices[(h >>> 4) % kickChoices.length]);
+    set(hat, eighths);
     set(snare, [4, 12]);
-    for (let i = 0; i < 16; i++) hat[i] = true;
+  } else if (tier === 2) {
+    set(kick, [0, 8]);
+    const syncChoices = [3, 6, 10];
+    set(kick, [syncChoices[(h >>> 4) % syncChoices.length]]);
+    set(snare, [4, 12]);
+    set(hat, sixteenths);
+  } else {
+    const kickPatterns = [[0, 4, 8, 12], [0, 3, 6, 10]];
+    set(kick, kickPatterns[(h >>> 4) & 1]);
+    set(snare, [4, 12]);
+    set(hat, sixteenths);
   }
-  if (tier >= 2 && barInPhrase === 7) set(snare, [12, 13, 14, 15]);
-  const flipCount = (h >>> 8) % 3;
-  for (let f = 0; f < flipCount; f++) {
-    const idx = (h >>> (12 + f * 4)) % 16;
+
+  if (barInPhrase === 3) set(snare, [14, 15]);
+  if (barInPhrase === 7) { set(snare, [12, 13, 14, 15]); set(kick, [12]); }
+
+  if (barInPhrase % 2 === 1) {
+    const idx = (h >>> 8) % 16;
     hat[idx] = !hat[idx];
   }
+
   return { kick, snare, hat };
 }
 
@@ -368,7 +480,7 @@ export function createConductor(ctx) {
     const scale = SCALES[active.audioMode] || SCALES['cold-ambient'];
     let candidate = null;
     let key = '';
-    for (let perturb = 0; perturb <= MELODY_MAX_PERTURB; perturb++) {
+    for (let perturb = 0; perturb <= MOTIF_MAX_PERTURB; perturb++) {
       candidate = melodyBar({
         worldSeed: active.worldSeed,
         depth: active.depth,
