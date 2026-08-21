@@ -1,7 +1,8 @@
 import { createButton, createProtocolCard, createChargeBar, createManualLink, createScrollArea } from '../components.js';
 import { createIcon } from '../icon.js';
-import { modifier, overclockTarget } from '../../rules/attributes.js';
+import { deriveStats, modifier, overclockTarget } from '../../rules/attributes.js';
 import { getSignatureCapabilities } from '../../rules/classes.js';
+import { resolveLoadout } from '../../rules/equipment.js';
 import { applyProtocolEffect, deckSlotCapacity, deckSlotCost, protocolChargeCost, resolveProtocolAction, validateProtocolDeck } from '../../rules/protocols.js';
 
 // SESSION-06 — fail-soft icon prefix; missing createElementNS (fake DOMs)
@@ -59,8 +60,20 @@ function chargeOf(actor) {
   return actor?.currentCHARGE ?? actor?.charge ?? 0;
 }
 
-function chargeMaxOf(actor) {
-  return actor?.maxCHARGE ?? actor?.chargeMax ?? chargeOf(actor);
+function chargeMaxOf(actor, derived) {
+  return actor?.maxCHARGE ?? actor?.chargeMax ?? derived?.chargeMax ?? chargeOf(actor);
+}
+
+// SESSION-03 — max HP/CHARGE is derived, never stored. Local copy of the
+// party.js helper (sibling-import boundary per src/ui/status-strip.js:46-47
+// precedent); duplicated in gear.js as well. Three copies is the accepted
+// ceiling.
+function derivedMaxesFor(character, data) {
+  const classData = classDataFor(data, character);
+  if (!classData) return null;
+  const loadout = resolveLoadout(character, data?.equipment, data?.affixes);
+  const derived = deriveStats(character, classData, loadout || character?.equipment || {});
+  return { hpMax: derived.hpMax, chargeMax: derived.chargeMax };
 }
 
 function activeCombatActor(context) {
@@ -76,7 +89,7 @@ function selectedRunCharacter(runState, ui, activeActor) {
   return runState?.party?.[ui.charIndex] || null;
 }
 
-function casterFor(character, activeActor) {
+function casterFor(character, activeActor, derived) {
   if (!character && !activeActor) return null;
   return {
     ...(character || {}),
@@ -84,9 +97,14 @@ function casterFor(character, activeActor) {
     attributes: { ...(character?.attributes || {}), ...(activeActor?.attributes || {}) },
     protocolDeck: activeActor?.protocols || activeActor?.protocolDeck || character?.protocolDeck || character?.protocols || [],
     currentCHARGE: activeActor?.charge ?? activeActor?.currentCHARGE ?? character?.currentCHARGE ?? character?.charge ?? 0,
-    maxCHARGE: activeActor?.chargeMax ?? activeActor?.maxCHARGE ?? character?.maxCHARGE ?? character?.chargeMax ?? character?.currentCHARGE ?? character?.charge ?? 0,
+    maxCHARGE: activeActor?.chargeMax ?? activeActor?.maxCHARGE ?? character?.maxCHARGE ?? character?.chargeMax ?? derived?.chargeMax ?? character?.currentCHARGE ?? character?.charge ?? 0,
     side: activeActor?.side || character?.side || 'party'
   };
+}
+
+function casterForContext(context, character, activeActor) {
+  const derived = character ? derivedMaxesFor(character, context?.data || {}) : null;
+  return casterFor(character, activeActor, derived);
 }
 
 function allActors(context, runState, caster) {
@@ -143,7 +161,7 @@ function beginProtocol(context, protocol, overclocked) {
   const ui = stateFor(context.runState);
   const activeActor = activeCombatActor(context);
   const character = selectedRunCharacter(context.runState, ui, activeActor);
-  const caster = casterFor(character, activeActor);
+  const caster = casterForContext(context, character, activeActor);
   const reason = availabilityReason(context, character, caster, protocol, overclocked);
   if (reason) {
     ui.error = reason;
@@ -213,7 +231,7 @@ function confirmProtocol(context) {
   const ui = stateFor(context.runState);
   const activeActor = activeCombatActor(context);
   const character = selectedRunCharacter(context.runState, ui, activeActor);
-  const caster = casterFor(character, activeActor);
+  const caster = casterForContext(context, character, activeActor);
   if (!ui.protocol || !caster) return false;
   const targets = targetsFor(context, context.runState, caster, ui.protocol);
   const target = ui.targetId ? targets.find((entry) => entry.id === ui.targetId) : null;
@@ -252,7 +270,7 @@ function cycleTarget(context, direction = 1) {
   const ui = stateFor(context.runState);
   if (!ui.protocol) return null;
   const activeActor = activeCombatActor(context);
-  const caster = casterFor(selectedRunCharacter(context.runState, ui, activeActor), activeActor);
+  const caster = casterForContext(context, selectedRunCharacter(context.runState, ui, activeActor), activeActor);
   const targets = targetsFor(context, context.runState, caster, ui.protocol);
   if (!targets.length) return false;
   const current = Math.max(0, targets.findIndex((target) => target.id === ui.targetId));
@@ -404,7 +422,8 @@ export function render(container, context = {}) {
   const ui = stateFor(runState);
   const activeActor = activeCombatActor(context);
   const character = selectedRunCharacter(runState, ui, activeActor);
-  const caster = casterFor(character, activeActor);
+  const derivedMaxes = character ? derivedMaxesFor(character, context.data || {}) : null;
+  const caster = casterFor(character, activeActor, derivedMaxes);
   if (!character && !caster) {
     container.appendChild(text('console-empty', 'No active character.', 'tech-empty'));
     return;
@@ -425,7 +444,7 @@ export function render(container, context = {}) {
   }));
   chargePanel.append(
     chargeHeading,
-    createChargeBar(chargeOf(caster), chargeMaxOf(caster)),
+    createChargeBar(chargeOf(caster), chargeMaxOf(caster, derivedMaxes)),
     text('tech-charge-regen', `Regen ${Math.max(0, Math.floor((character?.attributes?.res || 0) / 3))} per floor descent`)
   );
   container.appendChild(chargePanel);

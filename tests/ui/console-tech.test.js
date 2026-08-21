@@ -189,3 +189,66 @@ describe('TECH mode — SESSION-06 icon coverage', () => {
     expect(effect.textContent).toBe('Deal 1d6 + RES modifier damage to one target. · Range: SIG×2');
   });
 });
+
+// SESSION-03 — CHARGE meter must derive max, not fall back to current.
+// The screenshot bug (out-of-combat "CHG N/N" on a spent operator) is
+// chargeMaxOf falling through to chargeOf(actor) because the character never
+// stores a max field.
+describe('TECH mode — SESSION-03 derived charge max', () => {
+  function findCharge(root) {
+    if ((root.className || '').split(/\s+/).includes('charge-bar')) return root;
+    for (const child of root.children || []) {
+      const hit = findCharge(child);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  it('out-of-combat CHARGE bar reads current/derivedMax for a spent operator', () => {
+    // operator(res 6) → chargeMax = 6*3 + 4 = 22; currentCHARGE 5.
+    const runState = run([character({ currentCHARGE: 5 })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    const panel = byTestId(container, 'tech-charge-panel');
+    expect(panel).toBeTruthy();
+    const bar = findCharge(panel);
+    expect(bar).toBeTruthy();
+    expect(bar.getAttribute('aria-valuetext')).toBe('5/22');
+    expect(bar.getAttribute('aria-valuemax')).toBe('22');
+    expect(bar.getAttribute('aria-valuenow')).toBe('5');
+  });
+
+  it('active combat actor chargeMax still wins over derived', () => {
+    // Combat actor has explicit chargeMax=15 — beats derived 22.
+    const spent = character({ currentCHARGE: 5 });
+    const runState = run([spent]);
+    const actor = {
+      id: 'operator', side: 'party', ap: 2, charge: 5, chargeMax: 15,
+      hp: 30, hpMax: 30, attributes: spent.attributes,
+      protocols: spent.protocolDeck, conditions: [], swapAvailable: true
+    };
+    const combatState = { turnOrder: ['operator'], currentTurn: 0, combatants: new Map([['operator', actor]]) };
+    const container = new FakeElement('div');
+    const context = { runState, data, combatState, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    const panel = byTestId(container, 'tech-charge-panel');
+    const bar = findCharge(panel);
+    expect(bar.getAttribute('aria-valuetext')).toBe('5/15');
+  });
+
+  it('falls back to current when no data is available (derivedMaxesFor → null)', () => {
+    const runState = run([character({ currentCHARGE: 5 })]);
+    const container = new FakeElement('div');
+    // Omit `data` from context → derivedMaxesFor returns null → chargeMaxOf
+    // resolves via the last-resort current-value fallback.
+    const context = { runState, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    const panel = byTestId(container, 'tech-charge-panel');
+    const bar = findCharge(panel);
+    expect(bar.getAttribute('aria-valuetext')).toBe('5/5');
+  });
+});
