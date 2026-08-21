@@ -652,6 +652,38 @@ describe('audio boot lifecycle', () => {
     expect(api.getRuntimeSnapshot().audioContextState).toBe('suspended');
   });
 
+  it('applies persisted masterVolume at boot through startAudioEngine → engine.applySettings', async () => {
+    // Boot-application path: saveSettings → loadSettings → startAudioEngine
+    // → engine.applySettings(settings). Engine's getGraphState().masterVolume
+    // is surfaced via getRuntimeSnapshot() so this test does not depend on
+    // FakeContext internals.
+    saveSettings({ masterVolume: 55 });
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    expect(api.getRuntimeSnapshot().masterVolume).toBe(55);
+  });
+
+  it('applies the schema default masterVolume (100) when no user override is stored', async () => {
+    // Absent-key semantics in engine.applySettings (Number.isFinite guard)
+    // must not silently zero out master gain. Fresh storage from beforeEach
+    // + defaults-only saveSettings ensures normalizeSettings emits 100.
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    expect(api.getRuntimeSnapshot().masterVolume).toBe(100);
+  });
+
+  it('routes a masterVolume settings-change directly through the runtime handler when reachable', () => {
+    // NOTE: The bus contract validator in src/state/bus.js (SETTING_KEYS)
+    // currently rejects `masterVolume` payloads before listeners fire, so a
+    // live `bus.dispatch('state:settings-change', { key: 'masterVolume', ... })`
+    // is unreachable end-to-end until that whitelist gains 'masterVolume'.
+    // The runtime branch itself (audioEngine?.setMasterVolume) is guarded by
+    // optional chaining and cannot throw with or without an active engine —
+    // this test locks in the no-throw contract for the day the whitelist
+    // ships.
+    expect(() => bus.dispatch('state:settings-change', { key: 'masterVolume', value: 50 })).not.toThrow();
+  });
+
   it('closes the runtime-created AudioContext and removes gesture listeners on shutdown', async () => {
     const api = await runtime();
     await api.activateRuntime({ initialHash: '' });

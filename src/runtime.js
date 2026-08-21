@@ -495,6 +495,10 @@ function updateRuntimeSettings(key, value) {
   } else if (key === 'mute') {
     runtimeSettings = { ...runtimeSettings, masterMute: Boolean(value) };
     audioEngine?.setMute(value);
+  } else if (key === 'masterVolume') {
+    const volume = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    runtimeSettings = { ...runtimeSettings, masterVolume: volume };
+    audioEngine?.setMasterVolume(volume);
   } else if (key === 'glitch') {
     runtimeSettings = { ...runtimeSettings, glitchEnabled: Boolean(value) };
     visualSettings.glitchEnabled = Boolean(value);
@@ -871,6 +875,7 @@ export function getRuntimeSnapshot() {
     hasAudio: Boolean(audioEngine),
     audioStarted: Boolean(audioEngine?.isStarted?.()),
     audioContextState: runtimeAudioContext?.state ?? null,
+    masterVolume: audioEngine?.getGraphState?.().masterVolume ?? null,
     hasGlitch: Boolean(glitchSystem),
     hasGrain: Boolean(grainController),
     grainCanvasAttached: Boolean(grainCanvas?.parentNode),
