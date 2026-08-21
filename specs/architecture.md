@@ -2793,3 +2793,12 @@ Verification: `vitest tests/rules/ tests/integration/combat-sim.test.js` → 553
 **M52 Audio Engine (audio-glitch):** `pendingVolumes` fallback for the pre-`applySettings` window now matches the new library defaults `{ drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 }`. Runtime still applies library-loaded settings authoritatively via `startAudioEngine` → `applySettings`; this only affects the transient window before the first apply.
 
 Verification: `vitest tests/ui/front-door.test.js tests/state/library.test.js tests/audio/` → 124 pass / 6 files; `node --check` on title.js/library.js/engine.js OK. Playwright title-start-toggle e2e deferred to CI (jsdom front-door test is the gating check). Commits 5ea7b6a (ckpt1) → 3cf55e3 (ckpt2).
+
+<!-- playtest-ux-hotfix-batch SESSION-03 (2026-08-21 — appended by Jikijitsu) -->
+### Inventory-change autosave — new checkpoint + bus event (playtest-ux-hotfix-batch SESSION-03)
+
+**M86 Hot Runtime (runtime-and-offline):** `AUTOSAVE_CHECKPOINTS` extended with `'inventory-change'` — frozen list is now `['floor-transition', 'combat-resolution', 'combat-start', 'loot-taken', 'import-resume', 'explicit-exit', 'inventory-change']`. New runtime listener `state:inventory-change → commitAutosave(runState, 'inventory-change', autosaveMetadata(runState, floor, { reason: 'inventory' }))` mirrors the `state:loot-taken` listener exactly (same `if (!runState) return` guard, same floor resolution, same `state:autosave-complete`/`-failed` emission). `saveRun` unchanged — no schema bump; only save *frequency* changes, Custom Rule 6 (<1500 chars) holds, `stress:saves` exits 0.
+
+**M64 Console Gear (ui):** producer of the new `state:inventory-change { runState }` event. A `notifyInventoryChange(context)` helper (bus optional-chained) fires from every success path of the three mutating transactions — `transactionResult` (equip/unequip), `requestJunkToggle` (tag/untag success branch), `requestJunkAll` (after scrap mutation). Failed/intermediate transactions do not dispatch. No formal `EVENT_CONTRACTS` entry (`src/state/bus.js` out of lease) — dispatch returns `true` for unknown events, so the listener's `runState` guard is authoritative. Consumables stay on the combat-start/-resolution autosaves (accepted boundary).
+
+Verification: `vitest tests/integration/runtime.test.js tests/ui/console-gear.test.js tests/ui/party-gear.test.js` → 54/54 pass; `node --check src/runtime.js src/ui/console/gear.js` clean; `stress:saves` exit 0. Commits c948dbd (ckpt1) → 2204bdf (ckpt2).
