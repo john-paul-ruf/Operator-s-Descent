@@ -19,13 +19,10 @@ async function installStableStorage(page) {
   }, REDUCED_SETTINGS);
 }
 
-// Seed 5 puts the party at (10, 2) — inside the exploration camera's still-hardcoded
-// LATTICE_WORLD_W/H of 20×32 cells (src/ui/screens/exploration.js:46-47), so canvas
-// coordinates map correctly even though the underlying lattice was widened to 40×64
-// (playtest-clarity-and-4x-floors S06). Nearest enemy is Chebyshev 13 away, so
-// `nearestConnectedHostile` (HOSTILE_CONTACT_RANGE=2) never fires during south/north
-// steps. Followup logged: the exploration camera should adopt the true 40×64 world
-// bounds so any spawn cell tap-maps correctly.
+// Seed 5 places the party inside the true 40×64 world (see tapCoordForCell for
+// the exploration camera math). Nearest enemy is Chebyshev 13 away so
+// `nearestConnectedHostile` (HOSTILE_CONTACT_RANGE=2) never fires during
+// south/north steps, keeping the tap/drag journey deterministic.
 async function createRunByTouch(page, seed = 5) {
   await page.goto(`/?seed=${seed}#w=${seed}`);
   await expect(page.getByTestId('add-character')).toBeVisible();
@@ -70,6 +67,27 @@ async function readPartyCell(page) {
   const match = /Party at (-?\d+),(-?\d+)\./.exec(label ?? '');
   if (!match) throw new Error(`could not read party cell from aria-label: ${label}`);
   return { x: Number(match[1]), y: Number(match[2]) };
+}
+
+// Screen-space size of one world cell after the wheel-zoom leg has clamped the
+// camera to MAX_ZOOM_SCALE × fitScale. The prior implementation hard-coded 72px,
+// which was correct only for the retired 20×32 lattice at a specific Pixel-7
+// canvas rect; on the 40×64 world (playtest-clarity-and-4x-floors S06) fitScale
+// changes and the cell falls closer to ~38px. Derive it live from the current
+// canvas geometry so the tap lands one full cell north regardless of device.
+async function postWheelCellStepPx(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('[data-testid="exploration-canvas"]');
+    const rect = canvas.getBoundingClientRect();
+    const WORLD_W = 40 * 24;
+    const WORLD_H = 64 * 24;
+    const CELL = 24;
+    const MAX_ZOOM = 4;
+    const fit = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
+    // Two consecutive wheel events drive scale past MAX_ZOOM * fit; the
+    // clampScale in viewport.js pins it at exactly the ceiling.
+    return CELL * MAX_ZOOM * fit;
+  });
 }
 
 // Given a target world cell, compute a client-space tap coordinate on the exploration
@@ -173,9 +191,11 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
       clientX: x, clientY: y, deltaY: -1200, bubbles: true, cancelable: true
     }));
   }, { x: partyScreen.x, y: partyScreen.y });
-  // At max zoom (4× fit), one world cell = 24 * (4 * fitScale) screen px. For
-  // a Pixel-7-portrait fit-scale of ~0.75, that's ~72px. Tap 72px north.
-  await page.touchscreen.tap(partyScreen.x, partyScreen.y - 72);
+  // At max zoom (4× fit), one world cell = 24 × (4 × fitScale) screen px. The
+  // exact number varies by canvas rect, so read it live rather than hard-coding.
+  const cellStepPx = await postWheelCellStepPx(page);
+  expect(cellStepPx).toBeGreaterThan(0);
+  await page.touchscreen.tap(partyScreen.x, partyScreen.y - cellStepPx);
   await expect.poll(async () => JSON.stringify(await readPartyCell(page)))
     .toBe(JSON.stringify(startCell));
 
@@ -185,12 +205,36 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
 
   // 3) Drag across the canvas → gesture engine treats as pan; party must not move.
   //    Mouse events on hasTouch=true Chromium fire as pointer events with pointerType=touch.
+  //    Sweep well past DRAG_THRESHOLD_PX so this is unambiguously a pan, never a tap.
   await page.mouse.move(canvasBox.x + 40, canvasBox.y + canvasBox.height * 0.7);
   await page.mouse.down();
   await page.mouse.move(canvasBox.x + canvasBox.width - 40, canvasBox.y + canvasBox.height * 0.7, { steps: 8 });
   await page.mouse.up();
   const afterDragCell = await readPartyCell(page);
   expect(afterDragCell).toEqual(afterZoomTapCell);
+
+  // 4) Release-only displacement in the real browser path: synthesize a
+  //    pointerdown at one client coord and a pointerup at another with NO
+  //    pointermove between them. Playwright's touchscreen and mouse APIs both
+  //    inject an intermediate move, so the release-only edge case has to be
+  //    dispatched directly. The gesture engine must fold release coords into
+  //    classification — if it did not, this would fall through to onTap and
+  //    move the party. The unit test remains the authoritative fine-grained
+  //    coverage; this asserts the wired-up production path also holds.
+  const releaseOnlyReport = await page.evaluate(({ startX, y }) => {
+    const body = document.querySelector('.exploration-playfield');
+    if (!body || typeof PointerEvent !== 'function') return { supported: false };
+    const opts = (cx) => ({
+      clientX: cx, clientY: y, pointerId: 999, pointerType: 'touch',
+      bubbles: true, cancelable: true, isPrimary: true, button: 0
+    });
+    body.dispatchEvent(new PointerEvent('pointerdown', opts(startX)));
+    body.dispatchEvent(new PointerEvent('pointerup', opts(startX + 24)));
+    return { supported: true };
+  }, { startX: canvasBox.x + 40, y: canvasBox.y + canvasBox.height * 0.5 });
+  expect(releaseOnlyReport.supported).toBe(true);
+  const afterReleaseOnlyCell = await readPartyCell(page);
+  expect(afterReleaseOnlyCell).toEqual(afterZoomTapCell);
 });
 
 test('touch combat selects a target first and requires explicit confirm', async ({ page }) => {
