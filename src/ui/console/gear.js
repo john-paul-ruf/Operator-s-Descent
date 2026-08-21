@@ -78,16 +78,25 @@ function combatActorFor(context, character) {
   return combatants instanceof Map ? combatants.get(character?.id) || null : null;
 }
 
-function syncCombatActor(actor, character) {
+// SESSION-03 — the previous `actor.hpMax = character.maxHP ?? actor.hpMax`
+// pair was a no-op (characters never store maxHP/maxCHARGE). Replace with a
+// derived sync when data is available so a gear swap that alters chargeMax
+// (armor/offhand bonus) updates the combat actor's max in place; otherwise
+// leave the actor's max untouched. runStats is the sibling preview helper —
+// it derives from the current (post-transaction) equipment on the character.
+function syncCombatActor(actor, character, data) {
   if (!actor || !character) return;
   actor.weapon = character.equipment?.weapon || null;
   actor.armor = character.equipment?.armor || null;
   actor.offhand = character.equipment?.offhand || null;
   actor.equipment = cloneEquipment(character.equipment);
   actor.hp = character.currentHP ?? actor.hp;
-  actor.hpMax = character.maxHP ?? actor.hpMax;
   actor.charge = character.currentCHARGE ?? actor.charge;
-  actor.chargeMax = character.maxCHARGE ?? actor.chargeMax;
+  if (data && classDataFor(data, character)) {
+    const stats = runStats(data, character);
+    actor.hpMax = stats.hpMax;
+    actor.chargeMax = stats.chargeMax;
+  }
 }
 
 function combatSwapGate(context, character) {
@@ -102,7 +111,7 @@ function combatSwapGate(context, character) {
 function consumeSwap(context, character) {
   const actor = combatActorFor(context, character);
   if (actor && context.combatState) actor.swapAvailable = false;
-  syncCombatActor(actor, character);
+  syncCombatActor(actor, character, context.data);
 }
 
 function itemSlotCompatible(slot, item) {

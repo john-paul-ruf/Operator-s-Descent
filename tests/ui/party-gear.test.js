@@ -418,6 +418,58 @@ describe('GEAR mode', () => {
     expect(byTestId(container, 'gear-equip-backup-sidearm').getAttribute('aria-description')).toBe('Free combat swap already spent.');
   });
 
+  // SESSION-03 — replaces the no-op `actor.hpMax = character.maxHP` pair with
+  // a derived sync so a gear swap refreshes the combat actor's maxes instead
+  // of stranding them at whatever value the actor started with. Post-
+  // transaction, character.equipment already reflects the swapped loadout,
+  // so runStats(data, character) IS the "preview" derivation.
+  it('post-equip sync overwrites stale actor hpMax/chargeMax with derived values', () => {
+    const runState = run([item('fresh-sidearm', 'sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    // Actor holds stale maxes (30/12) that pre-date the derived truth
+    // (breacher vit 6 + hitDieBase 16 + calibrations 2 * hpGrowth 8 → hpMax
+    // 56; res 6 → chargeMax 18). The equip triggers the sync and refreshes
+    // both instead of leaving them stale.
+    const actor = {
+      id: 'breacher', side: 'party', ap: 2, swapAvailable: true,
+      hp: 40, hpMax: 30, charge: 10, chargeMax: 12,
+      weapon: null, equipment: { weapon: null, armor: null, offhand: null }
+    };
+    const combatState = { turnOrder: ['breacher'], currentTurn: 0, combatants: new Map([['breacher', actor]]) };
+    const { container } = renderGearWith(runState, { combatState });
+    byTestId(container, 'gear-equip-fresh-sidearm').click();
+
+    expect(runState.party[0].equipment.weapon?.id).toBe('fresh-sidearm');
+    // Derived hpMax with sidearm (no armor) = 6*4 + 16 + 2*8 = 56.
+    expect(actor.hpMax).toBe(56);
+    // Derived chargeMax with sidearm (no armor bonus) = 6*3 + 0 = 18.
+    expect(actor.chargeMax).toBe(18);
+  });
+
+  it('post-unequip sync with no context.data leaves actor maxes untouched', () => {
+    // Character starts with the default equipped-sidearm. Unequip does not
+    // hit the class-gate path, so it resolves even without data — perfect
+    // probe for the "data absent → don't touch actor maxes" fallback.
+    const runState = run([]);
+    const actor = {
+      id: 'breacher', side: 'party', ap: 2, swapAvailable: true,
+      hp: 30, hpMax: 30, charge: 5, chargeMax: 12,
+      weapon: runState.party[0].equipment.weapon,
+      equipment: { ...runState.party[0].equipment }
+    };
+    const combatState = { turnOrder: ['breacher'], currentTurn: 0, combatants: new Map([['breacher', actor]]) };
+    const container = new FakeElement('div');
+    // Deliberately omit `data` from context so syncCombatActor's guard skips
+    // the derived refresh.
+    const context = { runState, combatState, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+    byTestId(container, 'gear-unequip-weapon').click();
+
+    expect(runState.party[0].equipment.weapon).toBe(null);
+    // Without data, actor's pre-existing maxes are preserved (no zeroing).
+    expect(actor.hpMax).toBe(30);
+    expect(actor.chargeMax).toBe(12);
+  });
+
   it('renders the combat swap-locked reason visibly beside the disabled UNEQUIP button', () => {
     const runState = run([]);
     const actor = { id: 'breacher', side: 'party', ap: 2, swapAvailable: false, weapon: runState.party[0].equipment.weapon, equipment: { ...runState.party[0].equipment } };
