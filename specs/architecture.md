@@ -2761,3 +2761,24 @@ Verification: `vitest tests/ui/` 519 pass (+13); `design:scan` PASS (0 err / 9 w
 **Note:** a local `derivedMaxesFor(character, data)` helper is duplicated in `party.js`/`tech.js` (sibling-import boundary); `gear.js` reuses its `runStats` helper. Three local copies is the accepted ceiling; lift into `src/ui/components.js` only if a fourth appears (follow-up).
 
 Verification: `vitest tests/ui/` 514 pass; `node --check` on party/tech/gear OK. Commits 491aa59 (ckpt1) → 9e89b6e (ckpt2) → ae6c4cc (ckpt3).
+
+<!-- playtest-ux-hotfix-batch SESSION-01 (2026-08-21 — appended by Jikijitsu) -->
+### M91 Encounters — `deployBands` reachability invariant (playtest-ux-hotfix-batch SESSION-01)
+
+`deployBands(window, partyCount, hostileCount)` now confines both bands to the
+single largest connected open region of `window.cells` via
+`openRegionsOf(window.cells)[0]` (region cells re-sorted row-major before
+anchor selection). This makes party↔hostile mutual reachability an invariant
+of deployment on any carved window — combat movement uses Chebyshev BFS
+(`src/rules/combat-geometry.js:161`), and 4-connectivity within one open
+region is a subset of 8-connectivity, so any deployed party cell can path to
+any deployed hostile cell.
+
+No-op for fully-connected windows: `openRegionsOf(cells)[0]` sorted row-major
+equals the previous `openCellsOf(window)` order, so `anchorPair` and
+`nearestUnassigned` return byte-identical positions. Only genuinely
+disconnected windows change behavior (both bands land in the same room
+instead of one per room). No public API change; no PRNG draw added;
+determinism preserved.
+
+Verification: `vitest tests/rules/ tests/integration/combat-sim.test.js` → 553 pass / 17 files; `combat.test.js:751` (9–12 separation) still green (proves no-op-for-connected); `node --check src/rules/encounters.js` clean. Commits 2db0f48 (ckpt1) → 9172a81 (ckpt2).
