@@ -3,6 +3,7 @@ import { validateGameData } from '../../src/data-loader.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { generateFloor } from '../../src/floor/generator.js';
 import { validateFloor } from '../../src/floor/validator.js';
+import { GRID_W, GRID_H } from '../../src/floor/archetypes.js';
 import { createLattice } from '../../src/exploration/lattice.js';
 import { moveParty, tickDangerClock } from '../../src/exploration/movement.js';
 import { createRunState, validateRunState } from '../../src/state/run-state.js';
@@ -432,7 +433,7 @@ export function assertRunInvariants(runState, floor = null) {
   if (getInventoryCount(runState.inventory) > 100) throw new Error('inventory exceeds cap');
   if (runState.echoQueue.length > 2) throw new Error('echo queue exceeds cap');
   if (runState.party.some((character) => character.currentHP < 0 || character.currentCHARGE < 0)) throw new Error('negative party resource');
-  if (runState.partyPosition.x < 0 || runState.partyPosition.x >= 20 || runState.partyPosition.y < 0 || runState.partyPosition.y >= 32) throw new Error('party position out of bounds');
+  if (runState.partyPosition.x < 0 || runState.partyPosition.x >= GRID_W || runState.partyPosition.y < 0 || runState.partyPosition.y >= GRID_H) throw new Error('party position out of bounds');
   const encoded = encodeRun(runState);
   if (!encoded.success || encoded.fragment.length >= 1500) throw new Error(`save budget failed: ${encoded.error || encoded.fragment.length}`);
   if (floor) {

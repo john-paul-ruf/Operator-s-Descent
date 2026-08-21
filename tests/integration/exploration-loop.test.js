@@ -6,9 +6,12 @@ import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
 import { encodeRun, initEncoder } from '../../src/state/save-encode.js';
 import { decodeRun } from '../../src/state/save-decode.js';
+import { GRID_W, GRID_H } from '../../src/floor/archetypes.js';
 import { makeParty } from '../helpers/fixtures.js';
 import { reachable } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
+
+const CELLS = GRID_W * GRID_H;
 
 const themesData = loadData('themes');
 
@@ -71,7 +74,7 @@ function walkFloor(seed, { maxSteps = 500, floor: floorNum = 1 } = {}) {
   const lattice = createLattice(floor);
   const runState = createRunState(seed, makeParty(2));
   runState.rngState = cursor.getState();
-  const fogState = new Uint8Array(640);
+  const fogState = new Uint8Array(CELLS);
 
   const spawn = lattice.getPartyPosition();
   const dp = floor.descentPoint;
@@ -137,15 +140,15 @@ describe('exploration loop — reachability + loop mechanics', () => {
     it(`seed ${seed}: fog coherence — visited cells fog ∈ {1,2}, current LOS cells = 2`, () => {
       const { fogState, runState, lattice } = walkFloor(seed);
       const pos = lattice.getPartyPosition();
-      for (let y = 0; y < 32; y++) {
-        for (let x = 0; x < 20; x++) {
-          const idx = y * 20 + x;
+      for (let y = 0; y < GRID_H; y++) {
+        for (let x = 0; x < GRID_W; x++) {
+          const idx = y * GRID_W + x;
           if (fogState[idx] > 0) {
             expect([1, 2]).toContain(fogState[idx]);
           }
         }
       }
-      const cellIdx = pos.y * 20 + pos.x;
+      const cellIdx = pos.y * GRID_W + pos.x;
       expect(fogState[cellIdx]).toBe(2);
     });
   }
@@ -185,7 +188,7 @@ describe('exploration loop — save/resume determinism (marquee test)', () => {
       const latticeB = createLattice(floorB);
       const posB = decoded.runState.partyPosition;
       latticeB.setPartyPosition(posB.x, posB.y);
-      const fogB = new Uint8Array(640);
+      const fogB = new Uint8Array(CELLS);
       for (let i = 0; i < walkA.fogState.length; i++) fogB[i] = walkA.fogState[i];
 
       const dp = walkA.floor.descentPoint;
@@ -230,7 +233,7 @@ describe('exploration loop — cross-floor descent', () => {
       const reach2 = reachable(floor2.cells, spawn2.x, spawn2.y);
 
       if (reach2.has(`${floor2.descentPoint.x},${floor2.descentPoint.y}`)) {
-        const fog2 = new Uint8Array(640);
+        const fog2 = new Uint8Array(CELLS);
         const path2 = bfsPath(floor2.cells, spawn2.x, spawn2.y, floor2.descentPoint.x, floor2.descentPoint.y);
         if (path2) {
           const dirs2 = pathToDirections(path2);

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generateFloor } from '../../src/floor/generator.js';
 import { validateFloor } from '../../src/floor/validator.js';
 import { createLattice } from '../../src/exploration/lattice.js';
-import { ARCHETYPES } from '../../src/floor/archetypes.js';
+import { ARCHETYPES, GRID_W, GRID_H } from '../../src/floor/archetypes.js';
 import { reachable } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
 import { createRunState } from '../../src/state/run-state.js';
@@ -28,8 +28,8 @@ describe('floor pipeline — structural invariants (every floor)', () => {
   for (const rec of records) {
     it(`seed ${rec.seed} floor ${rec.floorNumber}: shape, cell values, positions distinct`, () => {
       const f = rec.floor;
-      expect(f.cells.length).toBe(32);
-      for (const row of f.cells) expect(row.length).toBe(20);
+      expect(f.cells.length).toBe(GRID_H);
+      for (const row of f.cells) expect(row.length).toBe(GRID_W);
 
       let descentCells = 0;
       let containerCells = 0;
