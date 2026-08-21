@@ -208,7 +208,7 @@ describe('recordEvent persistence policy (slim events)', () => {
     ]);
   });
 
-  it('keeps a string detail on recentEvents, bounded to 96 characters', () => {
+  it('drops the detail field on recordEvent regardless of its shape', () => {
     const state = makeState();
     state.recordEvent({
       type: 'attack',
@@ -216,24 +216,88 @@ describe('recordEvent persistence policy (slim events)', () => {
       sequence: 7,
       detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
     });
-    expect(state.recentEvents[0]).toEqual({
-      type: 'attack',
-      message: 'Operator strikes drone.',
-      sequence: 7,
-      detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg'
-    });
-    // Long detail is sliced at 96 characters.
-    state.recordEvent({ type: 'attack', message: 'Overflow', sequence: 8, detail: 'X'.repeat(200) });
-    expect(state.recentEvents[1].detail).toBe('X'.repeat(96));
-  });
-
-  it('drops non-string detail values instead of persisting them', () => {
-    const state = makeState();
     state.recordEvent({ type: 'attack', message: 'No detail', sequence: 9, detail: null });
     state.recordEvent({ type: 'attack', message: 'Numeric detail', sequence: 10, detail: 42 });
-    state.recordEvent({ type: 'attack', message: 'Object detail', sequence: 11, detail: { some: 'object' } });
+    state.recordEvent({ type: 'attack', message: 'Object detail', sequence: 11, detail: { deep: { nested: 'x' } } });
     state.recordEvent({ type: 'attack', message: 'Empty string', sequence: 12, detail: '' });
+    expect(state.recentEvents).toHaveLength(5);
     for (const entry of state.recentEvents) expect(entry).not.toHaveProperty('detail');
+  });
+
+  it('sanitizes recentEvents supplied to createRunState — legacy rich payloads are stripped at the load boundary', () => {
+    const state = createRunState(42, [makeCharacter()], {
+      creationTimestamp: 1_000,
+      recentEvents: [
+        {
+          type: 'attack',
+          message: 'Legacy fat event.',
+          sequence: 5,
+          timestamp: 1_700_000_000_000,
+          detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg',
+          entry: { round: 2, damage: 6, extras: { deep: 'nested' } }
+        }
+      ]
+    });
+    expect(state.recentEvents).toEqual([{ type: 'attack', message: 'Legacy fat event.', sequence: 5 }]);
+  });
+
+  it('drops rich keys on round-trip serialization — record → serialize → deserialize yields slim events', () => {
+    const state = makeState();
+    state.recordEvent({
+      type: 'attack',
+      message: 'Round-trip target.',
+      sequence: 42,
+      timestamp: 1_700_000_000_000,
+      detail: 'd20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg',
+      entry: { deep: 'x' }
+    });
+    const serialized = state.serialize();
+    expect(serialized.recentEvents).toEqual([{ type: 'attack', message: 'Round-trip target.', sequence: 42 }]);
+    // Re-hydrating a save whose recentEvents were manually tampered with fat keys
+    // sanitizes them at the same canonical boundary.
+    serialized.recentEvents = [{
+      type: 'attack',
+      message: 'Round-trip target.',
+      sequence: 42,
+      detail: 'this should not survive',
+      entry: { should: 'be dropped' },
+      timestamp: 9
+    }];
+    const restored = deserializeRunState(serialized);
+    expect(restored).not.toBeNull();
+    expect(restored.recentEvents).toEqual([{ type: 'attack', message: 'Round-trip target.', sequence: 42 }]);
+  });
+
+  it('does not mutate the caller-supplied recentEvents array or its entries', () => {
+    const rich = { type: 'attack', message: 'Rich caller entry.', sequence: 1, detail: 'd20 14 → HIT', entry: { round: 3 } };
+    const caller = [rich];
+    const snapshot = JSON.parse(JSON.stringify(caller));
+    createRunState(42, [makeCharacter()], { creationTimestamp: 1_000, recentEvents: caller });
+    expect(caller).toEqual(snapshot);
+    expect(rich).toEqual(snapshot[0]);
+  });
+
+  it('silently drops individual legacy entries without a string message on load, so Custom Rule 13 saves keep loading', () => {
+    // Early v4 saves shipped loot events shaped as {containerId, count, type}
+    // with no `message`. Rejecting them at load would strand real user saves,
+    // so the sanitizer drops the malformed entry and keeps the well-formed ones.
+    const serialized = makeState().serialize();
+    serialized.recentEvents = [
+      { containerId: 0, count: 1, type: 'loot' },
+      { type: 'move', message: 'party moves N', sequence: 3 }
+    ];
+    const state = deserializeRunState(serialized);
+    expect(state).not.toBeNull();
+    expect(state.recentEvents).toEqual([{ type: 'move', message: 'party moves N', sequence: 3 }]);
+  });
+
+  it('still rejects a recentEvents value that is not an array or exceeds the 64-entry cap', () => {
+    const serialized = makeState().serialize();
+    serialized.recentEvents = 'not-an-array';
+    expect(deserializeRunState(serialized)).toBeNull();
+    const oversized = makeState().serialize();
+    oversized.recentEvents = Array.from({ length: 65 }, (_, index) => ({ type: 'move', message: `s${index}`, sequence: index }));
+    expect(deserializeRunState(oversized)).toBeNull();
   });
 });
 

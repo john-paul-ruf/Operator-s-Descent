@@ -229,17 +229,15 @@ function normalizeEcho(value, sourceVersion) {
   return echo;
 }
 
-function normalizeStructuredEntries(value, maxEntries, maxBytes) {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > maxEntries) return null;
-  const entries = value.map(entry => cloneBounded(entry, maxBytes));
-  return entries.every(entry => entry !== undefined) ? entries : null;
-}
-
 const PERSISTED_EVENT_TYPE_MAX = 16;
 const PERSISTED_EVENT_MESSAGE_MAX = 72;
-const PERSISTED_EVENT_DETAIL_MAX = 96;
 
+// Single canonical boundary for every persisted RunState event. Live combat/runtime
+// entries may carry `detail`, `entry`, `timestamp`, roll fields, or other rich
+// presentation payload — none of it belongs in the save. Only bounded `type` and
+// `message` (plus optional finite `sequence`) survive. Applied both when recordEvent
+// pushes a new event and when normalizeRunState loads an older/local save, so stale
+// detail from a legacy payload never re-enters the in-memory state.
 function normalizePersistedEvent(event) {
   if (!isPlainObject(event)) return undefined;
   const type = typeof event.type === 'string' && event.type.length > 0
@@ -250,13 +248,19 @@ function normalizePersistedEvent(event) {
   const message = rawMessage.slice(0, PERSISTED_EVENT_MESSAGE_MAX);
   const entry = { type, message };
   if (Number.isFinite(event.sequence)) entry.sequence = event.sequence;
-  // Detail is a pre-formatted breakdown string (e.g. "d20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg")
-  // supplied by combat dispatch and runtime log entries. Bounded (96 chars) so the
-  // event trimmer in save-encode can predict payload size; non-string detail drops.
-  if (typeof event.detail === 'string' && event.detail.length > 0) {
-    entry.detail = event.detail.slice(0, PERSISTED_EVENT_DETAIL_MAX);
-  }
   return entry;
+}
+
+// Array-level policy: a non-array or oversized array is rejected (matches the
+// prior structured-clone gate). Per-entry policy on load: an entry that fails
+// the canonical sanitizer (e.g. a legacy `{containerId, count, type}` loot
+// row without a `message` string that shipped in early v4 saves) is silently
+// dropped so Custom Rule 13 saves keep loading. recordEvent still calls the
+// per-entry sanitizer directly and rejects invalid input at that boundary.
+function normalizePersistedEvents(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_EVENTS) return null;
+  return value.map(normalizePersistedEvent).filter(entry => entry !== undefined);
 }
 
 function serializeCharacter(character) {
@@ -532,7 +536,7 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
     if (!finiteInteger(stats[key] ?? 0, 0, 1_000_000_000)) return null;
     summary[key] = stats[key] ?? 0;
   }
-  const recentEvents = normalizeStructuredEntries(input.recentEvents, MAX_EVENTS, MAX_EXTENSION_BYTES);
+  const recentEvents = normalizePersistedEvents(input.recentEvents);
   if (!recentEvents) return null;
   const known = new Set([
     'worldSeed', 'creationTimestamp', 'depth', 'floorSubSeed', 'partyPosition', 'fogOfWar', 'openedContainers', 'defeatedEnemies',
