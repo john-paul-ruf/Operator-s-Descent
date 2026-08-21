@@ -9,7 +9,7 @@ import { GRID_W, GRID_H } from '../floor/archetypes.js';
 // the post-flip world lands via `normalizeFog`'s reset branch below.
 const GRID_WIDTH = GRID_W;
 const GRID_HEIGHT = GRID_H;
-const FOG_BYTES = Math.ceil((GRID_WIDTH * GRID_HEIGHT) / 8);
+export const FOG_BYTES = Math.ceil((GRID_WIDTH * GRID_HEIGHT) / 8);
 const MAX_DEPTH = 255;
 const MAX_INVENTORY = 100;
 const MAX_ECHOES = 2;

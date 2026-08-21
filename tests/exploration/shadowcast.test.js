@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { computeLOS, updateFogOfWar, createFogState, syncVisitedBitmap } from '../../src/exploration/shadowcast.js';
 import { createLattice } from '../../src/exploration/lattice.js';
+import { GRID_W, GRID_H } from '../../src/floor/archetypes.js';
+import { FOG_BYTES } from '../../src/state/run-state.js';
 import { makeGrid, carve } from '../helpers/grids.js';
+
+const CELLS = GRID_W * GRID_H;
 
 describe('computeLOS — open room', () => {
   const grid = makeGrid(20, 20, 0);
@@ -132,61 +136,61 @@ describe('computeLOS — corner visibility', () => {
 
 describe('updateFogOfWar', () => {
   it('fog all zeros + visible set → those become 2', () => {
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const vis = new Set(['5,5', '6,5', '5,6']);
     updateFogOfWar(fog, vis);
-    expect(fog[5 * 20 + 5]).toBe(2);
-    expect(fog[5 * 20 + 6]).toBe(2);
-    expect(fog[6 * 20 + 5]).toBe(2);
+    expect(fog[5 * GRID_W + 5]).toBe(2);
+    expect(fog[5 * GRID_W + 6]).toBe(2);
+    expect(fog[6 * GRID_W + 5]).toBe(2);
   });
 
   it('second call with shifted set → formerly-2 become 1, new become 2', () => {
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const vis1 = new Set(['5,5', '6,5']);
     updateFogOfWar(fog, vis1);
     const vis2 = new Set(['7,5', '8,5']);
     updateFogOfWar(fog, vis2);
-    expect(fog[5 * 20 + 5]).toBe(1);
-    expect(fog[5 * 20 + 6]).toBe(1);
-    expect(fog[5 * 20 + 7]).toBe(2);
-    expect(fog[5 * 20 + 8]).toBe(2);
+    expect(fog[5 * GRID_W + 5]).toBe(1);
+    expect(fog[5 * GRID_W + 6]).toBe(1);
+    expect(fog[5 * GRID_W + 7]).toBe(2);
+    expect(fog[5 * GRID_W + 8]).toBe(2);
   });
 
   it('re-seen 1 → 2', () => {
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const vis1 = new Set(['5,5']);
     updateFogOfWar(fog, vis1);
     const vis2 = new Set([]);
     updateFogOfWar(fog, vis2);
-    expect(fog[5 * 20 + 5]).toBe(1);
+    expect(fog[5 * GRID_W + 5]).toBe(1);
     const vis3 = new Set(['5,5']);
     updateFogOfWar(fog, vis3);
-    expect(fog[5 * 20 + 5]).toBe(2);
+    expect(fog[5 * GRID_W + 5]).toBe(2);
   });
 
   it('cells never regress 1→0', () => {
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     fog[100] = 1;
     const vis = new Set([]);
     updateFogOfWar(fog, vis);
     expect(fog[100]).toBe(1);
   });
 
-  it('visible keys outside 0–639 ignored', () => {
-    const fog = new Uint8Array(640);
-    const vis = new Set(['25,40']);
+  it('visible keys outside fog bounds ignored', () => {
+    const fog = new Uint8Array(CELLS);
+    const vis = new Set([`${GRID_W},${GRID_H}`]);
     expect(() => updateFogOfWar(fog, vis)).not.toThrow();
   });
 });
 
 describe('createFogState', () => {
   it('empty bitmap + no visible → all zeros', () => {
-    const fog = createFogState(new Uint8Array(80), null);
+    const fog = createFogState(new Uint8Array(FOG_BYTES), null);
     expect(fog.every(v => v === 0)).toBe(true);
   });
 
   it('visited bitmap bits → fog state 1', () => {
-    const bitmap = new Uint8Array(80);
+    const bitmap = new Uint8Array(FOG_BYTES);
     bitmap[0] = 0xFF;
     const fog = createFogState(bitmap, null);
     for (let i = 0; i < 8; i++) {
@@ -196,7 +200,7 @@ describe('createFogState', () => {
   });
 
   it('visible cells override visited to 2', () => {
-    const bitmap = new Uint8Array(80);
+    const bitmap = new Uint8Array(FOG_BYTES);
     bitmap[0] = 0xFF;
     const vis = new Set(['0,0', '1,0']);
     const fog = createFogState(bitmap, vis);
@@ -205,19 +209,19 @@ describe('createFogState', () => {
     expect(fog[2]).toBe(1);
   });
 
-  it('640-element fog array returned', () => {
+  it('fog array sized to CELLS returned', () => {
     const fog = createFogState(null, null);
-    expect(fog.length).toBe(640);
+    expect(fog.length).toBe(CELLS);
   });
 });
 
 describe('syncVisitedBitmap', () => {
   it('fog > 0 sets visited bit', () => {
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     fog[0] = 1;
     fog[1] = 2;
     fog[10] = 2;
-    const bitmap = new Uint8Array(80);
+    const bitmap = new Uint8Array(FOG_BYTES);
     syncVisitedBitmap(fog, bitmap);
     expect(bitmap[0] & 1).toBeTruthy();
     expect(bitmap[0] & 2).toBeTruthy();
@@ -225,18 +229,18 @@ describe('syncVisitedBitmap', () => {
   });
 
   it('fog all 0 → bitmap unchanged', () => {
-    const fog = new Uint8Array(640);
-    const bitmap = new Uint8Array(80);
+    const fog = new Uint8Array(CELLS);
+    const bitmap = new Uint8Array(FOG_BYTES);
     bitmap[5] = 0xAB;
     syncVisitedBitmap(fog, bitmap);
     expect(bitmap[5]).toBe(0xAB);
   });
 
   it('round-trip: mark visited → createFogState → sync back', () => {
-    const fog1 = new Uint8Array(640);
+    const fog1 = new Uint8Array(CELLS);
     fog1[100] = 2;
     fog1[200] = 1;
-    const bitmap = new Uint8Array(80);
+    const bitmap = new Uint8Array(FOG_BYTES);
     syncVisitedBitmap(fog1, bitmap);
     const fog2 = createFogState(bitmap, null);
     expect(fog2[100]).toBe(1);

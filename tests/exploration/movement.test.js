@@ -12,8 +12,11 @@ import {
 import { createLattice } from '../../src/exploration/lattice.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
+import { GRID_W, GRID_H } from '../../src/floor/archetypes.js';
 import { makeParty, makeCharacter } from '../helpers/fixtures.js';
 import { makeGrid, carve } from '../helpers/grids.js';
+
+const CELLS = GRID_W * GRID_H;
 
 function makeFloor(overrides = {}) {
   const grid = makeGrid(20, 32, 0);
@@ -46,7 +49,7 @@ describe('moveParty — direction table', () => {
       const rs = makeRunState();
       const cursor = createRNGCursorForRun(1);
       lat.setPartyPosition(10, 15);
-      const fog = new Uint8Array(640);
+      const fog = new Uint8Array(CELLS);
       const result = moveParty(lat, fog, name, cursor, rs);
       expect(result.moved).toBe(true);
       expect(lat.getPartyPosition()).toEqual({ x: 10 + dx, y: 15 + dy });
@@ -59,7 +62,7 @@ describe('moveParty — direction table', () => {
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
     lat.setPartyPosition(10, 15);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'xyz', cursor, rs);
     expect(result).toEqual({ moved: false, interruptType: 'invalid-direction' });
   });
@@ -72,7 +75,7 @@ describe('moveParty — blocking', () => {
     lat.setPartyPosition(1, 1);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const before = rs.dangerClockProgress;
     moveParty(lat, fog, 'w', cursor, rs);
     expect(lat.getPartyPosition()).toEqual({ x: 1, y: 1 });
@@ -90,7 +93,7 @@ describe('moveParty — corner rule', () => {
     lat.setPartyPosition(5, 5);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'ne', cursor, rs);
     expect(result.moved).toBe(false);
     expect(result.interruptType).toBe('blocked');
@@ -106,7 +109,7 @@ describe('moveParty — corner rule', () => {
     lat.setPartyPosition(5, 5);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'ne', cursor, rs);
     expect(result.moved).toBe(true);
     expect(lat.getPartyPosition()).toEqual({ x: 6, y: 4 });
@@ -120,7 +123,7 @@ describe('moveParty — successful move transaction', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.moved).toBe(true);
     expect(result.position).toEqual({ x: 11, y: 15 });
@@ -132,7 +135,7 @@ describe('moveParty — successful move transaction', () => {
     expect(result.danger.progress).toBeDefined();
     expect(result.proximity).toBeDefined();
     expect(result.stateDelta).toBeDefined();
-    const idx = 15 * 20 + 11;
+    const idx = 15 * GRID_W + 11;
     expect(fog[idx]).toBe(2);
   });
 
@@ -142,7 +145,7 @@ describe('moveParty — successful move transaction', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     moveParty(lat, fog, 'e', cursor, rs);
     expect(rs.partyPosition).toEqual({ x: 11, y: 15 });
   });
@@ -155,7 +158,7 @@ describe('moveParty — LOS radius', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs, { losRadius: 2 });
     for (const key of result.visibleCells) {
       const [x, y] = key.split(',').map(Number);
@@ -170,7 +173,7 @@ describe('moveParty — LOS radius', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState(5);
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.visibleCells.size).toBeGreaterThan(10);
   });
@@ -181,7 +184,7 @@ describe('moveParty — LOS radius', () => {
     lat.setPartyPosition(10, 15);
     const rs = createRunState(42, []);
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.visibleCells.size).toBeGreaterThan(5);
   });
@@ -196,7 +199,7 @@ describe('moveParty — discoveries', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     const hostileDiscoveries = result.discoveries.filter(d => d.type === 'hostile');
     expect(hostileDiscoveries.length).toBeGreaterThan(0);
@@ -212,7 +215,7 @@ describe('moveParty — discoveries', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const firstResult = moveParty(lat, fog, 'e', cursor, rs);
     const hostileDiscoveries = firstResult.discoveries.filter(d => d.type === 'hostile');
     expect(hostileDiscoveries.length).toBeGreaterThan(0);
@@ -234,7 +237,7 @@ describe('moveParty — discoveries', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     const containerDiscoveries = result.discoveries.filter(d => d.type === 'container');
     expect(containerDiscoveries.length).toBeGreaterThan(0);
@@ -250,7 +253,7 @@ describe('moveParty — discoveries', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     const descentDiscoveries = result.discoveries.filter(d => d.type === 'descent');
     expect(descentDiscoveries.length).toBeGreaterThan(0);
@@ -266,7 +269,7 @@ describe('moveParty — discoveries', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('descent');
     expect(result.discoveredEntity).toEqual({ x: 13, y: 15 });
@@ -278,7 +281,7 @@ describe('moveParty — discoveries', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBeNull();
   });
@@ -294,7 +297,7 @@ describe('moveParty — interrupt priority', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('hostile');
   });
@@ -309,7 +312,7 @@ describe('moveParty — interrupt priority', () => {
     const rs = makeRunState();
     rs.markEnemyDefeated(0);
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('container');
   });
@@ -324,7 +327,7 @@ describe('moveParty — interrupt priority', () => {
     const rs = makeRunState();
     rs.markContainerOpened(0);
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('descent');
   });
@@ -339,7 +342,7 @@ describe('moveParty — quick-toggle auto-stop', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs, { autoStopToggles: { container: false } });
     expect(result.interruptType).not.toBe('container');
   });
@@ -352,7 +355,7 @@ describe('moveParty — quick-toggle auto-stop', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs, { autoStopToggles: { descent: false } });
     expect(result.interruptType).not.toBe('descent');
   });
@@ -365,7 +368,7 @@ describe('moveParty — quick-toggle auto-stop', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs, { autoStopToggles: { hostile: false } });
     expect(result.interruptType).toBe('hostile');
   });
@@ -378,7 +381,7 @@ describe('moveParty — damage interrupt', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     signalMovementDamage();
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('damage');
@@ -390,7 +393,7 @@ describe('moveParty — damage interrupt', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     signalMovementDamage();
     moveParty(lat, fog, 'e', cursor, rs);
     lat.setPartyPosition(10, 15);
@@ -408,7 +411,7 @@ describe('moveParty — proximity', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.proximity.nearestHostile).not.toBeNull();
     expect(typeof result.proximity.nearestHostile).toBe('number');
@@ -422,7 +425,7 @@ describe('moveParty — proximity', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.proximity.nearestContainer).not.toBeNull();
     expect(typeof result.proximity.nearestContainer).toBe('number');
@@ -434,7 +437,7 @@ describe('moveParty — proximity', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.proximity.nearestHostile).toBeNull();
     expect(result.proximity.nearestContainer).toBeNull();
@@ -449,7 +452,7 @@ describe('moveParty — proximity', () => {
     const rs = makeRunState();
     rs.markEnemyDefeated(0);
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.proximity.nearestHostile).toBeNull();
   });
@@ -463,7 +466,7 @@ describe('moveParty — proximity', () => {
     const rs = makeRunState();
     rs.markContainerOpened(0);
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.proximity.nearestContainer).toBeNull();
   });
@@ -511,7 +514,7 @@ describe('tickDangerClock', () => {
     const rs = makeRunState();
     rs.depth = 1;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     lat.setPartyPosition(10, 15);
     rs.dangerClockProgress = 0;
     moveParty(lat, fog, 'e', cursor, rs);
@@ -560,7 +563,7 @@ describe('moveParty — danger clock does not tick on blocked move', () => {
     rs.depth = 1;
     rs.dangerClockProgress = 0;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     moveParty(lat, fog, 'w', cursor, rs);
     expect(rs.dangerClockProgress).toBe(0);
   });
@@ -575,7 +578,7 @@ describe('moveParty — combatActive option', () => {
     rs.depth = 1;
     rs.dangerClockProgress = 0;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs, { combatActive: true });
     expect(rs.dangerClockProgress).toBe(0);
     expect(result.danger.pendingHunt).toBe(false);
@@ -589,7 +592,7 @@ describe('moveParty — combatActive option', () => {
     rs.depth = 100;
     rs.dangerClockProgress = 1.0;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs, { combatActive: true });
     expect(result.danger.pendingHunt).toBe(true);
     expect(result.interruptType).not.toBe('hunt');
@@ -598,7 +601,7 @@ describe('moveParty — combatActive option', () => {
 
 describe('findExplorationPath', () => {
   const DIRECTION_SET = new Set(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']);
-  function revealedFog(w = 20, h = 32) {
+  function revealedFog(w = GRID_W, h = GRID_H) {
     return new Uint8Array(w * h).fill(2);
   }
 
@@ -651,9 +654,9 @@ describe('findExplorationPath', () => {
   it('target on an unrevealed cell → null', () => {
     const floor = makeFloor();
     const lat = createLattice(floor);
-    const fog = new Uint8Array(640);
-    fog[15 * 20 + 10] = 2;
-    fog[15 * 20 + 11] = 2;
+    const fog = new Uint8Array(CELLS);
+    fog[15 * GRID_W + 10] = 2;
+    fog[15 * GRID_W + 11] = 2;
     const result = findExplorationPath(lat, fog, { x: 10, y: 15 }, { x: 15, y: 15 });
     expect(result).toBeNull();
   });
@@ -695,7 +698,7 @@ describe('moveParty — hunt triggering', () => {
     rs.depth = 100;
     rs.dangerClockProgress = 0.99;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('hunt');
     expect(result.danger.huntTriggered).toBe(true);
@@ -712,7 +715,7 @@ describe('moveParty — hunt triggering', () => {
     rs.depth = 100;
     rs.dangerClockProgress = 0.99;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('container');
     expect(result.danger.pendingHunt).toBe(true);
@@ -729,7 +732,7 @@ describe('moveParty — hunt triggering', () => {
     rs.depth = 100;
     rs.dangerClockProgress = 0.99;
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('hunt');
   });
@@ -747,7 +750,7 @@ describe('moveParty — combat contact range', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.combatContact).toBe(true);
     expect(result.contactEntity).toEqual(expect.objectContaining({ id: 0, archetypeId: 'drone' }));
@@ -767,7 +770,7 @@ describe('moveParty — combat contact range', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'e', cursor, rs);
     expect(result.interruptType).toBe('hostile');
     expect(result.visibleCells.has('16,15')).toBe(true);
@@ -795,7 +798,7 @@ describe('moveParty — combat contact range', () => {
     lat.setPartyPosition(10, 16);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const result = moveParty(lat, fog, 'n', cursor, rs);
     expect(result.moved).toBe(true);
     expect(result.position).toEqual({ x: 10, y: 15 });
@@ -816,7 +819,7 @@ describe('moveParty — combat contact range', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const first = moveParty(lat, fog, 'e', cursor, rs);
     expect(first.interruptType).toBe('hostile');
     expect(first.combatContact).toBe(false);
@@ -843,7 +846,7 @@ describe('moveParty — combat contact range', () => {
     lat.setPartyPosition(10, 15);
     const rs = makeRunState();
     const cursor = createRNGCursorForRun(1);
-    const fog = new Uint8Array(640);
+    const fog = new Uint8Array(CELLS);
     const first = moveParty(lat, fog, 'e', cursor, rs);
     expect(first.combatContact).toBe(true);
     const stepBack = moveParty(lat, fog, 'w', cursor, rs);

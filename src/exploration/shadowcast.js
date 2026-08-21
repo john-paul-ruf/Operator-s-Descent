@@ -1,3 +1,7 @@
+import { GRID_W, GRID_H } from '../floor/archetypes.js';
+
+const CELLS = GRID_W * GRID_H;
+
 const MULT = [
   [1, 0, 0, -1, -1, 0, 0, 1],
   [0, 1, -1, 0, 0, -1, 1, 0],
@@ -83,12 +87,10 @@ function castLight(lattice, cx, cy, row, start, end, radius, xx, xy, yx, yy, vis
   }
 }
 
-const GRID_W = 20;
-
 export function createFogState(visitedBitmap, visibleCells) {
-  const fog = new Uint8Array(640);
+  const fog = new Uint8Array(CELLS);
   if (visitedBitmap) {
-    for (let i = 0; i < 640; i++) {
+    for (let i = 0; i < CELLS; i++) {
       const byteIdx = Math.floor(i / 8);
       const bitIdx = i % 8;
       if (byteIdx < visitedBitmap.length && (visitedBitmap[byteIdx] & (1 << bitIdx))) {
@@ -100,7 +102,7 @@ export function createFogState(visitedBitmap, visibleCells) {
     for (const key of visibleCells) {
       const [x, y] = key.split(',').map(Number);
       const idx = y * GRID_W + x;
-      if (idx >= 0 && idx < 640) {
+      if (idx >= 0 && idx < CELLS) {
         fog[idx] = 2;
       }
     }
@@ -129,7 +131,7 @@ export function updateFogOfWar(fogState, visibleCells) {
 }
 
 export function syncVisitedBitmap(fogState, visitedBitmap) {
-  for (let i = 0; i < 640; i++) {
+  for (let i = 0; i < fogState.length; i++) {
     if (fogState[i] > 0) {
       const byteIdx = Math.floor(i / 8);
       const bitIdx = i % 8;
