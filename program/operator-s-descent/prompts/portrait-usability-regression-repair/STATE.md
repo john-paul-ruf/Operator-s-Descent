@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | **Feature** | `portrait-usability-regression-repair` |
-| **Status** | Blocked |
+| **Status** | In Progress |
 | **Started** | 2026-08-21 15:43 CDT |
 | **Completed** | — |
 | **Authoritative plan** | `./program/operator-s-descent/prompts/portrait-usability-regression-repair/MASTER.md` |
@@ -18,9 +18,9 @@
 | SESSION-02 | done | — | 3/3 | Viewport gestures + touch-flow test | Release-time gesture classification with a fixed origin, disqualified latch surviving pinch/cancel/lostpointercapture, and a live-canvas-derived post-wheel cell step for the phone drag proof. |
 | SESSION-03 | done | — | 2/2 | RunState log policy + log tests | normalizePersistedEvent is now the single canonical boundary for persisted events; recordEvent strips detail, and load-time normalization filters legacy fat/rich entries so recentEvents on state is always slim {type, message, sequence?}. |
 | SESSION-04 | done | — | 2/2 | Title state + navigation E2E | Title screen now subscribes to ui:manual-close and locally resets START ↔ branches to its canonical START-visible/branches-hidden view with focus on START; no history mutation, no route remount, no fragment change. |
-| SESSION-05 | blocked | — | 3/3 | Bus contracts + integration tests | Lease violation: checkpoint 1 commit `05af9ec` included `./README.MD` outside `Owns`; the committed user state was not altered or reverted by Jikijitsu. |
+| SESSION-05 | done | — | 3/3 | Bus contracts + integration tests | Human override accepted the completed functional work despite checkpoint 1 commit `05af9ec` including `./README.MD` outside `Owns`; the violation remains recorded below. |
 | SESSION-06 | done | SESSION-01 | 4/4 | CSS/design/tooling + adaptive/combat E2E | Portrait console-bar now an in-flow flex child (no overlay, no dim layer); every touch-capable row hits the 96px floor; --hp added to design.md palette; deploy-p/deploy-e classes production-defined; design scan 0 warnings. |
-| SESSION-07 | pending | SESSION-01–06 | 0/3 | New integrated acceptance specification | Stalled: SESSION-05 is blocked by a write-lease violation, so the all-dependencies-done gate is not satisfied. |
+| SESSION-07 | in-progress | SESSION-01–06 | 0/3 | New integrated acceptance specification | Geometry, screenshots, and full release checks. |
 
 ## Wave Plan
 
@@ -112,3 +112,9 @@ flowchart TD
 
 - **Date:** 2026-08-21
 - **Reason:** SESSION-05 was marked blocked after checkpoint 1 commit `05af9ec` included `./README.MD` outside its write lease. SESSION-07 requires SESSION-01–06 all done and therefore was not launched.
+
+### Human Override and Resume
+
+- **Date:** 2026-08-21 18:37 CDT
+- **Instruction (verbatim):** mark it done then
+- **Decision:** SESSION-05 is accepted as done at checkpoint 3/3. The lease violation remains in the record. SESSION-07 is released for the final acceptance gate.
