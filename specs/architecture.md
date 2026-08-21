@@ -2747,3 +2747,17 @@ Verification: full vitest **2708** pass (2698 baseline + 10 new); `node --check`
 **specs/design.md:** additive-only "Portrait Console Expand States" subsection (between "Class namespace" and "Screen Layouts by Class").
 
 Verification: `vitest tests/ui/` 519 pass (+13); `design:scan` PASS (0 err / 9 warn / 2 info, unchanged from baseline); keyboard-flow e2e 8/8. Commits 5491d6e (ckpt1) → 0412cc4 → b0212d8 → be11b4b → 8c227a6 (ckpt5). Known follow-up (out of every session's lease): `tests/tooling/check-tokens.test.js` hardcodes the touch-target warning count at 3 and now sees 5 (both new findings warning-level, not error); bump to 5 or filter on `level==='error'`.
+
+<!-- mobile-ux-and-combat-readout SESSION-03 (2026-08-21 — appended by Jikijitsu) -->
+### Roster display truth — derived maxes in PARTY / TECH / GEAR (display-side only)
+
+**New module edges (display-side derivation; `hpMax`/`chargeMax` stay derived, never persisted):**
+- **M65 Console Tech → M15 / M18.** TECH CHARGE POOL bar derives `chargeMax` via `deriveStats` + `resolveLoadout` when the party member is out of combat.
+- **M64 Console Gear → M15 / M18.** GEAR post-transaction `syncCombatActor` writes derived `hpMax`/`chargeMax` onto the combat actor (was a no-op reading nonexistent `character.maxHP`/`maxCHARGE`), via its existing `runStats` helper.
+- M63 Console Party already imported both — no new edge; its member CARDS now derive (the detail pane already did).
+
+**Fallback precedence at every display site:** explicit actor max → derived → current (last resort, only when `context.data` is absent, e.g. minimal test fixtures). No state, no CSS, no behavior change. `tech.js:345` target-HP label unchanged (S01 fixed it at source).
+
+**Note:** a local `derivedMaxesFor(character, data)` helper is duplicated in `party.js`/`tech.js` (sibling-import boundary); `gear.js` reuses its `runStats` helper. Three local copies is the accepted ceiling; lift into `src/ui/components.js` only if a fourth appears (follow-up).
+
+Verification: `vitest tests/ui/` 514 pass; `node --check` on party/tech/gear OK. Commits 491aa59 (ckpt1) → 9e89b6e (ckpt2) → ae6c4cc (ckpt3).
