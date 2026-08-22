@@ -550,6 +550,17 @@
       color: var(--text-dim);
       margin: 4px 0;
     }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
   </style>
 </head>
 <body>
@@ -582,12 +593,12 @@
       <button class="btn-crt btn-start" onclick="toggleBranches()">START</button>
 
       <div id="branches" class="hidden-branch wide-title-branches">
-        <a href="creation.html" class="btn-crt btn-link">◈ Begin New Run</a>
-        <a href="library.html"  class="btn-crt btn-link">◈ Run Library</a>
-        <a href="import.html"   class="btn-crt btn-link">◈ Import Link</a>
+        <a href="creation.html" class="btn-crt btn-link has-icon" aria-label="◈ BEGIN NEW RUN" title="Begin new run"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg>Begin New Run</a>
+        <a href="library.html"  class="btn-crt btn-link has-icon" aria-label="◈ RUN LIBRARY" title="Run library"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#archive"></use></svg>Run Library</a>
+        <a href="import.html"   class="btn-crt btn-link has-icon" aria-label="◈ IMPORT LINK" title="Import link"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#download"></use></svg>Import Link</a>
         <div class="branch-row">
-          <a href="tutorial.html" class="btn-crt btn-link">Tutorial</a>
-          <a href="settings.html" class="btn-crt btn-link">Settings</a>
+          <a href="tutorial.html" class="btn-crt btn-link has-icon" aria-label="MANUAL" title="Manual"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#scroll-text"></use></svg>Manual</a>
+          <a href="settings.html" class="btn-crt btn-link has-icon" aria-label="SETTINGS" title="Settings"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#gauge"></use></svg>Settings</a>
         </div>
       </div>
     </div>

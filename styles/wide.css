@@ -1317,6 +1317,17 @@
   }
   .wide-save-name-input:focus { border-color: var(--accent); box-shadow: 0 0 4px var(--accent); }
 
+  /* Per-config action row (icon-first-ui-density SESSION-04) — holds the
+     icon-only LOAD upload button and the icon+text destructive DELETE
+     button inside each `.wide-saved-configs .config-card`. Layout-only;
+     touch-target sizing is delegated to the inner `.btn-crt` rules and
+     the surrounding pointer-density guard. */
+  .config-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
   /* Right pane — stacked editor sections */
   .wide-editor {
     flex: 1;

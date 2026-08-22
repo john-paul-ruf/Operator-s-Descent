@@ -306,6 +306,17 @@
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 9px; font-weight: bold; color: var(--accent);
     }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
   </style>
 </head>
 <body>
@@ -416,7 +427,7 @@
           <div class="text-[9px] mb-3" style="color: var(--text-dim);">Link carries the seed only — no run state. Anyone can descend the same dungeon.</div>
           <div class="flex gap-2">
             <input type="text" readonly value="https://descent.app/#w=B7E13D9F" class="flex-1 text-[11px] px-3 py-3" style="background: var(--bg-base); border: 1px solid var(--border-dim); color: var(--accent); font-family: inherit; outline: none;">
-            <button class="btn-crt primary" style="flex-shrink: 0;">COPY</button>
+            <button class="btn-crt primary has-icon" style="flex-shrink: 0;" aria-label="COPY WORLD LINK" title="Copy world link"><svg class="icon icon-14 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#link"></use></svg>Copy</button>
           </div>
           <div id="copied" class="text-[10px] accent-text glow mt-2" style="display: none;">◈ LINK COPIED TO CLIPBOARD ◈</div>
         </div>
@@ -442,11 +453,11 @@
       </div>
 
       <div class="wide-scorecard-actions">
-        <a href="creation.html" class="btn-crt btn-link primary">◈ Restart with Same Seed (New Party)</a>
-        <a href="creation.html" class="btn-crt btn-link">◈ New Run (Fresh Seed)</a>
+        <a href="creation.html" class="btn-crt btn-link primary has-icon" aria-label="RESTART SAME SEED" title="Restart with same seed"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#recycle"></use></svg>Restart with Same Seed</a>
+        <a href="creation.html" class="btn-crt btn-link has-icon" aria-label="NEW RUN" title="New run"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg>New Run (Fresh Seed)</a>
         <div class="flex gap-2">
-          <a href="title.html" class="btn-crt btn-link flex-1">Title Screen</a>
-          <a href="library.html" class="btn-crt btn-link flex-1">Library</a>
+          <a href="title.html" class="btn-crt btn-link icon-only flex-1" aria-label="TITLE" title="Title"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#arrow-left"></use></svg></a>
+          <a href="library.html" class="btn-crt btn-link icon-only flex-1" aria-label="LIBRARY" title="Library"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#archive"></use></svg></a>
         </div>
       </div>
     </section>

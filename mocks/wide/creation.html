@@ -770,6 +770,25 @@
     .tech-gate-note {
       font-size: 10px; color: var(--text-dim); margin-top: 8px;
     }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
+    .btn-crt.btn-danger { border-color: var(--danger); color: var(--danger);
+      background: rgba(232,58,58,0.06); }
+    .btn-crt.btn-danger:hover { border-color: var(--danger); color: #fff;
+      background: rgba(232,58,58,0.2); box-shadow: 0 0 8px var(--danger); }
+    /* Compact per-config action buttons (LOAD / DELETE) inside the saved-configs list. */
+    .config-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .config-actions .btn-crt { min-height: 40px; padding: 6px 10px; font-size: 10px; flex: 1; }
   </style>
 </head>
 <body>
@@ -828,6 +847,7 @@
             <div class="label dim">ADD</div>
           </div>
         </div>
+        <button type="button" class="btn-crt btn-danger has-icon remove-character-btn" aria-label="− REMOVE" title="Remove"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../../assets/icons.svg#x"></use></svg>Remove</button>
       </div>
 
       <!-- Saved configurations (FR-51) -->
@@ -837,13 +857,19 @@
           <div class="config-card active">
             <div class="name">Solo Breacher</div>
             <div class="meta">38pt spent · 1 char</div>
+            <div class="config-actions">
+              <button type="button" class="btn-crt icon-only" aria-label="LOAD" title="Load"><svg class="icon icon-14 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#upload"></use></svg></button>
+              <button type="button" class="btn-crt btn-danger has-icon" aria-label="DELETE" title="Delete"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../../assets/icons.svg#x"></use></svg>Delete</button>
+            </div>
           </div>
           <div class="config-card">
             <div class="name">Quad Assault</div>
             <div class="meta">72pt spent · 4 char</div>
           </div>
           <div class="config-card save-slot">
-            <div class="name">+ SAVE CURRENT</div>
+            <div class="name">
+              <button type="button" class="btn-crt has-icon" style="min-height:40px;padding:6px 10px;font-size:11px;" aria-label="+ SAVE" title="Save"><svg class="icon icon-14" aria-hidden="true"><use href="../../assets/icons.svg#download"></use></svg>Save Current</button>
+            </div>
             <div class="meta">10 max</div>
           </div>
         </div>
@@ -1144,9 +1170,9 @@
 
     <!-- FOOTER: spans both panes -->
     <footer class="wide-creation-footer">
-      <a href="title.html" class="btn-crt btn-link" style="flex:0 0 200px;">◀ Back</a>
+      <a href="title.html" class="btn-crt btn-link icon-only" style="flex:0 0 96px;min-width:96px;" aria-label="◀ BACK" title="Back"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#arrow-left"></use></svg></a>
       <div style="flex:1;"></div>
-      <a href="exploration.html" class="btn-crt btn-primary btn-link" style="flex:0 0 320px;">◈ Finalize &amp; Descend</a>
+      <a href="exploration.html" class="btn-crt btn-primary btn-link has-icon" style="flex:0 0 320px;" aria-label="◈ FINALIZE &amp; DESCEND" title="Finalize and descend"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg>Finalize &amp; Descend</a>
     </footer>
 
   </div>

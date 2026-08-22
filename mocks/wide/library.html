@@ -552,6 +552,18 @@
     }
     .btn-primary:hover { background: rgba(126,200,227,0.2); box-shadow: 0 0 20px var(--accent); }
     .btn-link { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
   </style>
 </head>
 <body>
@@ -598,8 +610,8 @@
             </div>
             <div class="run-card-meta">Last played: 2h ago · 2 party members</div>
             <div class="run-card-actions">
-              <a href="exploration.html" class="btn-crt btn-link" style="flex:2;">◈ Resume</a>
-              <button class="btn-crt btn-danger" style="flex:1;" onclick="event.stopPropagation();confirmDelete(this,'A4F2·9C1E')">Delete</button>
+              <a href="exploration.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:48px;" aria-label="◈ RESUME" title="Resume"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg></a>
+              <button class="btn-crt btn-danger has-icon" style="flex:1;" onclick="event.stopPropagation();confirmDelete(this,'A4F2·9C1E')" aria-label="DELETE" title="Delete"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../../assets/icons.svg#x"></use></svg>Delete</button>
             </div>
           </div>
         </article>
@@ -626,8 +638,8 @@
             </div>
             <div class="run-card-meta">Last played: yesterday · 4 party members</div>
             <div class="run-card-actions">
-              <a href="exploration.html" class="btn-crt btn-link" style="flex:2;">◈ Resume</a>
-              <button class="btn-crt btn-danger" style="flex:1;" onclick="event.stopPropagation();confirmDelete(this,'B7E1·3D9F')">Delete</button>
+              <a href="exploration.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:48px;" aria-label="◈ RESUME" title="Resume"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg></a>
+              <button class="btn-crt btn-danger has-icon" style="flex:1;" onclick="event.stopPropagation();confirmDelete(this,'B7E1·3D9F')" aria-label="DELETE" title="Delete"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../../assets/icons.svg#x"></use></svg>Delete</button>
             </div>
           </div>
         </article>
@@ -651,8 +663,8 @@
             </div>
             <div class="run-card-meta">Last played: 3d ago · Solo run (Oracle)</div>
             <div class="run-card-actions">
-              <a href="exploration.html" class="btn-crt btn-link" style="flex:2;">◈ Resume</a>
-              <button class="btn-crt btn-danger" style="flex:1;" onclick="event.stopPropagation();confirmDelete(this,'C2A8·F1B7')">Delete</button>
+              <a href="exploration.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:48px;" aria-label="◈ RESUME" title="Resume"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg></a>
+              <button class="btn-crt btn-danger has-icon" style="flex:1;" onclick="event.stopPropagation();confirmDelete(this,'C2A8·F1B7')" aria-label="DELETE" title="Delete"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../../assets/icons.svg#x"></use></svg>Delete</button>
             </div>
           </div>
         </article>
@@ -664,9 +676,9 @@
     </main>
 
     <footer class="wide-library-footer">
-      <a href="title.html" class="btn-crt btn-link" style="flex:0 0 240px;">◀ Title</a>
+      <a href="title.html" class="btn-crt btn-link icon-only" style="flex:0 0 96px;min-width:96px;" aria-label="TITLE" title="Title"><svg class="icon icon-16" aria-hidden="true"><use href="../../assets/icons.svg#arrow-left"></use></svg></a>
       <div style="flex:1;"></div>
-      <a href="creation.html" class="btn-crt btn-primary btn-link" style="flex:0 0 240px;">◈ New Run</a>
+      <a href="creation.html" class="btn-crt btn-primary btn-link has-icon" style="flex:0 0 240px;" aria-label="◈ NEW RUN" title="New run"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../../assets/icons.svg#chevron-right"></use></svg>New Run</a>
     </footer>
 
   </div>
