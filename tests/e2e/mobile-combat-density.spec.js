@@ -24,6 +24,14 @@ const COMBAT_PORTRAIT_CELL_PX = 64;
 const MAX_ZOOM = 4;
 
 const PHONE_PROJECT = 'chromium-phone-touch';
+const V8_CACHE = 'operator-descent-2026-08-22-mobile-combat-density-v8';
+const V7_CACHE = 'operator-descent-2026-08-21-icon-density-v7';
+const CHANGED_ASSETS = [
+  '/src/ui/status-strip.js',
+  '/src/ui/console/combat.js',
+  '/src/ui/screens/combat.js',
+  '/styles/components.css'
+];
 
 // A weapon whose range already covers the whole combat window (8×16, max
 // Chebyshev distance well under 16) so Attack is legal from any on-window
@@ -311,6 +319,70 @@ test.describe('mobile combat density — phone acceptance', () => {
       });
     } finally {
       await lowerBoundContext.close();
+    }
+  });
+});
+
+// ─── Checkpoint 2 — cache delivery proof ─────────────────────────────────────
+
+test.describe('mobile combat density — release cache acceptance', () => {
+  test('service worker serves the v8 combat density assets online and repeats the geometry proof fully offline; v7 is evicted', async ({ browser, baseURL, browserName }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'service-worker cache acceptance runs in Chromium');
+    test.slow();
+
+    const context = await browser.newContext({ baseURL, serviceWorkers: 'allow' });
+    const page = await context.newPage();
+    try {
+      await installStableStorage(page);
+      await page.goto('/');
+      await page.getByTestId('title-start').click();
+      await expect(page.getByTestId('title-branches')).toBeVisible();
+
+      await page.waitForFunction(async () => {
+        if (!('serviceWorker' in navigator)) return false;
+        const registration = await navigator.serviceWorker.ready;
+        return Boolean(registration.active);
+      }, null, { timeout: 15000 });
+      if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)))) {
+        await page.reload();
+        await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15000 });
+      }
+
+      const cacheState = await page.evaluate(async (assets) => {
+        const keys = await caches.keys();
+        const activeKey = keys.find((key) => key.startsWith('operator-descent-'));
+        const cache = activeKey ? await caches.open(activeKey) : null;
+        const present = {};
+        if (cache) {
+          for (const asset of assets) present[asset] = Boolean(await cache.match(new URL(asset, location.href).href));
+        }
+        return { keys, activeKey, present };
+      }, CHANGED_ASSETS);
+
+      expect(cacheState.activeKey, `active cache key measured among [${cacheState.keys.join(', ')}]`).toBe(V8_CACHE);
+      expect(cacheState.keys, 'v7 predecessor cache evicted').not.toContain(V7_CACHE);
+      for (const asset of CHANGED_ASSETS) {
+        expect(cacheState.present[asset], `${asset} cached under ${V8_CACHE}`).toBe(true);
+      }
+
+      // Resume the deterministic combat snapshot fully offline, from the
+      // release cache — proves the repaired screen (not the pre-repair one)
+      // is what an installed offline client actually receives.
+      const { fragment } = attackReadyCombatFixture(97);
+      await context.setOffline(true);
+      await page.goto(`/?offline=1#r=${fragment}`);
+      await expect(page.getByTestId('import-run-summary')).toContainText('ACTIVE COMBAT SNAPSHOT');
+      await page.getByTestId('import-resume').click();
+      await expect(page.getByTestId('combat-canvas')).toBeVisible();
+      await expect(page.getByTestId('console-tab-combat')).toHaveAttribute('aria-selected', 'true');
+
+      await assertCombatDensityCore(page, { statusMax: 128, canvasMin: 470, label: 'offline v8 resume' });
+
+      const finalKeys = await page.evaluate(() => caches.keys());
+      expect(finalKeys, 'v8 cache retained offline').toContain(V8_CACHE);
+      expect(finalKeys, 'v7 predecessor cache stays evicted offline').not.toContain(V7_CACHE);
+    } finally {
+      await context.close();
     }
   });
 });
