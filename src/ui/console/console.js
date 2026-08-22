@@ -316,6 +316,7 @@ export function createConsole(state, options = {}) {
   }
 
   function refresh() {
+    if (rendered) captureScroll(contentArea, `console:${currentMode}`);
     const next = firstAvailableMode(state, currentMode);
     currentMode = next;
     updateTabs();

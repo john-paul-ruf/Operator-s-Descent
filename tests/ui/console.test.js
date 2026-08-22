@@ -27,6 +27,9 @@ class FakeElement {
     this.hidden = false;
     this.parentNode = null;
     this.innerHTML = '';
+    this.scrollTop = 0;
+    this.scrollHeight = 500;
+    this.clientHeight = 100;
   }
   set className(value) { this._className = String(value); this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean)); }
   get className() { return this._className; }
@@ -39,7 +42,7 @@ class FakeElement {
   addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
   removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((candidate) => candidate !== listener)); }
   dispatch(type, event = {}) { for (const listener of this.listeners.get(type) || []) listener({ type, target: this, ...event }); }
-  focus() { this.focused = true; }
+  focus(options) { this.focused = true; this.focusOptions = options; }
 }
 
 function collect(root, predicate, results = []) {
@@ -193,6 +196,27 @@ describe('console shell', () => {
     expect(content.focused).toBe(true);
     expect(content.children).not.toBe(firstRenderChildren);
     expect(root.children[1].children[2].getAttribute('aria-selected')).toBe('true');
+  });
+
+  test('captures the keyed mode offset before refresh or swap, restores it after mount, and focuses without scrolling', () => {
+    const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
+    const root = consoleShell.render();
+    const content = root.children[2];
+    content.scrollTop = 73;
+
+    consoleShell.refresh();
+    expect(content.scrollTop).toBe(73);
+    expect(content.dataset.scrollOwner).toBe('console-mode');
+    expect(content.focusOptions).toEqual({ preventScroll: true });
+
+    content.scrollTop = 51;
+    consoleShell.setMode('party');
+    content.scrollTop = 19;
+    consoleShell.setMode('move');
+    expect(content.scrollTop).toBe(51);
+    consoleShell.setMode('party');
+    expect(content.scrollTop).toBe(19);
+    expect(content.dataset.mode).toBe('party');
   });
 
   test('console input context handles mode shortcuts tab and cancel teardown', () => {
