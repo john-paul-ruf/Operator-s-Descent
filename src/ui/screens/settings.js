@@ -1,6 +1,6 @@
 import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
-import { createButton, createPanel, createScreenBody, createSlider, createToggle } from '../components.js';
+import { createButton, createMenuGroup, createPanel, createScreenBody, createSlider, createToggle } from '../components.js';
 import { createIcon } from '../icon.js';
 import { currentLayoutClass } from '../layout.js';
 
@@ -13,9 +13,9 @@ const LAYERS = [
 ];
 
 const MOTION_OPTIONS = [
-  ['system', 'FOLLOW SYSTEM', 'Use the operating system reduced-motion preference.'],
-  ['reduce', 'REDUCE', 'Disable motion-heavy glitch and transitions.'],
-  ['full', 'ALLOW', 'Allow full motion even when the system asks to reduce.']
+  { id: 'system', label: 'FOLLOW SYSTEM', description: 'Use the operating system reduced-motion preference.' },
+  { id: 'reduce', label: 'REDUCE', description: 'Disable motion-heavy glitch and transitions.' },
+  { id: 'full', label: 'ALLOW', description: 'Allow full motion even when the system asks to reduce.' }
 ];
 
 const INFO_ROWS = [
@@ -106,12 +106,14 @@ export function mount(container, params = {}) {
   }
 
   function updateMotionButtons() {
-    for (const [value, button] of motionButtons) {
+    for (const value of motionButtons.keys()) {
       const selected = settings.reducedMotion === value;
-      button.classList.toggle('selected', selected);
-      button.setAttribute('aria-selected', String(selected));
-      button.setAttribute('aria-pressed', String(selected));
-      button.setAttribute('aria-checked', String(selected));
+      motionGroup.setItemState(value, {
+        selected,
+        ariaSelected: selected,
+        ariaChecked: selected,
+        ariaPressed: selected
+      });
     }
   }
 
@@ -179,36 +181,40 @@ export function mount(container, params = {}) {
   visualPanel.appendChild(glitch);
   appendCaption(visualPanel, 'Char substitution, VHS, jitter, bars, flash');
 
-  const motionGroup = document.createElement('div');
-  motionGroup.className = 'motion-options';
-  motionGroup.setAttribute('role', 'radiogroup');
-  motionGroup.setAttribute('aria-label', 'Reduced-motion override');
-  motionGroup.dataset.testid = 'settings-motion-options';
-
   const motionTitle = document.createElement('div');
   motionTitle.className = 'panel-title';
   motionTitle.textContent = 'REDUCED MOTION';
-  motionGroup.appendChild(motionTitle);
-  appendCaption(motionGroup, 'Manual override · disables glitch + transitions');
-
-  for (const [value, label, description] of MOTION_OPTIONS) {
-    const option = createButton(label, {
-      selected: settings.reducedMotion === value,
-      description,
-      onClick: () => {
-        settings = { ...settings, reducedMotion: value };
-        saveCurrent(`MOTION ${label}`);
-        updateMotionButtons();
-        dispatchChange('reducedMotion', value);
-      }
-    });
-    option.dataset.testid = `settings-motion-${value}`;
-    option.setAttribute('role', 'radio');
-    option.setAttribute('aria-checked', String(settings.reducedMotion === value));
-    motionButtons.set(value, option);
-    cleanups.push(() => option.cleanup?.());
-    motionGroup.appendChild(option);
+  const motionCaption = document.createElement('small');
+  motionCaption.className = 'caption';
+  motionCaption.textContent = 'Manual override · disables glitch + transitions';
+  const motionGroup = createMenuGroup(MOTION_OPTIONS, {
+    className: 'motion-options',
+    role: 'radiogroup',
+    ariaLabel: 'Reduced-motion override',
+    testid: 'settings-motion-options',
+    actionOptions: { variant: 'radio', className: 'btn-crt' },
+    itemOptions: (option) => {
+      const selected = settings.reducedMotion === option.id;
+      return {
+        selected,
+        testid: `settings-motion-${option.id}`,
+        ariaSelected: selected,
+        ariaChecked: selected,
+        ariaPressed: selected,
+        onClick: () => {
+          settings = { ...settings, reducedMotion: option.id };
+          saveCurrent(`MOTION ${option.label}`);
+          updateMotionButtons();
+          dispatchChange('reducedMotion', option.id);
+        }
+      };
+    }
+  });
+  motionGroup.prepend(motionTitle, motionCaption);
+  for (const option of MOTION_OPTIONS) {
+    motionButtons.set(option.id, motionGroup.getAction(option.id));
   }
+  cleanups.push(() => motionGroup.cleanup?.());
   visualPanel.appendChild(motionGroup);
 
   const texture = createToggle('SCANLINES & GRAIN', settings.scanlineGrainEnabled, (value) => {

@@ -343,6 +343,17 @@ describe('settings screen', () => {
     ]));
     expect(allText(container)).not.toContain('VERSION 1.0');
 
+    const motionGroup = byTestId(container, 'settings-motion-options');
+    expect(motionGroup.getAttribute('role')).toBe('radiogroup');
+    expect(motionGroup.getAttribute('aria-label')).toBe('Reduced-motion override');
+    for (const value of ['system', 'reduce', 'full']) {
+      const option = byTestId(container, `settings-motion-${value}`);
+      expect(option.getAttribute('role')).toBe('radio');
+      expect(option.getAttribute('aria-selected')).toBe(String(value === 'full'));
+      expect(option.getAttribute('aria-checked')).toBe(String(value === 'full'));
+      expect(option.getAttribute('aria-pressed')).toBe(String(value === 'full'));
+    }
+
     // icon-first-ui-density SESSION-06 — BACK is icon-only. aria-label
     // preserves the former visible label so getByRole(name:)/getByLabel e2e
     // (portrait-usability, keyboard-flow, navigation-history, adaptive-layout)
