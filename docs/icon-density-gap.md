@@ -608,3 +608,267 @@ Observations:
   floors.
 
 ---
+
+## §5 Height Budget
+
+The budget is per-viewport. Two rules bound every entry:
+
+1. **The 96 px touch floor NEVER moves.** Every `.console-row` /
+   `.mode-tab` / `.combat-action` / `.combat-direction` / `.combat-target`
+   stays ≥ 96 px in portrait. SESSION-08 will raise `touch-flow.spec.js:152`
+   from 48 → 96 (per STATE.md Design Decision 7) so the touch floor becomes
+   internally consistent across every visible touchable row.
+2. **Every reclaimed pixel is assigned to playfield/map or console content.**
+   No reclaimed budget vanishes into padding without a stated purpose.
+
+Height budget targets are ranges — SESSION-05..07 report achieved values in
+handoffs, SESSION-08 asserts those achieved values (STATE.md Design Decision
+7). If the wide subset gets `chevron-down`+`hash` (§3.16), a further ~ 2 px
+per label is captured; if not, the placeholders are already accounted for.
+
+### 5.1 Portrait phone (412 × 915)
+
+| Region | Current px (source) | Target px | Delta reclaimed | Assigned to |
+|--------|--------------------|-----------|-----------------|-------------|
+| Status strip (explore) | ~ 46 (padding 8×12 + 30 px content, `components.css:1069`) | 40–44 (icon labels absorb the DEPTH/SEED/… inline; strip stays text but tightens gap from 12 → 8) | ~ 2–6 | Playfield (portrait) |
+| Status strip (combat) | ~ 78 (2-row grid, `status-strip.js:187`; padding 6×10) | 72–76 (icon-prefixed field labels shave 2 px per row via 8 px letter-spacing) | ~ 2–6 | Playfield (portrait combat) |
+| Console tab bar (collapsed) | 96 (min `.mode-tab`, `components.css:94`) | **96 (unchanged)** | 0 (touch floor) | — |
+| In-tab `tab-key` badge | 8 px overlay, no height cost | unchanged | 0 | — |
+| `expanded-half` tray | 220 min, 32 dvh (`components.css:1170`) | 200 min, 30 dvh (icon-only tabs let content sit closer to the top) | ~ 20 | Console content vertical room |
+| `expanded-full` tray | 320 min, 48 dvh (`components.css:1176`) | **320 (unchanged)** — full tray already burns dvh | 0 | — |
+| Feedback rail (between playfield & console) | ~ 24 px (portrait), see `screens/combat.js` | 20–24 | ~ 0–4 | Playfield |
+| Bottom safe-area padding | ~ 8 px | unchanged | 0 | — |
+| **Playfield reclaimed floor** | ≥ 200 (`portrait-usability.spec.js:282`) | **≥ 224 (raise +24)** | +24 | — |
+| **Touch-row floor** | ≥ 48 (`touch-flow.spec.js:152`) | **≥ 96 (raise +48)** | 0 (already true; e2e closes gap) | — |
+
+Total reclaimed on portrait phone: **~ 24 px** of vertical playfield, plus
+the touch-floor upgrade being asserted rather than aspirational.
+
+### 5.2 Portrait tall (1080 × 1920)
+
+| Region | Current px | Target px | Delta reclaimed | Assigned to |
+|--------|-----------|-----------|-----------------|-------------|
+| Status strip | ~ 46 (as phone) | 40–44 | ~ 2–6 | Playfield |
+| Console tab bar | 96 | **96 (unchanged)** | 0 | — |
+| `expanded-half` (32 dvh at 1920 = ~ 614 px, capped 420) | 420 max | **420 (unchanged — cap already dominates)** | 0 | — |
+| `expanded-full` (48 dvh = ~ 922, capped 640) | 640 max | **640 (unchanged)** | 0 | — |
+| **Playfield reclaimed floor** | ≥ 200 | **≥ 240 (raise +40 — the 1080-wide viewport has more spare vertical budget once the strip tightens)** | +40 | — |
+
+### 5.3 Wide-square (1024 × 1024)
+
+| Region | Current px | Target px | Delta reclaimed | Assigned to |
+|--------|-----------|-----------|-----------------|-------------|
+| `.wide-console-tabs` column width | 96 (default `.wide-mode-tab` writing-mode `horizontal-tb`, min-height 72; the column WIDTH is the sum of tab-label widths) | 72–80 (icon-only tabs collapse the horizontal write-mode band) | ~ 16–24 | Middle column |
+| `.wide-mode-tab` min-height | 72 (`wide.css:333`) | **72 (unchanged — WCAG-safe floor for a vertical tab column)** | 0 | — |
+| `.wide-console-content-header` padding | 10 × 14 (`wide.css:369`) | 8 × 12 | ~ 4 | Console content (vertical) |
+| Wide telemetry-dock `.wide-telemetry-field` row | ~ 22 (label + value in flex row) | ~ 22 (icon-prefixed already; §3.9) | 0 | — |
+| Wide dock width (right console) | ≥ 360 (`wide-panes.spec.js:262`) | **≥ 360 (unchanged; owner-chosen width is user-preference)** | 0 | — |
+| Playfield column width | ≥ 320 (`wide-panes.spec.js:252`) | **≥ 320 (unchanged floor); typical width grows by ~ 20 px as the console tab column narrows** | +20 (typical, not floor) | Playfield map |
+| **Map/playfield reclaimed floor** | ≥ 320 (already asserted) | **≥ 320 (unchanged; SESSION-08 to add "canvas fills column" invariant if not already covered)** | — | — |
+
+Total wide-square reclamation: ~ 16–24 px of column width to the middle
+(playfield/map) column, plus ~ 4 px of vertical room in the wide dock's
+content header.
+
+### 5.4 Summary — headline reclaimed pixels per viewport
+
+| Viewport | Vertical reclaimed | Horizontal reclaimed | Where it lands |
+|----------|--------------------|-----------------------|-----------------|
+| `phone` 412×915 | **~ 24 px** | 0 | Playfield (portrait floor 200 → 224) |
+| `portrait` 1080×1920 | **~ 40 px** | 0 | Playfield (portrait floor 200 → 240) |
+| `wide-square` 1024×1024 | **~ 4 px** | **~ 16–24 px** | Middle column (map/playfield) + wide-dock content |
+
+The 96 px touch floor holds in every viewport. `.wide-mode-tab` stays ≥ 72 px
+per its 2026-08 density pass. No new tokens are minted (§7 flags the token
+sheet check-off).
+
+---
+
+## §6 Per-screen notes
+
+Cross-referenced with §2/§3, sequenced by session:
+
+### 6.1 Title (SESSION-04 mocks + CSS; SESSION-06 JS)
+
+- Portrait: primary branch buttons at 46 px sit just above WCAG; if
+  SESSION-06 changes their padding to accommodate a 16 px lucide prefix,
+  hold the button height ≥ 48 px (better: 52 px). Icons lead the label —
+  layout stays two-line-safe on 412 px width.
+- Wide: primary + secondary branch strips are rendered inside
+  `.wide-title-branches` — SESSION-04 mock must express the new prefix
+  slot; SESSION-06 JS should not swap the label to icon-only for the
+  named branches (icon+text stays because these are page-level CTAs).
+- START stays sanctioned text; wordmark stays proper-noun content. No
+  icon on either.
+- Retire the tutorial branch was already done — this feature does not
+  reintroduce it (`tests/ui/front-door.test.js:271`).
+
+### 6.2 Creation (SESSION-04 mocks; SESSION-06 JS)
+
+- The `◀ BACK` header button goes icon-only. `◈ FINALIZE & DESCEND`
+  stays icon+text.
+- `− REMOVE`, `DELETE / CONFIRM DELETE`, `CONFIRM CORRUPT EQUIP` all stay
+  icon+text with `danger` tone (Custom Rule 14, brief §3 destructive).
+- **Attribute steppers are the ceiling.** They are 44 × 44 px today; do NOT
+  wrap them in extra label chrome. Docs/accessibility-audit.md §3D flags
+  their disabled opacity (`0.30`, → 2.22:1 contrast) — SESSION-06 must NOT
+  make the steppers smaller and SHOULD leave the opacity fix to a separate
+  session (out of scope for icon-first density).
+
+### 6.3 Library (SESSION-04 mocks; SESSION-07 JS)
+
+- Portrait uses `RESUME` + `DELETE LOCAL STATE`; wide uses `◈ RESUME` +
+  `DELETE`. Icon-only for RESUME/`◈ RESUME`, icon+text destructive for
+  both DELETE variants.
+- `QUARANTINED — <reason>` rows stay text (content). The load-error red
+  color already appears — verify it uses `--danger` (allowed as a
+  semantic error state per Custom Rule 14).
+- Empty state ("No saved living runs…") stays text (content).
+
+### 6.4 Scorecard (SESSION-04 mocks; SESSION-07 JS)
+
+- `COPY WORLD LINK` toggles text on success — `link` icon persists; the
+  label swap `COPY WORLD LINK` ↔ `WORLD LINK COPIED` is a value change,
+  not chrome. Handle carefully so the aria-label reflects the current
+  visible label.
+- `RESTART SAME SEED` gets `recycle` (not destructive — restart is a
+  sanctioned intent); `NEW RUN` gets `chevron-right`; `TITLE` +
+  `LIBRARY` go icon-only.
+
+### 6.5 Import (SESSION-04 mocks; SESSION-07 JS)
+
+- Text-heavy screen; the single primary CTA (`IMPORT`) goes icon-only
+  with `download` for accent.
+- `RESUME RUN` / `FRESH RUN IN THIS WORLD` stay icon+text — labels tell
+  the reader which fallback path fired.
+
+### 6.6 Settings (SESSION-04 mocks; SESSION-06 JS)
+
+- Sliders keep their label / input / value trio verbatim (portrait
+  `.wide-settings-body .slider-row` e2e at `portrait-usability.spec.js:468-479`
+  depends on the trio not being reordered). Icon prefixes go on TOGGLE rows
+  only (MASTER MUTE, GLITCH, SCANLINES & GRAIN, OPERATOR'S MANUAL), never
+  on slider labels.
+- The layer names (`DRONE`, `PULSE`, `SPARKLE`, `LEAD`, `NOISE BED`) are
+  synthesis-layer proper nouns; no icon.
+- `BACK` goes icon-only.
+
+### 6.7 In-run screens (exploration + combat) (SESSION-03 mocks + CSS; SESSION-05 JS)
+
+- Own zero buttons themselves — every touchable chrome control lives in the
+  console (M60–M67) or the strip/dock (M59). SESSION-03 will touch the
+  in-run mocks (`mocks/{exploration,combat}.html`,
+  `mocks/wide/{exploration,combat}.html`), and their scan compliance is
+  the gate for the JS work in SESSION-05.
+- **Dead-region elimination**: `.status-strip-combat` grid at
+  `status-strip.js:182-187` uses `4px 8px` gap; SESSION-05 may tighten to
+  `2px 6px` in combat (justified by the density payoff and the initiative
+  rail already scrolling).
+- The `?` manual chip stays text and stays at the trailing edge
+  (`status-strip.js:200`).
+
+### 6.8 Console shell + modes (SESSION-03 mocks/CSS + SESSION-05 JS)
+
+- All 7 tabs go icon-only with the numeric badge preserved. Aria labels
+  keep the `LABEL · Key N` format (`console.js:164`) — that string is the
+  e2e-selector contract per STATE.md Design Decision 2.
+- The in-tab `tab-key` badge (`console.js:120`) stays; SESSION-05 must not
+  merge it into the icon.
+- MOVE mode D-pad is already icon-first; no regression.
+- COMBAT direction cells swap arrow characters for the same 8 arrow
+  sprites; center `X LEFT` cell stays text (value chip).
+- CAST/CAST BLOCKED, TAKE/TAKE BLOCKED, OPEN CONTAINER/OPENED, EQUIP/EQUIP
+  BLOCKED, COPY LINK: enabled path is icon-only, disabled path keeps text +
+  reason line.
+- All destructive actions (JUNK ALL TAGGED, DELETE, UNEQUIP when it clears
+  a CORRUPT tag, CONFIRM CORRUPT EQUIP, CONFIRM JUNK ALL TAGGED, − REMOVE)
+  stay icon+text with `danger` tone.
+
+---
+
+## §7 Risks
+
+1. **`gauge` used for both `Depth` (wide dock) and `SETTINGS` (title
+   secondary branch).** Two different meanings on the same session is a
+   legibility hazard. **Mitigation:** SESSION-02 adds `sliders`
+   (lucide name: `sliders`) or `settings2` to the subset; if the owner
+   declines, keep `gauge` on title SETTINGS and accept the collision —
+   context (title screen row vs. telemetry dock label) disambiguates for
+   the reader.
+
+2. **Scanner does not scan `styles/icons.css`.** `scripts/design-scan/check-mock-classes.js:4`
+   only reads `styles/{base,components,crt,wide}.css`. Any class the mocks
+   express that lives in `styles/icons.css` (currently `.icon`,
+   `.icon-<size>`, `.icon-<tone>`) would be flagged by the mock-class check
+   as missing. **Mitigation:** SESSION-03 extends `PRODUCTION_CSS_FILES`
+   to include `styles/icons.css` (STATE.md Wave/W2 already flags this file
+   as owned by SESSION-03). Fail-loud: if SESSION-03 misses this, W5 icon
+   swaps will trip mock-class errors on the very next `design:scan`.
+
+3. **Contrast on disabled tones (accessibility-audit.md §2D).** `.mode-tab.disabled`
+   sits at opacity `0.35` → 2.60:1, below WCAG 4.5:1. Adding a lucide
+   glyph inherits `currentColor`, so the same reduced-contrast state
+   applies to the icon. **Mitigation:** do NOT apply `tone: 'danger'` to
+   disabled buttons; keep the disabled reason ADJACENT (text, in a
+   `.disabled-reason` chip that already carries its own opacity).
+   Contrast fixes proper are OUT of scope for this feature; document in
+   handoff for a follow-up.
+
+4. **`gear.js:434` per-slot `EQUIP <SLOT>` becoming icon-only loses the
+   slot name in the visible chrome.** Slot is communicated by the SELECTED
+   slot button above (`gear.js:300`, e.g. `Weapon · <item>` `selected`),
+   but a screen-reader listener who lost focus context may hear only
+   `Equip`. **Mitigation:** aria-label MUST keep the slot: `EQUIP WEAPON`
+   / `EQUIP ARMOR` / `EQUIP OFF-HAND` (the aria template is
+   `EQUIP ${SLOT_LABELS[ui.slot].toUpperCase()}`, matching the current
+   dynamic label verbatim per STATE.md Design Decision 2).
+
+5. **Sanctioned text on destructive icon+text pairings must all use
+   `--danger`.** Custom Rule 14 reserves `--danger` red for hostiles AND
+   for semantic error/validation states. Destructive actions
+   (UNEQUIP, DELETE, JUNK ALL, CONFIRM CORRUPT EQUIP, − REMOVE) already
+   fit under Custom Rule 14 as "destructive" exceptions — but the icon
+   tone must be applied via `.icon-danger` (via `opts.iconTone = 'danger'`),
+   NOT by adding a new red token. Zero new tokens ship in this feature.
+
+6. **CSS `!important` and specificity war.** Historical `.combat-action`
+   / `.combat-direction` / `.combat-target` are already at 96 px min-height
+   in shared portrait CSS; wide overrides live in `styles/wide.css`. Do
+   NOT out-escalate a selector to force an icon-only bare-button width.
+   Flatten by structure. Handoff any place that needed `!important` so
+   Forge learns the mock/CSS gap.
+
+7. **Ambiguous glyphs (owner-review candidates):**
+   - `flame` for combat ITEM action (currently used for `burning`
+     condition — reader may associate flame with a condition, not a
+     consumable). Backup: `hand-metal` (already in the sprite for
+     "grab an item") — SESSION-05 discretion; §3.3 records `flame` as
+     the default to match the existing catalog.
+   - `download` for creation SAVE CONFIG (implies "download to device")
+     — the actual op is "write to localStorage." The metaphor holds
+     ("into local storage"); `upload` is arguably closer to "read out"
+     (LOAD).
+   - `chevron-right` on RESUME rows overloads the same glyph as
+     BEGIN/RESUME/NEW RUN. Acceptable — the shared "forward motion"
+     semantics is exactly the point.
+
+8. **`portrait-usability.spec.js:290` regex `getByRole` couplings.** The
+   test asserts labels equal `['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH',
+   'LOOT', 'LOG']` by reading `tab.firstChild?.textContent?.trim()`
+   (`accessibility.spec.js:94`). Going icon-only replaces the first child
+   with an `<svg>`, and `tab.firstChild.textContent` returns `""`. SESSION-05
+   MUST update this assertion (it OWNS `tests/e2e/accessibility.spec.js`
+   per STATE.md wave 5) to read the accessible name from `aria-label`
+   instead of `firstChild`. **Fail-loud**: if the assertion is not
+   updated, wave-5 turns red on the very next e2e run.
+
+9. **`docs/accessibility-audit.md` §3F flags the focus-restore bug in the
+   route change.** Not fixed by this feature; SESSION-08 must not attempt
+   to. Record in handoff if any icon swap tests reveal a new focus
+   regression; do not fix in-lease.
+
+10. **The 96 px touch floor never moves.** Any session that reports "I
+    shrunk `.mode-tab` to 80" is wrong. `touch-flow.spec.js:152` bumps
+    to 96 in SESSION-08 precisely to lock this.
+
+---
