@@ -80,15 +80,37 @@ function prefixIcon(host, iconId, iconSize, iconTone) {
   else host.appendChild(icon);
 }
 
+// createButton(label, opts?) — canonical CRT button factory.
+//
+// Icon-only form: pass an empty string for `label` and a lucide id via
+// opts.icon. An icon-only button MUST carry an accessible name — the caller
+// supplies it via opts.label (or opts.title). Missing both while the label
+// arg is empty throws, mirroring createIcon's falsy-id throw so silent
+// nameless buttons never ship. Icon-only buttons receive the `.icon-only`
+// class in addition to `.has-icon`.
+//
+// title attribute: opts.title always wins. Otherwise, an icon-only button
+// takes its title from opts.label (mandatory, so always present); a text
+// button whose opts.label differs from the visible label also gets a title
+// mirror. Same-text buttons stay untitled — the visible label already
+// satisfies pointer discoverability.
 export function createButton(label, opts = {}) {
+  const isIconOnly = !label && Boolean(opts.icon);
+  if (isIconOnly && !opts.label && !opts.title) {
+    throw new Error('icon-only button requires opts.label');
+  }
   const button = document.createElement('button');
   button.type = 'button';
   button.className = opts.primary ? 'btn-crt btn-primary primary' : 'btn-crt';
   button.textContent = label;
   if (opts.danger) button.classList.add('danger');
   if (opts.selected) button.classList.add('selected');
+  if (isIconOnly) button.classList.add('icon-only');
   button.classList.add('is-interactive');
   applyControlState(button, opts);
+  const titleText = opts.title
+    ?? (isIconOnly ? opts.label : (opts.label && opts.label !== label ? opts.label : null));
+  if (titleText) button.setAttribute('title', titleText);
   prefixIcon(button, opts.icon, opts.iconSize, opts.iconTone);
   return withCleanup(button, opts.onClick ? listen(button, 'click', opts.onClick) : undefined);
 }

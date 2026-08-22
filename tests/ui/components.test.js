@@ -592,6 +592,79 @@ describe('semantic components', () => {
     expect(clicks).toBe(0);
   });
 
+  // icon-first-ui-density SESSION-02: icon-only createButton form.
+  // Empty label + opts.icon → `.icon-only` sibling class of `.has-icon`,
+  // aria-label mandatory, title mirrors aria-label for pointer users.
+  test('createButton icon-only: empty label + opts.icon + opts.label yields icon-only+has-icon, aria-label, and title', () => {
+    const button = createButton('', { icon: 'chevron-left', label: 'Back', iconSize: 24 });
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.textContent).toBe('');
+    expect(button.classList.values.has('icon-only')).toBe(true);
+    expect(button.classList.values.has('has-icon')).toBe(true);
+    expect(button.classList.values.has('is-interactive')).toBe(true);
+    expect(button.getAttribute('aria-label')).toBe('Back');
+    expect(button.getAttribute('title')).toBe('Back');
+    expect(button.children).toHaveLength(1);
+    expect(button.children[0].tagName).toBe('SVG');
+    expect(button.children[0].className).toBe('icon icon-24');
+  });
+
+  test('createButton icon-only: empty label + opts.icon without opts.label throws', () => {
+    expect(() => createButton('', { icon: 'chevron-left' })).toThrow(/icon-only button requires opts\.label/);
+  });
+
+  test('createButton icon-only: opts.title overrides opts.label as the title text', () => {
+    const button = createButton('', { icon: 'x', label: 'Close', title: 'Dismiss' });
+    expect(button.getAttribute('aria-label')).toBe('Close');
+    expect(button.getAttribute('title')).toBe('Dismiss');
+    expect(button.classList.values.has('icon-only')).toBe(true);
+  });
+
+  test('createButton text form: opts.label that differs from the visible label sets a title mirror', () => {
+    const button = createButton('SAVE', { label: 'Save configuration' });
+    expect(button.textContent).toBe('SAVE');
+    expect(button.getAttribute('aria-label')).toBe('Save configuration');
+    expect(button.getAttribute('title')).toBe('Save configuration');
+    expect(button.classList.values.has('icon-only')).toBe(false);
+  });
+
+  test('createButton text form: matching label and opts.label do NOT set a title (visible text already discoverable)', () => {
+    const button = createButton('START', { label: 'START' });
+    expect(button.getAttribute('aria-label')).toBe('START');
+    expect(button.getAttribute('title')).toBeNull();
+  });
+
+  test('createButton text form: no opts.label and no opts.title leaves the button untitled (backwards compat)', () => {
+    const button = createButton('START');
+    expect(button.getAttribute('title')).toBeNull();
+    expect(button.classList.values.has('icon-only')).toBe(false);
+  });
+
+  test('createButton icon-only: onClick fires exactly once and cleanup removes the listener', () => {
+    let clicks = 0;
+    const button = createButton('', {
+      icon: 'chevron-left',
+      label: 'Back',
+      onClick: () => { clicks += 1; }
+    });
+    button.click();
+    expect(clicks).toBe(1);
+    button.cleanup();
+    button.click();
+    expect(clicks).toBe(1);
+  });
+
+  test('createButton icon-only: opts.title alone (no opts.label) also satisfies the accessible-name requirement', () => {
+    // opts.title is a legal accessible-name source: pointer users see the
+    // tooltip, screen-reader users get the aria-label when opts.label is
+    // supplied — but a title-only icon-only button is at least discoverable
+    // and does not throw. Kept lenient because a few call-sites already use
+    // title as a discoverability affordance.
+    const button = createButton('', { icon: 'x', title: 'Dismiss' });
+    expect(button.getAttribute('title')).toBe('Dismiss');
+    expect(button.classList.values.has('icon-only')).toBe(true);
+  });
+
   test('createManualLink with opts.icon prepends the sprite before the label', () => {
     const link = createManualLink('burning', { icon: 'flame', dispatch: () => {} });
     expect(link.classList.values.has('has-icon')).toBe(true);
