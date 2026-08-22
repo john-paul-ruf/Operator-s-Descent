@@ -17,7 +17,7 @@
 |---|---------|---------|------|--------|------------|-----------|-------|
 | 01 | Shared menu/action primitives and CSS contract | M56, M79, M101 | `./src/ui/components.js`, `./tests/ui/components.test.js`, `./styles/components.css`, `./styles/wide.css` | done | 4/4 | 2026-08-21 | Shared menu/action primitives and additive CSS contract complete. |
 | 02 | Wide pane controls on the shared action grammar | M100, M95 | `./src/ui/layout.js`, `./tests/ui/layout.test.js` | done | 2/2 | 2026-08-21 | Wide pane collapse controls now use the shared action primitive. |
-| 03 | Creation tablist through the shared tab primitive | M69, M95 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | pending | — | — | Depends on SESSION-01; owns portrait `renderTabs` and re-render cleanup. |
+| 03 | Creation tablist through the shared tab primitive | M69, M95 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | done | 3/3 | 2026-08-21 | Creation tabs now use the shared tab primitive with lifecycle cleanup. |
 | 04 | Title branches and settings motion group | M68, M76, M95 | `./src/ui/screens/title.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js` | pending | — | — | Depends on SESSION-01; title and settings share one front-door test lease. |
 
 ## Wave Plan
@@ -83,4 +83,10 @@ flowchart TD
 
 ```json
 {"session":"02","status":"done","checkpoint":2,"notes":"Wide pane collapse controls now use the shared action primitive.","delivered":"Refactored both collapse buttons to createMenuAction while preserving native button semantics, labels, classes, test IDs, append order, pane state, persistence, and cleanup.","verification":"83 focused unit tests passed; wide-panes e2e: 10 passed, 30 skipped; git diff --check and syntax check passed.","surprises":"A pre-staged deletion outside the lease was included in checkpoint 1 commit: ./program/operator-s-descent/prompts/icon-first-ui-density/STATE.md. Concurrent creation-session changes were observed outside the lease.","followUp":"No architecture fragment needed. Width bounds, data attributes, storage shape, visible arrows, child-tab auto-expand, and ./src/ui/input.js remain unchanged.","filesTouched":["./src/ui/layout.js","./tests/ui/layout.test.js","./program/operator-s-descent/prompts/icon-first-ui-density/STATE.md"],"blockedReason":null}
+```
+
+### SESSION-03
+
+```json
+{"session":"03","status":"done","checkpoint":3,"notes":"Creation tabs now use the shared tab primitive with lifecycle cleanup.","delivered":"Refactored portrait creation tabs to createTabGroup, preserving classes, ARIA, IDs, labels, panel targets, and layout styling. Added cleanup on rerender/unmount and regression tests.","verification":"105 focused unit tests passed; design scan passed with 0 errors; visual captures inspected for portrait and wide layouts; e2e: 48 passed, 2 unrelated wide touch-floor failures, 82 skipped.","surprises":"Concurrent changes exist outside lease in settings/title/front-door tests and untracked .DS_Store; left untouched. E2E failures were outside this lease.","followUp":"Wide creation markup and console behavior intentionally unchanged.","filesTouched":["./src/ui/screens/creation.js","./tests/ui/creation-screen.test.js"],"blockedReason":null,"layoutClasses":["portrait","wide"],"evidence":[{"shot":"creation-portrait.png","note":"Tab strip remains contained with six controls, active underline, and no overlap."},{"shot":"creation-wide.png","note":"Wide creation surface remains unchanged and visually stable."}],"a11yNotes":"Native tablist/tab/tabpanel semantics, aria-selected, aria-controls, labels, and idempotent listener cleanup preserved."}
 ```
