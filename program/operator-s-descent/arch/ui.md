@@ -283,3 +283,10 @@ Signature is unchanged (`createButton(label, opts)`), extensions are backwards-c
 - Icon-only buttons without any accessible-name source (no `opts.label`, no `opts.title`) throw, mirroring `createIcon`'s falsy-id contract.
 
 Every existing consumer renders byte-identical DOM (60 component tests + all screen tests green; the two failing exploration-screen tests pre-exist SESSION-02).
+
+<!-- SESSION-01 -->
+## M56 — Shared menu/action primitives
+
+- Added `createMenuAction(item, opts)`, `createMenuGroup(items, opts)`, and `createTabGroup(items, opts)` to `src/ui/components.js`.
+- Actions are native buttons with variant roles, explicit ARIA/test-ID options, optional sprite icons, independent selected/active/disabled state, idempotent `.cleanup()`, and `.setState(nextState)`.
+- Groups expose `.actions`, `.getAction(id)`, `.setItemState(id, state)`, and aggregate idempotent cleanup. Tab groups emit stable `tab-{id}` IDs and panel controls.
