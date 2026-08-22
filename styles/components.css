@@ -990,13 +990,13 @@ input[type="range"]::-moz-range-thumb {
    1024). Wide-mode densification down to 48px is now scoped to fine-pointer
    hover contexts only (see styles/wide.css) so any coarse-pointer / touch
    surface still hits this 96px floor. */
-.console-row,
+.console-row:not(.console-static-row):not(.console-static-card),
 .mode-tab,
 .menu-action,
-.action-btn,
-.item-card,
-.equipment-card,
-.protocol-card,
+.action-btn:not(.console-static-row):not(.console-static-card),
+.item-card:not(.console-static-row):not(.console-static-card),
+.equipment-card:not(.console-static-row):not(.console-static-card),
+.protocol-card:not(.console-static-row):not(.console-static-card),
 .run-row,
 .deck-slot,
 .calibration-card,
@@ -1004,6 +1004,11 @@ input[type="range"]::-moz-range-thumb {
 .slider-row,
 .text-input-row {
   min-height: 96px;
+}
+
+.console-static-row,
+.console-static-card {
+  min-height: 0;
 }
 
 button.mode-tab[aria-selected="true"],

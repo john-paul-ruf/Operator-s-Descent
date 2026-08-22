@@ -18,13 +18,18 @@
      so `.wide-settings-body` rows always hit their 96px floor regardless
      of pointer capability. */
   @media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
-    .wide-console-content-body .console-row,
-    .wide-console-content-body .action-btn,
-    .wide-console-content-body .item-card,
-    .wide-console-content-body .equipment-card,
-    .wide-console-content-body .protocol-card {
+    .wide-console-content-body .console-row:not(.console-static-row):not(.console-static-card),
+    .wide-console-content-body .action-btn:not(.console-static-row):not(.console-static-card),
+    .wide-console-content-body .item-card:not(.console-static-row):not(.console-static-card),
+    .wide-console-content-body .equipment-card:not(.console-static-row):not(.console-static-card),
+    .wide-console-content-body .protocol-card:not(.console-static-row):not(.console-static-card) {
       min-height: 48px;
     }
+  }
+
+  .wide-console-content-body .console-static-row,
+  .wide-console-content-body .console-static-card {
+    min-height: 0;
   }
 
   /* ═══ WIDE SHELL — three-region grid (Adaptive Layout System) ═══ */
@@ -407,6 +412,7 @@
   }
   .wide-console-content-body {
     flex: 1;
+    min-height: 0;
     /* SESSION-06 density pass — 20 → 12 padding + systematic 8px rhythm on
        every direct child to reclaim vertical space in the narrow dock.
        SESSION-05 (Issue D) added padding-bottom: 24px so the last row of

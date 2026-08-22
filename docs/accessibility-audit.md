@@ -258,6 +258,15 @@ sub-tabs, saved configs, dual portrait/wide layouts. Findings:
   a native `<button>`. **OK for AT semantics.**
 - **Content area** is `role="tabpanel"` with `tabindex="-1"` + focused on
   render — **OK.**
+- **Semantic density contract** — `.console-static-row` and
+  `.console-static-card` identify noninteractive readout/article content. They
+  are not touch targets and must not be made focusable merely to retain a row
+  height; actual buttons, tabs, focusable roles, and composite action rows
+  keep the 96px floor.
+- **Scroll reachability** — `.console-content.scroll-area` (portrait) and
+  `.wide-console-content-body.scroll-area` (wide) are named, keyboard-reachable
+  mode-level scroll owners. Long content remains in flow and its final item
+  must be reachable.
 - **`console.js`** `updateTabs` sets `tab.disabled = !available` — so
   disabled tabs drop out of the focus order entirely. **WCAG 2.1.1 OK**,
   but users cannot see WHY the tab is disabled without hovering; the `title`
@@ -349,8 +358,11 @@ Cross-referenced `src/ui/input.js` KEY_MAP against on-screen affordances:
 
 ### 4C. Touch targets (WCAG 2.5.5 AAA, project rule = 96 px console rows)
 
-`scripts/design-scan/check-touch-targets.js` reports three warnings
-against the project's 96 px minimum:
+`scripts/design-scan/check-touch-targets.js` checks positive `min-height`
+declarations against the project's 96 px control minimum. It must evaluate
+semantic controls rather than a blanket `.console-row:visible` query:
+`.console-static-row` and `.console-static-card` are content and use the
+accepted `min-height: 0` reset.
 
 | Declaration | Value | File | Fix hint |
 |-------------|-------|------|----------|
@@ -555,4 +567,3 @@ high-contrast override toggle:
   color to `--bg-base` as fill for a badge) — these are canvas-drawn
   graphics. Static analysis flags them; runtime rendering blends them
   differently. Confirm no AT-visible text uses these tokens.
-

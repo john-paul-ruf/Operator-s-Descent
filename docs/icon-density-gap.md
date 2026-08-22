@@ -579,7 +579,7 @@ Observations:
 |--------|----------------|------------|--------|
 | Console tab bar `.console-tab-bar` height | 96 px | 72 px | `.mode-tab { min-height: 96px }` (`components.css:94`); `.wide-mode-tab { min-height: 72px }` (`wide.css:333`). |
 | Console tab-tap floor (e2e) | ≥ 48 px | (n/a, tabs are `.wide-mode-tab`) | `tests/e2e/touch-flow.spec.js:152` — asserts `.console-row:visible, .mode-tab:visible` min ≥ 48. |
-| Console row floor (e2e) | ≥ 96 px | ≥ 96 px | `tests/e2e/portrait-usability.spec.js:290`, `wide-panes.spec.js` implicit via `.console-row`. |
+| Console control-row floor (e2e) | ≥ 96 px | ≥ 96 px on coarse pointer | Buttons, tabs, focusable roles, and composite action rows. Static `.console-static-row` / `.console-static-card` content uses intrinsic height and is excluded. |
 | Console-bar `expanded-half` | 220 px min / 32 dvh / 420 px max | (dock: `full` always) | `components.css:1170-1173`. |
 | Console-bar `expanded-full` | 320 px min / 48 dvh / 640 px max | (dock: `full` always) | `components.css:1176-1178`. |
 | Playfield height (portrait, tray half-open) | ≥ 200 px | (n/a) | `tests/e2e/portrait-usability.spec.js:282`. |
@@ -613,11 +613,13 @@ Observations:
 
 The budget is per-viewport. Two rules bound every entry:
 
-1. **The 96 px touch floor NEVER moves.** Every `.console-row` /
-   `.mode-tab` / `.combat-action` / `.combat-direction` / `.combat-target`
-   stays ≥ 96 px in portrait. SESSION-08 will raise `touch-flow.spec.js:152`
-   from 48 → 96 (per STATE.md Design Decision 7) so the touch floor becomes
-   internally consistent across every visible touchable row.
+1. **The 96 px touch floor NEVER moves for controls.** Every button, tab,
+   focusable role, and composite action row — including `.console-row`,
+   `.mode-tab`, `.combat-action`, `.combat-direction`, and `.combat-target` —
+   stays ≥ 96 px in portrait. Static readouts/articles marked
+   `.console-static-row` or `.console-static-card` are not touch targets and
+   use intrinsic height; they must remain reachable through the named console
+   scroll owners.
 2. **Every reclaimed pixel is assigned to playfield/map or console content.**
    No reclaimed budget vanishes into padding without a stated purpose.
 

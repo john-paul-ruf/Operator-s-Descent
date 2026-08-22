@@ -92,7 +92,10 @@ stage → CONFIRM buffer is retired.
 
 Base unit: **4px**. Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96, 128.
 
-Console row height: **96px minimum** (touch target per FR-15).
+Console row height: **96px minimum** for a touch-capable control or composite
+action surface (touch target per FR-15). Static readouts, articles, and log
+content use intrinsic height through `.console-static-row` or
+`.console-static-card`; they are content, not touch targets.
 
 ### Corner Radius
 
@@ -351,6 +354,8 @@ Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon
   the M104 viewport camera (AMENDED 2026-08-17 via map-pan-zoom) — see **Movement
   Interaction**. No context menus, no floating panels.
 - Seven mutually exclusive modes selected via a tab bar.
+- Static mode content is marked `.console-static-row` or `.console-static-card`;
+  a button, tab, focusable role, or composite action row remains a touch surface.
 - **Collapsed state:** Shows only the tab bar + minimal info (~48px tall). Maximizes playfield.
 - **Expanded state:** Fixed height per mode. Dims playfield behind it. The M104 viewport
   camera keeps the active actor in view via user pan/zoom in every class (the console no
@@ -519,6 +524,11 @@ row a touch device may hit. Wide only permits densification on rows that are exp
 pointer-only (e.g. hover-revealed secondary controls, keyboard-cycled item chips in a
 desktop-only editor).
 
+Static console content is explicitly excluded from that floor: use
+`.console-static-row` for a readout/article row and `.console-static-card` for
+an opt-in compact equipment or protocol article. Neither marker makes content
+focusable or actionable.
+
 **Class namespace.** New CSS structures that exist only in wide use a `wide-` class prefix
 (e.g. `.wide-shell`, `.wide-telemetry-dock`, `.wide-console-dock`, `.wide-mode-tab`). This
 lets tooling exclude planned-only structures from portrait-scope parity checks and marks the
@@ -542,6 +552,11 @@ The clamps guarantee a meaningful map region above the console in every state at
 portrait viewport (phone 412×915, tall portrait 1080×1920). Neither `half` nor `full` may
 consume the entire frame; mode content scrolls internally via `.console-content`'s
 `overflow-y: auto`.
+
+`.console-content.scroll-area` is the portrait mode-level scroll owner and
+`.wide-console-content-body.scroll-area` is its wide counterpart. Their content
+stays in flow; the last item must remain reachable without clipping or a
+fixed-height empty panel.
 
 **Tap-cycle.** Tapping the currently-active tab cycles `collapsed → half → full → collapsed`.
 Tapping a different tab switches mode; it opens the console at `half` only when it was
@@ -584,6 +599,10 @@ never dropped into slack padding. Targets are per-viewport ranges; downstream
 sessions report achieved values in handoffs and the acceptance sessions raise
 the e2e geometry floors from those achieved values, not from these targets.
 Full per-region math and viewport tables in `docs/icon-density-gap.md` §5.
+
+This floor does not apply to `.console-static-row` or `.console-static-card`:
+they reclaim only forced touch-target slack while preserving all text and the
+mode-level scroll contract.
 
 | Region | Portrait phone (412×915) | Wide-square (1024×1024) | Delta assigned to |
 |--------|--------------------------|--------------------------|-------------------|
