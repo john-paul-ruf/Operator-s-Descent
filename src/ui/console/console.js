@@ -1,4 +1,5 @@
 import { bus } from '../../state/bus.js';
+import { createIcon } from '../icon.js';
 import { captureScroll, restoreScroll } from '../scroll-memory.js';
 import * as moveMode from './move.js';
 import * as combatMode from './combat.js';
@@ -7,6 +8,15 @@ import * as gearMode from './gear.js';
 import * as techMode from './tech.js';
 import * as lootMode from './loot.js';
 import * as logMode from './log.js';
+
+// SESSION-05 (icon-first-ui-density) — mirrors the fail-soft prefix pattern
+// used across the console modes. Test docs without createElementNS get a
+// text-only tab; the aria-label carries the label + shortcut for AT.
+function safeCreateIcon(id, opts = {}) {
+  if (!id) return null;
+  if (typeof document?.createElementNS !== 'function') return null;
+  try { return createIcon(id, opts); } catch { return null; }
+}
 
 export const CONSOLE_INTENTS = Object.freeze({
   expand: 'console:expand',
@@ -17,14 +27,16 @@ export const CONSOLE_INTENTS = Object.freeze({
 
 const MODE_MODULES = { move: moveMode, combat: combatMode, party: partyMode, gear: gearMode, tech: techMode, loot: lootMode, log: logMode };
 
+// SESSION-05 — `icon` maps each tab to its lucide sprite id per GAP §3.1. Every
+// id is already in the M107 subset (assets/icons.svg).
 export const MODE_REGISTRY = [
-  { id: 'move', label: 'MOVE', key: 'mode_1', module: moveMode, available: (state) => !state.combatState, reason: 'Only available while exploring.' },
-  { id: 'combat', label: 'CMBT', key: 'mode_2', module: combatMode, available: (state) => Boolean(state.combatState), reason: 'No active combat.' },
-  { id: 'party', label: 'PARTY', key: 'mode_3', module: partyMode, available: (state) => Boolean(state.runState?.party?.length), reason: 'No party.' },
-  { id: 'gear', label: 'GEAR', key: 'mode_4', module: gearMode, available: (state) => Boolean(state.runState), reason: 'No run data.' },
-  { id: 'tech', label: 'TECH', key: 'mode_5', module: techMode, available: (state) => Boolean(state.runState?.party?.length), reason: 'No protocol deck.' },
-  { id: 'loot', label: 'LOOT', key: 'mode_6', module: lootMode, available: (state) => Boolean(state.lootState || state.canLoot?.()), reason: 'No unopened nearby container.' },
-  { id: 'log', label: 'LOG', key: 'mode_7', module: logMode, available: () => true, reason: '' }
+  { id: 'move', label: 'MOVE', key: 'mode_1', module: moveMode, icon: 'footprints', available: (state) => !state.combatState, reason: 'Only available while exploring.' },
+  { id: 'combat', label: 'CMBT', key: 'mode_2', module: combatMode, icon: 'sword', available: (state) => Boolean(state.combatState), reason: 'No active combat.' },
+  { id: 'party', label: 'PARTY', key: 'mode_3', module: partyMode, icon: 'users', available: (state) => Boolean(state.runState?.party?.length), reason: 'No party.' },
+  { id: 'gear', label: 'GEAR', key: 'mode_4', module: gearMode, icon: 'backpack', available: (state) => Boolean(state.runState), reason: 'No run data.' },
+  { id: 'tech', label: 'TECH', key: 'mode_5', module: techMode, icon: 'flask-conical', available: (state) => Boolean(state.runState?.party?.length), reason: 'No protocol deck.' },
+  { id: 'loot', label: 'LOOT', key: 'mode_6', module: lootMode, icon: 'box', available: (state) => Boolean(state.lootState || state.canLoot?.()), reason: 'No unopened nearby container.' },
+  { id: 'log', label: 'LOG', key: 'mode_7', module: logMode, icon: 'scroll-text', available: () => true, reason: '' }
 ];
 
 function clearChildren(element) {
@@ -109,13 +121,24 @@ export function createConsole(state, options = {}) {
   const modeTabs = MODE_REGISTRY.map((mode, index) => {
     const tab = document.createElement('button');
     tab.type = 'button';
-    tab.className = isDock ? 'wide-mode-tab console-row' : 'mode-tab console-row';
-    tab.textContent = mode.label;
+    // SESSION-05 (icon-first-ui-density): `icon-only` marks the tab for the
+    // portrait/wide density rules that landed in SESSION-03 (styles/components.css,
+    // styles/wide.css). The visible label is now the lucide sprite; the
+    // accessible name still lives on aria-label (LABEL · Key N, verbatim).
+    tab.className = isDock ? 'wide-mode-tab console-row icon-only' : 'mode-tab console-row icon-only';
     tab.id = `console-tab-${mode.id}`;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', 'console-content');
-    // In-tab shortcut badge replaces the native `title` tooltip, which floated
-    // over the TARGET panel. The number is decorative (aria-label carries the
+    // Pointer discoverability — the icon carries no visible text, so a plain
+    // `title` names it on hover. The mocks (SESSION-03) added this back; the
+    // TARGET-panel overlap that killed titles pre-icon is moot when the tab is
+    // icon-only.
+    tab.setAttribute('title', mode.label);
+    // Sprite first, then the numeric shortcut badge — matches the mock DOM
+    // order (svg + tab-key). Icon-24 per the SESSION-03 tab-bar mocks.
+    const icon = safeCreateIcon(mode.icon, { size: 24 });
+    if (icon) tab.appendChild(icon);
+    // In-tab shortcut badge. The number is decorative (aria-label carries the
     // spoken shortcut); disabled tabs keep their reason in aria-label only.
     const keyBadge = document.createElement('span');
     keyBadge.className = 'tab-key';

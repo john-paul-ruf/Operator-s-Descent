@@ -88,10 +88,11 @@ test('portrait frame keeps fixed ratio and centered letterbox without tab reorde
   expect(Math.abs((frame.width / frame.height) - (1080 / 1920))).toBeLessThan(0.01);
   expect(Math.abs(frame.x - (1600 - frame.width) / 2)).toBeLessThan(2);
 
-  // Each tab now renders `<button>LABEL<span class="tab-key">N</span></button>` after
-  // ui-clarity-polish moved the shortcut hint into an in-tab badge — the label lives on
-  // the leading text node, so extract that instead of textContent (which includes the badge).
-  const labels = await page.locator('.mode-tab').evaluateAll((tabs) => tabs.map((tab) => tab.firstChild?.textContent?.trim()));
+  // SESSION-05 (icon-first-ui-density): tabs are icon-only. The former visible
+  // label lives on aria-label as `${label} · Key ${n}` (or `${label} · <reason>`
+  // when disabled — see src/ui/console/console.js:172-174). Read from aria-label
+  // and split on ` · ` to recover the label; `firstChild` is now an <svg>.
+  const labels = await page.locator('.mode-tab').evaluateAll((tabs) => tabs.map((tab) => (tab.getAttribute('aria-label') || '').split(' · ')[0]));
   expect(labels).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
   await expect(page.locator('.console-bar')).toHaveCSS('bottom', '0px');
 });

@@ -68,7 +68,10 @@ describe('console shell', () => {
     expect(consoleShell.setMode('combat')).toBe(false);
     expect(root.children[3].textContent).toBe('No active combat.');
     expect(root.children[1].children[1].disabled).toBe(true);
-    expect(root.children[1].children.map((tab) => tab.textContent)).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
+    // SESSION-05 icon-first-ui-density: tabs are icon-only. The former visible
+    // label lives on aria-label as `LABEL · Key N` and on the `title` tooltip.
+    expect(root.children[1].children.map((tab) => tab.getAttribute('title'))).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
+    expect(root.children[1].children.every((tab) => tab.classList.contains('icon-only'))).toBe(true);
     expect(root.children[1].children[0].getAttribute('aria-selected')).toBe('true');
     expect(root.children[1].children[1].classList.contains('disabled')).toBe(true);
     expect(root.children[2].className).toContain('scroll-area');
@@ -153,14 +156,18 @@ describe('console shell', () => {
     expect(consoleShell.expandState).toBe('collapsed');
   });
 
-  test('renders an in-tab key badge instead of a native title tooltip, with the shortcut in aria-label', () => {
+  test('renders an in-tab key badge alongside the icon-only tab, with the shortcut in aria-label and a pointer title', () => {
     const consoleShell = createConsole({ runState: { party: [{ sigilCodepoint: 0xE000, name: 'A' }], inventory: [] } });
     const root = consoleShell.render();
     const tabs = root.children[1].children;
 
     tabs.forEach((tab, index) => {
-      // No native tooltip — it floated over the TARGET panel.
-      expect(tab.getAttribute('title')).toBeNull();
+      // SESSION-05 icon-first-ui-density: icon-only tabs restore a pointer
+      // `title` — the visible label is now a sprite, and the mocks (SESSION-03)
+      // teach that a title is what names it for hover users. AT still reads
+      // aria-label, which is unchanged.
+      const modeLabels = ['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG'];
+      expect(tab.getAttribute('title')).toBe(modeLabels[index]);
       const badge = byClass(tab, 'tab-key');
       expect(badge).not.toBe(null);
       expect(badge.textContent).toBe(String(index + 1));
@@ -239,8 +246,11 @@ describe('console dock variant (wide)', () => {
     expect(byClass(root, 'console-dim-layer')).toBe(null);
     const tabs = root.children[0].children;
     expect(tabs).toHaveLength(7);
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
+    // SESSION-05 icon-first-ui-density: icon-only tabs — title carries the
+    // former visible label. aria-label keeps `LABEL · Key N` verbatim.
+    expect(tabs.map((tab) => tab.getAttribute('title'))).toEqual(['MOVE', 'CMBT', 'PARTY', 'GEAR', 'TECH', 'LOOT', 'LOG']);
     expect(tabs.every((tab) => tab.classList.contains('wide-mode-tab'))).toBe(true);
+    expect(tabs.every((tab) => tab.classList.contains('icon-only'))).toBe(true);
     expect(tabs.map((tab) => tab.dataset.testid)).toEqual([
       'console-tab-move', 'console-tab-combat', 'console-tab-party', 'console-tab-gear', 'console-tab-tech', 'console-tab-loot', 'console-tab-log'
     ]);
