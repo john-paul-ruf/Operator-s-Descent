@@ -330,10 +330,15 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   row.appendChild(detail);
   const btnWrap = document.createElement('div');
   btnWrap.className = 'protocol-buttons';
-  const cast = createButton(castReason ? 'CAST BLOCKED' : 'CAST', {
+  // SESSION-05 (icon-first-ui-density) — per GAP §3.6 CAST is icon-only
+  // when enabled (accent tone), disabled path keeps text so the reason is
+  // legible. aria-label preserves the former visible label verbatim.
+  const cast = createButton(castReason ? 'CAST BLOCKED' : '', {
     disabled: Boolean(castReason), description: castReason,
     onClick: () => beginProtocol(context, protocol, false),
-    icon: 'wand-sparkles', iconSize: 14
+    icon: 'wand-sparkles', iconSize: 14,
+    iconTone: castReason ? undefined : 'accent',
+    label: castReason ? undefined : 'Cast'
   });
   cast.classList.add('tech-cast-btn');
   cast.dataset.testid = `tech-cast-${protocolKey(protocol)}`;
@@ -392,7 +397,13 @@ function renderConfirm(container, context, ui, character) {
   const confirm = createButton('CONFIRM', { primary: true, disabled: ui.phase !== 'confirm', onClick: () => confirmProtocol(context) });
   confirm.dataset.testid = 'tech-confirm';
   row.appendChild(confirm);
-  const back = createButton('BACK', { onClick: () => { ui.phase = 'browse'; ui.protocol = null; ui.targetId = null; context.refresh?.(); } });
+  // SESSION-05 (icon-first-ui-density) — BACK is icon-only per GAP §3.6
+  // (arrow-left). aria-label preserves the former visible label.
+  const back = createButton('', {
+    label: 'BACK',
+    icon: 'arrow-left', iconSize: 14,
+    onClick: () => { ui.phase = 'browse'; ui.protocol = null; ui.targetId = null; context.refresh?.(); }
+  });
   back.dataset.testid = 'tech-back';
   row.appendChild(back);
   container.appendChild(row);

@@ -240,10 +240,17 @@ function renderContainerItems(container, context, lootContainer, items) {
     row.appendChild(text('loot-compare', comparisonLine(item, context), `loot-compare-${item.id}`));
     const result = addItem(context.runState?.inventory || [], item);
     const reason = inventoryFull || !result.success ? 'Inventory full; pickup blocked until space is freed.' : '';
-    const take = createButton(reason ? 'TAKE BLOCKED' : 'TAKE', {
+    // SESSION-05 (icon-first-ui-density) — per GAP §3.7 the ENABLED TAKE row
+    // goes icon-only with a download sprite (accent tone); disabled path keeps
+    // the "TAKE BLOCKED" text so the reason chip reads clearly. aria-label
+    // preserves the former visible label verbatim and names the item so the
+    // affordance is not ambiguous when read out.
+    const take = createButton(reason ? 'TAKE BLOCKED' : '', {
       primary: true, disabled: Boolean(reason), description: reason,
       onClick: () => takeItem(context, lootContainer, item.id),
-      icon: 'download', iconSize: 14
+      icon: 'download', iconSize: 14,
+      iconTone: reason ? undefined : 'accent',
+      label: reason ? undefined : `Take ${itemName(item, context.data || {})}`
     });
     take.dataset.testid = `loot-take-${item.id}`;
     row.appendChild(take);
@@ -273,13 +280,30 @@ function renderInventoryJunk(container, context, state) {
   container.appendChild(header);
 
   if (collapsible) {
-    const toggle = createButton(`${open ? '▾' : '▸'} MANAGE JUNK · ${inventory.length}`, {
+    // SESSION-05 (icon-first-ui-density) — per GAP §3.7 the toggle goes
+    // icon-only: chevron-down when the panel is open, chevron-right when it
+    // is closed. Numeric count moves to an adjacent chip so the icon-only
+    // button stays a single glyph. aria-label preserves the former visible
+    // label form (`▾ MANAGE JUNK · N` / `▸ MANAGE JUNK · N`) verbatim so
+    // screen readers still hear the count and the open/close intent.
+    const toggleAria = `${open ? '▾' : '▸'} MANAGE JUNK · ${inventory.length}`;
+    const toggle = createButton('', {
+      label: toggleAria,
+      icon: open ? 'chevron-down' : 'chevron-right',
+      iconSize: 14, iconTone: 'dim',
       onClick: () => { state.inventoryOpen = !open; context.refresh?.(); }
     });
-    toggle.className = 'loot-inventory-toggle console-row';
+    // classList.add preserves createButton's .icon-only marker. Reassigning
+    // className would wipe it (Issue G guard, src/ui/console/move.js:80).
+    toggle.classList.add('loot-inventory-toggle', 'console-row');
     toggle.dataset.testid = 'loot-inventory-toggle';
     toggle.setAttribute('aria-expanded', String(open));
     toggle.setAttribute('aria-controls', 'loot-inventory-body');
+    // The count IS content — render it as an adjacent chip.
+    const count = document.createElement('span');
+    count.className = 'loot-inventory-toggle-count';
+    count.textContent = String(inventory.length);
+    toggle.appendChild(count);
     container.appendChild(toggle);
   }
 
@@ -340,11 +364,16 @@ export function render(container, context = {}) {
   if (kindIcon) header.appendChild(kindIcon);
   header.appendChild(document.createTextNode(` CONTAINER ${lootContainer.id} · ${lootContainer.kind || 'standard'} · ${opened ? 'OPENED' : 'UNOPENED'} · ${items.length} item(s)`));
   container.appendChild(header);
-  const openButton = createButton(opened ? 'OPENED' : 'OPEN CONTAINER', {
+  // SESSION-05 (icon-first-ui-density) — per GAP §3.7 OPEN CONTAINER is
+  // icon-only when enabled (chevron-right, accent). Disabled → keep the
+  // OPENED text since the state IS the label.
+  const openButton = createButton(opened ? 'OPENED' : '', {
     primary: true,
     disabled: opened,
     onClick: () => context.bus?.dispatch('loot:open-request', { runState, floor: context.floor, container: lootContainer }),
-    icon: 'chevron-right', iconSize: 14
+    icon: 'chevron-right', iconSize: 14,
+    iconTone: opened ? undefined : 'accent',
+    label: opened ? undefined : 'Open container'
   });
   openButton.dataset.testid = 'loot-open';
   container.appendChild(openButton);

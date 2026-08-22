@@ -291,12 +291,18 @@ export function render(container, context = {}) {
     fallback.setAttribute('readonly', 'readonly');
     share.appendChild(fallback);
   }
-  const copyBtn = createButton('◈ COPY LINK', {
+  // SESSION-05 (icon-first-ui-density) — per GAP §3.8 COPY LINK is icon-only
+  // when enabled (link sprite, accent tone). Disabled path keeps the text
+  // "◈ COPY LINK" so the reason chip reads clearly.
+  const copyDisabled = !livingRun(context.runState) || context.runWiped;
+  const copyBtn = createButton(copyDisabled ? '◈ COPY LINK' : '', {
     primary: true,
-    disabled: !livingRun(context.runState) || context.runWiped,
-    description: !livingRun(context.runState) || context.runWiped ? 'Full-state link unavailable after wipe.' : '',
+    disabled: copyDisabled,
+    description: copyDisabled ? 'Full-state link unavailable after wipe.' : '',
     onClick: () => copyLink(container, context),
-    icon: 'link', iconSize: 14
+    icon: 'link', iconSize: 14,
+    iconTone: copyDisabled ? undefined : 'accent',
+    label: copyDisabled ? undefined : 'Copy link'
   });
   copyBtn.dataset.testid = 'log-copy-link';
   share.appendChild(copyBtn);

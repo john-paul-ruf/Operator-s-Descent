@@ -216,6 +216,64 @@ describe('LOOT mode — SESSION-06 icon coverage', () => {
     expect(firstIconChild(junkAll)).toBeTruthy();
   });
 
+  it('SESSION-05 icon-first-ui-density — enabled OPEN CONTAINER is icon-only (chevron-right accent) with aria "Open container"', () => {
+    const runState = run();
+    const lootState = { container: { id: 21, kind: 'standard', x: 1, y: 1 }, items: [item('loot-open-check')] };
+    const container = new FakeElement('div');
+    renderLoot(container, { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+    const open = byTestId(container, 'loot-open');
+    expect(open).toBeTruthy();
+    expect(open.disabled).toBe(false);
+    expect(open.classList.contains('icon-only')).toBe(true);
+    const svg = firstIconChild(open);
+    expect(svg).toBeTruthy();
+    expect(svg.className.split(/\s+/)).toContain('icon-accent');
+    expect((svg.children || []).find((c) => c.tagName === 'USE').getAttribute('href')).toBe('assets/icons.svg#chevron-right');
+    expect(open.getAttribute('aria-label')).toBe('Open container');
+  });
+
+  it('SESSION-05 icon-first-ui-density — enabled TAKE is icon-only (download accent) with aria "Take <name>"', () => {
+    const runState = run();
+    const takeable = item('loot-take-check');
+    const lootState = { container: { id: 22, kind: 'standard', x: 1, y: 1 }, items: [takeable] };
+    const container = new FakeElement('div');
+    renderLoot(container, { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+    const take = byTestId(container, 'loot-take-loot-take-check');
+    expect(take).toBeTruthy();
+    expect(take.disabled).toBe(false);
+    expect(take.classList.contains('icon-only')).toBe(true);
+    const svg = firstIconChild(take);
+    expect(svg).toBeTruthy();
+    expect(svg.className.split(/\s+/)).toContain('icon-accent');
+    // aria carries the item name so the affordance stays legible.
+    expect(take.getAttribute('aria-label')).toMatch(/^Take /);
+  });
+
+  it('SESSION-05 icon-first-ui-density — MANAGE JUNK toggle: chevron-down open, chevron-right closed, aria keeps the prior text', () => {
+    // Non-empty inventory triggers the collapsible toggle.
+    const runState = run([item('inv-1', 'sidearm')]);
+    const lootState = { container: { id: 23, kind: 'standard', x: 1, y: 1 }, items: [item('loot-mj-check')] };
+    const container = new FakeElement('div');
+    // First render: default closed → chevron-right.
+    renderLoot(container, { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+    const closedToggle = byTestId(container, 'loot-inventory-toggle');
+    expect(closedToggle).toBeTruthy();
+    expect(closedToggle.classList.contains('icon-only')).toBe(true);
+    const closedSvg = firstIconChild(closedToggle);
+    expect((closedSvg.children || []).find((c) => c.tagName === 'USE').getAttribute('href')).toBe('assets/icons.svg#chevron-right');
+    // aria form matches the former `▸ MANAGE JUNK · N` visible label.
+    expect(closedToggle.getAttribute('aria-label')).toBe('▸ MANAGE JUNK · 1');
+
+    // Click to open → chevron-down; aria form updates.
+    closedToggle.click();
+    const openContainer = new FakeElement('div');
+    renderLoot(openContainer, { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' } });
+    const openToggle = byTestId(openContainer, 'loot-inventory-toggle');
+    const openSvg = firstIconChild(openToggle);
+    expect((openSvg.children || []).find((c) => c.tagName === 'USE').getAttribute('href')).toBe('assets/icons.svg#chevron-down');
+    expect(openToggle.getAttribute('aria-label')).toBe('▾ MANAGE JUNK · 1');
+  });
+
   it('SESSION-02 — successful TAKE dispatches state:loot-taken with matching item/container ids', () => {
     const runState = run();
     const lootState = { container: { id: 7, kind: 'standard', x: 1, y: 1 }, items: [item('loot-sig')] };

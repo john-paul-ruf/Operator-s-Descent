@@ -108,6 +108,12 @@ describe('LOG mode — SESSION-06 icon coverage', () => {
     expect(copy.disabled).toBe(false);
     expect(firstIconChild(copy)).toBeTruthy();
     expect(copy.classList.contains('has-icon')).toBe(true);
+    // SESSION-05 icon-first-ui-density: enabled COPY LINK is icon-only.
+    expect(copy.classList.contains('icon-only')).toBe(true);
+    // aria-label preserves the former visible label intent.
+    expect(copy.getAttribute('aria-label')).toBe('Copy link');
+    // Accent tone signals primary intent.
+    expect(firstIconChild(copy).className.split(/\s+/)).toContain('icon-accent');
   });
 
   it('disabled COPY LINK (post-wipe) is inert on click and still shows the icon', () => {
