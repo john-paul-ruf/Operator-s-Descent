@@ -25,6 +25,25 @@
 .manual-term-link.has-icon > .icon,
 .condition-tag.has-icon > .icon { flex-shrink: 0; }
 
+/* Icon-only chrome (icon-first-ui-density SESSION-03). `createButton` in
+   src/ui/components.js emits `.btn-crt.has-icon.icon-only` when the visible
+   label is empty and an icon rides via opts.icon (aria-label carries the
+   accessible name). Square touch box, centered glyph, no side-heavy padding
+   inherited from `.has-icon`. `.icon-only` on `.action-btn` follows the same
+   shape when action-row callers opt in the same way. Both variants keep the
+   96px touch floor via the surrounding `.console-row` context; the
+   `min-width: 48px` guard here holds when the button is used bare.
+   `justify-content: center` overrides the row-flex-start on `.combat-action`
+   so the lone glyph sits truly centered. */
+.btn-crt.icon-only,
+.action-btn.icon-only {
+  padding: 8px;
+  min-width: 48px;
+  justify-content: center;
+  gap: 0;
+}
+.btn-crt.icon-only { padding-left: 8px; padding-right: 8px; }
+
 /* Wide-layout density pass — the console dock and telemetry dock are narrow;
    prevent shared portrait rows from wrapping. Row-minimum densification
    (48px, pointer-only) moved to styles/wide.css inside a fine-pointer /
@@ -124,6 +143,24 @@
   color: var(--text-dim);
   white-space: nowrap;
 }
+
+/* Icon-first mode tabs (icon-first-ui-density SESSION-03). SESSION-05 will
+   swap textual labels for lucide sprites; this rule owns the stack: glyph
+   centered, `.tab-key` recentered below the icon so the numeric shortcut is
+   still discoverable without stealing pointer space. Height stays at the
+   96px touch floor set by `.console-row` — icon-only reclaims the label
+   row, never the touch target. Applies in portrait; the wide dock variant
+   lives in styles/wide.css. */
+.mode-tab.icon-only {
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 4px;
+}
+.mode-tab.icon-only .tab-key {
+  align-self: center;
+  margin-left: 0;
+}
+.mode-tab.icon-only > .icon { flex-shrink: 0; }
 
 /* Status Strip */
 .status-strip {
@@ -227,6 +264,17 @@
 
 .dpad-btn:active {
   background: rgba(126,200,227,0.1);
+}
+
+/* Icon glyphs inside the D-pad (icon-first-ui-density SESSION-03). The
+   D-pad button font-size sets arrow-character glyph size for the current
+   arrow-character D-pad; when SESSION-05 swaps them for lucide arrows the
+   sprite must be authored large enough to read at glance across the 96×96
+   button. Sits above the 44 px WCAG touch floor by construction (parent
+   button is 96×96). */
+.dpad-btn > .icon {
+  width: 32px;
+  height: 32px;
 }
 
 .dpad-center {
@@ -1062,9 +1110,13 @@ button.protocol-card[aria-selected="true"],
 
 /* Status strip container + fields are noninteractive readouts (SESSION-06).
    Height comes from padding + inline flex alignment, not a misleading
-   `min-height` that would trip the touch-target scanner. */
+   `min-height` that would trip the touch-target scanner.
+   icon-first-ui-density SESSION-03 — inter-field gap tightened 12 → 8 so the
+   icon-prefixed label + value fields sit closer together in portrait; the
+   strip's own vertical padding (8 12) already meets the §5.1 40–44 px target
+   band without a second pass. */
 .status-strip {
-  gap: 12px;
+  gap: 8px;
   overflow: hidden;
   padding: 8px 12px;
   line-height: 1.35;
@@ -1167,8 +1219,12 @@ button.protocol-card[aria-selected="true"],
    tall desktop). Neither state may consume the whole frame; content
    scrolls inside `.console-content` via its own overflow rule. */
 .console-bar.expanded-half {
-  height: clamp(220px, 32dvh, 420px);
-  min-height: 220px;
+  /* icon-first-ui-density SESSION-03 — half-tray min height / dvh trimmed
+     220→200 / 32dvh→30dvh per §5.1 so icon-first tabs let the playfield claim
+     ~20 additional CSS pixels on phone. 200 stays well above the 96 px touch
+     floor; the 420 px ceiling still governs tall portrait. */
+  height: clamp(200px, 30dvh, 420px);
+  min-height: 200px;
   max-height: 420px;
 }
 
