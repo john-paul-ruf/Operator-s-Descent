@@ -267,6 +267,7 @@ export function mount(container, params = {}) {
     onClick: () => bus.dispatch('ui:navigate', { screen: params.from || 'title', params: {} })
   });
   back.dataset.testid = 'settings-back';
+  back.style.minHeight = '44px';
   cleanups.push(() => back.cleanup?.());
 
   const footer = document.createElement('footer');
