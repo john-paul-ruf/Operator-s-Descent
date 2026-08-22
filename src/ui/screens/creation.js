@@ -144,6 +144,11 @@ export function mount(container, params = {}) {
   let tabGroupCleanup = null;
   const warnedEmptyLists = new Set();
 
+  function disposeTabGroup() {
+    tabGroupCleanup?.();
+    tabGroupCleanup = null;
+  }
+
   function legalGearChoices(slot, classId) {
     return gearChoices(data, slot).filter(({ item }) => item.classGates?.includes(classId));
   }
@@ -191,8 +196,7 @@ export function mount(container, params = {}) {
   function render() {
     captureScroll(scrollPane, SCROLL_KEY);
     const summary = selectCreationState(draft, data);
-    tabGroupCleanup?.();
-    tabGroupCleanup = null;
+    disposeTabGroup();
     clear(container);
     scrollPane = null;
     if (currentLayoutClass() === 'wide') renderWide(summary);
@@ -1440,6 +1444,6 @@ export function mount(container, params = {}) {
   render();
 
   return {
-    unmount() { tabGroupCleanup?.(); tabGroupCleanup = null; inputHandler.destroy(); }
+    unmount() { disposeTabGroup(); inputHandler.destroy(); }
   };
 }
