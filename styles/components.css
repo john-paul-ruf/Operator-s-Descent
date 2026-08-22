@@ -1837,6 +1837,26 @@ button.protocol-card[aria-selected="true"],
   box-shadow: 0 0 8px var(--accent);
 }
 
+/* Destructive-tone button (icon-first-ui-density SESSION-04). Portrait
+   counterpart of the wide-only `.btn-danger` in styles/wide.css. Used by
+   library DELETE / DELETE LOCAL STATE, creation −REMOVE, creation DELETE
+   / CONFIRM DELETE — all sanctioned destructive icon+text pairings under
+   Custom Rule 14 (red reserved for hostiles + semantic error states).
+   Icon-side tone is applied via `.icon-danger` on the sprite; this rule
+   only owns the border/color/background around it. */
+.btn-crt.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(232, 58, 58, 0.06);
+}
+.btn-crt.btn-danger:hover,
+.btn-crt.btn-danger:focus {
+  border-color: var(--danger);
+  color: #fff;
+  background: rgba(232, 58, 58, 0.2);
+  box-shadow: 0 0 8px var(--danger);
+}
+
 /* HP-bar-only class (emitted by createHPBar). Repointed off enemy-red onto --hp
    per Custom Rule 14 — red is reserved for hostiles + semantic errors. */
 .bar-fill-danger {
