@@ -554,3 +554,18 @@ describe('GEAR mode', () => {
     expect(hasNestedButtonInButton(container)).toBe(false);
   });
 });
+
+describe('PARTY/GEAR — SESSION-02 shared density semantics', () => {
+  it('separates static detail metadata from retained interactive PARTY and GEAR rows', () => {
+    const partyContainer = new FakeElement('div');
+    renderParty(partyContainer, { runState: run(), data });
+    expect(byTestId(partyContainer, 'party-detail').classList.contains('scroll-area')).toBe(true);
+    expect(byTestId(partyContainer, 'party-defense').classList.contains('console-static-row')).toBe(true);
+    expect(byTestId(partyContainer, 'party-member-breacher').classList.contains('console-row')).toBe(true);
+
+    const { container: gearContainer } = renderGearWith(run([item('density-shared')]));
+    expect(byTestId(gearContainer, 'gear-inventory').classList.contains('scroll-area')).toBe(true);
+    expect(byTestId(gearContainer, 'gear-item-density-shared').classList.contains('console-row')).toBe(true);
+    expect(byTestId(gearContainer, 'gear-inventory-header').classList.contains('console-static-row')).toBe(true);
+  });
+});

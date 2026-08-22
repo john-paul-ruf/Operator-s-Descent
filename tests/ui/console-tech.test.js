@@ -302,3 +302,20 @@ describe('TECH mode — SESSION-03 derived charge max', () => {
     expect(bar.getAttribute('aria-valuetext')).toBe('5/5');
   });
 });
+
+describe('TECH mode — SESSION-02 density contract', () => {
+  it('preserves the prepared-deck scroll surface and protocol action composite', () => {
+    const container = new FakeElement('div');
+    renderTech(container, { runState: run(), data });
+
+    const deck = byTestId(container, 'tech-deck');
+    const protocol = byTestId(container, 'tech-protocol-disrupt-1');
+    expect(deck.classList.contains('scroll-area')).toBe(true);
+    expect(deck.classList.contains('tech-deck')).toBe(true);
+    expect(deck.tabIndex).toBe(0);
+    expect(deck.getAttribute('aria-label')).toBe('Prepared protocols');
+    expect(protocol.classList.contains('console-row')).toBe(true);
+    expect(protocol.children.some((child) => child.classList?.contains('console-static-card'))).toBe(true);
+    expect(byTestId(container, 'tech-slots').classList.contains('console-static-row')).toBe(true);
+  });
+});

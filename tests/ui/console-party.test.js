@@ -193,3 +193,20 @@ describe('PARTY mode — SESSION-03 derived maxes', () => {
     expect(labelOf(bars[1])).toBe('CHG 5/5');
   });
 });
+
+describe('PARTY mode — SESSION-02 density contract', () => {
+  it('keeps detail focusable while static readouts do not inherit touch-row semantics', () => {
+    const runState = createRunState(88, [character()], { creationTimestamp: 1, inventory: [], scrapCounter: 0, corruption: 0 });
+    const container = new FakeElement('div');
+    renderParty(container, { runState, data });
+
+    const detail = byTestId(container, 'party-detail');
+    expect(detail.classList.contains('scroll-area')).toBe(true);
+    expect(detail.classList.contains('party-detail')).toBe(true);
+    expect(detail.tabIndex).toBe(0);
+    expect(detail.getAttribute('aria-label')).toBe('Party member detail');
+    expect(byTestId(container, 'party-combat-resources').classList.contains('console-static-row')).toBe(true);
+    expect(byTestId(container, 'party-combat-resources').classList.contains('console-row')).toBe(false);
+    expect(byTestId(container, 'party-member-breacher').classList.contains('console-row')).toBe(true);
+  });
+});

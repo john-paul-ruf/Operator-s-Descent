@@ -354,3 +354,21 @@ describe('LOOT mode — SESSION-06 icon coverage', () => {
     expect(calls.filter(([event]) => event === 'state:loot-taken')).toHaveLength(0);
   });
 });
+
+describe('LOOT mode — SESSION-02 density contract', () => {
+  it('retains the named contents scroll area and TAKE composite while compacting metadata', () => {
+    const runState = run();
+    const lootState = { container: { id: 17, kind: 'standard', x: 1, y: 1 }, items: [item('density-loot')] };
+    const container = new FakeElement('div');
+    renderLoot(container, { runState, data, lootState, floor: { id: 'density-floor', themeId: 'printer_meat' } });
+
+    const list = byTestId(container, 'loot-items');
+    const row = byTestId(container, 'loot-item-density-loot');
+    expect(list.classList.contains('scroll-area')).toBe(true);
+    expect(list.tabIndex).toBe(0);
+    expect(list.getAttribute('aria-label')).toBe('Container contents');
+    expect(row.classList.contains('console-row')).toBe(true);
+    expect(row.children.some((child) => child.classList?.contains('console-static-card'))).toBe(true);
+    expect(byTestId(container, 'loot-compare-density-loot').classList.contains('console-static-row')).toBe(true);
+  });
+});

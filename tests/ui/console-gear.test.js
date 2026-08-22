@@ -355,3 +355,20 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     expect(runState.party[0].equipment.weapon).toBe(before);
   });
 });
+
+describe('GEAR mode — SESSION-02 density contract', () => {
+  it('keeps inventory scroll semantics and compact cards inside actionable composite rows', () => {
+    const container = new FakeElement('div');
+    renderGear(container, { runState: run([item('density-sidearm')]), data });
+
+    const inventory = byTestId(container, 'gear-inventory');
+    const itemRow = byTestId(container, 'gear-item-density-sidearm');
+    expect(inventory.classList.contains('scroll-area')).toBe(true);
+    expect(inventory.classList.contains('inventory-list')).toBe(true);
+    expect(inventory.tabIndex).toBe(0);
+    expect(inventory.getAttribute('aria-label')).toBe('Inventory');
+    expect(byTestId(container, 'gear-inventory-header').classList.contains('console-static-row')).toBe(true);
+    expect(itemRow.classList.contains('console-row')).toBe(true);
+    expect(itemRow.children.some((child) => child.classList?.contains('console-static-card'))).toBe(true);
+  });
+});
