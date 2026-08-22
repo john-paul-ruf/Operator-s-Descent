@@ -147,6 +147,11 @@
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
     transition: all 0.15s ease;
   }
+  /* Shared actions inherit the established pane affordance without changing
+     the 44px collapse target or the dock's existing visual surface. */
+  .pane-collapse-btn.menu-action {
+    font: inherit;
+  }
   .pane-collapse-btn:hover,
   .pane-collapse-btn:focus {
     border-color: var(--accent);
@@ -354,6 +359,9 @@
     text-decoration: none;
     transition: all 0.15s ease;
     writing-mode: horizontal-tb;
+  }
+  .wide-mode-tab.menu-action {
+    width: 100%;
   }
   .wide-mode-tab:hover { color: var(--text-primary); }
   .wide-mode-tab.active {

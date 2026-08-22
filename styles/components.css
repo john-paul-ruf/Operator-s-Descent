@@ -88,6 +88,23 @@
   cursor: not-allowed;
 }
 
+/* Shared menu grammar. Surface classes remain responsible for their own
+   layout, border, and selected treatment; these hooks only identify native
+   actions and provide additive state selectors for consumer screens. */
+.menu-group {
+  display: flex;
+}
+.menu-action {
+  font: inherit;
+}
+.menu-action.is-selected,
+.menu-action.active,
+.menu-action[aria-checked="true"],
+.menu-action[aria-pressed="true"] {
+  /* State hooks intentionally inherit the caller's visual surface. */
+  font-weight: inherit;
+}
+
 /* Console Shell (SESSION-06 — in-flow, see the detailed rule further below).
    Background + shadow keep the console visually separated from the playfield
    even though it now sits below in normal flow instead of overlaying. */
@@ -975,6 +992,7 @@ input[type="range"]::-moz-range-thumb {
    surface still hits this 96px floor. */
 .console-row,
 .mode-tab,
+.menu-action,
 .action-btn,
 .item-card,
 .equipment-card,
