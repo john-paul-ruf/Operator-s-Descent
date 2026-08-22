@@ -115,6 +115,158 @@ export function createButton(label, opts = {}) {
   return withCleanup(button, opts.onClick ? listen(button, 'click', opts.onClick) : undefined);
 }
 
+function actionValue(item, opts, key) {
+  return opts[key] ?? item[key];
+}
+
+function setActionState(button, state, variant) {
+  const next = state || {};
+  const selected = next.selected != null ? Boolean(next.selected) : null;
+  const active = next.active != null ? Boolean(next.active) : null;
+  const disabled = next.disabled != null ? Boolean(next.disabled) : null;
+  if (selected != null) {
+    button.classList.toggle('selected', variant !== 'tab' && selected);
+    button.classList.toggle('is-selected', selected);
+    if (variant === 'tab' || next.ariaSelected != null) button.setAttribute('aria-selected', String(selected));
+    if (variant === 'radio' || variant === 'segmented') button.setAttribute('aria-checked', String(selected));
+  }
+  if (active != null) button.classList.toggle('active', active);
+  if (disabled != null) {
+    button.disabled = disabled;
+    button.toggleAttribute?.('disabled', disabled);
+    button.setAttribute('aria-disabled', String(disabled));
+    button.classList.toggle('disabled', disabled);
+  }
+  if (next.ariaChecked != null) button.setAttribute('aria-checked', String(Boolean(next.ariaChecked)));
+  if (next.ariaPressed != null) button.setAttribute('aria-pressed', String(Boolean(next.ariaPressed)));
+}
+
+export function createMenuAction(item, opts = {}) {
+  const source = item || {};
+  const variant = opts.variant || 'button';
+  const label = actionValue(source, opts, 'label') ?? '';
+  const ariaLabel = actionValue(source, opts, 'ariaLabel');
+  const title = actionValue(source, opts, 'title');
+  const description = actionValue(source, opts, 'description');
+  const icon = actionValue(source, opts, 'icon');
+  const iconSize = actionValue(source, opts, 'iconSize');
+  const iconTone = actionValue(source, opts, 'iconTone');
+  const ownerDocument = opts.ownerDocument || document;
+  const isIconOnly = variant === 'icon' || (!label && Boolean(icon));
+  const accessibleName = ariaLabel || (isIconOnly ? title : label);
+  if (isIconOnly && !accessibleName) throw new Error('icon-only menu action requires an accessible name');
+
+  const button = ownerDocument.createElement('button');
+  button.type = 'button';
+  button.className = `menu-action menu-action-${variant} is-interactive${opts.className ? ` ${opts.className}` : ''}`;
+  button.textContent = label;
+  if (isIconOnly) button.classList.add('icon-only');
+  const role = opts.role || (variant === 'tab' ? 'tab' : (variant === 'radio' || variant === 'segmented' ? 'radio' : null));
+  if (role) button.setAttribute('role', role);
+  if (accessibleName) button.setAttribute('aria-label', accessibleName);
+  if (description) button.setAttribute('aria-description', description);
+  const derivedTitle = title ?? (accessibleName && accessibleName !== label ? accessibleName : null);
+  if (derivedTitle) button.setAttribute('title', derivedTitle);
+  if (opts.ariaControls != null) button.setAttribute('aria-controls', String(opts.ariaControls));
+  if (opts.ariaExpanded != null) button.setAttribute('aria-expanded', String(Boolean(opts.ariaExpanded)));
+  if (opts.ariaSelected != null) button.setAttribute('aria-selected', String(Boolean(opts.ariaSelected)));
+  if (opts.ariaChecked != null) button.setAttribute('aria-checked', String(Boolean(opts.ariaChecked)));
+  if (opts.ariaPressed != null) button.setAttribute('aria-pressed', String(Boolean(opts.ariaPressed)));
+  const testid = opts.testid ?? source.testid ?? (source.id ? `${opts.testidPrefix || ''}${source.id}` : null);
+  if (testid) {
+    button.dataset.testid = testid;
+    button.setAttribute('data-testid', testid);
+  }
+  prefixIcon(button, icon, iconSize, iconTone);
+  const initialState = {
+    selected: opts.selected,
+    active: opts.active,
+    disabled: opts.disabled,
+    ariaSelected: opts.ariaSelected,
+    ariaChecked: opts.ariaChecked,
+    ariaPressed: opts.ariaPressed
+  };
+  if (variant === 'tab' && initialState.selected == null) initialState.selected = false;
+  setActionState(button, initialState, variant);
+  const callback = opts.onClick || opts.onActivate;
+  let cleaned = false;
+  const removeListener = callback ? listen(button, 'click', callback) : () => {};
+  button.setState = (nextState = {}) => {
+    setActionState(button, nextState, variant);
+    return button;
+  };
+  button.cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    removeListener();
+  };
+  return button;
+}
+
+export function createMenuGroup(items, opts = {}) {
+  const ownerDocument = opts.ownerDocument || document;
+  const group = ownerDocument.createElement(opts.tagName || 'div');
+  group.className = `menu-group${opts.className ? ` ${opts.className}` : ''}`;
+  if (opts.role) group.setAttribute('role', opts.role);
+  if (opts.ariaLabel) group.setAttribute('aria-label', opts.ariaLabel);
+  if (opts.ariaLabelledBy) group.setAttribute('aria-labelledby', opts.ariaLabelledBy);
+  if (opts.testid) {
+    group.dataset.testid = opts.testid;
+    group.setAttribute('data-testid', opts.testid);
+  }
+  const actions = [];
+  const byId = new Map();
+  for (const [index, item] of (items || []).entries()) {
+    const itemOpts = opts.itemOptions?.(item, index) || {};
+    const action = createMenuAction(item, { ...opts.actionOptions, ...itemOpts, ownerDocument });
+    actions.push(action);
+    if (item?.id != null) byId.set(String(item.id), action);
+    group.appendChild(action);
+  }
+  group.actions = actions;
+  group.getAction = (id) => byId.get(String(id));
+  group.setItemState = (id, state) => group.getAction(id)?.setState(state);
+  let cleaned = false;
+  group.cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    actions.forEach((action) => action.cleanup?.());
+  };
+  return group;
+}
+
+export function createTabGroup(items, opts = {}) {
+  const activeId = opts.activeId == null ? null : String(opts.activeId);
+  const panelId = opts.panelId || ((id) => `panel-${id}`);
+  let currentId = activeId;
+  const group = createMenuGroup(items, {
+    ...opts,
+    role: 'tablist',
+    className: `tab-group${opts.className ? ` ${opts.className}` : ''}`,
+    itemOptions: (item, index) => {
+      const caller = opts.itemOptions?.(item, index) || {};
+      const id = String(item.id);
+      const selected = id === currentId;
+      return {
+        ...caller,
+        variant: 'tab',
+        className: [opts.tabClassName, caller.className].filter(Boolean).join(' '),
+        selected,
+        active: selected,
+        ariaControls: caller.ariaControls || (typeof panelId === 'function' ? panelId(id, item, index) : panelId),
+        testid: caller.testid ?? `tab-${id}`,
+        onClick: (event) => {
+          currentId = id;
+          group.actions?.forEach((action) => action.setState({ selected: action === group.getAction(id), active: action === group.getAction(id) }));
+          caller.onClick?.(event);
+          opts.onSelect?.(id, event, item);
+        }
+      };
+    }
+  });
+  return group;
+}
+
 export function createSlider(label, value, onChange, opts = {}) {
   const row = document.createElement('label');
   row.className = 'slider-row console-row';
