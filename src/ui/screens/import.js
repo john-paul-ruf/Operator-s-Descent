@@ -169,6 +169,10 @@ export function mount(container, params = {}) {
     actions.className = 'import-failure-actions';
     if (Number.isInteger(recoveredSeed)) {
       const fresh = track(createButton('FRESH RUN IN THIS WORLD', {
+        label: 'FRESH RUN IN THIS WORLD',
+        icon: 'chevron-right',
+        iconSize: 16,
+        iconTone: 'accent',
         primary: true,
         onClick: () => navigate('creation', { preloadedSeed: recoveredSeed })
       }));
@@ -177,6 +181,9 @@ export function mount(container, params = {}) {
       actions.appendChild(fresh);
     }
     const titleButton = track(createButton('RETURN TO TITLE', {
+      label: 'RETURN TO TITLE',
+      icon: 'arrow-left',
+      iconSize: 16,
       onClick: () => navigate('title')
     }));
     titleButton.dataset.testid = 'import-return-title-result';
@@ -195,6 +202,10 @@ export function mount(container, params = {}) {
     resultArea.appendChild(panel);
 
     const resume = track(createButton('RESUME RUN', {
+      label: 'RESUME RUN',
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
       primary: true,
       onClick: () => {
         const imported = withImportedIdentity(runState);
@@ -265,14 +276,25 @@ export function mount(container, params = {}) {
 
   const actions = document.createElement('div');
   actions.className = 'import-actions';
-  const importButton = track(createButton('IMPORT', { primary: true, onClick: doImport }));
+  const importButton = track(createButton('', {
+    label: 'IMPORT',
+    icon: 'download',
+    iconSize: 16,
+    iconTone: 'accent',
+    primary: true,
+    onClick: doImport
+  }));
   importButton.classList.remove('btn-primary');
   importButton.dataset.testid = 'import-submit';
+  importButton.style.minWidth = '96px';
   actions.appendChild(importButton);
 
   const footer = document.createElement('footer');
   footer.className = isWide ? 'panel wide-import-footer' : 'panel s-3';
   const titleButton = track(createButton('RETURN TO TITLE', {
+    label: 'RETURN TO TITLE',
+    icon: 'arrow-left',
+    iconSize: 16,
     onClick: () => navigate('title')
   }));
   titleButton.dataset.testid = 'import-return-title';

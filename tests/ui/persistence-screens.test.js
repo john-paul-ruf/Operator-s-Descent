@@ -379,6 +379,14 @@ describe('import screen', () => {
     expect(eyebrow.getAttribute('role')).toBe('heading');
     expect(eyebrow.getAttribute('aria-level')).toBe('1');
 
+    const importBtn = byTestId(container, 'import-submit');
+    expect(importBtn.classList.contains('icon-only')).toBe(true);
+    expect(importBtn.getAttribute('aria-label')).toBe('IMPORT');
+    expect(iconUseId(importBtn)).toBe('download');
+    const returnTitle = byTestId(container, 'import-return-title');
+    expect(returnTitle.getAttribute('aria-label')).toBe('RETURN TO TITLE');
+    expect(iconUseId(returnTitle)).toBe('arrow-left');
+
     byTestId(container, 'import-input').value = `https://example.test/play/#w=${encodeSeed(987)}`;
     await byTestId(container, 'import-submit').click();
     expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 987 } });
@@ -389,6 +397,10 @@ describe('import screen', () => {
     await byTestId(container, 'import-submit').click();
     expect(byTestId(container, 'import-run-summary')).toBeTruthy();
     expect(allText(container).join(' ')).toContain('SEED 555 · DEPTH 6 · 2 MEMBERS');
+
+    const resumeRun = byTestId(container, 'import-resume');
+    expect(resumeRun.getAttribute('aria-label')).toBe('RESUME RUN');
+    expect(iconUseId(resumeRun)).toBe('chevron-right');
 
     await byTestId(container, 'import-resume').click();
     expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, imported: true, originalCreationTimestamp: 1000, runState: expect.objectContaining({ worldSeed: 555, creationTimestamp: 1000 }) } });
@@ -422,6 +434,12 @@ describe('import screen', () => {
     await byTestId(container, 'import-submit').click();
     expect(byTestId(container, 'import-failure-malformed')).toBeTruthy();
     expect(byTestId(container, 'import-fresh-world')).toBeTruthy();
+    const freshWorld = byTestId(container, 'import-fresh-world');
+    expect(freshWorld.getAttribute('aria-label')).toBe('FRESH RUN IN THIS WORLD');
+    expect(iconUseId(freshWorld)).toBe('chevron-right');
+    const resultTitle = byTestId(container, 'import-return-title-result');
+    expect(resultTitle.getAttribute('aria-label')).toBe('RETURN TO TITLE');
+    expect(iconUseId(resultTitle)).toBe('arrow-left');
     await byTestId(container, 'import-fresh-world').click();
     expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 321 } });
 
