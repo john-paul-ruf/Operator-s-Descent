@@ -3,17 +3,25 @@ import { createButton } from '../components.js';
 import { createInputHandler } from '../input.js';
 import { currentLayoutClass } from '../layout.js';
 
+// icon-first-ui-density SESSION-06 — branch rows are icon+text per GAP §3.10.
+// aria-label preserves the former visible label verbatim (ornament included)
+// so getByRole(name:)/getByLabel e2e (title-start-toggle, manual.spec,
+// keyboard-flow) continue to resolve without spec edits. Visible label drops
+// the ornament: the sprite icon now carries the visual accent.
 const BRANCHES = [
-  ['◈ BEGIN NEW RUN', 'creation', 'title-begin-new-run'],
-  ['◈ RUN LIBRARY', 'library', 'title-run-library'],
-  ['◈ IMPORT LINK', 'import', 'title-import-link']
+  { label: 'BEGIN NEW RUN', route: 'creation', testid: 'title-begin-new-run', icon: 'chevron-right', ariaLabel: '◈ BEGIN NEW RUN', iconTone: 'accent' },
+  { label: 'RUN LIBRARY',   route: 'library',   testid: 'title-run-library',  icon: 'archive',       ariaLabel: '◈ RUN LIBRARY' },
+  { label: 'IMPORT LINK',   route: 'import',    testid: 'title-import-link',  icon: 'download',      ariaLabel: '◈ IMPORT LINK' }
 ];
 
 // the-manual SESSION-04 — TUTORIAL branch retired; MANUAL opens the modal.
 // Distinguished from SETTINGS by `action: 'manual'` vs the default navigate.
+// GAP §3.10 sanctioned fallback keeps `gauge` for SETTINGS; the icon collides
+// visually with the wide-dock `Depth` label but no better id lives in the
+// M107 subset (`sliders`/`settings2` not present in lucide@^0.400.0).
 const SECONDARY_BRANCHES = [
-  ['MANUAL', 'manual', 'title-manual', 'manual'],
-  ['SETTINGS', 'settings', 'title-settings']
+  { label: 'MANUAL',   route: 'manual',   testid: 'title-manual',   action: 'manual', icon: 'scroll-text', ariaLabel: 'MANUAL' },
+  { label: 'SETTINGS', route: 'settings', testid: 'title-settings',                  icon: 'gauge',       ariaLabel: 'SETTINGS' }
 ];
 
 function navigate(screen, params = {}) {
@@ -104,12 +112,16 @@ function mountPortrait(container, cleanups) {
   branchList.id = 'title-branches';
   branchList.dataset.testid = 'title-branches';
 
-  for (const [label, route, testid] of BRANCHES) {
-    const button = createButton(label, {
-      onClick: () => navigate(route)
+  for (const branch of BRANCHES) {
+    const button = createButton(branch.label, {
+      icon: branch.icon,
+      iconSize: 16,
+      iconTone: branch.iconTone,
+      label: branch.ariaLabel,
+      onClick: () => navigate(branch.route)
     });
     button.classList.add('btn-crt');
-    button.dataset.testid = testid;
+    button.dataset.testid = branch.testid;
     cleanups.push(() => button.cleanup?.());
     branchList.appendChild(button);
   }
@@ -118,12 +130,17 @@ function mountPortrait(container, cleanups) {
   secondaryRow.style.display = 'flex';
   secondaryRow.style.gap = '12px';
   secondaryRow.dataset.testid = 'title-secondary-branches';
-  for (const [label, route, testid, action] of SECONDARY_BRANCHES) {
-    const onClick = action === 'manual' ? () => openManual('title') : () => navigate(route);
-    const button = createButton(label, { onClick });
+  for (const branch of SECONDARY_BRANCHES) {
+    const onClick = branch.action === 'manual' ? () => openManual('title') : () => navigate(branch.route);
+    const button = createButton(branch.label, {
+      icon: branch.icon,
+      iconSize: 16,
+      label: branch.ariaLabel,
+      onClick
+    });
     button.classList.add('btn-crt');
     button.style.flex = '1';
-    button.dataset.testid = testid;
+    button.dataset.testid = branch.testid;
     cleanups.push(() => button.cleanup?.());
     secondaryRow.appendChild(button);
   }
@@ -210,10 +227,16 @@ function mountWide(container, cleanups) {
   branchList.id = 'title-branches';
   branchList.dataset.testid = 'title-branches';
 
-  for (const [label, route, testid] of BRANCHES) {
-    const button = createButton(label, { onClick: () => navigate(route) });
+  for (const branch of BRANCHES) {
+    const button = createButton(branch.label, {
+      icon: branch.icon,
+      iconSize: 16,
+      iconTone: branch.iconTone,
+      label: branch.ariaLabel,
+      onClick: () => navigate(branch.route)
+    });
     button.classList.add('btn-crt');
-    button.dataset.testid = testid;
+    button.dataset.testid = branch.testid;
     cleanups.push(() => button.cleanup?.());
     branchList.appendChild(button);
   }
@@ -221,11 +244,16 @@ function mountWide(container, cleanups) {
   const branchRow = document.createElement('div');
   branchRow.className = 'branch-row';
   branchRow.dataset.testid = 'title-secondary-branches';
-  for (const [label, route, testid, action] of SECONDARY_BRANCHES) {
-    const onClick = action === 'manual' ? () => openManual('title') : () => navigate(route);
-    const button = createButton(label, { onClick });
+  for (const branch of SECONDARY_BRANCHES) {
+    const onClick = branch.action === 'manual' ? () => openManual('title') : () => navigate(branch.route);
+    const button = createButton(branch.label, {
+      icon: branch.icon,
+      iconSize: 16,
+      label: branch.ariaLabel,
+      onClick
+    });
     button.classList.add('btn-crt');
-    button.dataset.testid = testid;
+    button.dataset.testid = branch.testid;
     cleanups.push(() => button.cleanup?.());
     branchRow.appendChild(button);
   }

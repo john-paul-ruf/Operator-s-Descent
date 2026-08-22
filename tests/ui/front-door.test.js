@@ -162,7 +162,11 @@ describe('title screen', () => {
     expect(allText(container)).toContain("OPERATOR'S");
     expect(allText(container)).toContain('DESCENT');
     expect(allText(container)).toContain('DEPTH IS THE SCORE');
-    expect(allText(container)).not.toContain('BEGIN NEW RUN');
+    // icon-first-ui-density SESSION-06 — branch list is populated at mount
+    // but hidden until START; assert the hidden state on the class rather
+    // than on visible text, since text-content is now shorn of the ornament
+    // and asserting substring absence is fragile against label renaming.
+    expect(byTestId(container, 'title-branches').classList.contains('hidden-branches')).toBe(true);
 
     expect(byTestId(container, 'title-header').textContent).toBe('GLITCH FORGEWORKS');
     expect(byTestId(container, 'title-tagline').textContent).toBe('DEPTH IS THE SCORE');
@@ -184,11 +188,19 @@ describe('title screen', () => {
     const branches = byTestId(container, 'title-branches');
     expect(branches.classList.contains('hidden-branches')).toBe(false);
     expect(start.style.display).toBe('none');
-    expect(allText(container)).toContain('◈ BEGIN NEW RUN');
+    // icon-first-ui-density SESSION-06 — every branch keeps its former
+    // visible label verbatim on aria-label; visible textContent drops the
+    // ornament in favor of the sprite icon.
+    expect(byTestId(container, 'title-begin-new-run').getAttribute('aria-label')).toBe('◈ BEGIN NEW RUN');
+    expect(byTestId(container, 'title-begin-new-run').textContent).toBe('BEGIN NEW RUN');
+    expect(byTestId(container, 'title-run-library').getAttribute('aria-label')).toBe('◈ RUN LIBRARY');
+    expect(byTestId(container, 'title-import-link').getAttribute('aria-label')).toBe('◈ IMPORT LINK');
     expect(byTestId(container, 'title-secondary-branches').children).toHaveLength(2);
     expect(byTestId(container, 'title-manual').textContent).toBe('MANUAL');
+    expect(byTestId(container, 'title-manual').getAttribute('aria-label')).toBe('MANUAL');
     expect(byTestId(container, 'title-tutorial')).toBeNull();
     expect(byTestId(container, 'title-settings').textContent).toBe('SETTINGS');
+    expect(byTestId(container, 'title-settings').getAttribute('aria-label')).toBe('SETTINGS');
 
     await byTestId(container, 'title-run-library').click();
     expect(seen.at(-1)).toEqual({ screen: 'library', params: {} });
