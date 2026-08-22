@@ -193,6 +193,7 @@ describe('creation screen workflow', () => {
     const oldTab = byTestId(container, 'tab-attrs');
     byTestId(container, 'tab-gear').click();
     expect(byTestId(container, 'panel-gear')).not.toBeNull();
+    expect(oldTab.listeners.get('click')).toHaveLength(0);
     oldTab.click();
     expect(byTestId(container, 'panel-gear')).not.toBeNull();
     expect(byTestId(container, 'panel-attrs')).toBeNull();
