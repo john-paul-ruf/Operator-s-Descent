@@ -138,6 +138,21 @@ class FakePaneElement {
     this.tabIndex = -1;
     this._captured = new Set();
     this._className = '';
+    this.classList = {
+      add: (...names) => {
+        const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+        names.forEach((name) => classes.add(name));
+        this._className = [...classes].join(' ');
+      },
+      toggle: (name, force) => {
+        const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+        const enabled = force == null ? !classes.has(name) : Boolean(force);
+        if (enabled) classes.add(name); else classes.delete(name);
+        this._className = [...classes].join(' ');
+        return enabled;
+      }
+    };
+    this.disabled = false;
   }
   set className(value) { this._className = String(value); }
   get className() { return this._className; }
@@ -146,6 +161,10 @@ class FakePaneElement {
   remove() { this.parentNode?.removeChild(this); }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
+  toggleAttribute(name, force) {
+    if (force) this.setAttribute(name, '');
+    else this.attributes.delete(name);
+  }
   addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
   removeEventListener(type, listener) { this.listeners.set(type, (this.listeners.get(type) || []).filter((l) => l !== listener)); }
   dispatch(type, event = {}) {
@@ -219,6 +238,22 @@ describe('attachWidePanes', () => {
     expect(findChildByTestId(shell, 'pane-handle-right')).not.toBe(null);
     expect(findChildByTestId(shell, 'pane-collapse-left')).not.toBe(null);
     expect(findChildByTestId(shell, 'pane-collapse-right')).not.toBe(null);
+
+    const leftCollapse = findChildByTestId(shell, 'pane-collapse-left');
+    const rightCollapse = findChildByTestId(shell, 'pane-collapse-right');
+    expect(leftCollapse.type).toBe('button');
+    expect(leftCollapse.className.split(/\s+/)).toEqual(expect.arrayContaining([
+      'menu-action', 'is-interactive', 'pane-collapse-btn', 'pane-collapse-left'
+    ]));
+    expect(rightCollapse.className.split(/\s+/)).toEqual(expect.arrayContaining([
+      'menu-action', 'is-interactive', 'pane-collapse-btn', 'pane-collapse-right'
+    ]));
+    expect(leftCollapse.textContent).toBe('◀');
+    expect(rightCollapse.textContent).toBe('▶');
+    expect(leftCollapse.getAttribute('aria-label')).toBe('Collapse telemetry dock');
+    expect(rightCollapse.getAttribute('aria-label')).toBe('Collapse console dock');
+    expect(leftCollapse.getAttribute('data-testid')).toBe('pane-collapse-left');
+    expect(rightCollapse.getAttribute('data-testid')).toBe('pane-collapse-right');
 
     cleanup();
   });
@@ -487,10 +522,14 @@ describe('attachWidePanes', () => {
 
   test('cleanup removes injected nodes and clears width vars / dataset flags', () => {
     const shell = makeShell();
-    const cleanup = attachWidePanes({ shell, loadSettings: () => ({}), saveSettings: () => {} });
+    const saved = [];
+    const cleanup = attachWidePanes({ shell, loadSettings: () => ({}), saveSettings: (payload) => saved.push(payload) });
+    const collapseLeft = findChildByTestId(shell, 'pane-collapse-left');
 
     expect(shell.children).toHaveLength(4);
     cleanup();
+    collapseLeft.dispatch('click');
+    expect(saved).toEqual([]);
     expect(shell.children).toHaveLength(0);
     expect(shell.style._props['--wide-left-w']).toBeUndefined();
     expect(shell.style._props['--wide-right-w']).toBeUndefined();

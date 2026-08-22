@@ -1,3 +1,5 @@
+import { createMenuAction } from './components.js';
+
 export const WIDE_MEDIA_QUERY = '(min-width: 900px) and (min-aspect-ratio: 1/1)';
 
 export function currentLayoutClass() {
@@ -104,14 +106,21 @@ function makeHandle(doc, side, bounds) {
   return handle;
 }
 
-function makeCollapseButton(doc, side) {
-  const btn = doc.createElement('button');
-  btn.type = 'button';
-  btn.className = `pane-collapse-btn pane-collapse-${side}`;
-  btn.setAttribute('aria-label', side === 'left' ? 'Collapse telemetry dock' : 'Collapse console dock');
-  btn.dataset.testid = `pane-collapse-${side}`;
-  btn.textContent = side === 'left' ? '◀' : '▶';
-  return btn;
+function makeCollapseButton(doc, side, onClick) {
+  return createMenuAction(
+    {
+      id: `pane-collapse-${side}`,
+      label: side === 'left' ? '◀' : '▶',
+      ariaLabel: side === 'left' ? 'Collapse telemetry dock' : 'Collapse console dock',
+      testid: `pane-collapse-${side}`
+    },
+    {
+      variant: 'button',
+      className: `pane-collapse-btn pane-collapse-${side}`,
+      ownerDocument: doc,
+      onClick
+    }
+  );
 }
 
 export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
@@ -138,13 +147,6 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
 
   const leftHandle = makeHandle(doc, 'left', WIDE_PANE_LEFT_BOUNDS);
   const rightHandle = makeHandle(doc, 'right', WIDE_PANE_RIGHT_BOUNDS);
-  const leftCollapse = makeCollapseButton(doc, 'left');
-  const rightCollapse = makeCollapseButton(doc, 'right');
-
-  shell.appendChild(leftHandle);
-  shell.appendChild(rightHandle);
-  shell.appendChild(leftCollapse);
-  shell.appendChild(rightCollapse);
 
   function persist() {
     if (typeof saveSettings !== 'function') return;
@@ -260,8 +262,13 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
     event.preventDefault?.();
     toggleCollapse('right');
   }
-  leftCollapse.addEventListener('click', onLeftCollapseClick);
-  rightCollapse.addEventListener('click', onRightCollapseClick);
+  const leftCollapse = makeCollapseButton(doc, 'left', onLeftCollapseClick);
+  const rightCollapse = makeCollapseButton(doc, 'right', onRightCollapseClick);
+
+  shell.appendChild(leftHandle);
+  shell.appendChild(rightHandle);
+  shell.appendChild(leftCollapse);
+  shell.appendChild(rightCollapse);
 
   // ── Tab-click auto-expand (right pane) ────────────────────────────────────
   const tabs = typeof shell.querySelector === 'function' ? shell.querySelector('.wide-console-tabs') : null;
@@ -275,8 +282,8 @@ export function attachWidePanes({ shell, saveSettings, loadSettings } = {}) {
   return function cleanup() {
     unbindLeftDrag();
     unbindRightDrag();
-    leftCollapse.removeEventListener('click', onLeftCollapseClick);
-    rightCollapse.removeEventListener('click', onRightCollapseClick);
+    leftCollapse.cleanup?.();
+    rightCollapse.cleanup?.();
     if (tabs && typeof tabs.removeEventListener === 'function') {
       tabs.removeEventListener('click', onTabsClick);
     }
