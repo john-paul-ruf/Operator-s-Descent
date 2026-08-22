@@ -10,21 +10,21 @@
 
 ## Current Observation
 
-The report that several visual fixes appeared unchanged has two confirmed causes in the current 412×915 phone baseline:
+The pre-repair baseline is preserved below; SESSION-02 then confirmed that the delivered source still misses two real-phone density gates. Cache delivery is proven, but there is no remaining planned remediation lease for the measured CSS/layout regressions.
 
 | Surface | Current measurement | Consequence |
 |---|---:|---|
-| Combat status strip | 226px | The active actor uses the generic vertical group, so one metric cell expands to 111px and pushes initiative/manual affordances into additional rows. |
-| Inactive feedback rail | 22px | Padding and borders consume space even with both message children hidden. |
-| Half-tray console content | 162px visible / 627px action content | The 96px tab bar plus a two-column grid whose three primary actions each span a full row shows only one primary action at a time. |
-| Service-worker release | Cache version 2026-08-22-mobile-combat-density-v8 | SESSION-01 replaced v7 and its integration test proved predecessor eviction/v8 retention. Real controlled/offline browser proof remains SESSION-02. |
+| Combat status strip | 141.7px at 412×915; 167.9px at 360×800 | Both exceed the documented ≤128px/≤136px budgets. The compact topline/initiative rows are cumulatively too tall under real font metrics. |
+| Inactive feedback rail | Pre-repair baseline: 22px | SESSION-01 supplied the explicit inactive-state source contract; SESSION-02's failing run is not evidence of an independently completed feedback measurement. |
+| Half-tray console content | Primary button bottom 30.5px past the 412×915 content scroll fold | Move/Attack/End Turn cost chips are cut off mid-glyph in the initial half-tray; the actions are not fully visible without scrolling. |
+| Service-worker release | Cache version 2026-08-22-mobile-combat-density-v8 | SESSION-02 proved v8 active, v7 evicted, and offline deterministic-combat resume delivered from the release cache. |
 
 ## Session Status
 
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---|---|---|---|---|---|---|
 | 01 | Recompose and release the portrait combat density contract | M59, M62, M71, M79, M81, M97, M107 | ./src/ui/status-strip.js; ./src/ui/console/combat.js; ./src/ui/screens/combat.js; ./styles/components.css; ./specs/design.md; ./service-worker.js; ./tests/ui/status-strip.test.js; ./tests/ui/console-combat.test.js; ./tests/ui/combat-screen.test.js; ./tests/integration/service-worker.test.js | done | 3/3 | 2026-08-22 | Recomposed the portrait combat status strip into a dedicated .status-combat-overview (topline row + one horizontal active-actor row + initiative rail) instead of the vertical per-metric stack that drove the 226px/111px regression; compacted combat action buttons to icon+verb+cost-chip with full phrase in aria-label and a 3-col primary row; made the feedback rail's inactive chrome zero-cost via an explicit is-active flag; bumped service-worker cache to v8. |
-| 02 | Prove mobile combat density and cache refresh in a real phone browser | M95, M97, M99 | ./tests/e2e/mobile-combat-density.spec.js | pending | — | — | Depends on SESSION-01. The new dedicated spec avoids the write lease held by the pending console submenu browser session. |
+| 02 | Prove mobile combat density and cache refresh in a real phone browser | M95, M97, M99 | ./tests/e2e/mobile-combat-density.spec.js | done | 2/2 | 2026-08-22 | New deterministic phone acceptance spec (412×915 project + 360×800 lower-bound context, plus a v8/offline cache proof) is complete and committed; it correctly FAILS against current production because it caught two real, confirmed density regressions SESSION-01 itself flagged as unmeasured — see surprises. Cache delivery (v8 active, v7 evicted, offline resume) is fully proven and passes. |
 
 ## Wave Plan
 
@@ -46,6 +46,8 @@ Two sessions are deliberate rather than a split by file count:
 flowchart TD
   S01["S01 · recompose + release"] --> S02["S02 · phone acceptance"]
 ```
+
+
 
 ## Architecture Reference
 
@@ -104,5 +106,26 @@ flowchart TD
   "followUp": "SESSION-02 should capture actual 412×915 and 360×800 measurements (status height, feedback height, canvas height, first action-row geometry) in a real/Playwright browser and confirm against the ≤128px/≤136px budget now documented in specs/design.md; if the 3-column action grid or status overview run over budget on real font metrics, the fix is a CSS-only follow-up (gap/padding trim), not a structural change. Also worth flagging to Forge: the `.combat-ap` AP/move duplication between the status strip and the portrait console pane is now a known, deliberately-kept redundancy pinned by e2e — a future session could retire it by first updating tests/e2e/combat-touch.spec.js and portrait-usability.spec.js to read AP/move from the status strip instead.",
   "filesTouched": ["src/ui/status-strip.js", "src/ui/console/combat.js", "src/ui/screens/combat.js", "styles/components.css", "specs/design.md", "service-worker.js", "tests/ui/status-strip.test.js", "tests/ui/console-combat.test.js", "tests/ui/combat-screen.test.js", "tests/integration/service-worker.test.js"],
   "blockedReason": null
+}
+```
+<!-- SESSION-02 -->
+```json
+{
+  "session": "02",
+  "status": "done",
+  "checkpoint": 2,
+  "notes": "New deterministic phone acceptance spec (412×915 project + 360×800 lower-bound context, plus a v8/offline cache proof) is complete and committed; it correctly FAILS against current production because it caught two real, confirmed density regressions SESSION-01 itself flagged as unmeasured — see surprises. Cache delivery (v8 active, v7 evicted, offline resume) is fully proven and passes.",
+  "delivered": "tests/e2e/mobile-combat-density.spec.js — two describe blocks. (1) 'phone acceptance': imports a real, resumable combat snapshot (adjacent enemy so Attack is genuinely enabled, not a fabricated state) via the existing game-fixture/roundTripRunState recipe, then at 412×915 (chromium-phone-touch project) and 360×800 (an explicitly created browser context, since no configured project uses that viewport) asserts: combat status height budget, every status field visible with icon+accessible-name, canvas height floor, zero-cost inactive feedback rail with no gap/overlap, Move/Attack/End Turn 96px-floor + same-row alignment + full inside the initial console-content pane, no horizontal overflow, natural-scroll reachability of Retreat, and the Move→tap→notice→feedback-expansion→reset flow (reset via the console's own BACK control). Screenshots are attached as evidence. (2) 'release cache acceptance': verifies the active SW cache key is exactly the v8 namespace with the 4 changed runtime assets cached, v7 is evicted, then goes offline and resumes the same deterministic snapshot from the release cache, repeating the primary density assertions to prove the offline client receives the repaired screen.",
+  "verification": "node --check → OK. npx playwright test ./tests/e2e/mobile-combat-density.spec.js --project=chromium-phone-touch → 2 tests, both FAIL on a real, reproduced status-height/action-row finding (see surprises); --project=chromium-portrait → phone-geometry test skips (viewport-scoped by design), cache test runs and fails on the SAME root cause (proves it's not project/viewport-specific). npx playwright test ./tests/e2e/combat-touch.spec.js ./tests/e2e/portrait-usability.spec.js --project=chromium-phone-touch → 4 passed, 3 skipped (unrelated/unaffected, unchanged). npm run parity:shots -- --screen combat → captured and inspected; production side shows the exploration-context screen (the script's 'startRunToCombat' setup never forces a live encounter) so it isn't a combat-mode comparison this session can act on — recorded as a mock/production observation, not fixed (outside lease either way). npm run design:scan → PASS, 0 errors (2 pre-existing INFO findings, unrelated). git diff --check → clean. git status → only tests/e2e/mobile-combat-density.spec.js touched; pre-existing untracked .DS_Store and the pre-existing deletion at program/operator-s-descent/prompts/shared-menu-primitives/STATE.md left exactly as found.",
+  "surprises": "The spec caught two real, precisely-measured density regressions in the SESSION-01 recomposition that SESSION-01's own handoff explicitly flagged as unmeasured ('did not measure actual rendered px heights in a live/Playwright browser'): (1) Combat status height budget breach — measured 141.7px vs the documented ≤128px at 412×915, and 167.9px vs ≤136px at 360×800 (worse at the smaller viewport). Root cause: .status-combat-topline's three metric groups (Depth/Round/Seed) each stack an icon+label row ABOVE a value row via createGroup's flex-column layout (~38px per row), and the initiative rail row (~50px) pushes the total past budget — not a wrapping issue, just cumulative real font-metric height nobody measured until now. (2) Move/Attack/End Turn are NOT fully inside the initial console-content pane as the session requires — confirmed both by geometry (button bottom 30.5px past content's own scroll fold at 412×915) and by a visual screenshot crop showing the cost chips ('≤5', '1 AP') cut off mid-glyph under MOVE/ATTACK at the default half-expand mount state; a phone user sees a truncated primary action row before any scroll. Both regressions are 100% reproducible, occur identically online and fully-offline-from-cache (so it's a real CSS/layout issue, not a cache staleness artifact), and are outside this session's lease (styles/components.css, src/ui/status-strip.js — Reads, not Owns). I deliberately kept the acceptance budgets exactly as specs/design.md documents them (≤128/≤136px, fully-inside-content) rather than loosening them to match current production, per Custom Rule 11 (strengthen tests, don't preserve bug-tolerant expectations) and the session's own stated purpose (catch density regressions, don't paper over them). I also found and fixed a bug in my own harness during development: clicking the already-active console-tab-combat tab fires its tap-cycle gesture (half→full), which would have corrupted the very 'opens once at half on mount' geometry this spec proves — importCombat now asserts aria-selected instead of clicking.",
+  "followUp": "A CSS-only follow-up session (styles/components.css / src/ui/status-strip.js only, no structural change per SESSION-01's own prediction) should: (a) trim .status-combat-topline/.status-combat-active/.status-combat-initiative-row gaps/padding to close the ~14px (412×915) / ~32px (360×800) status-height overage, and (b) either compact the mode-indicator + combat-active-conditions header inside .console-content or accept a slightly larger half-tray so Move/Attack/End Turn render fully without scrolling. Once landed, this spec should pass unmodified — no test change needed, only production CSS. Re-run this spec after that fix as the acceptance gate; both checkpoints commit cleanly today and will start passing once those two are addressed.",
+  "filesTouched": ["tests/e2e/mobile-combat-density.spec.js"],
+  "blockedReason": null,
+  "layoutClasses": ["portrait"],
+  "evidence": [
+    { "shot": "diagnostic capture (not committed) — .console-bar crop at 412×915, half-expand, default scroll", "note": "MOVE/ATTACK/END TURN icons+labels visible but their cost chips ('≤5'/'1 AP') are cut off mid-glyph by console-content's own overflow fold — visually confirms finding (2) is a real, user-visible truncation, not just a geometry-math artifact" },
+    { "shot": "program/operator-s-descent/prompts/visual-parity-v3/shots/combat.png (npm run parity:shots --screen combat)", "note": "inspected; production side renders the exploration-context screen because the script's 'startRunToCombat' setup doesn't force a live encounter — historical mock/production mismatch recorded, not corrected (outside this session's lease and not caused by this session's changes)" }
+  ],
+  "a11yNotes": "Accessible names verified intact (aria-label carries the full phrase, e.g. 'Move · up to 5 cells', independent of the shrunk visible label); the action buttons remain in the DOM/focus order and reachable by keyboard/AT regardless of the visual scroll-fold clipping — the two findings above are visual/geometric only, not accessibility regressions. Manual '?' chip, all status fields, and icon+text pairing (never icon-only for meaning) all confirmed present with correct labels."
 }
 ```
