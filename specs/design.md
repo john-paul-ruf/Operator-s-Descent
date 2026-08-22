@@ -187,6 +187,49 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 - List bullet replacement
 - Branding mark
 
+### Iconography
+
+Chrome is icon-first (icon-first-ui-density, 2026-08-21). Every button/tab/toggle whose meaning survives without a text label renders a single lucide glyph via `createIcon(id, opts)` from the static sprite `assets/icons.svg` (M107). Never inline SVG in JS; never a `<img>` tag for a UI glyph; never a non-lucide id. The sprite is generated at dev-time by `npm run build:icons` from `tools/icons/subset.json` and committed as a static asset.
+
+**Sanctioned text (never converts to icon-only).** The wordmark `OPERATOR'S DESCENT` and the `START` control on title (`mocks/title.html`); every destructive action carries **icon + short text** (DELETE, DELETE LOCAL STATE, CONFIRM CORRUPT EQUIP, CONFIRM DELETE, JUNK ALL TAGGED, REMOVE); every value, log line, notice, prose row, proper noun, numeric readout, action-cost chip, and disabled-reason line stays text as content. Attribute steppers keep the mathematical `−`/`+` characters — they ARE the affordance.
+
+**Icon anatomy (icon-only control).**
+
+| Property | Rule |
+|----------|------|
+| Visible box | ≥ **96px** on any touch-capable row (unchanged, per **Spacing System** and the class-independent floor in **Adaptive Layout System → Input target rules**) |
+| Glyph size | 14px on chips/pills/toggles; 16px on primary action buttons; 20px on the seven console tabs; 24px permitted for D-pad cells and title branches; sizes clamp via `ALLOWED_SIZES = {14, 16, 20, 24}` in `src/ui/icon.js` |
+| Accessible name | `aria-label` MANDATORY — value equals the former visible label verbatim (e.g. tab aria stays `LABEL · Key N`); `title` mirrors `aria-label` for pointer discoverability; a text button whose `opts.label` differs from the visible label also gets a title mirror |
+| Nameless guard | `createButton('', { icon })` throws when neither `opts.label` nor `opts.title` supplies an accessible name — silent nameless buttons never ship |
+| Tone | Untoned glyphs inherit `currentColor` from `.btn-crt` and follow the interactive-affordance grammar; explicit tones limited to `.icon-dim` (label prefixes on content rows), `.icon-accent` (primary intent, e.g. `chevron-right` on OPEN CONTAINER), and `.icon-danger` (destructive / hostile only per Custom Rule 14 — never a player-facing gauge) |
+| DOM class marker | `.has-icon` on every button carrying a sprite prefix; additional `.icon-only` when the visible label is empty and the whole affordance is the glyph |
+
+**Sprite membership.** `src/ui/icon.js` `ICON_IDS` is the runtime gate — any id passed to `createIcon` must be present or the factory throws. Growing the sprite means editing `tools/icons/subset.json`, rerunning `npm run build:icons`, extending `ICON_IDS`, and adding the id to `tests/ui/icon.test.js`; the `tests/tools/build-pipelines.test.js` parity gate then blocks any drift between the subset, the sprite, and the runtime gate.
+
+**Control → glyph map (chrome only; content rows omitted).**
+
+| Surface / control | lucide id | Size | Tone | Notes |
+|-------------------|-----------|------|------|-------|
+| Console tabs — MOVE / CMBT / PARTY / GEAR / TECH / LOOT / LOG | `footprints` / `sword` / `users` / `backpack` / `flask-conical` / `box` / `scroll-text` | 20 | — | `aria-label` = `LABEL · Key N`; disabled aria = `LABEL · <reason>` |
+| Move-mode D-pad — 8 directions | `arrow-*` (all 8) | 14 | — | Already icon-first; CONFIRM cell (`WAIT` / `DESCEND`) stays text (no glyph disambiguates) |
+| Combat actions — Move / Attack / Protocol / Overclock / Item / Retreat / End Turn | `arrow-down-right` / `sword` / `wand-sparkles` / `zap` / `flame` / `arrow-up-right` / `clock` | 16 | — | icon + text; cost chip is content |
+| Combat direction cells (8) | `arrow-*` | 16 | — | icon-only; center cell `X LEFT` stays text |
+| UNDO (combat) / BACK (combat, tech, settings, creation, library, scorecard, import) | `arrow-up-left` / `arrow-left` | 14 | — | icon-only |
+| Gear — Weapon / Armor / Off-hand slots | `sword` / `shield` / `star` | 14 | dim | icon + text with equipped item name |
+| Gear — UNEQUIP / CONFIRM CORRUPT EQUIP / EQUIP / TAG JUNK / UNTAG JUNK / JUNK ALL TAGGED | `x` / `triangle-alert` / `check` / `recycle` / `recycle` / `recycle` | 14 | — / danger / accent / dim / dim / danger | destructive rows stay icon + short text |
+| Tech — CAST / OVERCLOCK / BACK | `wand-sparkles` / `zap` / `arrow-left` | 14 | accent / danger / — | CAST enabled = icon-only, blocked = icon + text; OVERCLOCK keeps CHG cost text |
+| Loot — container / OPEN CONTAINER / TAKE / MANAGE JUNK open / MANAGE JUNK closed | `box` or `archive` / `chevron-right` / `download` / `chevron-down` / `chevron-right` | 16 / 14 / 14 / 14 / 14 | dim / accent / accent / dim / dim | primary actions icon-only when enabled, blocked/disabled paths keep text |
+| Log — COPY LINK | `link` | 14 | accent | icon-only when enabled |
+| Status strip / wide dock labels — Depth / Seed / Party / Danger Clock / Corruption / Round | `gauge` / `hash` / `users` / `clock` / `flame` / `sparkles` | 14 | dim | wide-dock only; portrait strip stays text for pixel budget; manual `?` chip stays text |
+| Title — BEGIN NEW RUN / RUN LIBRARY / IMPORT LINK / MANUAL / SETTINGS | `chevron-right` / `archive` / `download` / `scroll-text` / `gauge` | 16 | accent / — / — / — / — | icon + text; SETTINGS reuses `gauge` (see icon-density-gap §7 for the collision note) |
+| Settings — MASTER MUTE / GLITCH / SCANLINES & GRAIN / OPERATOR'S MANUAL | `x` / `triangle-alert` / `eye` / `scroll-text` | 14 / 14 / 14 / 16 | — / — / dim / — | icon + text; setting names are not glyph-guessable |
+| Creation — REMOVE / SAVE CONFIG / + SAVE / LOAD / DELETE | `x` / `download` / `download` / `upload` / `x` | 14 | danger / — / — / — / danger | destructive rows stay icon + short text |
+| Library — RESUME / NEW RUN / DELETE (LOCAL STATE) | `chevron-right` / `chevron-right` / `x` | 14–16 | accent / accent / danger | RESUME icon-only per row; DELETE stays icon + short text |
+| Scorecard — COPY WORLD LINK / RESTART SAME SEED / NEW RUN / TITLE / LIBRARY | `link` / `recycle` / `chevron-right` / `arrow-left` / `archive` | 14 | — / — / accent / — / — | TITLE and LIBRARY icon-only |
+| Import — IMPORT / RETURN TO TITLE / FRESH RUN IN THIS WORLD / RESUME RUN | `download` / `arrow-left` / `chevron-right` / `chevron-right` | 14–16 | accent / — / — / accent | primary IMPORT icon-only; FRESH RUN keeps text (mutates run intent) |
+
+Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon-first-ui-density SESSION-01).
+
 ---
 
 ## Component Inventory
@@ -194,11 +237,11 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 | Component | Description | States |
 |-----------|-------------|--------|
 | **CRT Frame** | Portrait container with scanline/vignette/grain overlays | Always-on background layer |
-| **Status Strip** | Top-pinned readout: depth, seed, party HP sigils, danger clock | Exploration + combat variants |
+| **Status Strip** | Top-pinned readout: depth, seed, party HP sigils, danger clock. Portrait strip labels stay text for pixel budget; wide dock prefixes each field label with a 14px lucide glyph (see **Iconography** → control map) | Exploration + combat variants |
 | **Playfield** | Canvas lattice (20×32 exploration / 8×16 combat), fog of war, party token | Exploration, combat-zoom |
 | **Console** | Bottom-pinned input surface, 7 modes, expand/collapse | Collapsed, expanded (per mode) |
-| **Console Tab Bar** | Row of 7 mode buttons: MOVE, COMBAT, PARTY, GEAR, TECH, LOOT, LOG | Active, inactive, disabled |
-| **Directional Pad** | 8-way movement control in MOVE mode | Default, pressed, disabled |
+| **Console Tab Bar** | Row of 7 mode buttons: MOVE, COMBAT, PARTY, GEAR, TECH, LOOT, LOG. Each tab is icon-only (20px lucide glyph per **Iconography** control map) with the numeric badge (`Key N`) preserved; `aria-label` = `LABEL · Key N` verbatim so keyboard shortcuts and existing e2e survive the swap | Active, inactive, disabled |
+| **Directional Pad** | 8-way movement control in MOVE mode. Icon-only: each cell renders the matching lucide `arrow-*` glyph via `createIcon`; CONFIRM cell (`WAIT` / `DESCEND`) keeps text — no glyph disambiguates the semantic switch | Default, pressed, disabled |
 | **Initiative Rail** | Horizontal/vertical list of 34px sigils in turn order | Active highlighted, others dimmed |
 | **Combat Grid** | 8×16 cell grid at 2× zoom, sigil tokens at 72px | Targeting overlay, range overlay |
 | **Sigil Token** | Character/enemy glyph at 34/72/108/220px | Player, enemy, echo (red), dead (dimmed) |
@@ -209,7 +252,7 @@ Signature decorative element, drawn with CSS (never a sigil bank glyph). Used as
 | **Protocol Card** | Protocol name, school, tier, CHARGE cost, deck slot | Available, insufficient-charge, overclock-available |
 | **Rarity Tag** | Color-coded label: Stock, Tuned, Custom, Prototype, CORRUPT | 5 tiers |
 | **Condition Tag** | Text label for active condition | 9 types, with duration indicator |
-| **Button** | Primary action trigger, neon glow | Default, hover, active, disabled |
+| **Button** | Primary action trigger, neon glow. Icon-first: `createButton('', { icon, label })` yields the icon-only form (`.icon-only .has-icon`, aria-label + title mandatory); `createButton('LABEL', { icon })` yields the icon-prefixed text form; destructive actions stay icon + short text per **Iconography** | Default, hover, active, disabled, icon-only |
 | **Slider** | Range input for audio volumes | 0–100% |
 | **Toggle** | Binary switch (settings) | On, off |
 | **Run Row** | Library entry: accent swatch, seed, depth, party sigils | Active, wiped (removed) |
@@ -530,6 +573,24 @@ wide dock is unaffected and keeps its full active panel, initiative rail, and do
 feedback. The combat map defaults to a legible portrait zoom
 (`zoomToCells(COMBAT_CELL_SIZE, 64)` on the M104 viewport camera) centered on the active
 actor.
+
+**Height budget (icon-first-ui-density, 2026-08-21).** The icon-first swap
+reclaims vertical chrome for playfield/map + console content. Two rules bound
+every entry: the **96px touch floor NEVER moves** (any `.console-row`,
+`.mode-tab`, `.combat-action`, `.combat-direction`, `.combat-target` stays
+≥96px in portrait — see **Spacing System** and **Input target rules** above),
+and **every reclaimed pixel is assigned to playfield/map or console content**,
+never dropped into slack padding. Targets are per-viewport ranges; downstream
+sessions report achieved values in handoffs and the acceptance sessions raise
+the e2e geometry floors from those achieved values, not from these targets.
+Full per-region math and viewport tables in `docs/icon-density-gap.md` §5.
+
+| Region | Portrait phone (412×915) | Wide-square (1024×1024) | Delta assigned to |
+|--------|--------------------------|--------------------------|-------------------|
+| Status strip (explore) | Icon-prefixed field labels tighten inline gaps; strip content unchanged | Wide dock: `hash` on Seed, `gauge` on Depth, etc. shave a small height per stacked row | Playfield / map |
+| Console tab bar (collapsed) | Icon-only tabs (20px glyph + numeric badge) at the 96px touch floor — height unchanged, glyph legibility raised | Wide 72px vertical tabs unchanged (`.wide-mode-tab` floor) | — (touch floor holds) |
+| Console mode content | Icon prefixes on action rows and slot buttons tighten label runs; row heights stay ≥96px | Same rule inside the console dock | Console content density |
+| Title branches | Icon prefixes on BEGIN NEW RUN / RUN LIBRARY / IMPORT LINK / MANUAL / SETTINGS; branch button height stays ≥ 46px (WCAG floor), permitted to grow toward 56px if the acceptance session reclaims elsewhere | Same rule; wider ornament field around the centered stack | Title composition |
 
 ### Screen Layouts by Class
 
