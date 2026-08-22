@@ -60,4 +60,16 @@ describe('icon sprite build output', () => {
       expect(subsetSet.has(id), `orphan symbol '${id}'`).toBe(true);
     }
   });
+
+  // icon-first-ui-density SESSION-02: pin the two new ids ordered by
+  // SESSION-01's followUp so the sprite pipeline stops re-shipping without
+  // them if the subset is rebuilt from an older revision.
+  test('SESSION-02 additions ship in both subset.json and the sprite', () => {
+    const subsetSet = new Set(subsetIds);
+    const symbolSet = new Set(symbolIds);
+    for (const id of ['chevron-down', 'hash']) {
+      expect(subsetSet.has(id), `subset.json missing '${id}'`).toBe(true);
+      expect(symbolSet.has(id), `assets/icons.svg missing '${id}'`).toBe(true);
+    }
+  });
 });

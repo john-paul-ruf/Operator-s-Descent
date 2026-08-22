@@ -29,8 +29,8 @@ export const ICON_IDS = new Set([
   'flask-conical', 'wand-sparkles', 'gauge',
   'archive', 'box', 'gem',
   'scroll-text', 'link', 'download', 'upload',
-  'menu', 'chevron-left', 'chevron-right', 'x', 'check',
-  'circle-help', 'info', 'triangle-alert', 'eye', 'eye-off'
+  'menu', 'chevron-left', 'chevron-right', 'chevron-down', 'x', 'check',
+  'circle-help', 'info', 'triangle-alert', 'eye', 'eye-off', 'hash'
 ]);
 
 export function isIconId(id) {

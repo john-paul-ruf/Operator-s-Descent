@@ -87,6 +87,13 @@ describe('isIconId', () => {
     expect(isIconId('')).toBe(false);
     expect(isIconId(null)).toBe(false);
   });
+  // icon-first-ui-density SESSION-02: two new sprite ids requested by
+  // SESSION-01 (§3.7 loot MANAGE JUNK toggle, §3.9 wide-dock Seed label).
+  // Pinned explicitly so a regression at either end fails loudly.
+  test('SESSION-02 sprite additions are members of ICON_IDS', () => {
+    expect(isIconId('chevron-down')).toBe(true);
+    expect(isIconId('hash')).toBe(true);
+  });
 });
 
 describe('ICON_IDS lockstep with sprite', () => {

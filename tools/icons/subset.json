@@ -8,5 +8,5 @@
   "tech":   ["flask-conical", "wand-sparkles", "gauge"],
   "loot":   ["archive", "box", "gem"],
   "log":    ["scroll-text", "link", "download", "upload"],
-  "ui":     ["menu", "chevron-left", "chevron-right", "x", "check", "circle-help", "info", "triangle-alert", "eye", "eye-off"]
+  "ui":     ["menu", "chevron-left", "chevron-right", "chevron-down", "x", "check", "circle-help", "info", "triangle-alert", "eye", "eye-off", "hash"]
 }
