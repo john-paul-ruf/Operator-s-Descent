@@ -483,6 +483,24 @@ describe('scorecard screen', () => {
     expect(byTestId(container, 'scorecard-roster').children[0].children[0].classList.contains('sigil-dead')).toBe(true);
     expect(byTestId(container, 'scorecard-library')).toBeTruthy();
 
+    const copyBtn = byTestId(container, 'scorecard-copy-world');
+    expect(copyBtn.getAttribute('aria-label')).toBe('COPY WORLD LINK');
+    expect(iconUseId(copyBtn)).toBe('link');
+    const restartBtn = byTestId(container, 'scorecard-restart-seed');
+    expect(restartBtn.getAttribute('aria-label')).toBe('RESTART SAME SEED');
+    expect(iconUseId(restartBtn)).toBe('recycle');
+    const scNewRun = byTestId(container, 'scorecard-new-run');
+    expect(scNewRun.getAttribute('aria-label')).toBe('NEW RUN');
+    expect(iconUseId(scNewRun)).toBe('chevron-right');
+    const scTitle = byTestId(container, 'scorecard-title');
+    expect(scTitle.classList.contains('icon-only')).toBe(true);
+    expect(scTitle.getAttribute('aria-label')).toBe('TITLE');
+    expect(iconUseId(scTitle)).toBe('arrow-left');
+    const scLibrary = byTestId(container, 'scorecard-library');
+    expect(scLibrary.classList.contains('icon-only')).toBe(true);
+    expect(scLibrary.getAttribute('aria-label')).toBe('LIBRARY');
+    expect(iconUseId(scLibrary)).toBe('archive');
+
     await byTestId(container, 'scorecard-copy-world').click();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(shareUrl);
     await byTestId(container, 'scorecard-restart-seed').click();

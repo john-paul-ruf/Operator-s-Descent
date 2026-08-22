@@ -40,6 +40,25 @@ function navigate(screen, params = {}) {
   bus.dispatch('ui:navigate', { screen, params });
 }
 
+// Update a button's visible text without disturbing prefixed icon children.
+// Walks childNodes for the trailing text node (real DOM) and rewrites its
+// value; falls back to textContent for environments without text-node
+// support (FakeElement in unit tests). Aria-label is never touched — it
+// stays pinned to the former visible label per Design Decision 2.
+function swapButtonLabel(button, text) {
+  const nodes = button.childNodes;
+  if (nodes && typeof nodes.length === 'number' && nodes.length > 0) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const node = nodes[i];
+      if (node && node.nodeType === 3) {
+        node.nodeValue = text;
+        return;
+      }
+    }
+  }
+  button.textContent = text;
+}
+
 function buildRoster(party) {
   const roster = document.createElement('div');
   roster.className = 'scorecard-roster';
@@ -140,10 +159,10 @@ export function mount(container, params = {}) {
     }
     if (copied) {
       copyStatus.textContent = 'WORLD LINK COPIED';
-      copyBtn.textContent = 'WORLD LINK COPIED';
+      swapButtonLabel(copyBtn, 'WORLD LINK COPIED');
       if (typeof globalThis.setTimeout === 'function') {
         if (resetTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(resetTimer);
-        resetTimer = globalThis.setTimeout(() => { copyBtn.textContent = 'COPY WORLD LINK'; resetTimer = null; }, 2000);
+        resetTimer = globalThis.setTimeout(() => { swapButtonLabel(copyBtn, 'COPY WORLD LINK'); resetTimer = null; }, 2000);
       }
     } else {
       copyStatus.textContent = 'CLIPBOARD UNAVAILABLE — SELECT LINK';
@@ -152,7 +171,13 @@ export function mount(container, params = {}) {
     }
   }
 
-  const copyBtn = createButton('COPY WORLD LINK', { onClick: copyShareLink });
+  const copyBtn = createButton('COPY WORLD LINK', {
+    label: 'COPY WORLD LINK',
+    icon: 'link',
+    iconSize: 14,
+    iconTone: 'accent',
+    onClick: copyShareLink
+  });
   copyBtn.dataset.testid = 'scorecard-copy-world';
   cleanups.push(() => {
     if (resetTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(resetTimer);
@@ -161,20 +186,34 @@ export function mount(container, params = {}) {
   });
 
   const restart = createButton('RESTART SAME SEED', {
+    label: 'RESTART SAME SEED',
+    icon: 'recycle',
+    iconSize: 16,
+    iconTone: 'accent',
     primary: true,
     onClick: () => navigate('creation', { preloadedSeed: seed })
   });
   restart.classList.remove('btn-primary');
   restart.dataset.testid = 'scorecard-restart-seed';
   const newRun = createButton('NEW RUN', {
+    label: 'NEW RUN',
+    icon: 'chevron-right',
+    iconSize: 16,
+    iconTone: 'accent',
     onClick: () => navigate('creation')
   });
   newRun.dataset.testid = 'scorecard-new-run';
-  const titleButton = createButton('TITLE', {
+  const titleButton = createButton('', {
+    label: 'TITLE',
+    icon: 'arrow-left',
+    iconSize: 16,
     onClick: () => navigate('title')
   });
   titleButton.dataset.testid = 'scorecard-title';
-  const libraryButton = createButton('LIBRARY', {
+  const libraryButton = createButton('', {
+    label: 'LIBRARY',
+    icon: 'archive',
+    iconSize: 16,
     onClick: () => navigate('library')
   });
   libraryButton.dataset.testid = 'scorecard-library';
