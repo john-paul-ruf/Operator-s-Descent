@@ -16,7 +16,7 @@
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---------|---------|------|--------|------------|-----------|-------|
 | 01 | Shared menu/action primitives and CSS contract | M56, M79, M101 | `./src/ui/components.js`, `./tests/ui/components.test.js`, `./styles/components.css`, `./styles/wide.css` | done | 4/4 | 2026-08-21 | Shared menu/action primitives and additive CSS contract complete. |
-| 02 | Wide pane controls on the shared action grammar | M100, M95 | `./src/ui/layout.js`, `./tests/ui/layout.test.js` | pending | — | — | Depends on SESSION-01; preserve pane state/persistence/geometry. |
+| 02 | Wide pane controls on the shared action grammar | M100, M95 | `./src/ui/layout.js`, `./tests/ui/layout.test.js` | done | 2/2 | 2026-08-21 | Wide pane collapse controls now use the shared action primitive. |
 | 03 | Creation tablist through the shared tab primitive | M69, M95 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | pending | — | — | Depends on SESSION-01; owns portrait `renderTabs` and re-render cleanup. |
 | 04 | Title branches and settings motion group | M68, M76, M95 | `./src/ui/screens/title.js`, `./src/ui/screens/settings.js`, `./tests/ui/front-door.test.js` | pending | — | — | Depends on SESSION-01; title and settings share one front-door test lease. |
 
@@ -77,4 +77,10 @@ flowchart TD
 
 ```json
 {"session":"01","status":"done","checkpoint":4,"notes":"Shared menu/action primitives and additive CSS contract complete.","delivered":"Added createMenuAction, createMenuGroup, and createTabGroup with ARIA state, stable test IDs, icons, state updates, lookup, and idempotent cleanup. Added additive menu CSS hooks while preserving legacy selectors and touch floors.","verification":"76 tests passed; npm run design:scan passed with 2 informational findings and 0 errors; git diff --check passed.","surprises":"Untracked .DS_Store remains outside the lease. console.js and input.js were read-only compatibility references.","followUp":"Consumer sessions should use getAction(id), setItemState(id, state), and tab onSelect(id, event, item).","filesTouched":["./src/ui/components.js","./tests/ui/components.test.js","./styles/components.css","./styles/wide.css"],"blockedReason":null}
+```
+
+### SESSION-02
+
+```json
+{"session":"02","status":"done","checkpoint":2,"notes":"Wide pane collapse controls now use the shared action primitive.","delivered":"Refactored both collapse buttons to createMenuAction while preserving native button semantics, labels, classes, test IDs, append order, pane state, persistence, and cleanup.","verification":"83 focused unit tests passed; wide-panes e2e: 10 passed, 30 skipped; git diff --check and syntax check passed.","surprises":"A pre-staged deletion outside the lease was included in checkpoint 1 commit: ./program/operator-s-descent/prompts/icon-first-ui-density/STATE.md. Concurrent creation-session changes were observed outside the lease.","followUp":"No architecture fragment needed. Width bounds, data attributes, storage shape, visible arrows, child-tab auto-expand, and ./src/ui/input.js remain unchanged.","filesTouched":["./src/ui/layout.js","./tests/ui/layout.test.js","./program/operator-s-descent/prompts/icon-first-ui-density/STATE.md"],"blockedReason":null}
 ```
