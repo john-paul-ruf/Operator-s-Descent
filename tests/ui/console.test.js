@@ -75,6 +75,7 @@ describe('console shell', () => {
     expect(root.children[1].children[0].getAttribute('aria-selected')).toBe('true');
     expect(root.children[1].children[1].classList.contains('disabled')).toBe(true);
     expect(root.children[2].className).toContain('scroll-area');
+    expect(root.children[2].dataset.scrollOwner).toBe('console-mode');
     expect(root.getAttribute('aria-expanded')).toBe('false');
     // Portrait console seeds data-expand-state at construction time so callers
     // reading the dataset before any expand() call see 'collapsed'.
@@ -243,6 +244,7 @@ describe('console dock variant (wide)', () => {
     expect(root.children).toHaveLength(2);
     expect(root.children[0].className).toContain('wide-console-tabs');
     expect(root.children[1].className).toContain('wide-console-content');
+    expect(byClass(root, 'wide-console-content-body').dataset.scrollOwner).toBe('console-mode');
     expect(byClass(root, 'console-dim-layer')).toBe(null);
     const tabs = root.children[0].children;
     expect(tabs).toHaveLength(7);

@@ -87,6 +87,7 @@ export function createConsole(state, options = {}) {
   }
   const contentArea = document.createElement('div');
   contentArea.className = isDock ? 'wide-console-content-body scroll-area' : 'console-content scroll-area';
+  contentArea.dataset.scrollOwner = 'console-mode';
   contentArea.setAttribute('role', 'tabpanel');
   contentArea.tabIndex = -1;
   const notice = document.createElement('div');

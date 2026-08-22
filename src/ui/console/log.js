@@ -169,7 +169,7 @@ function describeDetailFromFields(entry) {
 
 export function createLogEntryElement(entry, index) {
   const el = document.createElement('div');
-  el.className = `log-entry log-${entry.type || 'info'} console-row`;
+  el.className = `log-entry log-${entry.type || 'info'} console-static-row`;
   el.dataset.testid = `log-entry-${index}`;
   const order = entry.sequence ?? entry.turn ?? entry.eventIndex ?? index + 1;
   const stamp = document.createElement('span');
@@ -266,26 +266,26 @@ export function render(container, context = {}) {
   const logs = collectLogs(context);
   const isWide = context.layout === 'wide';
   const heading = document.createElement('div');
-  heading.className = isWide ? 'log-history-header' : 'mode-indicator log-heading';
+  heading.className = isWide ? 'log-history-header console-static-row' : 'mode-indicator log-heading console-static-row';
   heading.textContent = `◈ EVENT LOG — FLOOR ${String(context.runState?.depth || 1).padStart(2, '0')}`;
   container.appendChild(heading);
   const logArea = createScrollArea({ label: 'Recent event log', focusable: true });
   logArea.className = 'log-area scroll-area';
   logArea.dataset.testid = 'log-area';
 
-  if (!logs.length) logArea.appendChild(Object.assign(document.createElement('div'), { className: 'log-empty console-row', textContent: 'No events logged.' }));
+  if (!logs.length) logArea.appendChild(Object.assign(document.createElement('div'), { className: 'log-empty console-static-row', textContent: 'No events logged.' }));
   for (let index = 0; index < logs.length; index++) logArea.appendChild(createLogEntryElement(logs[index], index));
   container.appendChild(logArea);
 
   const share = document.createElement('div');
   share.className = isWide ? 'log-share share-panel panel-elevated' : 'log-share panel-elevated';
   share.dataset.testid = 'log-share';
-  share.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator', textContent: '◈ SHARE RUN' }));
-  share.appendChild(Object.assign(document.createElement('div'), { className: 'log-budget', textContent: 'URL < 1500 chars' }));
+  share.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator console-static-row', textContent: '◈ SHARE RUN' }));
+  share.appendChild(Object.assign(document.createElement('div'), { className: 'log-budget console-static-row', textContent: 'URL < 1500 chars' }));
   if (state.link) {
     const fallback = document.createElement('input');
     fallback.type = 'text';
-    fallback.className = isWide ? 'log-link-text share-input console-row' : 'log-link-text console-row';
+    fallback.className = isWide ? 'log-link-text share-input console-static-row' : 'log-link-text console-static-row';
     fallback.dataset.testid = 'log-link-text';
     fallback.value = state.link;
     fallback.setAttribute('readonly', 'readonly');
@@ -309,14 +309,14 @@ export function render(container, context = {}) {
   container.appendChild(share);
   if (state.notice) {
     const notice = document.createElement('div');
-    notice.className = 'log-notice console-row';
+    notice.className = 'log-notice console-static-row';
     notice.dataset.testid = 'log-notice';
     notice.textContent = state.notice;
     container.appendChild(notice);
   }
   if (state.error) {
     const error = document.createElement('div');
-    error.className = 'log-error console-row';
+    error.className = 'log-error console-static-row';
     error.dataset.testid = 'log-error';
     error.textContent = state.error;
     container.appendChild(error);

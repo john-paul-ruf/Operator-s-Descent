@@ -209,6 +209,24 @@ describe('LOG mode — slim persisted event rendering', () => {
   });
 });
 
+describe('LOG mode — static density markers', () => {
+  it('keeps the named focusable log surface while marking entries and empty content static', () => {
+    const container = new FakeElement('div');
+    renderLog(container, { runState: run(), data, logEntries: [] });
+    const logArea = byTestId(container, 'log-area');
+    expect(logArea.classList.contains('scroll-area')).toBe(true);
+    expect(logArea.getAttribute('aria-label')).toBe('Recent event log');
+    expect(logArea.tabIndex).toBe(0);
+    const empty = logArea.children[0];
+    expect(empty.classList.contains('console-static-row')).toBe(true);
+    expect(empty.classList.contains('console-row')).toBe(false);
+
+    const entry = createLogEntryElement({ type: 'combat', message: 'Drone defeated.', sequence: 1 }, 0);
+    expect(entry.classList.contains('console-static-row')).toBe(true);
+    expect(entry.classList.contains('console-row')).toBe(false);
+  });
+});
+
 function detailChild(row) {
   return (row.children || []).find((child) => (child.className || '').includes('log-detail')) || null;
 }

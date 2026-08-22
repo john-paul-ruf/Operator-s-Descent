@@ -860,3 +860,31 @@ describe('console/combat.js — primary-action contract (SESSION-01)', () => {
     ]);
   });
 });
+
+describe('console/combat.js — static density markers', () => {
+  it('marks noninteractive readouts as static while preserving action control classes', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, {
+      ...renderContext({
+        active,
+        enemies: [makeEnemy()],
+        selection: { phase: 'choose-action', actionType: 'attack', targetId: null },
+        previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+      }),
+      layout: 'wide'
+    });
+
+    for (const testid of ['combat-active', 'initiative-rail', 'combat-hint']) {
+      const node = byTestId(container, testid);
+      expect(node, `${testid} exists`).toBeTruthy();
+      expect(node.classList.contains('console-static-row')).toBe(true);
+      expect(node.classList.contains('console-row')).toBe(false);
+    }
+    for (const id of ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'end-turn']) {
+      const button = byTestId(container, `combat-action-${id}`);
+      expect(button.classList.contains('console-row')).toBe(true);
+      expect(button.classList.contains('console-static-row')).toBe(false);
+    }
+  });
+});

@@ -124,7 +124,7 @@ function humanizeActorNames(actors) {
 function activeSummary(container, active, dispatch) {
   if (!active) return;
   const panel = document.createElement('div');
-  panel.className = 'combat-active-panel panel-elevated console-row';
+  panel.className = 'combat-active-panel panel-elevated console-static-row';
   panel.dataset.testid = 'combat-active';
   panel.appendChild(createSigilToken(sigilOf(active), 34, { role: roleOf(active), label: `Active ${humanizeActorName(active)}` }));
   appendText(panel, 'combat-active-name', `${humanizeActorName(active)} · ${active.side?.toUpperCase() || 'ACTOR'}`);
@@ -152,7 +152,7 @@ function activeSummary(container, active, dispatch) {
 function activeConditions(container, active, dispatch) {
   if (!active) return;
   const row = document.createElement('div');
-  row.className = 'combat-active-conditions console-row';
+  row.className = 'combat-active-conditions console-static-row';
   row.dataset.testid = 'combat-active';
   const apLine = appendText(row, 'combat-ap', `AP ${active.ap ?? 0} · ${active.moveAvailable ? 'MOVE READY' : 'MOVE SPENT'}`);
   apLine.appendChild(createManualLink('ap_and_initiative', {
@@ -169,7 +169,7 @@ function activeConditions(container, active, dispatch) {
 
 function initiativeRail(container, combatState) {
   const rail = document.createElement('div');
-  rail.className = 'init-rail panel console-row';
+  rail.className = 'init-rail panel console-static-row';
   rail.dataset.testid = 'initiative-rail';
   const actors = new Map(getActors(combatState).map((actor) => [actor.id, actor]));
   for (const id of combatState.turnOrder || []) {
@@ -337,7 +337,7 @@ function renderProtocols(container, context, active) {
   const list = document.createElement('div');
   list.className = 'combat-protocol-list';
   list.dataset.testid = 'combat-protocols';
-  if (!protocols.length) appendText(list, 'console-empty', 'No protocols prepared.');
+  if (!protocols.length) appendText(list, 'console-empty console-static-row', 'No protocols prepared.');
   const cleanups = [];
   for (const protocol of protocols) {
     const data = context.protocolsData?.schools?.[protocol.school]?.tiers?.[protocol.tier - 1];
@@ -361,7 +361,7 @@ function renderItems(container, context) {
   const list = document.createElement('div');
   list.className = 'combat-item-list';
   list.dataset.testid = 'combat-items';
-  if (!items.length) appendText(list, 'console-empty', 'No consumables available.');
+  if (!items.length) appendText(list, 'console-empty console-static-row', 'No consumables available.');
   const cleanups = [];
   for (const item of items) {
     const button = createButton(item.name || item.baseType || item.id, {
@@ -403,7 +403,7 @@ function renderTargets(container, context) {
   if (selected) {
     if (context.layout === 'wide') {
       const info = document.createElement('div');
-      info.className = 'target-info';
+      info.className = 'target-info console-static-row';
       info.dataset.testid = 'combat-selected-preview';
       const name = document.createElement('div');
       name.className = 'target-name';
@@ -417,13 +417,13 @@ function renderTargets(container, context) {
       info.append(name, detail);
       list.appendChild(info);
     } else {
-      const preview = appendText(list, 'mode-indicator combat-target-preview', `◈ TARGET: ${nameOf(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
+      const preview = appendText(list, 'mode-indicator combat-target-preview console-static-row', `◈ TARGET: ${nameOf(selected)} · ${previewText(context.combatGetPreview?.(selected.id))}`, 'combat-selected-preview');
       preview.appendChild(createManualLink('cover_and_range', {
         variant: 'chip', source: 'combat-cover', dispatch, testid: 'combat-cover-link'
       }));
     }
   }
-  if (!targets.length) appendText(list, 'console-empty', 'No valid targets.');
+  if (!targets.length) appendText(list, 'console-empty console-static-row', 'No valid targets.');
   const cleanups = [];
   for (const target of targets) {
     const preview = context.combatGetPreview?.(target.id);
@@ -491,7 +491,7 @@ export function render(container, context = {}) {
   clear(container);
   const combatState = context.combatState;
   if (!combatState) {
-    appendText(container, 'console-empty', 'No active combat.');
+    appendText(container, 'console-empty console-static-row', 'No active combat.');
     return;
   }
   const selection = context.selection || {};
@@ -508,8 +508,8 @@ export function render(container, context = {}) {
   // instead of after it, so the feedback stays glance-able even when the
   // action or target list is long.
   if (isWide) {
-    if (selection.notice) appendText(container, 'combat-notice console-row', selection.notice, 'combat-notice');
-    if (selection.error) appendText(container, 'combat-error console-row', selection.error, 'combat-error');
+    if (selection.notice) appendText(container, 'combat-notice console-static-row', selection.notice, 'combat-notice');
+    if (selection.error) appendText(container, 'combat-error console-static-row', selection.error, 'combat-error');
   }
   // Wide keeps the full readout (the wide dock has no top status strip); portrait
   // (default when `context.layout` is unset) hands the readout to M59 and shows
@@ -521,11 +521,11 @@ export function render(container, context = {}) {
     activeConditions(container, active, dispatch);
   }
   if (combatState.ended) {
-    appendText(container, 'combat-terminal console-row', `COMBAT ${String(combatState.result || 'ENDED').toUpperCase()}`, 'combat-terminal');
+    appendText(container, 'combat-terminal console-static-row', `COMBAT ${String(combatState.result || 'ENDED').toUpperCase()}`, 'combat-terminal');
     return;
   }
   if (!active || active.side !== 'party') {
-    appendText(container, 'combat-resolving console-row', 'Enemy turn resolving…', 'combat-resolving');
+    appendText(container, 'combat-resolving console-static-row', 'Enemy turn resolving…', 'combat-resolving');
     return;
   }
   const legalActions = context.combatGetLegalActions?.() || { actions: [], legalMoveDirections: [] };
@@ -535,7 +535,7 @@ export function render(container, context = {}) {
   if (selection.phase === 'choose-item') renderItems(container, context);
   if (selection.phase === 'choose-target' || (selection.phase === 'confirm' && ['attack', 'cast', 'overclock', 'item'].includes(selection.actionType))) renderTargets(container, context);
   if (selection.phase === 'confirm') renderConfirm(container, context);
-  else if (selection.actionType) appendText(container, 'combat-hint console-row', 'Select an option, then confirm.', 'combat-hint');
+  else if (selection.actionType) appendText(container, 'combat-hint console-static-row', 'Select an option, then confirm.', 'combat-hint');
 }
 
 export function handleInput(event, context = {}) {
