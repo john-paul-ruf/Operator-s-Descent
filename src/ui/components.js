@@ -451,8 +451,11 @@ export function createConditionTag(conditionId, duration, opts = {}) {
 }
 
 export function createEquipmentCard(item, opts = {}) {
+  const isCompactStatic = opts.compact === true && !opts.onClick;
   const card = document.createElement(opts.onClick ? 'button' : 'article');
-  card.className = 'equipment-card item-card console-row';
+  card.className = isCompactStatic
+    ? 'equipment-card item-card console-static-card'
+    : 'equipment-card item-card console-row';
   if (opts.onClick) card.type = 'button';
   if (item.corrupt) card.classList.add('corrupt');
   if (opts.onClick) card.classList.add('is-interactive');
@@ -487,8 +490,11 @@ export function createEquipmentCard(item, opts = {}) {
 }
 
 export function createProtocolCard(protocol, opts = {}) {
+  const isCompactStatic = opts.compact === true && !opts.onClick;
   const card = document.createElement(opts.onClick ? 'button' : 'article');
-  card.className = 'protocol-card action-btn console-row';
+  card.className = isCompactStatic
+    ? 'protocol-card action-btn console-static-card'
+    : 'protocol-card action-btn console-row';
   if (opts.onClick) card.type = 'button';
   if (opts.insufficient) card.classList.add('insufficient');
   if (opts.onClick) card.classList.add('is-interactive');

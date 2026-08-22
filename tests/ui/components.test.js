@@ -216,6 +216,29 @@ describe('semantic components', () => {
     expect(staticProtocol.classList.values.has('is-interactive')).toBe(false);
   });
 
+  test('compact card variants mark only static articles without changing their content contract', () => {
+    const equipment = { id: 'sidearm-1', name: 'Sidearm', description: 'd6 dmg', rarity: 'Tuned' };
+    const protocol = { id: 'purge', name: 'PURGE', school: 'disrupt', chargeCost: 2, effect: 'Clear one condition.' };
+
+    const defaultEquipment = createEquipmentCard(equipment);
+    const compactEquipment = createEquipmentCard(equipment, { compact: true });
+    const clickableEquipment = createEquipmentCard(equipment, { compact: true, onClick: () => {} });
+    expect(defaultEquipment.className).toBe('equipment-card item-card console-row');
+    expect(compactEquipment.className).toBe('equipment-card item-card console-static-card');
+    expect(compactEquipment.children.map((child) => child.className)).toEqual(defaultEquipment.children.map((child) => child.className));
+    expect(clickableEquipment.tagName).toBe('BUTTON');
+    expect(clickableEquipment.className).toBe('equipment-card item-card console-row is-interactive');
+
+    const defaultProtocol = createProtocolCard(protocol);
+    const compactProtocol = createProtocolCard(protocol, { compact: true });
+    const clickableProtocol = createProtocolCard(protocol, { compact: true, onClick: () => {} });
+    expect(defaultProtocol.className).toBe('protocol-card action-btn console-row');
+    expect(compactProtocol.className).toBe('protocol-card action-btn console-static-card');
+    expect(compactProtocol.children.map((child) => child.className)).toEqual(defaultProtocol.children.map((child) => child.className));
+    expect(clickableProtocol.tagName).toBe('BUTTON');
+    expect(clickableProtocol.className).toBe('protocol-card action-btn console-row is-interactive');
+  });
+
   test('createUpdateToast renders a testid-marked reload button that fires onReload once and cleans up', () => {
     let reloaded = 0;
     const toast = createUpdateToast({ onReload: () => { reloaded += 1; } });
