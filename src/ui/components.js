@@ -257,7 +257,10 @@ export function createTabGroup(items, opts = {}) {
         testid: caller.testid ?? `tab-${id}`,
         onClick: (event) => {
           currentId = id;
-          group.actions?.forEach((action) => action.setState({ selected: action === group.getAction(id), active: action === group.getAction(id) }));
+          group.actions?.forEach((action) => {
+            const isCurrent = action === group.getAction(id);
+            action.setState({ selected: isCurrent, active: isCurrent });
+          });
           caller.onClick?.(event);
           opts.onSelect?.(id, event, item);
         }
