@@ -183,6 +183,80 @@ describe('console/combat.js — portrait action-list + direction-pad density sca
   });
 });
 
+describe('console/combat.js — direction cells + BACK icons (SESSION-05 icon-first-ui-density)', () => {
+  const DIR_ICONS = {
+    n: 'arrow-up', ne: 'arrow-up-right', e: 'arrow-right', se: 'arrow-down-right',
+    s: 'arrow-down', sw: 'arrow-down-left', w: 'arrow-left', nw: 'arrow-up-left'
+  };
+
+  function pathContext(active) {
+    return {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-path', actionType: 'move', movePath: [{ direction: 'n' }] },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move'], legalMoveDirections: ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] }),
+      combatGetPathSteps: () => ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'],
+      combatGetTargets: () => [],
+      combatGetPreview: () => null,
+      combatStepPath: () => {},
+      combatPopPath: () => {}
+    };
+  }
+
+  it('each of the 8 direction cells prefixes an arrow-<dir> lucide sprite and drops the arrow character', () => {
+    const container = new FakeElement('div');
+    renderCombat(container, pathContext(makeActive({ ap: 2 })));
+    for (const [dir, iconId] of Object.entries(DIR_ICONS)) {
+      const cell = byTestId(container, `combat-dir-${dir}`);
+      expect(cell, `combat-dir-${dir} exists`).toBeTruthy();
+      const svg = svgChild(cell);
+      expect(svg, `combat-dir-${dir} has an svg icon`).toBeTruthy();
+      const useEl = (svg.children || []).find((c) => c.tagName === 'USE');
+      expect(useEl.getAttribute('href')).toBe(`assets/icons.svg#${iconId}`);
+      // Arrow character no longer painted alongside the sprite.
+      expect(cell.textContent.trim()).not.toMatch(/[↑↓←→↖↗↙↘]/);
+      // aria-label preserves the former direction phrasing.
+      expect(cell.getAttribute('aria-label')).toBe(`Step ${dir}`);
+    }
+    // Center cell keeps its value chip text — no icon swap.
+    const center = byTestId(container, 'combat-dir-center');
+    expect(svgChild(center)).toBeFalsy();
+    expect(center.textContent).toMatch(/LEFT/);
+  });
+
+  it('UNDO row (path length > 0) carries an arrow-up-left icon + text keeps', () => {
+    const container = new FakeElement('div');
+    renderCombat(container, pathContext(makeActive({ ap: 2 })));
+    const undo = byTestId(container, 'combat-undo');
+    expect(undo).toBeTruthy();
+    const svg = svgChild(undo);
+    expect(svg).toBeTruthy();
+    expect((svg.children || []).find((c) => c.tagName === 'USE').getAttribute('href')).toBe('assets/icons.svg#arrow-up-left');
+    expect(undo.textContent).toBe('UNDO');
+  });
+
+  it('BACK button (confirm phase) is icon-only with arrow-left sprite and aria-label "BACK"', () => {
+    const active = makeActive({ ap: 2 });
+    const container = new FakeElement('div');
+    renderCombat(container, {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'confirm', actionType: 'attack', targetId: 'enemy' },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['attack'], legalMoveDirections: [] }),
+      combatGetTargets: () => [makeEnemy({ id: 'enemy' })],
+      combatGetPreview: () => ({ distance: 1, range: { band: 'adjacent', legal: true }, coverBonus: 0, flanked: false, targetLegal: true }),
+      combatCanConfirm: () => true
+    });
+    const back = byTestId(container, 'combat-back');
+    expect(back).toBeTruthy();
+    expect(back.classList.contains('icon-only')).toBe(true);
+    const svg = svgChild(back);
+    expect(svg).toBeTruthy();
+    expect((svg.children || []).find((c) => c.tagName === 'USE').getAttribute('href')).toBe('assets/icons.svg#arrow-left');
+    expect(back.getAttribute('aria-label')).toBe('BACK');
+  });
+});
+
 describe('console/combat.js — action button icons (SESSION-05 checkpoint 4)', () => {
   it('every combat-action button contains an <svg> icon child with the icon class', () => {
     const active = makeActive();

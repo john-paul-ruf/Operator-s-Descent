@@ -29,10 +29,13 @@ const ACTIONS = [
   { id: 'retreat', label: 'Retreat', needs: '1 AP', icon: 'arrow-up-right' },
   { id: 'end-turn', label: 'End Turn', needs: 'explicit', icon: 'clock', primary: true }
 ];
+// SESSION-05 (icon-first-ui-density) — direction cells swap the arrow
+// character for the same 8 lucide sprites the D-pad already uses (GAP §3.3).
+// The center cell stays a value chip (`N LEFT`), so its icon field is null.
 const DIRECTION_GRID = [
-  ['nw', '↖'], ['n', '↑'], ['ne', '↗'],
-  ['w', '←'], [null, '·'], ['e', '→'],
-  ['sw', '↙'], ['s', '↓'], ['se', '↘']
+  ['nw', '↖', 'arrow-up-left'], ['n', '↑', 'arrow-up'], ['ne', '↗', 'arrow-up-right'],
+  ['w', '←', 'arrow-left'], [null, '·', null], ['e', '→', 'arrow-right'],
+  ['sw', '↙', 'arrow-down-left'], ['s', '↓', 'arrow-down'], ['se', '↘', 'arrow-down-right']
 ];
 const ACTION_TO_DIRECTION = {
   move_n: 'n', move_s: 's', move_w: 'w', move_e: 'e',
@@ -286,7 +289,7 @@ function renderDirections(container, context) {
   const grid = document.createElement('div');
   grid.className = 'combat-direction-grid';
   grid.dataset.testid = 'combat-directions';
-  for (const [direction, label] of DIRECTION_GRID) {
+  for (const [direction, label, iconId] of DIRECTION_GRID) {
     if (!direction) {
       const center = document.createElement('div');
       center.className = 'combat-direction console-row dpad-center';
@@ -295,22 +298,34 @@ function renderDirections(container, context) {
       grid.appendChild(center);
       continue;
     }
-    const button = createButton(label, {
+    // SESSION-05 (icon-first-ui-density) — same sprite-only D-pad rhythm as
+    // src/ui/console/move.js: when opts.icon is set, createButton drops the
+    // visible text and marks the cell `icon-only`. aria-label preserves the
+    // former direction phrasing verbatim.
+    const button = createButton(iconId ? '' : label, {
       label: `Step ${direction}`,
       disabled: !legalNext.has(direction) || selection.resolving,
+      icon: iconId || undefined,
+      iconSize: 16,
       onClick: () => context.combatStepPath?.(direction)
     });
-    button.className = `combat-direction console-row`;
+    // Preserve existing structural classes; createButton's own icon-only marker
+    // survives via classList.add rather than className reassignment (Issue G
+    // guard from src/ui/console/move.js:80-82).
+    button.classList.add('combat-direction', 'console-row');
     button.dataset.testid = `combat-dir-${direction}`;
     grid.appendChild(button);
   }
   container.appendChild(grid);
   if (path.length > 0) {
+    // UNDO — icon+text keep per GAP §3.3 (semantically loaded verb). arrow-up-left
+    // reads as "step back up the path" without stealing meaning from BACK.
     const undo = createButton('UNDO', {
       disabled: selection.resolving,
+      icon: 'arrow-up-left', iconSize: 14, iconTone: 'dim',
       onClick: () => context.combatPopPath?.()
     });
-    undo.className = 'combat-undo console-row';
+    undo.classList.add('combat-undo', 'console-row');
     undo.dataset.testid = 'combat-undo';
     container.appendChild(undo);
   }
@@ -459,7 +474,14 @@ function renderConfirm(container, context) {
   confirm.dataset.testid = 'combat-confirm';
   if (context.layout === 'wide') confirm.classList.add('btn-confirm');
   row.appendChild(confirm);
-  const back = createButton('BACK', { disabled: selection.resolving, onClick: () => context.combatCancel?.() });
+  // SESSION-05 (icon-first-ui-density) — BACK is icon-only per GAP §3.3 (arrow-left).
+  // aria-label preserves the former visible label verbatim (`BACK`).
+  const back = createButton('', {
+    label: 'BACK',
+    disabled: selection.resolving,
+    icon: 'arrow-left', iconSize: 14,
+    onClick: () => context.combatCancel?.()
+  });
   back.dataset.testid = 'combat-back';
   row.appendChild(back);
   container.appendChild(row);
