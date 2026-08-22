@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | **Feature** | `portrait-usability-regression-repair` |
-| **Status** | In Progress |
+| **Status** | Blocked |
 | **Started** | 2026-08-21 15:43 CDT |
 | **Completed** | — |
 | **Authoritative plan** | `./program/operator-s-descent/prompts/portrait-usability-regression-repair/MASTER.md` |
@@ -20,7 +20,7 @@
 | SESSION-04 | done | — | 2/2 | Title state + navigation E2E | Title screen now subscribes to ui:manual-close and locally resets START ↔ branches to its canonical START-visible/branches-hidden view with focus on START; no history mutation, no route remount, no fragment change. |
 | SESSION-05 | done | — | 3/3 | Bus contracts + integration tests | Human override accepted the completed functional work despite checkpoint 1 commit `05af9ec` including `./README.MD` outside `Owns`; the violation remains recorded below. |
 | SESSION-06 | done | SESSION-01 | 4/4 | CSS/design/tooling + adaptive/combat E2E | Portrait console-bar now an in-flow flex child (no overlay, no dim layer); every touch-capable row hits the 96px floor; --hp added to design.md palette; deploy-p/deploy-e classes production-defined; design scan 0 warnings. |
-| SESSION-07 | in-progress | SESSION-01–06 | 0/3 | New integrated acceptance specification | Geometry, screenshots, and full release checks. |
+| SESSION-07 | blocked | SESSION-01–06 | 3/3 | New integrated acceptance specification | New integrated spec ./tests/e2e/portrait-usability.spec.js added and passes 7/7 across every project for which it is selected (chromium-portrait, chromium-phone-touch; firefox-portrait + webkit-portrait skip by design). Full feature gate blocked by 15 test failures outside SESSION-07's lease — 2 unit regressions in ./tests/ui/exploration-screen.test.js and 13 e2e failures across ./tests/e2e/accessibility.spec.js, ./tests/e2e/manual.spec.js, and ./tests/e2e/touch-flow.spec.js. |
 
 ## Wave Plan
 
@@ -118,3 +118,10 @@ flowchart TD
 - **Date:** 2026-08-21 18:37 CDT
 - **Instruction (verbatim):** mark it done then
 - **Decision:** SESSION-05 is accepted as done at checkpoint 3/3. The lease violation remains in the record. SESSION-07 is released for the final acceptance gate.
+
+### SESSION-07
+
+- **Blocked:** 2026-08-21
+- **Reason (verbatim):** Full feature gate fails on 2 unit tests (./tests/ui/exploration-screen.test.js lines 378 + 395; owning session per bisect: portrait-usability-regression-repair SESSION-02 via ./src/ui/viewport.js; command `npx vitest run tests/ui/exploration-screen.test.js`) AND 13 Playwright tests (./tests/e2e/accessibility.spec.js:78 × 4 projects [pre-existing at 5f501cc, no owner in this feature]; ./tests/e2e/manual.spec.js:301 + :314 × 4 projects [introduced by SESSION-01–06, most likely SESSION-04 title-manual close reset]; ./tests/e2e/touch-flow.spec.js:136 × chromium-phone-touch [pre-existing at 5f501cc]; command `E2E_PORT=4187 npx playwright test --reporter=line`). Every failing file is outside SESSION-07's write lease of ./tests/e2e/portrait-usability.spec.js; per session prompt: 'A production or pre-existing-spec failure outside the lease returns blocked with the owning path, failing project, screenshot/trace path, and exact command.' Trace/screenshot artifacts for each failing e2e sit under ./test-results/<test-slug>/{trace.zip, test-failed-1.png, video.webm, error-context.md} after each run of the exact command.
+- **Notes (verbatim):** New integrated spec ./tests/e2e/portrait-usability.spec.js added and passes 7/7 across every project for which it is selected (chromium-portrait, chromium-phone-touch; firefox-portrait + webkit-portrait skip by design). Full feature gate blocked by 15 test failures outside SESSION-07's lease — 2 unit regressions in ./tests/ui/exploration-screen.test.js and 13 e2e failures across ./tests/e2e/accessibility.spec.js, ./tests/e2e/manual.spec.js, and ./tests/e2e/touch-flow.spec.js.
+- **Follow-up (verbatim):** Follow-up session with a lease over ./tests/ui/exploration-screen.test.js needs to reconcile the 2 unit tests against SESSION-02's release-time gesture classification (src/ui/viewport.js) — likely the tests need to synthesize pointerdown+pointermove+pointerup rather than assuming pointerdown alone triggers the tap intent. Follow-up session with a lease over ./tests/e2e/manual.spec.js needs to reconcile the 8 manual-dismissal failures at lines 301+314 against SESSION-04's ui:manual-close reset-to-START behavior (the invoker.focus in ./src/ui/manual/manual-modal.js runs BEFORE the ui:manual-close dispatch, so the title's local listener then pulls focus back to START — old tests likely expected focus to stay on the invoker). The 5 pre-existing failures (accessibility.spec.js × 4, touch-flow.spec.js × 1) were carried forward from 5f501cc and appear as-is. My spec's tap coord math is copied verbatim from combat-touch.spec.js — if src/ui/screens/combat.js COMBAT_PORTRAIT_CELL_PX or src/ui/viewport.js MAX_ZOOM_SCALE changes, both specs need the same knob (combat-touch.spec.js already documents this coupling). The wide-square case runs on chromium-portrait with page.setViewportSize({width:1024,height:1024}) because the chromium-wide-square project's testMatch is scoped to adaptive-layout.spec.js in ./playwright.config.js; if a future feature widens that testMatch to include portrait-usability.spec.js, the test's PROJECT_NAME skip guard should be extended to also allow the wide-square project. Extracted PNG copies of every attachment (name-prefixed by project) currently live under /tmp/pw-shots for human review; regenerate by running the JSON reporter and base64-decoding testInfo.attach payloads.
