@@ -402,6 +402,24 @@
       box-shadow: inset 0 -4px 8px rgba(126,200,227,0.1);
     }
     .mode-tab.disabled { opacity: 0.3; cursor: not-allowed; }
+    /* Icon-first mode tabs + icon primitives (icon-first-ui-density SESSION-03,
+       mirror of styles/components.css + styles/icons.css). */
+    .mode-tab.icon-only { flex-direction: column; gap: 2px; padding: 8px 4px; }
+    .mode-tab.icon-only .tab-key { align-self: center; margin-left: 0; }
+    .mode-tab.icon-only > .icon { flex-shrink: 0; }
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-20 { width: 20px; height: 20px; }
+    .icon-24 { width: 24px; height: 24px; }
+    .icon-dim { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .tab-key { align-self: flex-start; margin-left: 4px; font-size: 8px;
+      line-height: 1; color: var(--text-dim); white-space: nowrap; }
+    .dpad-btn > .icon { width: 32px; height: 32px; }
 
     /* ── D-pad ── */
     .dpad {
@@ -569,13 +587,13 @@
       <div class="console-bar">
         <!-- Mode tabs -->
         <div class="flex">
-          <a href="exploration.html" class="mode-tab active" style="text-decoration:none;">MOVE</a>
-          <div class="mode-tab disabled">CMBT</div>
-          <a href="console-party.html" class="mode-tab" style="text-decoration:none;">PARTY</a>
-          <a href="console-gear.html" class="mode-tab" style="text-decoration:none;">GEAR</a>
-          <a href="console-tech.html" class="mode-tab" style="text-decoration:none;">TECH</a>
-          <a href="console-loot.html" class="mode-tab" style="text-decoration:none;">LOOT</a>
-          <a href="console-log.html" class="mode-tab" style="text-decoration:none;">LOG</a>
+          <a href="exploration.html" class="mode-tab icon-only active" style="text-decoration:none;" aria-label="MOVE · Key 1" title="MOVE"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#footprints"></use></svg><span class="tab-key" aria-hidden="true">1</span></a>
+          <div class="mode-tab icon-only disabled" aria-label="CMBT · Key 2 · no hostiles in view" title="CMBT"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#sword"></use></svg><span class="tab-key" aria-hidden="true">2</span></div>
+          <a href="console-party.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="PARTY · Key 3" title="PARTY"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#users"></use></svg><span class="tab-key" aria-hidden="true">3</span></a>
+          <a href="console-gear.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="GEAR · Key 4" title="GEAR"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#backpack"></use></svg><span class="tab-key" aria-hidden="true">4</span></a>
+          <a href="console-tech.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="TECH · Key 5" title="TECH"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#flask-conical"></use></svg><span class="tab-key" aria-hidden="true">5</span></a>
+          <a href="console-loot.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="LOOT · Key 6" title="LOOT"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#box"></use></svg><span class="tab-key" aria-hidden="true">6</span></a>
+          <a href="console-log.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="LOG · Key 7" title="LOG"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#scroll-text"></use></svg><span class="tab-key" aria-hidden="true">7</span></a>
         </div>
 
         <!-- Expanded content: MOVE mode D-pad -->
@@ -585,15 +603,15 @@
             <div class="text-[9px]" style="color: var(--text-dim);">Arrows / WASD / Numpad</div>
           </div>
           <div class="dpad">
-            <div class="dpad-btn">↖</div>
-            <div class="dpad-btn">↑</div>
-            <div class="dpad-btn">↗</div>
-            <div class="dpad-btn">←</div>
+            <div class="dpad-btn" role="button" aria-label="Step northwest"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-up-left"></use></svg></div>
+            <div class="dpad-btn" role="button" aria-label="Step north"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-up"></use></svg></div>
+            <div class="dpad-btn" role="button" aria-label="Step northeast"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-up-right"></use></svg></div>
+            <div class="dpad-btn" role="button" aria-label="Step west"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg></div>
             <div class="dpad-center">WAIT</div>
-            <div class="dpad-btn">→</div>
-            <div class="dpad-btn">↙</div>
-            <div class="dpad-btn">↓</div>
-            <div class="dpad-btn">↘</div>
+            <div class="dpad-btn" role="button" aria-label="Step east"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-right"></use></svg></div>
+            <div class="dpad-btn" role="button" aria-label="Step southwest"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-down-left"></use></svg></div>
+            <div class="dpad-btn" role="button" aria-label="Step south"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-down"></use></svg></div>
+            <div class="dpad-btn" role="button" aria-label="Step southeast"><svg class="icon" aria-hidden="true"><use href="../assets/icons.svg#arrow-down-right"></use></svg></div>
           </div>
           <div class="flex justify-between mt-3 text-[9px]" style="color: var(--text-dim);">
             <span>TAP TO COLLAPSE</span>

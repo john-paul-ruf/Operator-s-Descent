@@ -273,6 +273,21 @@
       box-shadow: inset 0 -4px 8px rgba(126,200,227,0.1);
     }
     .mode-tab.disabled { opacity: 0.3; cursor: not-allowed; }
+    /* Icon primitives (icon-first-ui-density SESSION-03, mirror of styles/icons.css).
+       Tab bar in this mock stays text-only because tests/tooling/extract-mocks.test.js
+       pins its labels — production tabs go icon-first from styles/components.css when
+       the JS lands in SESSION-05. Action-row icons here follow §3.3 (icon+text). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-20 { width: 20px; height: 20px; }
+    .icon-24 { width: 24px; height: 24px; }
+    .icon-dim { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .action-btn.has-icon > .icon { margin-bottom: 2px; }
 
     .action-btn {
       background: var(--bg-panel-elevated); border: 1px solid var(--border-dim);
@@ -401,10 +416,10 @@
         <div class="px-3 py-2">
           <div class="text-[9px] uppercase tracking-wider mb-1.5 glow" style="color: var(--text-dim);">◈ Target: Drone (14,10) · Range: Short 1-4 · Cover: None</div>
           <div class="grid grid-cols-4 gap-1.5">
-            <button class="action-btn selected">ATTACK<span class="action-cost">1 AP</span></button>
-            <button class="action-btn">CAST<span class="action-cost">1 AP · 2 CHG</span></button>
-            <button class="action-btn">ITEM<span class="action-cost">1 AP</span></button>
-            <button class="action-btn danger">RETREAT<span class="action-cost">1 AP</span></button>
+            <button class="action-btn has-icon selected" aria-label="Attack · 1 AP"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#sword"></use></svg>ATTACK<span class="action-cost">1 AP</span></button>
+            <button class="action-btn has-icon" aria-label="Cast · 1 AP · 2 CHG"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#wand-sparkles"></use></svg>CAST<span class="action-cost">1 AP · 2 CHG</span></button>
+            <button class="action-btn has-icon" aria-label="Item · 1 AP"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#flame"></use></svg>ITEM<span class="action-cost">1 AP</span></button>
+            <button class="action-btn has-icon danger" aria-label="Retreat · 1 AP"><svg class="icon icon-16 icon-danger" aria-hidden="true"><use href="../assets/icons.svg#arrow-up-right"></use></svg>RETREAT<span class="action-cost">1 AP</span></button>
           </div>
           <div class="flex justify-between mt-2 text-[9px]" style="color: var(--text-dim);">
             <span>◆ TARGET: Drone — d10 + MGT mod vs DEF 11</span>
