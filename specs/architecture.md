@@ -2811,3 +2811,7 @@ Verification: `vitest tests/integration/runtime.test.js tests/ui/console-gear.te
 **M77 Base CSS / M79 Components CSS (ui) — Custom Rule 14:** new palette token `--hp: #e8b23a` (amber; owner-tunable, single source in `styles/base.css`) beside `--danger`/`--warning`/`--heal`. `.bar-fill-hp` (base.css) and `.bar-fill-danger` (components.css — the HP-bar-only class emitted alongside `.bar-fill-hp` by `createHPBar`) both repointed to `--hp`. New scoped critical-state rule `.bar-fill-hp.danger, .bar-fill-danger.danger { background: var(--warning); box-shadow: 0 0 6px var(--warning); }` paints the `<25%` state warning-orange (not enemy-red). `createHPBar` factory unchanged — recolor is CSS-only via existing classes. Enemy sigils, `.enemy-marker`, error/`.load-error`, condition, and death styles stay `--danger` by design.
 
 Verification: `npm run design:scan` → 0 err (baseline preserved) / 10 warn / 2 info — one NEW warning expected (`--hp` not yet in the `specs/design.md` palette table; spec update out of lease → follow-up). Grep gates pass (`flex: 1` no longer matches `.inventory-list`; `var(--danger)` no longer matches `.bar-fill-hp`/`.bar-fill-danger`). Commits 6536fe1 (ckpt1) → 3a47fa2 (ckpt2).
+
+<!-- SESSION-01 -->
+- M56 `createEquipmentCard(item, opts)` and `createProtocolCard(protocol, opts)` accept `opts.compact === true` for non-clickable article cards, adding `console-static-card` and omitting `console-row`; clickable cards retain their existing classes and behavior.
+
