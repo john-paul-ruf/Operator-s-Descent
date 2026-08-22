@@ -1,6 +1,7 @@
 import { loadSettings, saveSettings } from '../../state/library.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel, createScreenBody, createSlider, createToggle } from '../components.js';
+import { createIcon } from '../icon.js';
 import { currentLayoutClass } from '../layout.js';
 
 const LAYERS = [
@@ -30,6 +31,23 @@ function appendCaption(parent, text) {
   caption.textContent = text;
   parent.appendChild(caption);
   return caption;
+}
+
+// Local helper — prefix an icon onto a createToggle's leading label span
+// without needing a components.js signature change (out of lease). Safe when
+// document.createElementNS is unavailable (test fakes): the icon is silently
+// skipped and .row-title-icon is not added, keeping the marker honest.
+function prefixToggleLabelIcon(toggle, iconId, iconSize = 14, iconTone) {
+  if (!iconId) return;
+  if (typeof document?.createElementNS !== 'function') return;
+  const labelSpan = toggle?.children?.[0];
+  if (!labelSpan) return;
+  let icon;
+  try { icon = createIcon(iconId, { size: iconSize, tone: iconTone }); }
+  catch { return; }
+  if (typeof labelSpan.classList?.add === 'function') labelSpan.classList.add('row-title-icon');
+  if (typeof labelSpan.prepend === 'function') labelSpan.prepend(icon);
+  else if (typeof labelSpan.insertBefore === 'function') labelSpan.insertBefore(icon, labelSpan.firstChild);
 }
 
 function dispatchChange(key, value) {
@@ -109,6 +127,7 @@ export function mount(container, params = {}) {
     dispatchChange('mute', value);
   });
   mute.dataset.testid = 'settings-master-mute';
+  prefixToggleLabelIcon(mute, 'x', 14);
   cleanups.push(() => mute.cleanup?.());
   audioPanel.appendChild(mute);
   appendCaption(audioPanel, 'Silence all audio');
@@ -155,6 +174,7 @@ export function mount(container, params = {}) {
     dispatchChange('glitch', value);
   });
   glitch.dataset.testid = 'settings-glitch';
+  prefixToggleLabelIcon(glitch, 'triangle-alert', 14);
   cleanups.push(() => glitch.cleanup?.());
   visualPanel.appendChild(glitch);
   appendCaption(visualPanel, 'Char substitution, VHS, jitter, bars, flash');
@@ -197,6 +217,7 @@ export function mount(container, params = {}) {
     dispatchChange('scanlineGrain', value);
   });
   texture.dataset.testid = 'settings-scanline-grain';
+  prefixToggleLabelIcon(texture, 'eye', 14, 'dim');
   cleanups.push(() => texture.cleanup?.());
   visualPanel.appendChild(texture);
   appendCaption(visualPanel, 'CRT frame texture (independent of glitch)');
@@ -204,6 +225,8 @@ export function mount(container, params = {}) {
   // the-manual SESSION-04 — Settings routes the reader into the settings
   // section of the manual via the fixed `settings_help` target id.
   const manualButton = createButton("OPERATOR'S MANUAL", {
+    icon: 'scroll-text',
+    iconSize: 16,
     onClick: () => bus.dispatch('ui:manual-open', { target: 'settings_help', source: 'settings' })
   });
   manualButton.dataset.testid = 'settings-manual';
@@ -231,7 +254,10 @@ export function mount(container, params = {}) {
     infoPanel.appendChild(row);
   }
 
-  const back = createButton('BACK', {
+  const back = createButton('', {
+    icon: 'arrow-left',
+    iconSize: 14,
+    label: 'BACK',
     onClick: () => bus.dispatch('ui:navigate', { screen: params.from || 'title', params: {} })
   });
   back.dataset.testid = 'settings-back';

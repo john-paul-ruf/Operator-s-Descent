@@ -327,7 +327,16 @@ describe('settings screen', () => {
     ]));
     expect(allText(container)).not.toContain('VERSION 1.0');
 
-    await byTestId(container, 'settings-back').click();
+    // icon-first-ui-density SESSION-06 — BACK is icon-only. aria-label
+    // preserves the former visible label so getByRole(name:)/getByLabel e2e
+    // (portrait-usability, keyboard-flow, navigation-history, adaptive-layout)
+    // continue to resolve it. Visible text collapses to empty.
+    const back = byTestId(container, 'settings-back');
+    expect(back.tagName).toBe('BUTTON');
+    expect(back.getAttribute('aria-label')).toBe('BACK');
+    expect(back.textContent).toBe('');
+    expect(back.classList.contains('icon-only')).toBe(true);
+    await back.click();
     expect(navigations.at(-1)).toEqual({ screen: 'exploration', params: {} });
 
     offSettings();
