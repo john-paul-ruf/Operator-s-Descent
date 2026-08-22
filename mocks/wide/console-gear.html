@@ -276,7 +276,7 @@
     .wide-shell {
       position: relative;
       display: grid;
-      grid-template-columns: minmax(280px, 1fr) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, 1.2fr);
+      grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr) minmax(360px, 1.2fr);
       grid-template-rows: 100vh;
       width: 100vw;
       height: 100vh;
@@ -343,7 +343,7 @@
     /* Console dock (right region): vertical mode tabs on inner (left) edge, content fills the rest */
     .wide-console-dock {
       display: grid;
-      grid-template-columns: 96px 1fr;   /* 96px vertical tab rail = touch-target minimum */
+      grid-template-columns: 76px 1fr;   /* icon-first-ui-density SESSION-03 §5.3: 96 → 76 */
       grid-template-rows: 100vh;
       background: var(--bg-panel);
       border-left: 1px solid var(--border-dim);
@@ -380,6 +380,25 @@
       box-shadow: inset 4px 0 8px rgba(126,200,227,0.1);
     }
     .wide-mode-tab.disabled { opacity: 0.3; cursor: not-allowed; }
+    /* Icon-first mode tabs + icon primitives (icon-first-ui-density SESSION-03,
+       mirror of styles/wide.css + styles/icons.css). */
+    .wide-mode-tab.icon-only { gap: 2px; padding: 8px 4px; }
+    .wide-mode-tab.icon-only .tab-key { align-self: center; margin-left: 0; }
+    .wide-mode-tab.icon-only > .icon { flex-shrink: 0; }
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-20 { width: 20px; height: 20px; }
+    .icon-24 { width: 24px; height: 24px; }
+    .icon-dim { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .tab-key { align-self: flex-start; margin-left: 4px; font-size: 8px;
+      line-height: 1; color: var(--text-dim); white-space: nowrap; }
+    .wide-telemetry-label.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; padding: 0; }
     .wide-console-content {
       display: flex; flex-direction: column;
       overflow: hidden;
@@ -387,7 +406,7 @@
       background: var(--bg-panel);
     }
     .wide-console-content-header {
-      padding: 14px 20px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border-dim);
       background: var(--bg-panel-elevated);
       display: flex; align-items: center; justify-content: space-between;
@@ -610,22 +629,22 @@
       <div class="wide-telemetry-header">
         <div class="theme-badge mb-2">◈ Cold Storage</div>
         <div class="wide-telemetry-field">
-          <span class="wide-telemetry-label">Depth</span>
+          <span class="wide-telemetry-label icon-only" title="Depth"><svg class="icon icon-14 icon-dim" aria-hidden="true"><use href="../../assets/icons.svg#gauge"></use></svg><span class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Depth</span></span>
           <span class="wide-telemetry-value glow-strong chroma-text" data-text="07">07</span>
         </div>
         <div class="wide-telemetry-field">
-          <span class="wide-telemetry-label">Seed</span>
+          <span class="wide-telemetry-label icon-only" title="Seed"><svg class="icon icon-14 icon-dim" aria-hidden="true"><use href="../../assets/icons.svg#hash"></use></svg><span class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Seed</span></span>
           <span class="wide-telemetry-value" style="font-size:12px;">A4F2·9C1E</span>
         </div>
         <div class="wide-telemetry-field">
-          <span class="wide-telemetry-label">Party</span>
+          <span class="wide-telemetry-label icon-only" title="Party"><svg class="icon icon-14 icon-dim" aria-hidden="true"><use href="../../assets/icons.svg#users"></use></svg><span class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Party</span></span>
           <span class="flex gap-2 items-center">
             <span class="sigil-mini jitter-target" title="Breacher HP 28/36">B</span>
             <span class="sigil-mini jitter-target" title="Ghost HP 18/22" style="opacity:0.8">G</span>
           </span>
         </div>
         <div class="wide-telemetry-field">
-          <span class="wide-telemetry-label">Danger Clock</span>
+          <span class="wide-telemetry-label icon-only" title="Danger Clock"><svg class="icon icon-14 icon-dim" aria-hidden="true"><use href="../../assets/icons.svg#clock"></use></svg><span class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Danger Clock</span></span>
           <span class="flex items-center gap-2">
             <span class="bar-track" style="width:64px;">
               <span class="bar-fill bar-fill-danger" style="display:block;width:64%;"></span>
@@ -634,7 +653,7 @@
           </span>
         </div>
         <div class="wide-telemetry-field">
-          <span class="wide-telemetry-label">Corruption</span>
+          <span class="wide-telemetry-label icon-only" title="Corruption"><svg class="icon icon-14 icon-dim" aria-hidden="true"><use href="../../assets/icons.svg#flame"></use></svg><span class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Corruption</span></span>
           <span style="color: var(--warning); font-size: 12px; font-weight: bold;">0.10</span>
         </div>
       </div>
@@ -671,13 +690,13 @@
     <!-- REGION 3: CONSOLE DOCK -->
     <aside class="wide-console-dock">
       <nav class="wide-console-tabs">
-        <a class="wide-mode-tab" href="exploration.html">MOVE</a>
-        <a class="wide-mode-tab" href="combat.html">CMBT</a>
-        <a class="wide-mode-tab" href="console-party.html">PARTY</a>
-        <a class="wide-mode-tab active" href="console-gear.html">GEAR</a>
-        <a class="wide-mode-tab" href="console-tech.html">TECH</a>
-        <a class="wide-mode-tab" href="console-loot.html">LOOT</a>
-        <a class="wide-mode-tab" href="console-log.html">LOG</a>
+        <a class="wide-mode-tab icon-only" href="exploration.html" aria-label="MOVE · Key 1" title="MOVE"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#footprints"></use></svg><span class="tab-key" aria-hidden="true">1</span></a>
+        <a class="wide-mode-tab icon-only" href="combat.html" aria-label="CMBT · Key 2" title="CMBT"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#sword"></use></svg><span class="tab-key" aria-hidden="true">2</span></a>
+        <a class="wide-mode-tab icon-only" href="console-party.html" aria-label="PARTY · Key 3" title="PARTY"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#users"></use></svg><span class="tab-key" aria-hidden="true">3</span></a>
+        <a class="wide-mode-tab icon-only active" href="console-gear.html" aria-label="GEAR · Key 4" title="GEAR"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#backpack"></use></svg><span class="tab-key" aria-hidden="true">4</span></a>
+        <a class="wide-mode-tab icon-only" href="console-tech.html" aria-label="TECH · Key 5" title="TECH"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#flask-conical"></use></svg><span class="tab-key" aria-hidden="true">5</span></a>
+        <a class="wide-mode-tab icon-only" href="console-loot.html" aria-label="LOOT · Key 6" title="LOOT"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#box"></use></svg><span class="tab-key" aria-hidden="true">6</span></a>
+        <a class="wide-mode-tab icon-only" href="console-log.html" aria-label="LOG · Key 7" title="LOG"><svg class="icon icon-24" aria-hidden="true"><use href="../../assets/icons.svg#scroll-text"></use></svg><span class="tab-key" aria-hidden="true">7</span></a>
       </nav>
       <div class="wide-console-content">
         <div class="wide-console-content-header">

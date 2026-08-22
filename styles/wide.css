@@ -68,21 +68,26 @@
       minmax(320px, 1fr)
       max(360px, var(--wide-right-w, 360px));
   }
+  /* icon-first-ui-density SESSION-03 §5.3 — the vertical tab column narrows
+     96 → 76 across every state so the icon-first sprite (24px glyph + 8px
+     badge) sits without a 20 px empty band. Reclaimed width falls into the
+     console-content pane (dock outer width holds at ≥360; map column floor
+     of 320 is unchanged). */
   .wide-shell[data-pane-right="collapsed"] {
     grid-template-columns:
       minmax(280px, var(--wide-left-w, 280px))
       minmax(320px, 1fr)
-      96px;
+      76px;
   }
   .wide-shell[data-pane-left="collapsed"][data-pane-right="collapsed"] {
-    grid-template-columns: 48px minmax(320px, 1fr) 96px;
+    grid-template-columns: 48px minmax(320px, 1fr) 76px;
   }
   /* Collapsed left dock: only the collapse button (its ◀ flips to ▶ by data-attr) shows.
      Every direct child of the telemetry dock is hidden. */
   .wide-shell[data-pane-left="collapsed"] .wide-telemetry-dock > * { display: none; }
   /* Collapsed right dock: hide the content pane; keep the vertical tab column usable. */
   .wide-shell[data-pane-right="collapsed"] .wide-console-content { display: none; }
-  .wide-shell[data-pane-right="collapsed"] .wide-console-dock { grid-template-columns: 96px 0; }
+  .wide-shell[data-pane-right="collapsed"] .wide-console-dock { grid-template-columns: 76px 0; }
 
   /* Map-only view (Issue H) — when a dock is collapsed, dissolve its dark
      panel background into the playfield so the shell reads as one continuous
@@ -308,10 +313,13 @@
     text-shadow: 0 0 8px var(--danger);
   }
 
-  /* Console dock (right region) */
+  /* Console dock (right region).
+     icon-first-ui-density SESSION-03 §5.3 — tab column width 96 → 76 so the
+     icon-only vertical rail sheds the label-band; matches the collapsed-state
+     rule above. */
   .wide-console-dock {
     display: grid;
-    grid-template-columns: 96px 1fr;
+    grid-template-columns: 76px 1fr;
     grid-template-rows: 100vh;
     background: var(--bg-panel);
     border-left: 1px solid var(--border-dim);
@@ -357,6 +365,13 @@
   }
   .wide-mode-tab.disabled,
   .wide-mode-tab[disabled] { color: var(--text-disabled); cursor: not-allowed; }
+  /* Icon-first vertical tab (icon-first-ui-density SESSION-03). SESSION-05
+     will emit `.wide-mode-tab.icon-only` on every dock tab; the glyph sits
+     centered with the numeric shortcut badge just below. Height (72px min)
+     is unchanged — the win is horizontal (76px column vs 96px label band). */
+  .wide-mode-tab.icon-only { gap: 2px; padding: 8px 4px; }
+  .wide-mode-tab.icon-only .tab-key { align-self: center; margin-left: 0; }
+  .wide-mode-tab.icon-only > .icon { flex-shrink: 0; }
   .wide-console-content {
     display: flex;
     flex-direction: column;
@@ -365,8 +380,11 @@
     background: var(--bg-panel);
   }
   .wide-console-content-header {
-    /* SESSION-06 density pass — 14/20 → 10/14 padding trim. */
-    padding: 10px 14px;
+    /* SESSION-06 density pass — 14/20 → 10/14 padding trim.
+       icon-first-ui-density SESSION-03 §5.3 — trimmed again 10/14 → 8/12 so
+       the icon-first content header claims ~4px less vertical space in the
+       narrow dock. */
+    padding: 8px 12px;
     border-bottom: 1px solid var(--border-dim);
     background: var(--bg-panel-elevated);
     display: flex;
