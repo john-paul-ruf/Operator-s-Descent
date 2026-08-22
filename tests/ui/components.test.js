@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { attachDoubleActivate, createAffixTag, createButton, createChargeBar, createConditionTag, createEquipmentCard, createHPBar, createManualLink, createProtocolCard, createRarityTag, createSigilToken, createSlider, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
+import { attachDoubleActivate, createAffixTag, createButton, createChargeBar, createConditionTag, createEquipmentCard, createHPBar, createManualLink, createMenuAction, createMenuGroup, createProtocolCard, createRarityTag, createSigilToken, createSlider, createTabGroup, createTextInput, createToggle, createUpdateToast } from '../../src/ui/components.js';
 
 class FakeClassList {
   constructor(element) { this.element = element; this.values = new Set(); }
@@ -57,6 +57,64 @@ function installFakeDocument() {
 beforeEach(() => installFakeDocument());
 
 describe('semantic components', () => {
+  test('menu actions preserve native semantics across variants and state updates', () => {
+    let clicked = 0;
+    const tab = createMenuAction({ id: 'gear', label: 'GEAR', icon: 'settings' }, {
+      variant: 'tab', className: 'tab-btn', ariaControls: 'panel-gear', testid: 'gear-tab',
+      onClick: () => clicked += 1
+    });
+    expect(tab.tagName).toBe('BUTTON');
+    expect(tab.type).toBe('button');
+    expect(tab.getAttribute('role')).toBe('tab');
+    expect(tab.getAttribute('aria-controls')).toBe('panel-gear');
+    expect(tab.dataset.testid).toBe('gear-tab');
+    expect(tab.classList.values.has('menu-action')).toBe(true);
+    expect(tab.classList.values.has('tab-btn')).toBe(true);
+    tab.setState({ selected: true, active: true });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.classList.values.has('active')).toBe(true);
+    tab.click();
+    expect(clicked).toBe(1);
+    tab.cleanup();
+    tab.cleanup();
+    tab.click();
+    expect(clicked).toBe(1);
+
+    const icon = createMenuAction({ id: 'help', icon: 'circle-help' }, { variant: 'icon', ariaLabel: 'Open help' });
+    expect(icon.classList.values.has('icon-only')).toBe(true);
+    expect(icon.getAttribute('aria-label')).toBe('Open help');
+    const radio = createMenuAction({ id: 'reduce', label: 'REDUCE' }, { variant: 'radio', selected: true, ariaChecked: true, ariaPressed: true, disabled: true });
+    expect(radio.getAttribute('role')).toBe('radio');
+    expect(radio.getAttribute('aria-checked')).toBe('true');
+    expect(radio.getAttribute('aria-pressed')).toBe('true');
+    expect(radio.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  test('menu and tab groups expose stable lookup, selection, and aggregate cleanup', () => {
+    let selected;
+    const group = createTabGroup([
+      { id: 'one', label: 'ONE' },
+      { id: 'two', label: 'TWO' }
+    ], { activeId: 'one', onSelect: (id) => { selected = id; } });
+    expect(group.getAttribute('role')).toBe('tablist');
+    expect(group.getAction('one').dataset.testid).toBe('tab-one');
+    expect(group.getAction('one').getAttribute('aria-controls')).toBe('panel-one');
+    group.getAction('two').click();
+    expect(selected).toBe('two');
+    expect(group.getAction('one').getAttribute('aria-selected')).toBe('false');
+    expect(group.getAction('two').getAttribute('aria-selected')).toBe('true');
+
+    let calls = 0;
+    const menu = createMenuGroup([{ id: 'a', label: 'A' }], { itemOptions: () => ({ onClick: () => calls += 1 }) });
+    menu.getAction('a').click();
+    expect(calls).toBe(1);
+    menu.cleanup();
+    menu.cleanup();
+    menu.getAction('a').click();
+    expect(calls).toBe(1);
+    group.cleanup();
+  });
+
   test('buttons are native controls with accessible state and cleanup', () => {
     let clicked = 0;
     const button = createButton('Start', { onClick: () => clicked += 1, selected: true, busy: true });
