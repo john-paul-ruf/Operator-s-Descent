@@ -1,5 +1,5 @@
 import { bus } from '../../state/bus.js';
-import { createButton } from '../components.js';
+import { createButton, createMenuGroup } from '../components.js';
 import { createInputHandler } from '../input.js';
 import { currentLayoutClass } from '../layout.js';
 
@@ -9,9 +9,9 @@ import { currentLayoutClass } from '../layout.js';
 // keyboard-flow) continue to resolve without spec edits. Visible label drops
 // the ornament: the sprite icon now carries the visual accent.
 const BRANCHES = [
-  { label: 'BEGIN NEW RUN', route: 'creation', testid: 'title-begin-new-run', icon: 'chevron-right', ariaLabel: '◈ BEGIN NEW RUN', iconTone: 'accent' },
-  { label: 'RUN LIBRARY',   route: 'library',   testid: 'title-run-library',  icon: 'archive',       ariaLabel: '◈ RUN LIBRARY' },
-  { label: 'IMPORT LINK',   route: 'import',    testid: 'title-import-link',  icon: 'download',      ariaLabel: '◈ IMPORT LINK' }
+  { id: 'begin-new-run', label: 'BEGIN NEW RUN', route: 'creation', testid: 'title-begin-new-run', icon: 'chevron-right', ariaLabel: '◈ BEGIN NEW RUN', iconTone: 'accent' },
+  { id: 'run-library', label: 'RUN LIBRARY', route: 'library', testid: 'title-run-library', icon: 'archive', ariaLabel: '◈ RUN LIBRARY' },
+  { id: 'import-link', label: 'IMPORT LINK', route: 'import', testid: 'title-import-link', icon: 'download', ariaLabel: '◈ IMPORT LINK' }
 ];
 
 // the-manual SESSION-04 — TUTORIAL branch retired; MANUAL opens the modal.
@@ -20,8 +20,8 @@ const BRANCHES = [
 // visually with the wide-dock `Depth` label but no better id lives in the
 // M107 subset (`sliders`/`settings2` not present in lucide@^0.400.0).
 const SECONDARY_BRANCHES = [
-  { label: 'MANUAL',   route: 'manual',   testid: 'title-manual',   action: 'manual', icon: 'scroll-text', ariaLabel: 'MANUAL' },
-  { label: 'SETTINGS', route: 'settings', testid: 'title-settings',                  icon: 'gauge',       ariaLabel: 'SETTINGS' }
+  { id: 'manual', label: 'MANUAL', route: 'manual', testid: 'title-manual', action: 'manual', icon: 'scroll-text', ariaLabel: 'MANUAL' },
+  { id: 'settings', label: 'SETTINGS', route: 'settings', testid: 'title-settings', icon: 'gauge', ariaLabel: 'SETTINGS' }
 ];
 
 function navigate(screen, params = {}) {
@@ -40,16 +40,51 @@ function revealBranches(startButton, branchList) {
   if (!startButton || !branchList) return;
   branchList.classList.remove('hidden-branches');
   startButton.style.display = 'none';
+  startButton.setAttribute('aria-expanded', 'true');
+  branchList.children[0]?.focus?.();
 }
 
 function resetToStart(startButton, branchList) {
   if (!startButton || !branchList) return;
   branchList.classList.add('hidden-branches');
   startButton.style.display = '';
+  startButton.setAttribute('aria-expanded', 'false');
   // The modal restores its invoker (typically the MANUAL branch) BEFORE
   // dispatching ui:manual-close, so focus lands on a now-hidden control unless
   // this listener pulls it back to the freshly visible START.
   startButton.focus?.();
+}
+
+function renderBranchGroup({ containerClass, rowClass, rowStyle, testid }) {
+  const primary = createMenuGroup(BRANCHES, {
+    className: containerClass,
+    testid: 'title-branches',
+    actionOptions: { className: 'btn-crt' },
+    itemOptions: (branch) => ({
+      ariaLabel: branch.ariaLabel,
+      icon: branch.icon,
+      iconSize: 16,
+      iconTone: branch.iconTone,
+      onClick: () => navigate(branch.route)
+    })
+  });
+  primary.id = 'title-branches';
+
+  const secondary = createMenuGroup(SECONDARY_BRANCHES, {
+    className: rowClass,
+    testid,
+    actionOptions: { className: 'btn-crt' },
+    itemOptions: (branch) => ({
+      ariaLabel: branch.ariaLabel,
+      icon: branch.icon,
+      iconSize: 16,
+      style: rowStyle,
+      onClick: branch.action === 'manual' ? () => openManual('title') : () => navigate(branch.route)
+    })
+  });
+  if (rowStyle) for (const button of secondary.actions) Object.assign(button.style, rowStyle);
+  primary.appendChild(secondary);
+  return { branchList: primary, cleanup: () => primary.cleanup?.() };
 }
 
 function mountPortrait(container, cleanups) {
@@ -105,46 +140,17 @@ function mountPortrait(container, cleanups) {
   });
   startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';
+  startButton.setAttribute('aria-controls', 'title-branches');
+  startButton.setAttribute('aria-expanded', 'false');
   cleanups.push(() => startButton.cleanup?.());
 
-  const branchList = document.createElement('div');
-  branchList.className = 'branch-list hidden-branches';
-  branchList.id = 'title-branches';
-  branchList.dataset.testid = 'title-branches';
-
-  for (const branch of BRANCHES) {
-    const button = createButton(branch.label, {
-      icon: branch.icon,
-      iconSize: 16,
-      iconTone: branch.iconTone,
-      label: branch.ariaLabel,
-      onClick: () => navigate(branch.route)
-    });
-    button.classList.add('btn-crt');
-    button.dataset.testid = branch.testid;
-    cleanups.push(() => button.cleanup?.());
-    branchList.appendChild(button);
-  }
-
-  const secondaryRow = document.createElement('div');
-  secondaryRow.style.display = 'flex';
-  secondaryRow.style.gap = '12px';
-  secondaryRow.dataset.testid = 'title-secondary-branches';
-  for (const branch of SECONDARY_BRANCHES) {
-    const onClick = branch.action === 'manual' ? () => openManual('title') : () => navigate(branch.route);
-    const button = createButton(branch.label, {
-      icon: branch.icon,
-      iconSize: 16,
-      label: branch.ariaLabel,
-      onClick
-    });
-    button.classList.add('btn-crt');
-    button.style.flex = '1';
-    button.dataset.testid = branch.testid;
-    cleanups.push(() => button.cleanup?.());
-    secondaryRow.appendChild(button);
-  }
-  branchList.appendChild(secondaryRow);
+  const { branchList, cleanup } = renderBranchGroup({
+    containerClass: 'branch-list hidden-branches',
+    rowClass: 'title-secondary-branches',
+    rowStyle: { display: 'flex', gap: '12px' },
+    testid: 'title-secondary-branches'
+  });
+  cleanups.push(cleanup);
 
   cleanups.push(bus.on('ui:manual-close', () => resetToStart(startButton, branchList)));
 
@@ -220,44 +226,16 @@ function mountWide(container, cleanups) {
   });
   startButton.classList.add('btn-start', 'glow-border-strong');
   startButton.dataset.testid = 'title-start';
+  startButton.setAttribute('aria-controls', 'title-branches');
+  startButton.setAttribute('aria-expanded', 'false');
   cleanups.push(() => startButton.cleanup?.());
 
-  const branchList = document.createElement('div');
-  branchList.className = 'wide-title-branches branch-list hidden-branches';
-  branchList.id = 'title-branches';
-  branchList.dataset.testid = 'title-branches';
-
-  for (const branch of BRANCHES) {
-    const button = createButton(branch.label, {
-      icon: branch.icon,
-      iconSize: 16,
-      iconTone: branch.iconTone,
-      label: branch.ariaLabel,
-      onClick: () => navigate(branch.route)
-    });
-    button.classList.add('btn-crt');
-    button.dataset.testid = branch.testid;
-    cleanups.push(() => button.cleanup?.());
-    branchList.appendChild(button);
-  }
-
-  const branchRow = document.createElement('div');
-  branchRow.className = 'branch-row';
-  branchRow.dataset.testid = 'title-secondary-branches';
-  for (const branch of SECONDARY_BRANCHES) {
-    const onClick = branch.action === 'manual' ? () => openManual('title') : () => navigate(branch.route);
-    const button = createButton(branch.label, {
-      icon: branch.icon,
-      iconSize: 16,
-      label: branch.ariaLabel,
-      onClick
-    });
-    button.classList.add('btn-crt');
-    button.dataset.testid = branch.testid;
-    cleanups.push(() => button.cleanup?.());
-    branchRow.appendChild(button);
-  }
-  branchList.appendChild(branchRow);
+  const { branchList, cleanup } = renderBranchGroup({
+    containerClass: 'wide-title-branches branch-list hidden-branches',
+    rowClass: 'branch-row',
+    testid: 'title-secondary-branches'
+  });
+  cleanups.push(cleanup);
 
   cleanups.push(bus.on('ui:manual-close', () => resetToStart(startButton, branchList)));
 

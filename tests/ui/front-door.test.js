@@ -183,11 +183,15 @@ describe('title screen', () => {
 
     const start = byTestId(container, 'title-start');
     expect(start).toBeTruthy();
+    expect(start.getAttribute('aria-controls')).toBe('title-branches');
+    expect(start.getAttribute('aria-expanded')).toBe('false');
     await start.click();
 
     const branches = byTestId(container, 'title-branches');
     expect(branches.classList.contains('hidden-branches')).toBe(false);
     expect(start.style.display).toBe('none');
+    expect(start.getAttribute('aria-expanded')).toBe('true');
+    expect(byTestId(container, 'title-begin-new-run').focused).toBe(true);
     // icon-first-ui-density SESSION-06 — every branch keeps its former
     // visible label verbatim on aria-label; visible textContent drops the
     // ornament in favor of the sprite icon.
