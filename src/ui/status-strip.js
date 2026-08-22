@@ -7,11 +7,12 @@ import { resolveLoadout } from '../rules/equipment.js';
 
 // SESSION-06 — telemetry dock field labels each lead with a lucide sprite
 // so the wide-mode density pass reads as a proper "gauge dashboard" rather
-// than a stack of ALL-CAPS text. `hash` is not in the current sprite subset;
-// fall back to `chevron-right` for Seed per SESSION-06.md guidance.
+// than a stack of ALL-CAPS text.
+// SESSION-05 (icon-first-ui-density) — `hash` landed in the M107 sprite via
+// SESSION-02; Seed swaps from its `chevron-right` placeholder to `hash` here.
 const DOCK_ICONS = {
   Depth: 'gauge',
-  Seed: 'chevron-right',
+  Seed: 'hash',
   Party: 'users',
   'Danger Clock': 'clock',
   Corruption: 'flame',
@@ -293,18 +294,29 @@ function appendDockField(header, label, valueBuilder) {
   const row = document.createElement('div');
   row.className = 'wide-telemetry-field';
   const labelEl = document.createElement('span');
-  labelEl.className = 'wide-telemetry-label';
-  // textContent set first so tests reading `labelEl.textContent` still see
-  // the label string; the icon child is then prepended so the sprite renders
-  // before the text in the browser DOM. The fake-DOM `.textContent` remains
-  // a plain stored property regardless of appended children.
-  labelEl.textContent = label;
-  labelEl.setAttribute('aria-label', label);
+  // SESSION-05 (icon-first-ui-density) — the wide dock label is now icon+
+  // sr-only-text per the SESSION-03 mock contract: visible chrome is the
+  // lucide sprite, screen readers get the field name through the sr-only
+  // span. `title` doubles up as the pointer-hover name so sighted mouse
+  // users still see it. `aria-label` on the label element itself is dropped
+  // — the sr-only child now carries that name to AT.
+  labelEl.className = 'wide-telemetry-label icon-only';
+  labelEl.setAttribute('title', label);
   const icon = safeIcon(DOCK_ICONS[label], { size: 14, tone: 'dim' });
-  if (icon) {
-    if (typeof labelEl.prepend === 'function') labelEl.prepend(icon);
-    else labelEl.appendChild(icon);
-  }
+  if (icon) labelEl.appendChild(icon);
+  // Inline sr-only styles mirror the SESSION-03 mock verbatim; no `.sr-only`
+  // rule exists in the shipped stylesheets (grep styles/*.css) and adding one
+  // is outside SESSION-05's lease. Inline keeps the label visually hidden
+  // while still exposed to screen readers via the child text node.
+  const srText = document.createElement('span');
+  srText.className = 'sr-only';
+  srText.textContent = label;
+  srText.style.position = 'absolute';
+  srText.style.width = '1px';
+  srText.style.height = '1px';
+  srText.style.overflow = 'hidden';
+  srText.style.clip = 'rect(0 0 0 0)';
+  labelEl.appendChild(srText);
   const valueEl = valueBuilder();
   valueEl.classList.add('wide-telemetry-value');
   row.append(labelEl, valueEl);

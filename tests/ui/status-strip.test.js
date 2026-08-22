@@ -351,7 +351,10 @@ describe('telemetry dock (wide)', () => {
     expect(dock.className).toContain('wide-telemetry-dock');
     expect(dock.getAttribute('role')).toBe('status');
     expect(findByClass(dock, 'wide-telemetry-header')).not.toBe(null);
-    const labels = findAllByClass(dock, 'wide-telemetry-label').map((el) => el.textContent);
+    // SESSION-05 icon-first-ui-density: wide dock labels are icon-only. The
+    // field name now lives on `title` (pointer hover) and a `.sr-only` child
+    // span (screen readers); the label element's own textContent is empty.
+    const labels = findAllByClass(dock, 'wide-telemetry-label').map((el) => el.getAttribute('title'));
     expect(labels).toEqual(['Depth', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
     const clock = byTestId(dock, 'telemetry-clock');
     expect(clock.textContent).toBe('0.32');
@@ -383,7 +386,8 @@ describe('telemetry dock (wide)', () => {
     const runState = { depth: 7, worldSeed: 'A4F29C1E', dangerClockProgress: 0.32, corruption: 0.1, party: [] };
     const dock = createTelemetryDock(runState, combatState);
 
-    const labels = findAllByClass(dock, 'wide-telemetry-label').map((el) => el.textContent);
+    // SESSION-05 icon-first-ui-density: label names live on `title` (see above).
+    const labels = findAllByClass(dock, 'wide-telemetry-label').map((el) => el.getAttribute('title'));
     expect(labels).toEqual(['Depth', 'Round', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
     const init = byTestId(dock, 'telemetry-init-block');
     expect(init).not.toBe(null);
@@ -445,19 +449,41 @@ describe('telemetry dock (wide)', () => {
     dock.cleanup();
   });
 
-  // SESSION-06 — wide-mode field labels each lead with a lucide sprite so
-  // the telemetry dock reads as a dashboard rather than an all-caps ladder.
-  test('every wide-mode telemetry field label carries a lucide sprite prefix and keeps its label text', () => {
+  // SESSION-06 — wide-mode field labels each lead with a lucide sprite.
+  // SESSION-05 icon-first-ui-density — labels are now icon-only: the field
+  // name lives on the `title` attribute (pointer hover) AND a `.sr-only`
+  // child span (AT). The label span's own textContent is empty.
+  test('every wide-mode telemetry field label carries a lucide sprite prefix and a sr-only + title fallback for its name', () => {
     const runState = { depth: 7, worldSeed: 'A4F29C1E', corruption: 0.1, dangerClockProgress: 0.32, party: [{ id: 'p1', sigilCodepoint: 0xE000, currentHP: 8, maxHP: 10 }] };
     const dock = createTelemetryDock(runState);
     const labels = findAllByClass(dock, 'wide-telemetry-label');
-    expect(labels.map((el) => el.textContent)).toEqual(['Depth', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
+    expect(labels.map((el) => el.getAttribute('title'))).toEqual(['Depth', 'Seed', 'Party', 'Danger Clock', 'Corruption']);
     for (const label of labels) {
+      // icon-only marker moves the label into density mode.
+      expect(label.classList.contains('icon-only')).toBe(true);
       const svg = label.children.find((child) => child.tagName === 'SVG');
-      expect(svg, `no sprite child on "${label.textContent}"`).toBeTruthy();
+      expect(svg, `no sprite child on "${label.getAttribute('title')}"`).toBeTruthy();
       expect(svg.className.split(/\s+/)).toContain('icon');
       expect(svg.className.split(/\s+/)).toContain('icon-14');
+      // AT fallback: sr-only child carries the field name for screen readers.
+      const sr = label.children.find((child) => (child.className || '').split(/\s+/).includes('sr-only'));
+      expect(sr, `no sr-only child on "${label.getAttribute('title')}"`).toBeTruthy();
+      expect(sr.textContent).toBe(label.getAttribute('title'));
     }
+    dock.cleanup();
+  });
+
+  // SESSION-05 icon-first-ui-density — Seed swaps from its chevron-right
+  // placeholder to `hash` now that SESSION-02 landed the sprite id.
+  test('Seed label uses the `hash` lucide sprite (dropped chevron-right placeholder)', () => {
+    const runState = { depth: 1, worldSeed: 'A4F29C1E', corruption: 0, dangerClockProgress: 0, party: [] };
+    const dock = createTelemetryDock(runState);
+    const labels = findAllByClass(dock, 'wide-telemetry-label');
+    const seed = labels.find((el) => el.getAttribute('title') === 'Seed');
+    expect(seed).toBeTruthy();
+    const svg = seed.children.find((c) => c.tagName === 'SVG');
+    const useEl = (svg.children || []).find((c) => c.tagName === 'USE');
+    expect(useEl.getAttribute('href')).toBe('assets/icons.svg#hash');
     dock.cleanup();
   });
 
