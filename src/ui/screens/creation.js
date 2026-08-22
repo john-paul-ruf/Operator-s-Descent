@@ -1,4 +1,4 @@
-import { createAttributeRow, createButton, createManualLink, createPanel, createScreenBody, createScrollArea, createSigilToken, createTextInput } from '../components.js';
+import { createAttributeRow, createButton, createManualLink, createPanel, createScreenBody, createScrollArea, createSigilToken, createTabGroup, createTextInput } from '../components.js';
 import { createIcon } from '../icon.js';
 import { createInputHandler } from '../input.js';
 import { currentLayoutClass } from '../layout.js';
@@ -141,6 +141,7 @@ export function mount(container, params = {}) {
   let finalizing = false;
   let finalized = false;
   let scrollPane = null;
+  let tabGroupCleanup = null;
   const warnedEmptyLists = new Set();
 
   function legalGearChoices(slot, classId) {
@@ -190,6 +191,8 @@ export function mount(container, params = {}) {
   function render() {
     captureScroll(scrollPane, SCROLL_KEY);
     const summary = selectCreationState(draft, data);
+    tabGroupCleanup?.();
+    tabGroupCleanup = null;
     clear(container);
     scrollPane = null;
     if (currentLayoutClass() === 'wide') renderWide(summary);
@@ -879,25 +882,23 @@ export function mount(container, params = {}) {
   }
 
   function renderTabs() {
-    const tablist = document.createElement('div');
-    tablist.className = 'creation-tabs';
-    tablist.classList.add('panel');
+    const tabItems = TABS.map(([id, label]) => ({
+      id,
+      label,
+      panelId: `creation-panel-${id}`,
+      testid: `tab-${id}`
+    }));
+    const tablist = createTabGroup(tabItems, {
+      activeId: activeTab,
+      ariaLabel: 'Creation editor sections',
+      className: 'creation-tabs panel',
+      tabClassName: 'tab-btn',
+      panelId: (id, item) => item.panelId,
+      onSelect: (id) => { activeTab = id; render(); }
+    });
     tablist.style.flexWrap = 'nowrap';
     tablist.style.gap = '0';
-    tablist.setAttribute('role', 'tablist');
-    tablist.setAttribute('aria-label', 'Creation editor sections');
-    for (const [id, label] of TABS) {
-      const tab = createButton(label, {
-        selected: activeTab === id,
-        onClick: () => { activeTab = id; render(); }
-      });
-      tab.className = `tab-btn${activeTab === id ? ' active' : ''}`;
-      tab.setAttribute('role', 'tab');
-      tab.setAttribute('aria-controls', `creation-panel-${id}`);
-      tab.setAttribute('aria-selected', String(activeTab === id));
-      tab.dataset.testid = `tab-${id}`;
-      tablist.appendChild(tab);
-    }
+    tabGroupCleanup = tablist.cleanup;
     return tablist;
   }
 
@@ -1439,6 +1440,6 @@ export function mount(container, params = {}) {
   render();
 
   return {
-    unmount() { inputHandler.destroy(); }
+    unmount() { tabGroupCleanup?.(); tabGroupCleanup = null; inputHandler.destroy(); }
   };
 }

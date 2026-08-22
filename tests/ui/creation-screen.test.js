@@ -166,6 +166,40 @@ describe('creation screen workflow', () => {
     controller.unmount();
   });
 
+  it('uses the shared tab group without dropping the creation tab contract', async () => {
+    const { container, controller } = await mountCreation({ preloadedSeed: 456 });
+    const tablist = byTestId(container, 'creation-root').children.find((child) => child.getAttribute?.('role') === 'tablist');
+    expect(tablist.className).toContain('creation-tabs');
+    expect(tablist.className).toContain('panel');
+    expect(tablist.className).toContain('tab-group');
+    expect(tablist.getAttribute('aria-label')).toBe('Creation editor sections');
+    expect(tablist.children).toHaveLength(6);
+    for (const [id, label] of [['class', 'CLASS'], ['sigil', 'SIGIL'], ['attrs', 'ATTRS'], ['gear', 'GEAR'], ['tech', 'TECH'], ['blueprints', 'BLUEPRINTS']]) {
+      const tab = byTestId(container, `tab-${id}`);
+      expect(tab.textContent).toBe(label);
+      expect(tab.className).toContain('menu-action');
+      expect(tab.className).toContain('tab-btn');
+      expect(tab.getAttribute('role')).toBe('tab');
+      expect(tab.getAttribute('aria-controls')).toBe(`creation-panel-${id}`);
+      expect(tab.getAttribute('aria-selected')).toBe(String(id === 'class'));
+    }
+    expect(byTestId(container, 'panel-class').getAttribute('role')).toBe('tabpanel');
+    expect(byTestId(container, 'panel-class').id).toBe('creation-panel-class');
+    controller.unmount();
+  });
+
+  it('cleans the previous tab group before rerender and makes cleanup idempotent', async () => {
+    const { container, controller } = await mountCreation({ preloadedSeed: 789 });
+    const oldTab = byTestId(container, 'tab-attrs');
+    byTestId(container, 'tab-gear').click();
+    expect(byTestId(container, 'panel-gear')).not.toBeNull();
+    oldTab.click();
+    expect(byTestId(container, 'panel-gear')).not.toBeNull();
+    expect(byTestId(container, 'panel-attrs')).toBeNull();
+    controller.unmount();
+    expect(() => controller.unmount()).not.toThrow();
+  });
+
   // playtest-clarity-and-4x-floors SESSION-02 — portrait protocol cards must
   // surface the authored effect string so players can tell SPARK from SURGE
   // without leaving the screen. Data source of truth: data/protocols.json.
