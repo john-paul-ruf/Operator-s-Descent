@@ -145,11 +145,13 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
   await expect(page.locator('.console-bar')).toHaveClass(/expanded/);
   await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', 'half');
 
-  // Touch-target floor per M97 (≥44px). Every visible `.console-row` /
-  // `.mode-tab` must respect the 48px min-height set in components.css.
+  // Icon-first density (SESSION-08): every visible `.console-row` / `.mode-tab`
+  // honors the strict 96px touch floor set in components.css. The 48px blanket
+  // exception is retired now that icon-only tabs meet the same minimum as every
+  // other touchable row (portrait-usability.spec.js:290 already asserts 96).
   const visibleRows = page.locator('.console-row:visible, .mode-tab:visible');
   const heights = await visibleRows.evaluateAll((rows) => rows.map((row) => Math.round(row.getBoundingClientRect().height)));
-  expect(Math.min(...heights)).toBeGreaterThanOrEqual(48);
+  expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
 
   // Tap 2: half → full.
   await page.getByTestId('console-tab-move').tap();

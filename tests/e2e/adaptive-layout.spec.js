@@ -156,6 +156,22 @@ test('console dock: touch floor ≥ 96px per tab at the 1024×1024 touch project
   expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
 });
 
+// SESSION-08 — icon-first density §5.3 dock-tightening. The wide console tab
+// column narrowed 96→76 in SESSION-03 (icon-only wide-mode-tab), and the
+// content-header padding tightened 10/14 → 8/12. Cap the collapsed dock rail
+// at 76px, and the tab-column width at 80px, so future regressions that
+// re-inflate either fail loud at the wide-square (touch) project.
+test('console dock: icon-density §5.3 caps — collapsed rail ≤ 76px, tab column ≤ 80px, content header ≤ 44px', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-wide-square', 'dock-tightening caps live at the wide-square touch project');
+  await finalizeOneOperatorRun(page, 5155);
+  const tabWidths = await page.locator('.wide-mode-tab').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+  expect(tabWidths.length).toBe(7);
+  expect(Math.max(...tabWidths), 'wide tab column max width').toBeLessThanOrEqual(80);
+
+  const headerHeight = await page.locator('.wide-console-content-header').evaluate((el) => Math.round(el.getBoundingClientRect().height));
+  expect(headerHeight, 'wide console content header max height').toBeLessThanOrEqual(44);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. Telemetry dock — stacked fields, numeric clock, live feed appends
 // ─────────────────────────────────────────────────────────────────────────────

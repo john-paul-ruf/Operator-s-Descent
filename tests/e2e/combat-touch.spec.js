@@ -149,6 +149,18 @@ async function assertPortraitLayoutRegions(page) {
   for (const [a, b] of pairs) {
     expect(overlap(rects[a], rects[b]), `${a} overlaps ${b}`).toBe(false);
   }
+
+  // Icon-first density (SESSION-08): every visible touch-capable console row
+  // holds the 96 CSS-px floor from styles/components.css (tabs, action rows,
+  // direction cells, target rows, confirm buttons — anything that matches
+  // `.console-row` or `.mode-tab`). The blanket 48px exception was retired
+  // once icon-only tabs rendered at 96 across the console shell.
+  const consoleTouchHeights = await page.locator('.console-row:visible, .mode-tab:visible').evaluateAll(
+    (els) => els.map((el) => Math.round(el.getBoundingClientRect().height))
+  );
+  expect(consoleTouchHeights.length, 'visible touch-capable rows').toBeGreaterThan(0);
+  expect(Math.min(...consoleTouchHeights), 'min combat console row height').toBeGreaterThanOrEqual(96);
+
   return rects;
 }
 

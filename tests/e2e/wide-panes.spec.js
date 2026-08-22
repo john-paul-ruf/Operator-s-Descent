@@ -228,8 +228,9 @@ test('wide-panes: collapsing the right dock pins both rails flush to their viewp
   expect(dock).not.toBeNull();
   expect(telemetry.left).toBeLessThanOrEqual(2);
   expect(dock.right).toBeGreaterThanOrEqual(1600 - 2);
-  // Right rail keeps its 96px width; content pane is hidden entirely.
-  expect(Math.round(dock.width)).toBe(96);
+  // Right rail keeps its 76px collapsed width (SESSION-03 icon-first density
+  // narrowed the tab column from 96 → 76); content pane is hidden entirely.
+  expect(Math.round(dock.width)).toBe(76);
   await expect(page.locator('.wide-console-content')).toBeHidden();
 
   // Chevrons render within 16px of the rail/dock they control (measured
@@ -304,8 +305,10 @@ test('wide-panes: clicking a console tab while the right dock is collapsed auto-
     .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
     .toBe('collapsed');
 
-  // Tap a non-active tab — GEAR — while collapsed.
-  const gearTab = page.locator('.wide-mode-tab').filter({ hasText: /GEAR/i }).first();
+  // Tap a non-active tab — GEAR — while collapsed. Icon-first density (SESSION-05)
+  // stripped visible text from tabs, so select by the stable data-testid rather
+  // than the retired textContent filter.
+  const gearTab = page.getByTestId('console-tab-gear');
   await gearTab.click();
   await expect
     .poll(() => page.evaluate(() => document.querySelector('[data-testid="wide-shell"]').dataset.paneRight))
@@ -332,7 +335,8 @@ test('wide-panes: pane collapse state survives an exploration↔combat entry (pe
     .toBe('collapsed');
   const dock = await dockBounds(page, '.wide-console-dock');
   expect(dock.right).toBeGreaterThanOrEqual(1600 - 2);
-  expect(Math.round(dock.width)).toBe(96);
+  // 76px collapsed dock — SESSION-03 icon-first density narrowed the tab column.
+  expect(Math.round(dock.width)).toBe(76);
 });
 
 test('wide-panes: at 1024x900 (breakpoint minimum), three regions render with no horizontal scrollbar', async ({ page }) => {
@@ -345,4 +349,16 @@ test('wide-panes: at 1024x900 (breakpoint minimum), three regions render with no
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(1024);
+
+  // Icon-first density dock-tightening (SESSION-08) — the wide dock's inner
+  // content header collapsed from 10×14 to 8×12 padding in SESSION-03 and
+  // measured ~33px in SESSION-05. Cap at 44px to allow small font/box-model
+  // variance while blocking a re-inflation to the pre-density value.
+  const headerHeight = await page.locator('.wide-console-content-header').evaluate((el) => Math.round(el.getBoundingClientRect().height));
+  expect(headerHeight, 'wide console content header max height').toBeLessThanOrEqual(44);
+
+  // Telemetry dock default width ~280 (SESSION-05); cap at 320 so future
+  // padding regressions can't quietly widen the left rail.
+  const telemetryWidth = await page.locator('.wide-telemetry-dock').evaluate((el) => Math.round(el.getBoundingClientRect().width));
+  expect(telemetryWidth, 'telemetry dock max width').toBeLessThanOrEqual(320);
 });

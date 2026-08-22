@@ -277,9 +277,18 @@ test.describe('portrait usability integrated acceptance', () => {
 
     // Map retains a meaningful positive interaction area after the compact
     // console tray is open — SESSION-01 opens the tray to 'half' once on mount.
-    // Threshold sized to phone (412×915): status+feedback+tabBar+tray leave
-    // ≈ 200–260 CSS px of vertical playfield.
-    expect(rects.playfield.height, 'playfield height').toBeGreaterThanOrEqual(200);
+    // Icon-first density (SESSION-08) locks the reclaimed floors from GAP §5:
+    // phone (412×915) → ≥ 224px playfield; tall (1080×1920) → ≥ 240px.
+    // Never weakens the prior 200px floor.
+    const playfieldFloor = testInfo.project.name === PHONE_PROJECT ? 224 : 240;
+    expect(rects.playfield.height, 'playfield height (icon-first floor)')
+      .toBeGreaterThanOrEqual(playfieldFloor);
+
+    // Cap the console tab bar height (SESSION-08) — mode-tab min-height is 96,
+    // and the icon-only tab treatment collapses padding so the bar row itself
+    // stays close to that minimum. 104px leaves 8px slack for the flex-row
+    // wrapper without allowing a re-inflation to text-tab heights.
+    expect(rects.tabBar.height, 'console tab bar max height').toBeLessThanOrEqual(104);
 
     // Every visible touch-capable console row honors the 96 CSS-px floor
     // (portrait rule from styles/components.css). Tabs, action rows, direction
@@ -338,6 +347,15 @@ test.describe('portrait usability integrated acceptance', () => {
         expect(overlaps(rects[regionKeys[i]], rects[regionKeys[j]]), `${regionKeys[i]} overlaps ${regionKeys[j]}`).toBe(false);
       }
     }
+
+    // SESSION-08 chrome ceilings for exploration mode. Icon-first density
+    // measured the portrait exploration strip at ~66px in SESSION-05 and the
+    // tab bar at 96px; caps at 72/104 give small slack for font-metric
+    // variance while blocking any re-inflation.
+    const stripRect = toRect(rects.status);
+    const tabBarRect = toRect(rects.tabBar);
+    expect(stripRect.height, 'exploration status strip max height').toBeLessThanOrEqual(72);
+    expect(tabBarRect.height, 'console tab bar max height').toBeLessThanOrEqual(104);
 
     const startCell = await readPartyCell(page);
 
