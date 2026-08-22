@@ -211,17 +211,17 @@ function renderContainerItems(container, context, lootContainer, items) {
   const list = createScrollArea({ label: 'Container contents', focusable: true });
   list.className = 'loot-items scroll-area';
   list.dataset.testid = 'loot-items';
-  if (!items.length) list.appendChild(text('loot-container empty console-row', isOpened(context.runState, lootContainer) ? 'Empty.' : 'Empty container.'));
+  if (!items.length) list.appendChild(text('loot-container empty console-static-row', isOpened(context.runState, lootContainer) ? 'Empty.' : 'Empty container.'));
   const cleanups = [];
   const inventoryFull = getInventoryCount(context.runState?.inventory || []) >= INVENTORY_CAP;
   for (const item of items) {
     const row = document.createElement('div');
     row.className = 'loot-item-row item-card console-row';
     row.dataset.testid = `loot-item-${item.id}`;
-    row.appendChild(createEquipmentCard(displayItem(item, context.data || {}), { stats: itemStats(item, context.data || {}) }));
+    row.appendChild(createEquipmentCard(displayItem(item, context.data || {}), { stats: itemStats(item, context.data || {}), compact: true }));
     if (item.rarity) {
       const rarityRow = document.createElement('div');
-      rarityRow.className = 'card-rarity-row';
+      rarityRow.className = 'card-rarity-row console-static-row';
       const rarityLink = createRarityTag(item.rarity, {
         manualLink: { source: 'loot-rarity', dispatch }
       });
@@ -230,14 +230,14 @@ function renderContainerItems(container, context, lootContainer, items) {
       row.appendChild(rarityRow);
     }
     const classesRow = document.createElement('div');
-    classesRow.className = 'card-classes';
+    classesRow.className = 'card-classes console-static-row';
     const classNames = classesUsableFor(item, context.data || {});
     classesRow.textContent = classNames.length
       ? `Classes: ${classNames.join(' · ')}`
       : 'Classes: none';
     classesRow.dataset.testid = `loot-classes-${item.id}`;
     row.appendChild(classesRow);
-    row.appendChild(text('loot-compare', comparisonLine(item, context), `loot-compare-${item.id}`));
+    row.appendChild(text('loot-compare console-static-row', comparisonLine(item, context), `loot-compare-${item.id}`));
     const result = addItem(context.runState?.inventory || [], item);
     const reason = inventoryFull || !result.success ? 'Inventory full; pickup blocked until space is freed.' : '';
     // SESSION-05 (icon-first-ui-density) — per GAP §3.7 the ENABLED TAKE row
@@ -274,7 +274,7 @@ function renderInventoryJunk(container, context, state) {
 
   container.appendChild(text('mode-indicator', '◈ INVENTORY', 'loot-inventory-heading'));
   const header = document.createElement('div');
-  header.className = 'loot-inventory-header console-row';
+  header.className = 'loot-inventory-header console-static-row';
   header.dataset.testid = 'loot-inventory-header';
   header.textContent = `Inventory ${getInventoryCount(inventory)}/${INVENTORY_CAP} · Scrap ${context.runState?.scrapCounter || 0} · Tagged ${tagged.length} / ${tagged.reduce((sum, item) => sum + getSalvageValue(item), 0)}`;
   container.appendChild(header);
@@ -343,7 +343,7 @@ export function render(container, context = {}) {
   const lootState = context.lootState || (context.lattice ? { container: findEligibleLootContainer(context.lattice, runState), items: [] } : null);
   const lootContainer = lootState?.container;
   if (!runState || !lootContainer) {
-    container.appendChild(text('loot-container empty console-row', 'No unopened container adjacent or underfoot.', 'loot-empty'));
+    container.appendChild(text('loot-container empty console-static-row', 'No unopened container adjacent or underfoot.', 'loot-empty'));
     if (runState) renderInventoryJunk(container, context, state);
     return;
   }
@@ -351,7 +351,7 @@ export function render(container, context = {}) {
   const opened = isOpened(runState, lootContainer);
   const items = opened ? [] : itemsFor({ ...context, lootState }, lootContainer);
   const header = document.createElement('div');
-  header.className = 'loot-container-header panel-elevated console-row';
+  header.className = 'loot-container-header panel-elevated console-static-row';
   header.dataset.testid = 'loot-container';
   const glyph = document.createElement('span');
   glyph.className = context.layout === 'wide' ? 'container-icon container-icon-lg' : 'container-icon';
@@ -380,7 +380,7 @@ export function render(container, context = {}) {
   container.appendChild(text('mode-indicator', '◈ CONTENTS', 'loot-contents-heading'));
   if (getInventoryCount(runState.inventory || []) >= INVENTORY_CAP) {
     const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
-    const warning = text('loot-warning console-row', 'Inventory full; pickup blocked until space is freed.', 'loot-cap-warning');
+    const warning = text('loot-warning console-static-row', 'Inventory full; pickup blocked until space is freed.', 'loot-cap-warning');
     warning.appendChild(createManualLink('loot_and_salvage', {
       variant: 'chip', source: 'loot-cap', dispatch, testid: 'loot-cap-link'
     }));
@@ -388,8 +388,8 @@ export function render(container, context = {}) {
   }
   renderContainerItems(container, { ...context, lootState }, lootContainer, items);
   renderInventoryJunk(container, context, state);
-  if (state.notice) container.appendChild(text('loot-notice console-row', state.notice, 'loot-notice'));
-  if (state.error) container.appendChild(text('loot-error console-row', state.error, 'loot-error'));
+  if (state.notice) container.appendChild(text('loot-notice console-static-row', state.notice, 'loot-notice'));
+  if (state.error) container.appendChild(text('loot-error console-static-row', state.error, 'loot-error'));
 }
 
 export function handleInput(event, context = {}) {

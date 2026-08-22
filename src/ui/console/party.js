@@ -87,7 +87,7 @@ function text(className, value, testid = null) {
 
 function row(label, value, testid = null, iconId = null) {
   const element = document.createElement('div');
-  element.className = 'party-stat-row console-row';
+  element.className = 'party-stat-row console-static-row';
   if (testid) element.dataset.testid = testid;
   const name = document.createElement('span');
   name.className = 'stat-label';
@@ -103,7 +103,7 @@ function row(label, value, testid = null, iconId = null) {
 
 function rowWithLink(label, value, target, dispatch, source, testid = null, linkTestid = null) {
   const element = document.createElement('div');
-  element.className = 'party-stat-row console-row';
+  element.className = 'party-stat-row console-static-row';
   if (testid) element.dataset.testid = testid;
   const name = document.createElement('span');
   name.className = 'stat-label';
@@ -118,7 +118,7 @@ function rowWithLink(label, value, target, dispatch, source, testid = null, link
 
 function compactBar(label, current, max, colorVar, iconId = null) {
   const wrap = document.createElement('div');
-  wrap.className = 'party-inline-bar console-row';
+  wrap.className = 'party-inline-bar console-static-row';
   const info = document.createElement('span');
   info.className = 'stat-label';
   info.textContent = `${label} ${current}/${max}`;
@@ -223,7 +223,7 @@ export function render(container, context = {}) {
   container.appendChild(grid);
 
   const detail = createScrollArea({ label: 'Party member detail', focusable: true });
-  detail.className = 'party-detail';
+  detail.classList.add('party-detail');
   detail.dataset.testid = 'party-detail';
   container.appendChild(detail);
   renderDetail(detail, living[state.index], context);
@@ -245,7 +245,7 @@ function renderDetail(area, character, context) {
 
   area.appendChild(text('mode-indicator', `◈ ${String(classData?.name || character.classId || 'OPERATOR').toUpperCase()} DETAIL`, 'party-detail-heading'));
   const header = document.createElement('div');
-  header.className = 'detail-header console-row panel-elevated';
+  header.className = 'detail-header console-static-row panel-elevated';
   const sigilToken = createSigilToken(sigilOf(character), 72, { role: 'player', label: `${character.id} sigil` });
   if (context.layout === 'wide') sigilToken.classList.add('sigil-lg');
   header.appendChild(sigilToken);
@@ -267,7 +267,7 @@ function renderDetail(area, character, context) {
   attrs.dataset.testid = 'party-attributes';
   for (const key of ATTRIBUTE_KEYS) {
     const attrRow = document.createElement('div');
-    attrRow.className = 'party-stat-row console-row';
+    attrRow.className = 'party-stat-row console-static-row';
     attrRow.dataset.testid = `party-attr-${key}`;
     const nameSpan = document.createElement('span');
     nameSpan.className = 'stat-label';
@@ -296,7 +296,7 @@ function renderDetail(area, character, context) {
   area.appendChild(stats);
 
   const conditions = document.createElement('div');
-  conditions.className = 'condition-list console-row';
+  conditions.className = 'condition-list console-static-row';
   conditions.dataset.testid = 'party-conditions';
   conditions.appendChild(text('section-label', 'Conditions'));
   const activeConditions = combatActor?.conditions || character.conditions || [];
@@ -322,7 +322,7 @@ function renderDetail(area, character, context) {
   deck.appendChild(text('section-label', 'Deck'));
   const protocols = character.protocolDeck || character.protocols || [];
   if (!protocols.length) deck.appendChild(text('deck-empty', 'No protocols prepared.'));
-  for (const protocol of protocols) deck.appendChild(createProtocolCard({ ...protocol, name: protocolLabel(protocol, data) }));
+  for (const protocol of protocols) deck.appendChild(createProtocolCard({ ...protocol, name: protocolLabel(protocol, data) }, { compact: true }));
   area.appendChild(deck);
 }
 

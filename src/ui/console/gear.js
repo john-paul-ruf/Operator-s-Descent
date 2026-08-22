@@ -54,7 +54,7 @@ function classesUsableFor(item, data) {
 
 function classesChip(item, data, testid) {
   const chip = document.createElement('div');
-  chip.className = 'card-classes';
+  chip.className = 'card-classes console-static-row';
   const names = classesUsableFor(item, data);
   chip.textContent = names.length ? `Classes: ${names.join(' · ')}` : 'Classes: none';
   chip.dataset.testid = testid;
@@ -311,8 +311,8 @@ export function render(container, context = {}) {
 
   renderEquipped(container, context, character, ui);
   renderInventory(container, context, character, ui);
-  if (ui.notice) container.appendChild(text('gear-notice console-row', ui.notice, 'gear-notice'));
-  if (ui.error) container.appendChild(text('gear-error console-row', ui.error, 'gear-error'));
+  if (ui.notice) container.appendChild(text('gear-notice console-static-row', ui.notice, 'gear-notice'));
+  if (ui.error) container.appendChild(text('gear-error console-static-row', ui.error, 'gear-error'));
 }
 
 function renderEquipped(container, context, character, ui) {
@@ -325,12 +325,12 @@ function renderEquipped(container, context, character, ui) {
     const row = document.createElement('div');
     row.className = 'equipped-row item-card equipped console-row';
     row.dataset.testid = `gear-equipped-${slot}`;
-    row.appendChild(text('equipped-slot', `${SLOT_LABELS[slot]}: ${itemName(item, context.data)}`));
+    row.appendChild(text('equipped-slot console-static-row', `${SLOT_LABELS[slot]}: ${itemName(item, context.data)}`));
     if (item) {
-      row.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data) }));
+      row.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data), compact: true }));
       if (item.rarity) {
         const detail = document.createElement('div');
-        detail.className = 'gear-item-detail console-row';
+        detail.className = 'gear-item-detail console-static-row';
         detail.dataset.testid = `gear-item-detail-${slot}`;
         detail.appendChild(createRarityTag(item.rarity, {
           manualLink: { source: 'gear-rarity', dispatch }
@@ -358,7 +358,7 @@ function renderEquipped(container, context, character, ui) {
       button.dataset.testid = `gear-unequip-${slot}`;
       row.appendChild(button);
       if (disabledReason) {
-        const why = text('disabled-reason unequip-blocked-reason console-row', disabledReason);
+        const why = text('disabled-reason unequip-blocked-reason console-static-row', disabledReason);
         why.dataset.testid = `gear-unequip-reason-${slot}`;
         row.appendChild(why);
       }
@@ -373,7 +373,7 @@ function renderInventory(container, context, character, ui) {
   const inventory = context.runState.inventory || [];
   container.appendChild(text('mode-indicator', '◈ INVENTORY', 'gear-inventory-heading'));
   const header = document.createElement('div');
-  header.className = 'inventory-header console-row';
+  header.className = 'inventory-header console-static-row';
   header.dataset.testid = 'gear-inventory-header';
   const tagged = inventory.filter((item) => item.junkTagged);
   const taggedScrap = tagged.reduce((sum, item) => sum + getSalvageValue(item), 0);
@@ -409,7 +409,7 @@ function renderInventory(container, context, character, ui) {
   }
 
   const list = createScrollArea({ label: 'Inventory', focusable: true });
-  list.className = 'inventory-list';
+  list.classList.add('inventory-list');
   list.dataset.testid = 'gear-inventory';
   if (!inventory.length) list.appendChild(text('console-empty', 'Inventory empty.'));
   const cleanups = [];
@@ -431,10 +431,10 @@ function renderInventoryItem(list, context, character, ui, item, cleanups = []) 
   const wrapper = document.createElement('div');
   wrapper.className = `inventory-row console-row${item.junkTagged ? ' junk-tagged' : ''}`;
   wrapper.dataset.testid = `gear-item-${item.id}`;
-  wrapper.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data) }));
+  wrapper.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data), compact: true }));
   const before = runStats(context.data || {}, character);
   const after = itemSlotCompatible(ui.slot, item) ? projectedStats(context.data || {}, character, ui.slot, item) : before;
-  wrapper.appendChild(text('gear-comparison', statDeltaLine(before, after), `gear-compare-${item.id}`));
+  wrapper.appendChild(text('gear-comparison console-static-row', statDeltaLine(before, after), `gear-compare-${item.id}`));
   wrapper.appendChild(classesChip(item, context.data || {}, `gear-classes-${item.id}`));
   const reason = equipDisabledReason(context, ui, character, item);
   // SESSION-05 (icon-first-ui-density) — per GAP §3.5 the ENABLED EQUIP row
@@ -459,7 +459,7 @@ function renderInventoryItem(list, context, character, ui, item, cleanups = []) 
   // when the item is not equippable so the inert row stays honest.
   if (!reason) cleanups.push(attachDoubleActivate(wrapper, () => requestEquip(context, item)));
   if (reason) {
-    const why = text('disabled-reason equip-blocked-reason console-row', reason);
+    const why = text('disabled-reason equip-blocked-reason console-static-row', reason);
     why.dataset.testid = `gear-equip-reason-${item.id}`;
     wrapper.appendChild(why);
   }

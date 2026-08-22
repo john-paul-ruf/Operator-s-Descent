@@ -287,7 +287,7 @@ function renderCharacters(container, context, ui, activeActor) {
   row.className = 'tech-character-row';
   row.dataset.testid = 'tech-characters';
   if (activeActor) {
-    row.appendChild(text('tech-active console-row', `ACTIVE: ${activeActor.name || activeActor.id}`));
+    row.appendChild(text('tech-active console-static-row', `ACTIVE: ${activeActor.name || activeActor.id}`));
   } else {
     for (let index = 0; index < (context.runState.party || []).length; index++) {
       const character = context.runState.party[index];
@@ -321,8 +321,8 @@ function renderProtocolRow(list, context, character, caster, protocol) {
     chargeCost: normalCost,
     effect: resolved?.effect,
     range: resolved?.range
-  }, { insufficient: Boolean(castReason) }));
-  const detail = text('tech-protocol-detail', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`);
+  }, { insufficient: Boolean(castReason), compact: true }));
+  const detail = text('tech-protocol-detail console-static-row', `${String(protocol.school).toUpperCase()} T${protocol.tier} · slot ${deckSlotCost(protocol.tier)} · range ${resolved?.range || '—'} · ${resolved?.effect || ''}`, `tech-detail-${protocolKey(protocol)}`);
   detail.appendChild(createManualLink(protocol.school, {
     variant: 'chip', source: 'tech-school', dispatch,
     testid: `tech-school-link-${protocolKey(protocol)}`
@@ -385,7 +385,7 @@ function renderConfirm(container, context, ui, character) {
   const preview = ui.overclocked
     ? `OVERCLOCK: cost ${overclock.cost} CHARGE, effective T${overclock.effectiveTier}, d20+FOC ${modifier(character?.attributes?.foc)} vs ${overclock.threshold}, corruption risk +${overclock.corruptionRisk.toFixed(2)}.`
     : `CAST: cost ${protocolChargeCost(ui.protocol.tier)} CHARGE, range ${resolved?.range || '—'}, effect ${resolved?.effect || '—'}.`;
-  const previewNode = text('tech-preview console-row', preview, 'tech-preview');
+  const previewNode = text('tech-preview console-static-row', preview, 'tech-preview');
   if (ui.overclocked) {
     previewNode.appendChild(createManualLink('charge_and_overclock', {
       variant: 'chip', source: 'tech-overclock', dispatch, testid: 'tech-overclock-link'
@@ -416,7 +416,7 @@ function renderCatalog(container, data) {
   catalog.appendChild(text('section-label', 'Protocol catalog'));
   for (const [school, schoolData] of Object.entries(data.protocols?.schools || {})) {
     const line = document.createElement('div');
-    line.className = 'tech-school-row console-row';
+    line.className = 'tech-school-row console-static-row';
     line.textContent = `${school.toUpperCase()}: ${(schoolData.tiers || []).map((tier) => `T${tier.tier} ${tier.name} ${tier.chargeCost}CHG`).join(' · ')}`;
     catalog.appendChild(line);
   }
@@ -463,9 +463,9 @@ export function render(container, context = {}) {
   const slotPanel = document.createElement('div');
   slotPanel.className = 'tech-slot-panel panel';
   slotPanel.dataset.testid = 'tech-slot-panel';
-  slotPanel.appendChild(text('tech-slots console-row', `Deck slots ${deckStatus.slotsUsed}/${deckStatus.capacity} · ${deckStatus.valid ? 'valid' : deckStatus.reason}`, 'tech-slots'));
+  slotPanel.appendChild(text('tech-slots console-static-row', `Deck slots ${deckStatus.slotsUsed}/${deckStatus.capacity} · ${deckStatus.valid ? 'valid' : deckStatus.reason}`, 'tech-slots'));
   const pipRow = document.createElement('div');
-  pipRow.className = 'tech-pip-row console-row';
+  pipRow.className = 'tech-pip-row console-static-row';
   for (let i = 0; i < deckStatus.capacity; i++) {
     const pip = document.createElement('span');
     pip.className = `deck-pip${i < deckStatus.slotsUsed ? ' filled' : ''}`;
@@ -476,7 +476,7 @@ export function render(container, context = {}) {
   container.appendChild(text('mode-indicator', '◈ EQUIPPED PROTOCOLS', 'tech-deck-heading'));
 
   const list = createScrollArea({ label: 'Prepared protocols', focusable: true });
-  list.className = 'tech-deck';
+  list.classList.add('tech-deck');
   list.dataset.testid = 'tech-deck';
   if (!deck.length) list.appendChild(text('console-empty', 'No protocols prepared.'));
   for (const protocol of deck) renderProtocolRow(list, context, character, caster, protocol);
@@ -484,10 +484,10 @@ export function render(container, context = {}) {
   renderTargets(container, context, ui, caster);
   renderConfirm(container, context, ui, character || caster);
   renderCatalog(container, data);
-  if (ui.result) container.appendChild(text('tech-result console-row', `Last: ${ui.result.protocol.name} · CHARGE -${ui.result.costs.charge}${ui.result.rolls.overclock ? ` · overclock ${ui.result.rolls.overclock.success ? 'success' : 'failed'}` : ''}`, 'tech-result'));
-  if (ui.notice) container.appendChild(text('tech-notice console-row', ui.notice, 'tech-notice'));
+  if (ui.result) container.appendChild(text('tech-result console-static-row', `Last: ${ui.result.protocol.name} · CHARGE -${ui.result.costs.charge}${ui.result.rolls.overclock ? ` · overclock ${ui.result.rolls.overclock.success ? 'success' : 'failed'}` : ''}`, 'tech-result'));
+  if (ui.notice) container.appendChild(text('tech-notice console-static-row', ui.notice, 'tech-notice'));
   if (ui.error) {
-    const err = text('tech-error console-row', ui.error, 'tech-error');
+    const err = text('tech-error console-static-row', ui.error, 'tech-error');
     prependChild(err, safeIcon('triangle-alert', { size: 14, tone: 'danger' }));
     container.appendChild(err);
   }
