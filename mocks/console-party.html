@@ -88,6 +88,26 @@
     .mode-tab:hover { color: var(--text-primary); }
     .mode-tab.active { border-bottom-color: var(--accent); color: var(--accent); text-shadow: 0 0 8px var(--accent); background: rgba(126,200,227,0.05); }
     .mode-tab.disabled { opacity: 0.3; }
+    /* Icon-first mode tabs (icon-first-ui-density SESSION-03) — mirror of the
+       production rule in styles/components.css. Numeric shortcut badge sits
+       centered below the glyph. */
+    .mode-tab.icon-only { flex-direction: column; gap: 2px; padding: 8px 4px; }
+    .mode-tab.icon-only .tab-key { align-self: center; margin-left: 0; }
+    .mode-tab.icon-only > .icon { flex-shrink: 0; }
+    /* Icon primitives (mirror of styles/icons.css so the mock renders in a
+       browser without a production stylesheet import). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-20 { width: 20px; height: 20px; }
+    .icon-24 { width: 24px; height: 24px; }
+    .icon-dim { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .tab-key { align-self: flex-start; margin-left: 4px; font-size: 8px;
+      line-height: 1; color: var(--text-dim); white-space: nowrap; }
     .bar-track { background: var(--bg-base); height: 4px; border: 1px solid var(--border-dim); }
     .bar-fill { height: 100%; }
     .bar-fill-hp { background: var(--danger); box-shadow: 0 0 4px var(--danger); }
@@ -148,13 +168,13 @@
       <!-- Console -->
       <div class="console-bar" style="flex: 1; display: flex; flex-direction: column;">
         <div class="flex">
-          <a href="exploration.html" class="mode-tab" style="text-decoration:none;">MOVE</a>
-          <a href="combat.html" class="mode-tab" style="text-decoration:none;">CMBT</a>
-          <a href="console-party.html" class="mode-tab active" style="text-decoration:none;">PARTY</a>
-          <a href="console-gear.html" class="mode-tab" style="text-decoration:none;">GEAR</a>
-          <a href="console-tech.html" class="mode-tab" style="text-decoration:none;">TECH</a>
-          <a href="console-loot.html" class="mode-tab" style="text-decoration:none;">LOOT</a>
-          <a href="console-log.html" class="mode-tab" style="text-decoration:none;">LOG</a>
+          <a href="exploration.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="MOVE · Key 1" title="MOVE"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#footprints"></use></svg><span class="tab-key" aria-hidden="true">1</span></a>
+          <a href="combat.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="CMBT · Key 2" title="CMBT"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#sword"></use></svg><span class="tab-key" aria-hidden="true">2</span></a>
+          <a href="console-party.html" class="mode-tab icon-only active" style="text-decoration:none;" aria-label="PARTY · Key 3" title="PARTY"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#users"></use></svg><span class="tab-key" aria-hidden="true">3</span></a>
+          <a href="console-gear.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="GEAR · Key 4" title="GEAR"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#backpack"></use></svg><span class="tab-key" aria-hidden="true">4</span></a>
+          <a href="console-tech.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="TECH · Key 5" title="TECH"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#flask-conical"></use></svg><span class="tab-key" aria-hidden="true">5</span></a>
+          <a href="console-loot.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="LOOT · Key 6" title="LOOT"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#box"></use></svg><span class="tab-key" aria-hidden="true">6</span></a>
+          <a href="console-log.html" class="mode-tab icon-only" style="text-decoration:none;" aria-label="LOG · Key 7" title="LOG"><svg class="icon icon-24" aria-hidden="true"><use href="../assets/icons.svg#scroll-text"></use></svg><span class="tab-key" aria-hidden="true">7</span></a>
         </div>
 
         <div class="flex-1 scroll-area px-3 py-3">
