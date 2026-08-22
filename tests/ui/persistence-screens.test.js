@@ -65,6 +65,14 @@ class FakeElement {
     return child;
   }
   append(...children) { for (const child of children) this.appendChild(child); }
+  prepend(...children) {
+    for (let i = children.length - 1; i >= 0; i--) {
+      const child = children[i];
+      if (!child) continue;
+      child.parentNode = this;
+      this.children.unshift(child);
+    }
+  }
   removeChild(child) {
     this.children = this.children.filter((entry) => entry !== child);
     child.parentNode = null;
@@ -98,6 +106,8 @@ class FakeElement {
 function installDocument() {
   globalThis.document = {
     createElement: (tagName) => new FakeElement(tagName),
+    createElementNS: (_ns, tagName) => new FakeElement(tagName),
+    createTextNode: (text) => ({ nodeType: 3, nodeValue: String(text) }),
     getElementById: () => null,
     documentElement: new FakeElement('html')
   };
@@ -135,6 +145,19 @@ function collect(root, predicate, matches = []) {
   if (predicate(root)) matches.push(root);
   for (const child of root.children || []) collect(child, predicate, matches);
   return matches;
+}
+
+// Icon assertion helper: verifies a button has an SVG child whose <use> element
+// points at the expected sprite id. Icons are prefixed by components.js
+// prefixIcon(); the FakeElement in this file honors createElementNS + prepend
+// so the SVG structure is present.
+function iconUseId(button) {
+  const svg = collect(button, (el) => el.tagName === 'SVG')[0];
+  if (!svg) return null;
+  const use = svg.children.find((child) => child.tagName === 'USE');
+  const href = use?.getAttribute('href') || '';
+  const hash = href.indexOf('#');
+  return hash >= 0 ? href.slice(hash + 1) : null;
 }
 
 function makeState(seed, timestamp, depth = 1) {
@@ -254,6 +277,23 @@ describe('run library screen', () => {
     expect(byTestId(container, `run-row-${second.key}`).classList.contains('run-row')).toBe(true);
     expect(byTestId(container, `run-resume-${second.key}`).classList.contains('primary')).toBe(true);
 
+    const portraitResume = byTestId(container, `run-resume-${second.key}`);
+    expect(portraitResume.classList.contains('icon-only')).toBe(true);
+    expect(portraitResume.getAttribute('aria-label')).toBe('RESUME');
+    expect(iconUseId(portraitResume)).toBe('chevron-right');
+    const portraitDelete = byTestId(container, `run-delete-${second.key}`);
+    expect(portraitDelete.classList.contains('has-icon')).toBe(true);
+    expect(portraitDelete.classList.contains('btn-danger')).toBe(true);
+    expect(portraitDelete.getAttribute('aria-label')).toBe('DELETE LOCAL STATE');
+    expect(iconUseId(portraitDelete)).toBe('x');
+    const portraitNewRun = byTestId(container, 'library-new-run');
+    expect(portraitNewRun.getAttribute('aria-label')).toBe('NEW RUN');
+    expect(iconUseId(portraitNewRun)).toBe('chevron-right');
+    const portraitTitle = byTestId(container, 'library-title');
+    expect(portraitTitle.classList.contains('icon-only')).toBe(true);
+    expect(portraitTitle.getAttribute('aria-label')).toBe('TITLE');
+    expect(iconUseId(portraitTitle)).toBe('arrow-left');
+
     await byTestId(container, `run-resume-${second.key}`).click();
     expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, runState: expect.objectContaining({ worldSeed: 222, depth: 7 }) } });
 
@@ -302,6 +342,20 @@ describe('run library screen', () => {
     expect(resumeButton.classList.contains('primary')).toBe(true);
     const deleteButton = byTestId(container, `run-delete-${second.key}`);
     expect(deleteButton.classList.contains('btn-danger')).toBe(true);
+
+    expect(resumeButton.classList.contains('icon-only')).toBe(true);
+    expect(resumeButton.getAttribute('aria-label')).toBe('◈ RESUME');
+    expect(iconUseId(resumeButton)).toBe('chevron-right');
+    expect(deleteButton.classList.contains('has-icon')).toBe(true);
+    expect(deleteButton.getAttribute('aria-label')).toBe('DELETE');
+    expect(iconUseId(deleteButton)).toBe('x');
+    const wideNewRun = byTestId(container, 'library-new-run');
+    expect(wideNewRun.getAttribute('aria-label')).toBe('◈ NEW RUN');
+    expect(iconUseId(wideNewRun)).toBe('chevron-right');
+    const wideTitle = byTestId(container, 'library-title');
+    expect(wideTitle.classList.contains('icon-only')).toBe(true);
+    expect(wideTitle.getAttribute('aria-label')).toBe('◀ TITLE');
+    expect(iconUseId(wideTitle)).toBe('arrow-left');
 
     await resumeButton.click();
     expect(seen.at(-1)).toMatchObject({ screen: 'exploration', params: { resume: true, runState: expect.objectContaining({ worldSeed: 222, depth: 7 }) } });

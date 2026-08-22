@@ -158,12 +158,16 @@ export function mount(container) {
       const error = document.createElement('p');
       error.className = 'load-error';
       error.textContent = `QUARANTINED — ${failureLabel(result.error)}`;
-      element.appendChild(error);
+      content.appendChild(error);
     }
 
     const controls = document.createElement('div');
-    controls.className = 'run-controls';
-    const resumeButton = track(createButton('RESUME', {
+    controls.className = 'run-controls run-actions';
+    const resumeButton = track(createButton('', {
+      label: 'RESUME',
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
       primary: true,
       disabled: broken,
       description: broken ? `Cannot resume: ${failureLabel(result.error)}` : `Resume seed ${entry.worldSeed}`,
@@ -175,15 +179,23 @@ export function mount(container) {
     resumeButton.classList.remove('btn-primary');
     resumeButton.dataset.testid = `run-resume-${entry.key}`;
     const deleteButton = track(createButton('DELETE LOCAL STATE', {
+      label: 'DELETE LOCAL STATE',
+      icon: 'x',
+      iconSize: 14,
+      iconTone: 'danger',
       danger: true,
       onClick: (event) => {
         event.stopPropagation?.();
         removeRun(entry);
       }
     }));
+    deleteButton.classList.add('btn-danger');
     deleteButton.dataset.testid = `run-delete-${entry.key}`;
+    resumeButton.style.flex = '0 0 auto';
+    resumeButton.style.minWidth = '48px';
+    deleteButton.style.flex = '1';
     controls.append(resumeButton, deleteButton);
-    element.appendChild(controls);
+    content.appendChild(controls);
     return element;
   }
 
@@ -273,7 +285,11 @@ export function mount(container) {
 
     const actions = document.createElement('div');
     actions.className = 'run-card-actions';
-    const resumeButton = track(createButton('◈ RESUME', {
+    const resumeButton = track(createButton('', {
+      label: '◈ RESUME',
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
       primary: true,
       disabled: broken,
       description: broken ? `Cannot resume: ${failureLabel(result.error)}` : `Resume seed ${entry.worldSeed}`,
@@ -284,7 +300,13 @@ export function mount(container) {
     }));
     resumeButton.classList.remove('btn-primary');
     resumeButton.dataset.testid = `run-resume-${entry.key}`;
+    resumeButton.style.flex = '0 0 auto';
+    resumeButton.style.minWidth = '48px';
     const deleteButton = track(createButton('DELETE', {
+      label: 'DELETE',
+      icon: 'x',
+      iconSize: 14,
+      iconTone: 'danger',
       danger: true,
       onClick: (event) => {
         event.stopPropagation?.();
@@ -293,6 +315,7 @@ export function mount(container) {
     }));
     deleteButton.classList.add('btn-danger');
     deleteButton.dataset.testid = `run-delete-${entry.key}`;
+    deleteButton.style.flex = '1';
     actions.append(resumeButton, deleteButton);
     body.appendChild(actions);
 
@@ -347,15 +370,25 @@ export function mount(container) {
     const actions = document.createElement('div');
     actions.className = 'library-actions';
     const newRun = track(createButton('NEW RUN', {
+      label: 'NEW RUN',
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
       primary: true,
       onClick: () => navigate('creation')
     }));
     newRun.classList.remove('btn-primary');
     newRun.dataset.testid = 'library-new-run';
-    const title = track(createButton('TITLE', {
+    newRun.style.flex = '1';
+    const title = track(createButton('', {
+      label: 'TITLE',
+      icon: 'arrow-left',
+      iconSize: 16,
       onClick: () => navigate('title')
     }));
     title.dataset.testid = 'library-title';
+    title.style.flex = '0 0 auto';
+    title.style.minWidth = '96px';
     actions.classList.add('panel', 's-3');
     actions.append(title, newRun);
     screen.appendChild(actions);
@@ -416,18 +449,28 @@ export function mount(container) {
 
     const actions = document.createElement('div');
     actions.className = 'panel wide-library-footer';
-    const titleButton = track(createButton('◀ TITLE', {
+    const titleButton = track(createButton('', {
+      label: '◀ TITLE',
+      icon: 'arrow-left',
+      iconSize: 16,
       onClick: () => navigate('title')
     }));
     titleButton.dataset.testid = 'library-title';
+    titleButton.style.flex = '0 0 96px';
+    titleButton.style.minWidth = '96px';
     const spacer = document.createElement('div');
     spacer.style.flex = '1';
     const newRun = track(createButton('◈ NEW RUN', {
+      label: '◈ NEW RUN',
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
       primary: true,
       onClick: () => navigate('creation')
     }));
     newRun.classList.remove('btn-primary');
     newRun.dataset.testid = 'library-new-run';
+    newRun.style.flex = '0 0 240px';
     actions.append(titleButton, spacer, newRun);
     screen.appendChild(actions);
     return screen;
