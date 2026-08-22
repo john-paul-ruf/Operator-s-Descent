@@ -767,6 +767,44 @@ describe('combat screen controller', () => {
     }
   });
 
+  // SESSION-01 (mobile-combat-density-repair checkpoint 2) — the rail carries
+  // an explicit, testable active flag so CSS can zero its own chrome when
+  // inactive without ever display:none-ing the live-region mount itself.
+  it('feedback rail carries an explicit active flag that flips with notice/error and never removes the live-region mount', async () => {
+    vi.useFakeTimers();
+    try {
+      const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+      const { container, controller } = await mountCombat({ combat });
+      const rail = byTestId(container, 'combat-feedback');
+
+      // Mounted inactive: no notice, no error yet.
+      expect(rail.classList.contains('is-active')).toBe(false);
+      expect(rail.dataset.active).toBe('false');
+
+      byTestId(container, 'combat-action-move').click();
+      const playfield = byClass(container, 'combat-playfield');
+      playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
+      playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
+
+      expect(rail.classList.contains('is-active')).toBe(true);
+      expect(rail.dataset.active).toBe('true');
+      // The live-region node and its message children stay mounted throughout —
+      // never removed, never display:none on the rail itself.
+      expect(byTestId(container, 'combat-feedback')).toBe(rail);
+      expect(byTestId(container, 'combat-notice')).not.toBe(null);
+      expect(byTestId(container, 'combat-error')).not.toBe(null);
+
+      byTestId(container, 'combat-confirm').click();
+      vi.runAllTimers();
+
+      expect(rail.classList.contains('is-active')).toBe(false);
+      expect(rail.dataset.active).toBe('false');
+      controller.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('wide mount has no portrait feedback rail — no combat-feedback duplicate', async () => {
     installMatchMedia(true);
     const { container, controller } = await mountCombat();

@@ -628,6 +628,13 @@ export function mount(container, params = {}) {
     noticeEl.hidden = !notice;
     if (errorEl.textContent !== error) errorEl.textContent = error;
     errorEl.hidden = !error;
+    // SESSION-01 (mobile-combat-density-repair) — explicit active flag so CSS
+    // can collapse the rail's own padding/border to zero when both message
+    // children are hidden. The rail element itself is never display:none;
+    // only its cost, not its live-region mount, is conditional.
+    const active = Boolean(notice || error);
+    feedbackRail.classList.toggle('is-active', active);
+    feedbackRail.dataset.active = String(active);
   }
 
   function syncCameraViewport() {

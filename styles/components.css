@@ -1341,6 +1341,20 @@ button.protocol-card[aria-selected="true"],
   display: none;
 }
 
+/* SESSION-01 (mobile-combat-density-repair) — an inactive rail (no notice,
+   no error) costs zero layout space: padding/border collapse to nothing.
+   The live-region node and its message children stay mounted (never
+   display:none on the rail itself) — only their own [hidden] attributes
+   toggle, set in src/ui/screens/combat.js:syncFeedbackRail. A notice/error
+   re-expands the rail in flow via the `.is-active` flag with no overflow
+   clipping, so a newly announced message is never cut off mid-transition. */
+.combat-feedback-rail:not(.is-active) {
+  padding: 0;
+  border-top: 0;
+  border-bottom: 0;
+  gap: 0;
+}
+
 /* Exploration playfield override (SESSION-06) — the JS still sets an inline
    `margin-bottom: 96px` (stale, from the old absolute-console era). With the
    in-flow console the margin becomes a gap between playfield and console;
@@ -1810,9 +1824,22 @@ button.protocol-card[aria-selected="true"],
 /* Portrait CMBT action + direction rows (SESSION-06) — every touch-capable
    row hits the 96px floor at phone (412×915) and 1080-portrait alike.
    Direction pad becomes a 3×3 grid of 96px cells for reliable thumb reach. */
-.combat-action-list { margin-bottom: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.combat-action { width: 100%; min-height: 96px; padding: 10px 12px; font-size: 11px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
-.combat-action--primary { grid-column: 1 / -1; }
+/* SESSION-01 (mobile-combat-density-repair) — 3-column grid so Move / Attack /
+   End Turn (emitted first by renderActions) land in the initial visual row in
+   their DOM/focus order without a grid-column span; `.combat-action--primary`
+   stays a semantic hook (JS still applies it) but no longer forces a
+   full-width row. Icon-forward compact buttons stack icon/label/cost
+   vertically to stay legible in a narrower column. */
+.combat-action-list { margin-bottom: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.combat-action { width: 100%; min-height: 96px; padding: 8px 6px; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.combat-action .action-cost { font-size: 8px; }
+
+/* Fallback threshold — only drop to 2 columns when 3 truly can't fit (below
+   the smallest acceptance width, 360×800). At 360px and 412px alike, three
+   columns hold. */
+@media (max-width: 340px) {
+  .combat-action-list { grid-template-columns: 1fr 1fr; }
+}
 .combat-direction-grid { display: grid; grid-template-columns: repeat(3, minmax(96px, 1fr)); grid-template-rows: repeat(3, 96px); gap: 6px; justify-content: center; margin-bottom: 12px; }
 .combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; min-height: 96px; }
 .combat-protocol-list { margin-bottom: 12px; }

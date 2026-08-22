@@ -41,6 +41,31 @@ const ACTION_TO_DIRECTION = {
   move_n: 'n', move_s: 's', move_w: 'w', move_e: 'e',
   move_nw: 'nw', move_ne: 'ne', move_sw: 'sw', move_se: 'se'
 };
+// SESSION-01 (mobile-combat-density-repair) — compact visible cost chip per
+// action, keyed by id rather than the full `needs` phrase so the mapping
+// stays stable if `needs` copy changes. The full phrase still reaches the
+// accessible name via `actionLabel()`; nothing here removes information,
+// only the on-screen glyph shrinks. 'end-turn' has no material cost to show.
+const COMPACT_COST = {
+  move: `≤${MOVE_RANGE}`,
+  attack: '1 AP',
+  cast: '1 AP+CHG',
+  overclock: '1 AP+OC',
+  item: '1 AP',
+  retreat: '1 AP',
+  'end-turn': ''
+};
+
+function actionLabel(action) {
+  return `${action.label} · ${action.needs}`;
+}
+
+function createActionCost(text) {
+  const cost = document.createElement('span');
+  cost.className = 'action-cost';
+  cost.textContent = text;
+  return cost;
+}
 
 function clear(container) {
   if (typeof container.replaceChildren === 'function') container.replaceChildren();
@@ -149,6 +174,15 @@ function activeSummary(container, active, dispatch) {
 // duplicating them. It keeps AP (repeated for glance-ability alongside the
 // action buttons) and the condition tags (the strip shows neither). Testid
 // 'combat-active' stays stable so existing lookups keep resolving.
+//
+// SESSION-01 (mobile-combat-density-repair) — the `.combat-ap` line is kept
+// unconditionally (not folded under a "has conditions" gate) because
+// tests/e2e/combat-touch.spec.js and tests/e2e/portrait-usability.spec.js
+// (outside this session's lease) hard-assert `.combat-ap` text at every step
+// of a portrait move, independent of whether the active actor carries any
+// condition. The "conditions readout" this checkpoint scopes to zero-cost is
+// the condition-tag list below, which already rendered nothing when
+// `active.conditions` is empty — no code change was needed there.
 function activeConditions(container, active, dispatch) {
   if (!active) return;
   const row = document.createElement('div');
@@ -253,7 +287,15 @@ function renderActions(container, context, legalActions) {
   for (const action of ordered) {
     const reason = combatActionDisabledReason(action, context, active, legalActions);
     const disabled = Boolean(reason);
-    const button = createButton(`${action.label.toUpperCase()} · ${action.needs.toUpperCase()}`, {
+    // SESSION-01 (mobile-combat-density-repair) — the visible label shrinks to
+    // a concise verb (e.g. "MOVE") while the full phrase (e.g. "Move · up to
+    // 5 cells") moves to the accessible name via opts.label. `title: ''`
+    // suppresses createButton's default title-mirrors-label fallback so the
+    // browser tooltip stays reserved for the disabled reason set below —
+    // exactly the pre-existing contract (enabled buttons carry no title).
+    const button = createButton(action.label.toUpperCase(), {
+      label: actionLabel(action),
+      title: '',
       disabled,
       description: reason || undefined,
       selected: selection.actionType === action.id,
@@ -272,10 +314,13 @@ function renderActions(container, context, legalActions) {
     if (reason) button.setAttribute('title', reason);
     // Prepend the action's icon (SESSION-01's createIcon returns an <svg> element with class
     // "icon"). Uses prepend() so the sprite sits before the button's textContent, giving the
-    // "◈ ATTACK · 1 AP" glyph-then-label rhythm the mocks establish. safeCreateIcon returns
-    // null in test envs without createElementNS — the button still renders, minus the sprite.
+    // "◈ ATTACK / 1 AP" glyph-then-label-then-cost rhythm the mocks establish. safeCreateIcon
+    // returns null in test envs without createElementNS — the button still renders, minus the
+    // sprite.
     const icon = safeCreateIcon(action.icon, { size: 16 });
     if (icon) button.prepend(icon);
+    const cost = COMPACT_COST[action.id];
+    if (cost) button.appendChild(createActionCost(cost));
     list.appendChild(button);
   }
   container.appendChild(list);

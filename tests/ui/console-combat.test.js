@@ -257,6 +257,62 @@ describe('console/combat.js — direction cells + BACK icons (SESSION-05 icon-fi
   });
 });
 
+// SESSION-01 (mobile-combat-density-repair checkpoint 2) — each action button's
+// visible label shrinks to a concise verb + a compact cost chip; the full
+// phrase (verb + needs) moves to the accessible name instead of disappearing.
+describe('console/combat.js — compact visible label + cost chip + full accessible name (SESSION-01 mobile-combat-density-repair)', () => {
+  const EXPECTED = {
+    move: { visible: 'MOVE', aria: 'Move · up to 5 cells', cost: '≤5' },
+    attack: { visible: 'ATTACK', aria: 'Attack · 1 AP', cost: '1 AP' },
+    cast: { visible: 'PROTOCOL', aria: 'Protocol · 1 AP + CHARGE', cost: '1 AP+CHG' },
+    overclock: { visible: 'OVERCLOCK', aria: 'Overclock · 1 AP + overclock CHARGE', cost: '1 AP+OC' },
+    item: { visible: 'ITEM', aria: 'Item · 1 AP', cost: '1 AP' },
+    retreat: { visible: 'RETREAT', aria: 'Retreat · 1 AP', cost: '1 AP' },
+    'end-turn': { visible: 'END TURN', aria: 'End Turn · explicit', cost: null }
+  };
+
+  it('every action button carries a concise visible verb, the full phrase as its accessible name, and a compact cost chip', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+
+    for (const [id, expected] of Object.entries(EXPECTED)) {
+      const button = byTestId(container, `combat-action-${id}`);
+      // Visible label is just the verb — the .textContent text run, not the
+      // icon/cost siblings.
+      const svg = svgChild(button);
+      const costEl = (button.children || []).find((c) => (c.className || '').split(/\s+/).includes('action-cost'));
+      expect(button.textContent, `${id} visible label`).toBe(expected.visible);
+      expect(button.getAttribute('aria-label'), `${id} accessible name`).toBe(expected.aria);
+      if (expected.cost) {
+        expect(costEl, `${id} has a cost chip`).toBeTruthy();
+        expect(costEl.textContent).toBe(expected.cost);
+      } else {
+        expect(costEl, `${id} has no cost chip`).toBeFalsy();
+      }
+      expect(svg, `${id} keeps its icon`).toBeTruthy();
+    }
+  });
+
+  it('an enabled action button carries no title attribute — title stays reserved for the disabled reason', () => {
+    const active = makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } });
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active,
+      enemies: [makeEnemy()],
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+    }));
+    expect(byTestId(container, 'combat-action-attack').getAttribute('title')).toBe(null);
+    expect(byTestId(container, 'combat-action-end-turn').getAttribute('title')).toBe(null);
+  });
+});
+
 describe('console/combat.js — action button icons (SESSION-05 checkpoint 4)', () => {
   it('every combat-action button contains an <svg> icon child with the icon class', () => {
     const active = makeActive();
