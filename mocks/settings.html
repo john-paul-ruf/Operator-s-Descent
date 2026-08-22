@@ -89,6 +89,22 @@
     .slider-label { min-width: 80px; font-size: 10px; color: var(--text-secondary); text-transform: uppercase; }
     .section-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
       color: var(--accent); margin: 16px 0 8px 0; }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-20 { width: 20px; height: 20px; }
+    .icon-24 { width: 24px; height: 24px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
+    /* Toggle-row icon-prefixed title (icon+text on TOGGLE rows only per GAP §6.6). */
+    .row-title-icon { display: inline-flex; align-items: center; gap: 8px; }
   </style>
 </head>
 <body>
@@ -118,10 +134,10 @@
           <!-- Master mute -->
           <div class="flex items-center justify-between" style="min-height: 48px;">
             <div>
-              <div class="text-[11px] font-bold">Master Mute</div>
+              <div class="text-[11px] font-bold row-title-icon"><svg class="icon icon-14" aria-hidden="true"><use href="../assets/icons.svg#x"></use></svg>Master Mute</div>
               <div class="text-[9px]" style="color: var(--text-dim);">Silence all audio</div>
             </div>
-            <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            <div class="toggle" onclick="this.classList.toggle('on')" role="switch" aria-label="MASTER MUTE" title="Master mute"><div class="toggle-knob"></div></div>
           </div>
           <div class="slider-row">
             <span class="slider-label">Master</span>
@@ -163,10 +179,10 @@
         <div class="panel p-3 space-y-3">
           <div class="flex items-center justify-between" style="min-height: 48px;">
             <div>
-              <div class="text-[11px] font-bold">Glitch Effects</div>
+              <div class="text-[11px] font-bold row-title-icon"><svg class="icon icon-14" aria-hidden="true"><use href="../assets/icons.svg#triangle-alert"></use></svg>Glitch Effects</div>
               <div class="text-[9px]" style="color: var(--text-dim);">Char substitution, VHS, jitter, bars, flash</div>
             </div>
-            <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')" role="switch" aria-label="GLITCH" title="Glitch"><div class="toggle-knob"></div></div>
           </div>
 
           <div class="flex items-center justify-between" style="min-height: 48px; border-top: 1px solid var(--border-dim); padding-top: 12px;">
@@ -174,17 +190,20 @@
               <div class="text-[11px] font-bold">Reduced Motion</div>
               <div class="text-[9px]" style="color: var(--text-dim);">Manual override · Disables glitch + transitions</div>
             </div>
-            <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            <div class="toggle" onclick="this.classList.toggle('on')" role="switch" aria-label="REDUCED MOTION" title="Reduced motion"><div class="toggle-knob"></div></div>
           </div>
 
           <div class="flex items-center justify-between" style="min-height: 48px; border-top: 1px solid var(--border-dim); padding-top: 12px;">
             <div>
-              <div class="text-[11px] font-bold">Scanlines &amp; Grain</div>
+              <div class="text-[11px] font-bold row-title-icon"><svg class="icon icon-14 icon-dim" aria-hidden="true"><use href="../assets/icons.svg#eye"></use></svg>Scanlines &amp; Grain</div>
               <div class="text-[9px]" style="color: var(--text-dim);">CRT frame texture (independent of glitch)</div>
             </div>
-            <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')" role="switch" aria-label="SCANLINES &amp; GRAIN" title="Scanlines and grain"><div class="toggle-knob"></div></div>
           </div>
         </div>
+
+        <!-- Manual deep-link (icon-first SESSION-04) — icon+text, sanctioned label -->
+        <a href="tutorial.html" class="btn-crt btn-link has-icon" style="display:flex;margin-top:16px;" aria-label="OPERATOR'S MANUAL" title="Operator's manual"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#scroll-text"></use></svg>Operator's Manual</a>
 
         <!-- Info -->
         <div class="section-header glow">◈ INFO</div>
@@ -202,7 +221,7 @@
 
       <!-- Footer -->
       <div class="flex gap-2 px-4 py-3 panel" style="border-left:0;border-right:0;border-bottom:0;">
-        <a href="title.html" class="btn-crt btn-link flex-1">◀ Back</a>
+        <a href="title.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:96px;" aria-label="BACK" title="Back"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg></a>
       </div>
     </div>
   </div>

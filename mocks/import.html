@@ -82,6 +82,18 @@
     .link-input::placeholder { color: var(--text-dim); }
     .error-screen { display: none; }
     .error-screen.active { display: flex; }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
   </style>
 </head>
 <body>
@@ -112,7 +124,7 @@
           </div>
           <textarea class="link-input" rows="4" placeholder="https://descent.app/#A4F29C1E7B2D..."></textarea>
           <div class="flex gap-2 mt-3">
-            <button class="btn-crt primary flex-1" onclick="showSuccess()">◈ IMPORT</button>
+            <button class="btn-crt primary icon-only" style="flex:0 0 auto;min-width:96px;" onclick="showSuccess()" aria-label="IMPORT" title="Import"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#download"></use></svg></button>
             <button class="btn-crt flex-1" onclick="showError('truncated')">SIMULATE: TRUNCATED</button>
           </div>
           <div class="flex gap-2 mt-2">
@@ -148,7 +160,7 @@
               <div>Version: <span class="accent-text">1.0 (match)</span></div>
             </div>
           </div>
-          <a href="exploration.html" class="btn-crt primary w-full mt-4">◈ RESUME RUN</a>
+          <a href="exploration.html" class="btn-crt primary has-icon w-full mt-4" aria-label="RESUME RUN" title="Resume run"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg>Resume Run</a>
         </div>
 
         <!-- Failure screens -->
@@ -160,7 +172,7 @@
           <div class="panel p-3 mt-4 w-full text-left">
             <div class="text-[9px]" style="color: var(--text-secondary);">Seed readable: <span style="color: var(--text-dim);">No — too short to extract</span></div>
           </div>
-          <a href="title.html" class="btn-crt w-full mt-4">◀ Return to Title</a>
+          <a href="title.html" class="btn-crt has-icon w-full mt-4" aria-label="RETURN TO TITLE" title="Return to title"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg>Return to Title</a>
         </div>
 
         <div id="error-version" class="error-screen flex-col items-center justify-center h-full text-center px-4">
@@ -170,9 +182,9 @@
           <div class="text-[9px] mt-1" style="color: var(--text-dim);">Link version: 0.9 · Current version: 1.0</div>
           <div class="panel p-3 mt-4 w-full text-left">
             <div class="text-[9px]" style="color: var(--text-secondary);">Seed readable: <span class="accent-text">Yes — B7E1·3D9F</span></div>
-            <button class="btn-crt primary w-full mt-2" onclick="window.location.href='creation.html'">◈ Fresh Run in This World</button>
+            <button class="btn-crt primary has-icon w-full mt-2" onclick="window.location.href='creation.html'" aria-label="FRESH RUN IN THIS WORLD" title="Fresh run in this world"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg>Fresh Run in This World</button>
           </div>
-          <a href="title.html" class="btn-crt w-full mt-3">◀ Return to Title</a>
+          <a href="title.html" class="btn-crt has-icon w-full mt-3" aria-label="RETURN TO TITLE" title="Return to title"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg>Return to Title</a>
         </div>
 
         <div id="error-checksum" class="error-screen flex-col items-center justify-center h-full text-center px-4">
@@ -182,9 +194,9 @@
           <div class="text-[9px] mt-1" style="color: var(--text-dim);">Data integrity could not be verified.</div>
           <div class="panel p-3 mt-4 w-full text-left">
             <div class="text-[9px]" style="color: var(--text-secondary);">Seed readable: <span class="accent-text">Yes — C2A8·F1B7</span></div>
-            <button class="btn-crt primary w-full mt-2" onclick="window.location.href='creation.html'">◈ Fresh Run in This World</button>
+            <button class="btn-crt primary has-icon w-full mt-2" onclick="window.location.href='creation.html'" aria-label="FRESH RUN IN THIS WORLD" title="Fresh run in this world"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg>Fresh Run in This World</button>
           </div>
-          <a href="title.html" class="btn-crt w-full mt-3">◀ Return to Title</a>
+          <a href="title.html" class="btn-crt has-icon w-full mt-3" aria-label="RETURN TO TITLE" title="Return to title"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg>Return to Title</a>
         </div>
 
         <div id="error-malformed" class="error-screen flex-col items-center justify-center h-full text-center px-4">
@@ -195,13 +207,13 @@
           <div class="panel p-3 mt-4 w-full text-left">
             <div class="text-[9px]" style="color: var(--text-secondary);">Seed readable: <span style="color: var(--text-dim);">No — invalid format</span></div>
           </div>
-          <a href="title.html" class="btn-crt w-full mt-4">◀ Return to Title</a>
+          <a href="title.html" class="btn-crt has-icon w-full mt-4" aria-label="RETURN TO TITLE" title="Return to title"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg>Return to Title</a>
         </div>
       </div>
 
       <!-- Footer -->
       <div class="flex gap-2 px-4 py-3 panel" style="border-left:0;border-right:0;border-bottom:0;">
-        <a href="title.html" class="btn-crt btn-link flex-1">◀ Title</a>
+        <a href="title.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:96px;" aria-label="TITLE" title="Title"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg></a>
       </div>
     </div>
   </div>

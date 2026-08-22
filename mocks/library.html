@@ -76,6 +76,24 @@
     .scroll-area::-webkit-scrollbar { width: 4px; }
     .scroll-area::-webkit-scrollbar-thumb { background: var(--accent); }
     .scroll-area::-webkit-scrollbar-track { background: var(--bg-panel); }
+    /* Icon primitives (icon-first-ui-density SESSION-03+04). */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+      fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round;
+      stroke-linejoin: round; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; }
+    .icon-16 { width: 16px; height: 16px; }
+    .icon-dim    { color: var(--text-dim); }
+    .icon-accent { color: var(--accent); }
+    .icon-danger { color: var(--danger); }
+    .btn-crt.has-icon, .btn-crt.icon-only { display: inline-flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .btn-crt.icon-only { padding: 8px; min-width: 48px; gap: 0; }
+    /* Destructive-tone button — matches styles/components.css `.btn-crt.btn-danger`. */
+    .btn-crt.btn-danger { border-color: var(--danger); color: var(--danger);
+      background: rgba(232,58,58,0.06); }
+    .btn-crt.btn-danger:hover { border-color: var(--danger); color: #fff;
+      background: rgba(232,58,58,0.2); box-shadow: 0 0 8px var(--danger); }
+    .run-actions { display: flex; gap: 6px; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -101,7 +119,7 @@
       <!-- Run list -->
       <div class="flex-1 scroll-area px-3 py-3 space-y-2">
         <!-- Run 1 -->
-        <div class="run-row flex" onclick="window.location.href='exploration.html'">
+        <div class="run-row flex">
           <div class="accent-swatch" style="background: #7ec8e3; box-shadow: 0 0 4px #7ec8e3;"></div>
           <div class="flex-1 p-3">
             <div class="flex items-center justify-between mb-1">
@@ -119,11 +137,15 @@
               </div>
             </div>
             <div class="text-[9px] mt-1" style="color: var(--text-dim);">Last played: 2h ago · 2 party members</div>
+            <div class="run-actions">
+              <a href="exploration.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:48px;" aria-label="RESUME" title="Resume"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg></a>
+              <button type="button" class="btn-crt btn-danger has-icon" style="flex:1;" aria-label="DELETE LOCAL STATE" title="Delete local state"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../assets/icons.svg#x"></use></svg>Delete Local State</button>
+            </div>
           </div>
         </div>
 
         <!-- Run 2 -->
-        <div class="run-row flex" onclick="window.location.href='exploration.html'">
+        <div class="run-row flex">
           <div class="accent-swatch" style="background: #e8632a; box-shadow: 0 0 4px #e8632a;"></div>
           <div class="flex-1 p-3">
             <div class="flex items-center justify-between mb-1">
@@ -143,11 +165,15 @@
               </div>
             </div>
             <div class="text-[9px] mt-1" style="color: var(--text-dim);">Last played: yesterday · 4 party members</div>
+            <div class="run-actions">
+              <a href="exploration.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:48px;" aria-label="RESUME" title="Resume"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg></a>
+              <button type="button" class="btn-crt btn-danger has-icon" style="flex:1;" aria-label="DELETE LOCAL STATE" title="Delete local state"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../assets/icons.svg#x"></use></svg>Delete Local State</button>
+            </div>
           </div>
         </div>
 
         <!-- Run 3 -->
-        <div class="run-row flex" onclick="window.location.href='exploration.html'">
+        <div class="run-row flex">
           <div class="accent-swatch" style="background: #b026d4; box-shadow: 0 0 4px #b026d4;"></div>
           <div class="flex-1 p-3">
             <div class="flex items-center justify-between mb-1">
@@ -164,6 +190,10 @@
               </div>
             </div>
             <div class="text-[9px] mt-1" style="color: var(--text-dim);">Last played: 3d ago · Solo run (Oracle)</div>
+            <div class="run-actions">
+              <a href="exploration.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:48px;" aria-label="RESUME" title="Resume"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg></a>
+              <button type="button" class="btn-crt btn-danger has-icon" style="flex:1;" aria-label="DELETE LOCAL STATE" title="Delete local state"><svg class="icon icon-14 icon-danger" aria-hidden="true"><use href="../assets/icons.svg#x"></use></svg>Delete Local State</button>
+            </div>
           </div>
         </div>
 
@@ -175,8 +205,8 @@
 
       <!-- Footer -->
       <div class="flex gap-2 px-4 py-3 panel" style="border-left:0;border-right:0;border-bottom:0;">
-        <a href="title.html" class="btn-crt btn-link flex-1">◀ Title</a>
-        <a href="creation.html" class="btn-crt btn-link primary flex-1">◈ New Run</a>
+        <a href="title.html" class="btn-crt btn-link icon-only" style="flex:0 0 auto;min-width:96px;" aria-label="TITLE" title="Title"><svg class="icon icon-16" aria-hidden="true"><use href="../assets/icons.svg#arrow-left"></use></svg></a>
+        <a href="creation.html" class="btn-crt btn-link primary has-icon" style="flex:1;" aria-label="◈ NEW RUN" title="New run"><svg class="icon icon-16 icon-accent" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"></use></svg>New Run</a>
       </div>
     </div>
   </div>

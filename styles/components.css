@@ -1857,6 +1857,28 @@ button.protocol-card[aria-selected="true"],
   box-shadow: 0 0 8px var(--danger);
 }
 
+/* Per-run action row on the portrait library card (icon-first-ui-density
+   SESSION-04). Holds the icon-only RESUME chevron and the icon+text
+   destructive DELETE LOCAL STATE button. The surrounding `.run-row`
+   itself carries the 96px touch floor via the shared `.console-row, ...,
+   .run-row { min-height: 96px }` rule — this container only owns layout;
+   no new min-height is introduced. */
+.run-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Icon-prefixed toggle-row title (icon-first-ui-density SESSION-04).
+   Inline-flex wrapper for the sprite + label pair on settings toggle rows
+   (MASTER MUTE, GLITCH, SCANLINES & GRAIN). Slider labels are NOT
+   iconized per GAP §6.6 — the label/input/value trio the e2e asserts. */
+.row-title-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* HP-bar-only class (emitted by createHPBar). Repointed off enemy-red onto --hp
    per Custom Rule 14 — red is reserved for hostiles + semantic errors. */
 .bar-fill-danger {
