@@ -297,6 +297,23 @@ describe('creation screen workflow', () => {
     expect(byTestId(container, 'back').parentNode.className).toBe('creation-footer-row');
     expect(byTestId(container, 'finalize').parentNode).toBe(byTestId(container, 'back').parentNode);
 
+    // icon-first-ui-density SESSION-06 — BACK is icon-only, aria-label
+    // preserves the former visible label verbatim; REMOVE + FINALIZE keep
+    // short text alongside their sprite prefix.
+    const back = byTestId(container, 'back');
+    expect(back.tagName).toBe('BUTTON');
+    expect(back.getAttribute('aria-label')).toBe('◀ BACK');
+    expect(back.textContent).toBe('');
+    expect(back.classList.contains('icon-only')).toBe(true);
+    const finalize = byTestId(container, 'finalize');
+    expect(finalize.textContent).toBe('FINALIZE & DESCEND');
+    expect(finalize.getAttribute('aria-label')).toBe('FINALIZE & DESCEND');
+    const remove = byTestId(container, 'remove-character');
+    // − REMOVE keeps visible text (accessible name comes from textContent);
+    // no aria-label needed since text is intact.
+    expect(remove.textContent).toBe('− REMOVE');
+    expect(remove.classList.contains('danger')).toBe(true);
+
     byTestId(container, 'open-blueprints').click();
     expect(byTestId(container, 'panel-blueprints')).not.toBeNull();
   });
@@ -723,6 +740,24 @@ describe('creation screen — wide layout', () => {
     expect(card.classList.contains('config-card')).toBe(true);
     expect(card.classList.contains('active')).toBe(true);
     expect(card.children.find((c) => c.classList?.contains('name')).textContent).toBe('ghost cell');
+    // icon-first-ui-density SESSION-06 — the wide saved-config card is a
+    // non-interactive div wrapping name + meta + `.config-actions` with
+    // sibling LOAD (icon-only) and DELETE (icon+text, danger) buttons —
+    // matches mocks/wide/creation.html and keeps `hasNestedButton` clean.
+    expect(card.tagName).toBe('DIV');
+    const actions = card.children.find((c) => c.classList?.contains('config-actions'));
+    expect(actions).toBeTruthy();
+    const load = byTestId(container, 'wide-saved-config-ghost cell-load');
+    expect(load).not.toBeNull();
+    expect(load.tagName).toBe('BUTTON');
+    expect(load.getAttribute('aria-label')).toBe('LOAD');
+    expect(load.textContent).toBe('');
+    expect(load.classList.contains('icon-only')).toBe(true);
+    const del = byTestId(container, 'wide-saved-config-ghost cell-delete');
+    expect(del).not.toBeNull();
+    // DELETE keeps visible text; accessible name comes from textContent.
+    expect(del.textContent).toBe('DELETE');
+    expect(del.classList.contains('danger')).toBe(true);
   });
 
   it('hides class-gated wide gear/tech options while keeping legal ones + gate note', async () => {
@@ -971,5 +1006,22 @@ describe('creation screen — wide layout', () => {
     expect(seen[0].screen).toBe('exploration');
     expect(seen[0].params.runState.worldSeed).toBe(4242);
     off();
+  });
+
+  // icon-first-ui-density SESSION-06 — wide footer BACK is icon-only,
+  // FINALIZE is icon+text. aria-labels preserve the former visible strings
+  // (◀ BACK / ◈ FINALIZE & DESCEND) verbatim so the e2e queries resolve.
+  it('wide footer BACK is icon-only and FINALIZE carries the ornament aria-label', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 4343 });
+    const back = byTestId(container, 'back');
+    expect(back).not.toBeNull();
+    expect(back.getAttribute('aria-label')).toBe('◀ BACK');
+    expect(back.textContent).toBe('');
+    expect(back.classList.contains('icon-only')).toBe(true);
+    const finalize = byTestId(container, 'finalize');
+    expect(finalize.getAttribute('aria-label')).toBe('◈ FINALIZE & DESCEND');
+    expect(finalize.textContent).toBe('FINALIZE & DESCEND');
+    expect(finalize.classList.contains('primary')).toBe(true);
   });
 });

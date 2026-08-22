@@ -1,4 +1,5 @@
 import { createAttributeRow, createButton, createManualLink, createPanel, createScreenBody, createScrollArea, createSigilToken, createTextInput } from '../components.js';
+import { createIcon } from '../icon.js';
 import { createInputHandler } from '../input.js';
 import { currentLayoutClass } from '../layout.js';
 import { bus } from '../../state/bus.js';
@@ -41,6 +42,23 @@ function text(tagName, className, value) {
   if (className) element.className = className;
   element.textContent = value;
   return element;
+}
+
+// icon-first-ui-density SESSION-06 — prefix a sprite icon onto a plain
+// element (used for the wide-save-slot name div where the icon rides on
+// the label text rather than on the outer button). Safe when
+// document.createElementNS is absent (test fakes) — icon is silently
+// skipped and .row-title-icon is not added, mirroring components.js
+// prefixIcon so the marker never lies about what actually rendered.
+function prefixTextIcon(host, iconId, iconSize = 14, iconTone) {
+  if (!host || !iconId) return;
+  if (typeof document?.createElementNS !== 'function') return;
+  let icon;
+  try { icon = createIcon(iconId, { size: iconSize, tone: iconTone }); }
+  catch { return; }
+  if (typeof host.classList?.add === 'function') host.classList.add('row-title-icon');
+  if (typeof host.prepend === 'function') host.prepend(icon);
+  else if (typeof host.insertBefore === 'function') host.insertBefore(icon, host.firstChild);
 }
 
 function getData(params) {
@@ -275,6 +293,9 @@ export function mount(container, params = {}) {
     section.appendChild(row);
     const removeReason = summary.characters.length <= 1 ? 'minimum party size' : '';
     const remove = createButton('− REMOVE', {
+      icon: 'x',
+      iconSize: 14,
+      iconTone: 'danger',
       danger: true,
       disabled: Boolean(removeReason),
       description: removeReason || 'Remove selected character',
@@ -321,14 +342,41 @@ export function mount(container, params = {}) {
     for (const config of configs) {
       const validation = validateConfig(config, data);
       const meta = shortBlueprintSummary(config);
-      const card = createButton('', {
-        description: validation.valid ? meta : 'configuration needs repair',
-        error: !validation.valid,
-        onClick: () => loadBlueprint(config.name)
-      });
+      // icon-first-ui-density SESSION-06 — mocks/wide/creation.html splits
+      // the card into name + meta + `.config-actions` with LOAD (icon-only,
+      // upload) and DELETE (icon+text, danger x). The card itself is a
+      // non-interactive div so LOAD/DELETE aren't nested inside another
+      // button (creation-screen.test.js `wide render never nests …`).
+      const card = document.createElement('div');
       card.className = 'config-card' + (saveName === config.name ? ' active' : '') + (validation.valid ? '' : ' invalid');
       card.dataset.testid = `wide-saved-config-${config.name}`;
-      card.append(text('div', 'name', config.name), text('div', 'meta', validation.valid ? meta : `REPAIR: ${validation.invalidItems.map((item) => item.field).join(', ')}`));
+      const errorId = validation.valid ? undefined : `wide-config-${config.name}-errors`;
+      const metaEl = text('div', 'meta', validation.valid ? meta : `REPAIR: ${validation.invalidItems.map((item) => item.field).join(', ')}`);
+      if (errorId) metaEl.id = errorId;
+      card.append(text('div', 'name', config.name), metaEl);
+      const actions = document.createElement('div');
+      actions.className = 'config-actions';
+      const loadBtn = createButton('', {
+        icon: 'upload',
+        iconSize: 14,
+        iconTone: 'accent',
+        label: 'LOAD',
+        describedBy: errorId,
+        error: !validation.valid,
+        description: validation.valid ? meta : 'configuration needs repair',
+        onClick: () => loadBlueprint(config.name)
+      });
+      loadBtn.dataset.testid = `wide-saved-config-${config.name}-load`;
+      const deleteBtn = createButton(pendingDeleteName === config.name ? 'CONFIRM DELETE' : 'DELETE', {
+        icon: 'x',
+        iconSize: 14,
+        iconTone: 'danger',
+        danger: true,
+        onClick: () => confirmDelete(config.name)
+      });
+      deleteBtn.dataset.testid = `wide-saved-config-${config.name}-delete`;
+      actions.append(loadBtn, deleteBtn);
+      card.appendChild(actions);
       list.appendChild(card);
     }
     const nameRow = document.createElement('label');
@@ -354,10 +402,12 @@ export function mount(container, params = {}) {
     });
     saveSlot.className = 'config-card save-slot';
     saveSlot.dataset.testid = 'wide-save-slot';
-    saveSlot.append(
-      text('div', 'name', pendingOverwriteName === saveName.trim() && saveName.trim() ? '+ CONFIRM OVERWRITE' : '+ SAVE CURRENT'),
-      text('div', 'meta', `${configs.length}/10`)
-    );
+    // icon-first-ui-density SESSION-06 — save-slot stays a single button (so
+    // the existing `disabled` test still resolves) with the download glyph
+    // riding on the name div (mock: mocks/wide/creation.html save-slot).
+    const saveSlotName = text('div', 'name', pendingOverwriteName === saveName.trim() && saveName.trim() ? '+ CONFIRM OVERWRITE' : '+ SAVE CURRENT');
+    prefixTextIcon(saveSlotName, 'download', 14);
+    saveSlot.append(saveSlotName, text('div', 'meta', `${configs.length}/10`));
     list.appendChild(saveSlot);
     section.appendChild(list);
     if (notice) section.appendChild(text('p', notice.startsWith('LOADED') || notice.startsWith('SAVED') ? 'creation-note' : 'creation-error', notice));
@@ -698,14 +748,22 @@ export function mount(container, params = {}) {
     const footer = document.createElement('footer');
     footer.className = 'wide-creation-footer';
     footer.dataset.testid = 'wide-creation-footer';
-    const backButton = createButton('◀ BACK', {
+    const backButton = createButton('', {
+      icon: 'arrow-left',
+      iconSize: 14,
+      label: '◀ BACK',
       onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
     });
     backButton.dataset.testid = 'back';
     backButton.classList.add('footer-back-btn', 'btn-link');
     const spacer = document.createElement('div');
     spacer.style.flex = '1';
-    const finalizeButton = createButton(finalizing ? 'BOOTING…' : finalized ? 'FINALIZED' : '◈ FINALIZE & DESCEND', {
+    const finalizeLabel = finalizing ? 'BOOTING…' : finalized ? 'FINALIZED' : 'FINALIZE & DESCEND';
+    const finalizeButton = createButton(finalizeLabel, {
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
+      label: '◈ FINALIZE & DESCEND',
       primary: true,
       busy: finalizing,
       disabled: finalizing || finalized || !summary.validation.valid,
@@ -800,6 +858,9 @@ export function mount(container, params = {}) {
     }
     const removeReason = summary.characters.length <= 1 ? 'minimum party size' : '';
     const remove = createButton('− REMOVE', {
+      icon: 'x',
+      iconSize: 14,
+      iconTone: 'danger',
       danger: true,
       disabled: Boolean(removeReason),
       description: removeReason || 'Remove selected character',
@@ -1124,6 +1185,8 @@ export function mount(container, params = {}) {
     input.dataset.testid = 'config-name-row';
     controls.appendChild(input);
     const saveButton = createButton(pendingOverwriteName === saveName.trim() ? 'CONFIRM OVERWRITE' : 'SAVE CONFIG', {
+      icon: 'download',
+      iconSize: 14,
       disabled: draft.characters.length === 0,
       onClick: saveBlueprint
     });
@@ -1150,12 +1213,19 @@ export function mount(container, params = {}) {
         issues.id = `config-${config.name}-errors`;
         row.appendChild(issues);
       }
-      row.appendChild(createButton('LOAD', {
+      row.appendChild(createButton('', {
+        icon: 'upload',
+        iconSize: 14,
+        iconTone: 'accent',
+        label: 'LOAD',
         describedBy: validation.valid ? undefined : `config-${config.name}-errors`,
         error: !validation.valid,
         onClick: () => loadBlueprint(config.name)
       }));
       row.appendChild(createButton(pendingDeleteName === config.name ? 'CONFIRM DELETE' : 'DELETE', {
+        icon: 'x',
+        iconSize: 14,
+        iconTone: 'danger',
         danger: true,
         onClick: () => confirmDelete(config.name)
       }));
@@ -1187,13 +1257,20 @@ export function mount(container, params = {}) {
     actionRow.style.display = 'flex';
     actionRow.style.gap = '8px';
     actionRow.style.minHeight = '48px';
-    const backButton = createButton('◀ BACK', {
+    const backButton = createButton('', {
+      icon: 'arrow-left',
+      iconSize: 14,
+      label: '◀ BACK',
       onClick: () => bus.dispatch('ui:navigate', { screen: 'title' })
     });
     backButton.dataset.testid = 'back';
     backButton.classList.add('footer-back-btn');
     backButton.style.minHeight = '48px';
     const finalizeButton = createButton(finalizing ? 'BOOTING…' : finalized ? 'FINALIZED' : 'FINALIZE & DESCEND', {
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
+      label: 'FINALIZE & DESCEND',
       primary: true,
       busy: finalizing,
       disabled: finalizing || finalized || !summary.validation.valid,
@@ -1244,6 +1321,8 @@ export function mount(container, params = {}) {
       list.appendChild(card);
     }
     const save = createButton('+ SAVE', {
+      icon: 'download',
+      iconSize: 14,
       description: 'Open saved configuration editor',
       onClick: () => { activeTab = 'blueprints'; render(); }
     });
