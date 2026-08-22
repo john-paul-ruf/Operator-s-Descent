@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | **Feature** | `portrait-usability-regression-repair` |
-| **Status** | In Progress |
+| **Status** | Blocked |
 | **Started** | 2026-08-21 15:43 CDT |
 | **Completed** | — |
 | **Authoritative plan** | `./program/operator-s-descent/prompts/portrait-usability-regression-repair/MASTER.md` |
@@ -20,7 +20,7 @@
 | SESSION-04 | done | — | 2/2 | Title state + navigation E2E | Title screen now subscribes to ui:manual-close and locally resets START ↔ branches to its canonical START-visible/branches-hidden view with focus on START; no history mutation, no route remount, no fragment change. |
 | SESSION-05 | done | — | 3/3 | Bus contracts + integration tests | Human override accepted the completed functional work despite checkpoint 1 commit `05af9ec` including `./README.MD` outside `Owns`; the violation remains recorded below. |
 | SESSION-06 | done | SESSION-01 | 4/4 | CSS/design/tooling + adaptive/combat E2E | Portrait console-bar now an in-flow flex child (no overlay, no dim layer); every touch-capable row hits the 96px floor; --hp added to design.md palette; deploy-p/deploy-e classes production-defined; design scan 0 warnings. |
-| SESSION-07 | in-progress | SESSION-01–06 | 3/3 | New integrated acceptance specification | Authorized rerun from committed checkpoint 3/3; re-running the integrated and full acceptance gates. |
+| SESSION-07 | blocked | SESSION-01–06 | 3/3 | New integrated acceptance specification | Rerun returned no parseable handoff JSON; see `./.forge/results/SESSION-07.result.md`. Existing checkpoint 3/3 commits remain clean. |
 
 ## Wave Plan
 
@@ -131,3 +131,10 @@ flowchart TD
 - **Date:** 2026-08-21 19:44 CDT
 - **Instruction (verbatim):** run seven
 - **Decision:** SESSION-07 is relaunched from its committed checkpoint 3/3 to rerun the integrated and full acceptance gates.
+
+### SESSION-07 Rerun Outcome
+
+- **Blocked:** 2026-08-21
+- **Reason:** no handoff JSON; see `./.forge/results/SESSION-07.result.md`
+- **Raw final message (verbatim):** Failed to parse tool arguments: JSON Parse error: Property name must be a string literal
+- **Checkpoint reconciliation:** Existing SESSION-07 checkpoint commits remain 3/3 with no uncommitted lease work.
