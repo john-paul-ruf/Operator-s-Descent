@@ -1204,6 +1204,36 @@ button.protocol-card[aria-selected="true"],
   scrollbar-width: none;
 }
 
+/* Combat status overview (SESSION-01 mobile-combat-density-repair) — the
+   combat branch's dedicated overview wrapper. A single flex-column of
+   compact rows replaces the old 4-column CSS grid; the active-actor row is
+   horizontal (icon-prefixed sigil/HP/CHARGE/AP/MOVE side by side) instead of
+   a stacked column, which was the actual driver of the pre-repair 226px
+   strip / 111px active-cell height. */
+:root:not([data-layout="wide"]) .status-combat-overview {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 3px;
+}
+
+:root:not([data-layout="wide"]) .status-combat-topline,
+:root:not([data-layout="wide"]) .status-combat-active {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:root:not([data-layout="wide"]) .status-combat-active {
+  gap: 6px;
+}
+
+:root:not([data-layout="wide"]) .status-combat-initiative-row {
+  width: 100%;
+}
+
 /* In-run screens (SESSION-06) — the exploration / combat containers are
    flex columns so the in-flow console-bar (formerly absolute) can sit
    below the playfield without covering it. Wide layout mounts its own

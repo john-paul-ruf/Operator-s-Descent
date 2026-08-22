@@ -123,30 +123,42 @@ describe('status strip', () => {
     ]);
     const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
 
-    expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '03', 'ROUND', '04', 'SEED', '◈ INITIATIVE ORDER', '1', '2', 'ACTIVE', '9/12', '3/6', 'AP 2', '1 MV']));
+    // Note: the SESSION-01 (mobile-combat-density-repair) active row drops the
+    // decorative "ACTIVE" caption that used to top the vertical active-group
+    // column — the active actor is still the sigil/HP/CHARGE/AP/MV row (its
+    // sigil carries an "active" aria-label); dropping this purely-visual
+    // caption is part of collapsing that column into a single compact row.
+    expect(textOf(strip)).toEqual(expect.arrayContaining(['DEPTH', '03', 'ROUND', '04', 'SEED', '◈ INITIATIVE ORDER', '1', '2', '9/12', '3/6', 'AP 2', '1 MV']));
     expect(strip.className).toContain('status-strip-combat');
-    expect(strip.style.gridTemplateColumns).toBe('auto auto auto minmax(0, 1fr)');
     expect(findByClass(strip, 'status-active-sigil')).not.toBe(null);
     expect(findByClass(strip, 'init-rail').children).toHaveLength(2);
     expect(findByClass(strip, 'init-rail').children[0].className).toContain('active');
   });
 
-  test('portrait combat strip is compact — tighter grid gap, shrunk row-1 labels, slim initiative rail — and readout stays complete', () => {
+  test('portrait combat strip renders a dedicated overview wrapper with a single horizontal active row, shrunk row-1 labels, a slim initiative rail — and readout stays complete', () => {
     const combatants = new Map([
       ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }],
       ['e1', { id: 'e1', side: 'enemy', sigilCodepoint: 0xE030, hp: 5, hpMax: 5 }]
     ]);
     const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1', 'e1'], currentTurn: 0, round: 4 });
 
-    // Compact grid — tighter than the pre-SESSION-02 `6px 12px`.
-    expect(strip.style.gap).toBe('4px 8px');
+    // Compact semantic composition: one combat overview wrapper holding a
+    // topline row and a single horizontal active-actor row — not the old
+    // per-metric vertical stacking that drove the 226px/111px regression.
+    const overview = findByClass(strip, 'status-combat-overview');
+    expect(overview).not.toBe(null);
+    const topline = findByClass(overview, 'status-combat-topline');
+    expect(topline).not.toBe(null);
+    const activeRow = findByClass(overview, 'status-combat-active');
+    expect(activeRow).not.toBe(null);
 
     // Readout completeness: after SESSION-01 the strip is the sole copy, so
-    // none of HP / CHARGE / AP / MV may be dropped.
-    expect(findByClass(strip, 'status-mini-hp')).not.toBe(null);
-    expect(findByClass(strip, 'status-mini-charge')).not.toBe(null);
-    expect(findByClass(strip, 'status-ap')).not.toBe(null);
-    expect(findByClass(strip, 'status-move')).not.toBe(null);
+    // none of HP / CHARGE / AP / MV may be dropped, and every field lives
+    // inside the single active row (no separate stacked sub-groups).
+    expect(findByClass(activeRow, 'status-mini-hp')).not.toBe(null);
+    expect(findByClass(activeRow, 'status-mini-charge')).not.toBe(null);
+    expect(findByClass(activeRow, 'status-ap')).not.toBe(null);
+    expect(findByClass(activeRow, 'status-move')).not.toBe(null);
     expect(findByClass(strip, 'init-rail')).not.toBe(null);
 
     // Row-1 labels (DEPTH/ROUND/SEED) and the initiative group label all
@@ -158,6 +170,54 @@ describe('status strip', () => {
 
     // Initiative rail sits on a slim single line — reduced inline padding.
     expect(findByClass(strip, 'init-rail').style.padding).toBe('2px 4px');
+  });
+
+  test('portrait combat strip prefixes M107 icons onto the topline and active-row metrics while every field keeps its visible text', () => {
+    const combatants = new Map([
+      ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }]
+    ]);
+    const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 });
+
+    function svgChildren(node) {
+      return (node.children || []).filter((child) => child.tagName === 'SVG');
+    }
+
+    // Topline: DEPTH/ROUND/SEED groups each carry exactly one decorative icon
+    // ahead of their visible label text — the field name is never icon-only.
+    const depthLabel = findByClass(strip, 'status-depth-combat-group').firstChild;
+    expect(svgChildren(depthLabel)).toHaveLength(1);
+    expect(depthLabel.children[0].getAttribute('aria-hidden')).toBe('true');
+    expect(findByClass(strip, 'status-depth-combat').textContent).toBe('03');
+
+    // Active row: HP/CHARGE/AP/MOVE each get a preceding icon sibling; the
+    // bars/text nodes retain their existing values and classes untouched.
+    const activeRow = findByClass(strip, 'status-combat-active');
+    expect(svgChildren(activeRow).length).toBeGreaterThanOrEqual(4);
+    expect(findByClass(activeRow, 'status-ap').textContent).toBe('AP 2');
+    expect(findByClass(activeRow, 'status-move').textContent).toBe('1 MV');
+    strip.cleanup();
+  });
+
+  test('portrait combat strip renders icon-free (fallback-safe) when the document lacks createElementNS', () => {
+    const originalCreateElementNS = globalThis.document.createElementNS;
+    delete globalThis.document.createElementNS;
+    try {
+      const combatants = new Map([
+        ['p1', { id: 'p1', side: 'party', sigilCodepoint: 0xE000, currentHP: 9, maxHP: 12, currentCHARGE: 3, maxCHARGE: 6, ap: 2, moveAvailable: true }]
+      ]);
+      const strip = createStatusBar({ depth: 3 }, { combatants, turnOrder: ['p1'], currentTurn: 0, round: 1 });
+      // Every value/class/label still renders — only the decorative SVG is absent.
+      expect(findByClass(strip, 'status-mini-hp')).not.toBe(null);
+      expect(findByClass(strip, 'status-ap').textContent).toBe('AP 2');
+      function anySvg(node) {
+        if (node.tagName === 'SVG') return true;
+        return (node.children || []).some(anySvg);
+      }
+      expect(anySvg(strip)).toBe(false);
+      strip.cleanup();
+    } finally {
+      globalThis.document.createElementNS = originalCreateElementNS;
+    }
   });
 
   test('the status-collapse control and status-collapsed class are removed in every variant', () => {

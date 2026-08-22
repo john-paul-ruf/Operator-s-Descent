@@ -141,6 +141,26 @@ function truncatedSeed(seed) {
   return text.length > 10 ? `${text.slice(0, 6)}…${text.slice(-4)}` : text;
 }
 
+// SESSION-01 (mobile-combat-density-repair) — decorative M107 icon prefixed
+// onto a compact combat metric. Every metric this touches keeps its own
+// visible text/aria-label; the icon never becomes the sole carrier of
+// meaning, so a missing sprite (safeIcon returns null) degrades silently.
+function appendMetricIcon(parent, iconId) {
+  const icon = safeIcon(iconId, { size: 14, tone: 'dim' });
+  if (icon) parent.appendChild(icon);
+  return icon;
+}
+
+// Prefixes a decorative icon inside a createGroup label (the group's first
+// child) rather than touching createGroup itself — createGroup is shared
+// with the exploration strip, which must stay icon-free (see the
+// "no icon children" portrait test).
+function prefixGroupIcon(group, iconId) {
+  const icon = safeIcon(iconId, { size: 14, tone: 'dim' });
+  if (icon && typeof group.firstChild?.prepend === 'function') group.firstChild.prepend(icon);
+  return group;
+}
+
 function appendActorSummary(strip, actor, active = false, derived = null) {
   const summary = document.createElement('div');
   summary.className = active ? 'status-active-actor' : 'status-party-member';
@@ -179,12 +199,6 @@ export function createStatusBar(runState, combatState = null, options = {}) {
 
   if (combatState) {
     strip.classList.add('status-strip-combat');
-    strip.style.display = 'grid';
-    strip.style.gridTemplateColumns = 'auto auto auto minmax(0, 1fr)';
-    // SESSION-02 — tightened from `6px 12px` for phone density; the combat
-    // strip is now the single source of truth for HP/CHARGE/AP/MV (SESSION-01
-    // dropped the console-pane copy), so vertical room matters.
-    strip.style.gap = '4px 8px';
     renderCombatStatus(strip, runState, combatState, data);
   } else {
     cleanups.push(renderExplorationStatus(strip, runState, data));
@@ -239,17 +253,58 @@ function compactLabel(group) {
   return group;
 }
 
+// SESSION-01 (mobile-combat-density-repair) — a dedicated combat-overview
+// wrapper replaces the old 4-column CSS grid. The wrapper is a single
+// flex-column of compact metric rows (topline chips, one horizontal active-
+// actor row, initiative rail) so no metric group stacks its own contents
+// into a tall column — that vertical stacking (sigil + HP + CHARGE + AP +
+// MOVE, each on its own line) was the actual source of the 226px/111px
+// height regression this session repairs. Every field, class, and testid
+// the console/e2e/wide layers depend on is preserved; only the container
+// shape changes.
 function renderCombatStatus(strip, runState, combatState, data = null) {
-  appendText(compactLabel(createGroup(strip, 'status-depth-combat', 'DEPTH')), 'status-depth-combat', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
-  appendText(compactLabel(createGroup(strip, 'status-round', 'ROUND')), 'status-round', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`);
-  appendText(compactLabel(createGroup(strip, 'status-seed-combat', 'SEED')), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
+  const overview = document.createElement('div');
+  overview.className = 'status-combat-overview';
+  strip.appendChild(overview);
+
+  const topline = document.createElement('div');
+  topline.className = 'status-combat-topline';
+  overview.appendChild(topline);
+  appendText(prefixGroupIcon(compactLabel(createGroup(topline, 'status-depth-combat', 'DEPTH')), 'gauge'), 'status-depth-combat', String(runState.depth).padStart(2, '0'), `Depth ${runState.depth}`);
+  appendText(prefixGroupIcon(compactLabel(createGroup(topline, 'status-round', 'ROUND')), 'sparkles'), 'status-round', String(combatState.round || 1).padStart(2, '0'), `Combat round ${combatState.round || 1}`);
+  appendText(prefixGroupIcon(compactLabel(createGroup(topline, 'status-seed-combat', 'SEED')), 'hash'), 'status-seed', truncatedSeed(runState.worldSeed), `World seed ${runState.worldSeed}`);
+
   const actors = actorList(combatState);
   const activeId = combatState.turnOrder?.[combatState.currentTurn];
   const active = actors.find((actor) => actor.id === activeId);
+
+  if (active) {
+    const activeRow = document.createElement('div');
+    activeRow.className = 'status-combat-active';
+    overview.appendChild(activeRow);
+    // Combat actors already carry true maxHP/maxCHARGE after SESSION-01 (M71
+    // normalizeCombatActor + M86 rehydrate). Derived is a defensive fallback
+    // if a party member is somehow present without a derived max — the
+    // runState party character (matched by id) still has attributes we can
+    // derive from.
+    const partyMatch = (runState.party || []).find((c) => c.id === active.id);
+    const derived = active.side === 'party' && partyMatch ? derivedFor(partyMatch, data) : null;
+    appendMetricIcon(activeRow, 'heart');
+    appendActorSummary(activeRow, active, true, derived);
+    const charge = chargeOf(active, derived);
+    appendMetricIcon(activeRow, 'battery');
+    const chargeBar = createChargeBar(charge.current, charge.max);
+    chargeBar.classList.add('status-mini-charge');
+    activeRow.appendChild(chargeBar);
+    appendMetricIcon(activeRow, 'zap');
+    appendText(activeRow, 'status-ap', `AP ${active.ap ?? 0}`, `Action points ${active.ap ?? 0}`);
+    appendMetricIcon(activeRow, 'footprints');
+    appendText(activeRow, 'status-move', active.moveAvailable ? '1 MV' : '0 MV', active.moveAvailable ? 'Move available' : 'Move spent');
+  }
+
   const order = (combatState.turnOrder || []).slice(combatState.currentTurn || 0, (combatState.currentTurn || 0) + 6);
-  const initiative = compactLabel(createGroup(strip, 'status-initiative', '◈ INITIATIVE ORDER'));
-  initiative.style.gridColumn = '1 / -1';
-  initiative.style.gridRow = '2';
+  const initiative = compactLabel(createGroup(overview, 'status-initiative', '◈ INITIATIVE ORDER'));
+  initiative.classList.add('status-combat-initiative-row');
   const rail = document.createElement('div');
   rail.className = 'init-rail status-initiative';
   // Slim the initiative rail to a single compact line (sigils remain 34px per
@@ -270,24 +325,6 @@ function renderCombatStatus(strip, runState, combatState, data = null) {
     rail.appendChild(slot);
   }
   initiative.appendChild(rail);
-  if (!active) return;
-  const activeGroup = createGroup(strip, 'status-active', 'ACTIVE');
-  activeGroup.style.gridColumn = '4';
-  activeGroup.style.gridRow = '1';
-  activeGroup.style.minWidth = '0';
-  // Combat actors already carry true maxHP/maxCHARGE after SESSION-01 (M71
-  // normalizeCombatActor + M86 rehydrate). Derived is a defensive fallback
-  // if a party member is somehow present without a derived max — the runState
-  // party character (matched by id) still has attributes we can derive from.
-  const partyMatch = (runState.party || []).find((c) => c.id === active.id);
-  const derived = active.side === 'party' && partyMatch ? derivedFor(partyMatch, data) : null;
-  appendActorSummary(activeGroup, active, true, derived);
-  const charge = chargeOf(active, derived);
-  const chargeBar = createChargeBar(charge.current, charge.max);
-  chargeBar.classList.add('status-mini-charge');
-  activeGroup.appendChild(chargeBar);
-  appendText(activeGroup, 'status-ap', `AP ${active.ap ?? 0}`, `Action points ${active.ap ?? 0}`);
-  appendText(activeGroup, 'status-move', active.moveAvailable ? '1 MV' : '0 MV', active.moveAvailable ? 'Move available' : 'Move spent');
 }
 
 function appendDockField(header, label, valueBuilder) {
