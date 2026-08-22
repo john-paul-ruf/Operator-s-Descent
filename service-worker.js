@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-21-icon-density-v7';
+const CACHE_VERSION = '2026-08-22-mobile-combat-density-v8';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };

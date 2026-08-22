@@ -572,22 +572,51 @@ from removing critical readouts. Every field (DEPTH, ROUND in combat, SEED, acti
 mini-HP, CHARGE, AP, MV, initiative, danger clock, corruption) stays legible on both phone
 and tall portrait.
 
-**Portrait Combat (SESSION-06).** In portrait, the COMBAT console pane is actions-first:
-the pinned status strip owns the readout (HP / CHARGE / AP / MV + initiative), so the pane
-drops the full active panel and initiative rail and keeps only a slim
-`.combat-active-conditions` row (AP repeated for glance-ability alongside the actions, plus
-condition tags — the strip shows neither). The action list is a 2-column grid where
-`combat-action--primary` (Move / Attack / End Turn) spans both columns for thumb reach and
-the four secondary actions (Protocol / Overclock / Item / Retreat) pair up in two-column
-rows; every action, direction cell, target row, and mode tab hits the **96px touch floor**.
+**Portrait Combat (SESSION-06; recomposed by mobile-combat-density-repair SESSION-01).**
+In portrait, the pinned status strip is a dedicated combat-overview composition
+(`.status-combat-overview`) — not the generic column-oriented status group — so no metric
+stacks its own contents into a tall column. A `.status-combat-topline` row holds compact
+DEPTH/ROUND/SEED metrics, each icon-plus-value (`gauge`/`sparkles`/`hash`) with a complete
+programmatic label; a single horizontal `.status-combat-active` row holds the active actor's
+sigil, HP bar, CHARGE bar, AP, and MOVE state side by side (icon-prefixed with
+`heart`/`battery`/`zap`/`footprints`) instead of the pre-repair vertical stack; and the
+initiative rail renders below at its existing slim single line. Every field this strip owns —
+Depth, Round, Seed, active sigil, HP/current-max, CHARGE/current-max, AP, MOVE state,
+initiative order, danger clock, corruption, and manual access — remains present with a
+complete accessible name; there is no collapse, no hidden telemetry, and icons are always
+decorative supplements to visible text, never the sole carrier of meaning. The acceptance
+budget is status height **≤128px at 412×915 and ≤136px at 360×800**, with no clipping,
+horizontal overflow, or loss of values.
+
+The COMBAT console pane is actions-first: the pinned status strip owns the readout (HP /
+CHARGE / AP / MV + initiative), so the pane drops the full active panel and initiative rail
+and keeps only a slim `.combat-active-conditions` row (AP repeated for glance-ability
+alongside the actions, plus condition tags — the strip shows neither); the condition-tag list
+inside that row renders only when the active actor carries at least one actual condition — no
+static tag placeholder for a conditions-free turn. Each action button is icon-forward and
+compact: a concise visible verb (e.g. `MOVE`), the action's existing icon, and a compact
+visible cost chip (e.g. `≤5`, `1 AP`, `1 AP+CHG`) — the full phrase (e.g. `Move · up to 5
+cells`) lives on the button's accessible name, so no cost material to a decision is ever
+hidden from assistive technology. The action list is a **3-column grid** so `Move`, `Attack`,
+and `End Turn` (emitted first, `combat-action--primary`) land in the first visual row in their
+DOM/focus order without a grid-column span; the four secondary actions (Protocol / Overclock
+/ Item / Retreat) fill the following rows in the same grid. Below 340px width — narrower than
+either acceptance viewport — the grid falls back to 2 columns rather than crushing 3 columns
+below legibility; both 412×915 and 360×800 keep 3 columns. Every action, direction cell,
+target row, and mode tab hits the **96px touch floor** with no exception.
+
 The console opens once at `half` on mount; enemy playback, action completion, and party-turn
 boundaries never resize it. Move feedback (notices, errors) renders on a screen-owned
 `.combat-feedback-rail` live region sitting between the playfield and the console, outside
 `.console-content`, so it stays visible regardless of console scroll or expand state. The
-wide dock is unaffected and keeps its full active panel, initiative rail, and dock-hosted
-feedback. The combat map defaults to a legible portrait zoom
+rail carries an explicit `.is-active` flag (mirrored to `data-active`) set whenever a notice
+or error is present; an inactive rail's own padding and border collapse to zero cost (≤1px)
+via CSS, but the live-region node and its message children stay mounted — the rail is never
+`display:none` — so a newly announced message always expands back in flow without an
+overflow-clipped announcement. The wide dock is unaffected and keeps its full active panel,
+initiative rail, and dock-hosted feedback. The combat map defaults to a legible portrait zoom
 (`zoomToCells(COMBAT_CELL_SIZE, 64)` on the M104 viewport camera) centered on the active
-actor.
+actor, opening to an initial canvas height of at least 470px at 412×915 and 400px at 360×800.
 
 **Height budget (icon-first-ui-density, 2026-08-21).** The icon-first swap
 reclaims vertical chrome for playfield/map + console content. Two rules bound
