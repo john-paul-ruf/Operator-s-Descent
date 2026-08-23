@@ -1785,6 +1785,7 @@ button.protocol-card[aria-selected="true"],
 /* Column flex with visible overflow keeps every action (EQUIP / TAG JUNK) in-flow
    and reachable — the "missing equip button" bug was clipped/overlapped rows. */
 .inventory-row { display: flex; flex-direction: column; gap: 6px; overflow: visible; padding: 8px; margin-bottom: 8px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
+.gear-equip-action { align-self: flex-start; min-inline-size: 112px; }
 .inventory-row.junk-tagged { opacity: 0.5; }
 .gear-comparison { font-size: 9px; color: var(--text-dim); margin-top: 4px; }
 .corrupt-warning { padding: 8px; border: 1px solid var(--warning); background: rgba(232,99,42,0.1); color: var(--warning); font-size: 10px; margin-bottom: 12px; }
@@ -2092,6 +2093,8 @@ button.protocol-card[aria-selected="true"],
 
 .error-screen { display: none; }
 .error-screen.active { display: flex; }
+.runtime-data-failure { display: grid; gap: 12px; padding: 24px; color: var(--text-primary); }
+.runtime-failure-action { justify-self: start; }
 
 /* Update toast — surfaced on runtime:update-ready while on an in-run surface.
    Fixed above the console dock so it never overlaps the tab bar; the RELOAD

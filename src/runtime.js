@@ -871,14 +871,17 @@ function mountDataFailure(error) {
   const root = document.getElementById('app-root');
   if (!root) return;
   const screen = document.createElement('main');
+  screen.className = 'runtime-data-failure';
   const message = document.createElement('p');
   message.textContent = `DATA LOAD FAILED — ${error?.file || 'data'} / ${error?.code || 'unknown'}`;
   const retry = document.createElement('button');
   retry.type = 'button';
+  retry.className = 'btn-crt runtime-failure-action';
   retry.textContent = 'RETRY';
   retry.addEventListener('click', () => window.location.reload());
   const returnButton = document.createElement('button');
   returnButton.type = 'button';
+  returnButton.className = 'btn-crt runtime-failure-action';
   returnButton.textContent = 'RETURN';
   returnButton.addEventListener('click', () => window.location.reload());
   screen.append(message, retry, returnButton);

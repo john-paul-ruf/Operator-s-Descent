@@ -5,6 +5,7 @@
 }
 
 :root {
+  color-scheme: dark;
   --bg-base: #0a0612;
   --bg-panel: #13092a;
   --bg-panel-elevated: #1a0e36;
@@ -29,6 +30,14 @@
   --scrollbar-thumb: color-mix(in oklab, var(--accent) 40%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 70%, transparent);
   --scrollbar-width: 6px;
+}
+
+button,
+input,
+textarea,
+select {
+  color: var(--text-primary);
+  font: inherit;
 }
 
 * {
@@ -367,4 +376,3 @@ html {
 .portrait-frame {
   transform-origin: center center;
 }
-
