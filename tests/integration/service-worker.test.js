@@ -101,6 +101,8 @@ describe('service worker manifest', () => {
     expect(manifest).toContain('./src/runtime.js');
     expect(manifest).toContain('./src/state/bit-codec.js');
     expect(manifest).toContain('./src/rules/progression.js');
+    expect(manifest).toContain('./src/ui/console/gear.js');
+    expect(manifest).toContain('./styles/components.css');
     expect(manifest).toContain('./data/sigils.json');
     expect(manifest).toContain('./assets/descent-sigil.woff2');
     expect(manifest.some((asset) => /^(\.\/)?(tests|program|specs|mocks|tools|font-src|node_modules|docs)\//.test(asset))).toBe(false);
