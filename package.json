@@ -31,7 +31,8 @@
     "parity:shots": "node ./scripts/screenshot-parity.js",
     "build:css": "node tools/tailwind/build-css.mjs",
     "build:icons": "node tools/icons/build-sprite.mjs",
-    "build:assets": "npm run build:css && npm run build:icons"
+    "build:assets": "npm run build:css && npm run build:icons",
+    "build:pages": "npm run check:assets && node ./scripts/build-pages.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
