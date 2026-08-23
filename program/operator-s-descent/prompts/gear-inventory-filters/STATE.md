@@ -13,7 +13,7 @@
 
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---|---|---|---|---|---|---|
-| 01 | Add top-level GEAR inventory filters | M06, M09, M12, M17, M18, M25, M33, M34, M56, M60, M64, M79, M95 | `./src/ui/console/gear.js`, `./styles/components.css`, `./tests/ui/console-gear.test.js`, `./tests/e2e/gear-actions-persistence.spec.js` | in-progress | — | — | — |
+| 01 | Add top-level GEAR inventory filters | M06, M09, M12, M17, M18, M25, M33, M34, M56, M60, M64, M79, M95 | `./src/ui/console/gear.js`, `./styles/components.css`, `./tests/ui/console-gear.test.js`, `./tests/e2e/gear-actions-persistence.spec.js` | done | 2 | 2026-08-23 | Added ALL/EQUIPPABLE/CONSUMABLES/JUNK radio filters to GEAR (src/ui/console/gear.js), rendered after gear-selectors and before the EQUIPPED heading, view-only in a per-run WeakMap (never RunState/save/localStorage/bus). EQUIPPABLE = resolveEquipSlot + itemLegalForCharacter (ignores transient combat-swap gate). Filter change cancels pending CORRUPT/junk-all confirmation; re-clicking the active filter is a no-op. Added styles/components.css .gear-filter-row/.gear-filter (inherits existing 96px console-row touch floor + wide fine-pointer 48px density, no new CSS needed there). Commands run: node --check gear.js, npx vitest run tests/ui/console-gear.test.js (26/26 pass), npx playwright test tests/e2e/gear-actions-persistence.spec.js (12/12 pass across chromium-portrait/phone-touch/firefox/webkit), npm run design:scan (PASS, 0 errors/warnings), npm run check:assets (pass, within budget), full npx vitest run (2861 tests: 2859 pass, 2 pre-existing failures in tests/ui/exploration-screen.test.js unrelated to this lease, confirmed via git stash against the pre-session baseline). |
 | 02 | Release GEAR filters through the offline cache | M81, M83, M95 | `./service-worker.js`, `./tests/integration/service-worker.test.js` | in-progress | — | — | — |
 
 ## Wave Plan
@@ -61,3 +61,21 @@ flowchart TD
 | Split the cache release from UI work | The write sets are disjoint and can safely run concurrently; the v12 cache identity prevents offline clients from retaining the unfiltered GEAR UI. |
 
 ## Handoff Notes
+
+### SESSION-01
+
+```json
+{
+  "session": "01",
+  "status": "done",
+  "checkpoint": 2,
+  "notes": "Added ALL/EQUIPPABLE/CONSUMABLES/JUNK radio filters to GEAR (src/ui/console/gear.js), rendered after gear-selectors and before the EQUIPPED heading, view-only in a per-run WeakMap (never RunState/save/localStorage/bus). EQUIPPABLE = resolveEquipSlot + itemLegalForCharacter (ignores transient combat-swap gate). Filter change cancels pending CORRUPT/junk-all confirmation; re-clicking the active filter is a no-op. Added styles/components.css .gear-filter-row/.gear-filter (inherits existing 96px console-row touch floor + wide fine-pointer 48px density, no new CSS needed there). Commands run: node --check gear.js, npx vitest run tests/ui/console-gear.test.js (26/26 pass), npx playwright test tests/e2e/gear-actions-persistence.spec.js (12/12 pass across chromium-portrait/phone-touch/firefox/webkit), npm run design:scan (PASS, 0 errors/warnings), npm run check:assets (pass, within budget), full npx vitest run (2861 tests: 2859 pass, 2 pre-existing failures in tests/ui/exploration-screen.test.js unrelated to this lease, confirmed via git stash against the pre-session baseline).",
+  "delivered": "Top-of-GEAR inventory filter radiogroup (ALL/EQUIPPABLE/CONSUMABLES/JUNK) with accessible role=radio/aria-checked semantics, filtered rendering, empty-filter feedback (gear-filter-empty), and full unit + browser test coverage.",
+  "verification": "node --check + vitest (26/26) + playwright (12/12, 4 browser projects) + design:scan (PASS) + check:assets (pass) + full vitest run (2859/2861, 2 unrelated pre-existing failures)",
+  "surprises": "tests/ui/exploration-screen.test.js has 2 pre-existing failures ('tap on an unreachable cell...' and 'tap-to-move truncates on hostile interrupt') unrelated to this lease — confirmed present on the pre-session commit via git stash, not touched or fixed. SESSION-02 (offline cache) had already landed on main (disjoint lease, no conflict).",
+  "followUp": "—",
+  "filesTouched": ["src/ui/console/gear.js", "styles/components.css", "tests/ui/console-gear.test.js", "tests/e2e/gear-actions-persistence.spec.js"],
+  "blockedReason": null,
+  "delegatedTo": "enso"
+}
+```
