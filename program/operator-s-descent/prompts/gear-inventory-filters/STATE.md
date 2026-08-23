@@ -14,7 +14,7 @@
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---|---|---|---|---|---|---|
 | 01 | Add top-level GEAR inventory filters | M06, M09, M12, M17, M18, M25, M33, M34, M56, M60, M64, M79, M95 | `./src/ui/console/gear.js`, `./styles/components.css`, `./tests/ui/console-gear.test.js`, `./tests/e2e/gear-actions-persistence.spec.js` | done | 2 | 2026-08-23 | Added ALL/EQUIPPABLE/CONSUMABLES/JUNK radio filters to GEAR (src/ui/console/gear.js), rendered after gear-selectors and before the EQUIPPED heading, view-only in a per-run WeakMap (never RunState/save/localStorage/bus). EQUIPPABLE = resolveEquipSlot + itemLegalForCharacter (ignores transient combat-swap gate). Filter change cancels pending CORRUPT/junk-all confirmation; re-clicking the active filter is a no-op. Added styles/components.css .gear-filter-row/.gear-filter (inherits existing 96px console-row touch floor + wide fine-pointer 48px density, no new CSS needed there). Commands run: node --check gear.js, npx vitest run tests/ui/console-gear.test.js (26/26 pass), npx playwright test tests/e2e/gear-actions-persistence.spec.js (12/12 pass across chromium-portrait/phone-touch/firefox/webkit), npm run design:scan (PASS, 0 errors/warnings), npm run check:assets (pass, within budget), full npx vitest run (2861 tests: 2859 pass, 2 pre-existing failures in tests/ui/exploration-screen.test.js unrelated to this lease, confirmed via git stash against the pre-session baseline). |
-| 02 | Release GEAR filters through the offline cache | M81, M83, M95 | `./service-worker.js`, `./tests/integration/service-worker.test.js` | in-progress | — | — | — |
+| 02 | Release GEAR filters through the offline cache | M81, M83, M95 | `./service-worker.js`, `./tests/integration/service-worker.test.js` | done | 2 | 2026-08-23 | Advanced service-worker cache identity from operator-descent-2026-08-23-auto-slot-gear-equip-v11 to operator-descent-2026-08-23-gear-inventory-filters-v12. Renamed v10→v11 test describe block to v11→v12, updated exact predecessor/expected cache-name assertions, and added a focused v12 test pinning ./src/ui/console/gear.js and ./styles/components.css in the manifest. No manifest, fetch strategy, or asset paths changed. |
 
 ## Wave Plan
 
@@ -77,5 +77,24 @@ flowchart TD
   "filesTouched": ["src/ui/console/gear.js", "styles/components.css", "tests/ui/console-gear.test.js", "tests/e2e/gear-actions-persistence.spec.js"],
   "blockedReason": null,
   "delegatedTo": "enso"
+}
+```
+
+### SESSION-02
+
+Both checkpoints committed cleanly, only the pre-existing `.DS_Store` remains untracked outside the lease. No module or public-API change occurred (cache identity bump only), so no arch fragment is needed.
+
+```json
+{
+  "session": "02",
+  "status": "done",
+  "checkpoint": 2,
+  "notes": "Advanced service-worker cache identity from operator-descent-2026-08-23-auto-slot-gear-equip-v11 to operator-descent-2026-08-23-gear-inventory-filters-v12. Renamed v10→v11 test describe block to v11→v12, updated exact predecessor/expected cache-name assertions, and added a focused v12 test pinning ./src/ui/console/gear.js and ./styles/components.css in the manifest. No manifest, fetch strategy, or asset paths changed.",
+  "delivered": "Cache v12 release identity for gear-inventory-filters, with lifecycle test proving v11 predecessor deletion and v12 retention, plus explicit GEAR filter client-file precache regression coverage.",
+  "verification": "node --check ./service-worker.js → ok; npx vitest run ./tests/integration/service-worker.test.js → 7 passed (7); npm run check:assets → 118 manifest assets, brotli transfer 336666 / budget 512000.",
+  "surprises": "Referenced read path ./program/operator-s-descent/prompts/auto-slot-gear-equip/STATE.md does not exist in this workspace (only the current feature's prompts dir is present); the needed v11 cache-name info was already present directly in ./service-worker.js, so this did not block the session. No prior commits existed for this session's lease before this run (fresh start, not a crash-recovery resume).",
+  "followUp": "—",
+  "filesTouched": ["./service-worker.js", "./tests/integration/service-worker.test.js"],
+  "blockedReason": null
 }
 ```
