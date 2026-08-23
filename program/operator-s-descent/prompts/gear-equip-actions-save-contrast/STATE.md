@@ -13,7 +13,7 @@
 
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---|---|---|---|---|---|---|
-| 01 | Restore visible GEAR equip actions, palette-safe controls, and autosave proof | M18, M25, M33–M35, M43–M45, M56, M60, M64, M77, M79, M81, M86, M95 | `./src/ui/console/gear.js`, `./src/runtime.js`, `./styles/base.css`, `./styles/components.css`, `./service-worker.js`, `./tests/ui/console-gear.test.js`, `./tests/integration/runtime.test.js`, `./tests/integration/service-worker.test.js`, `./tests/e2e/gear-actions-persistence.spec.js` | in-progress | — | — | Zen worker launched; result pending. |
+| 01 | Restore visible GEAR equip actions, palette-safe controls, and autosave proof | M18, M25, M33–M35, M43–M45, M56, M60, M64, M77, M79, M81, M86, M95 | `./src/ui/console/gear.js`, `./src/runtime.js`, `./styles/base.css`, `./styles/components.css`, `./service-worker.js`, `./tests/ui/console-gear.test.js`, `./tests/integration/runtime.test.js`, `./tests/integration/service-worker.test.js`, `./tests/e2e/gear-actions-persistence.spec.js` | done | 4/4 | 2026-08-23 | Restored literal EQUIP controls with slot-specific accessible labels; added palette-safe native-control defaults and runtime failure styling; proved inventory-change autosave, stable storage key/index, and local-storage resume; bumped cache to v10. |
 
 ## Wave Plan
 
@@ -62,3 +62,12 @@ flowchart TD
 | Advance cache v9 to exact v10 | Changed offline client assets require a cache revision and deterministic cleanup coverage. |
 
 ## Handoff Notes
+
+### SESSION-01
+
+- **notes:** Restored literal EQUIP controls with slot-specific accessible labels; added palette-safe native-control defaults and runtime failure styling; proved inventory-change autosave, stable storage key/index, and local-storage resume; bumped cache to v10.
+- **delivered:** Visible/reachable GEAR equip actions, durable autosave/reload coverage, narrow and wide browser coverage, and v9→v10 service-worker cleanup coverage.
+- **verification:** Focused Vitest: 41 pass; GEAR E2E: 8 pass across Chromium, Firefox, WebKit, and wide contexts; design:scan pass (0 errors/warnings, 2 info); check:assets pass. npm test has 2 unrelated exploration-screen failures; full E2E has unrelated accessibility/manual failures.
+- **surprises:** Pre-existing/unrelated full-suite failures: exploration tap-path assertions; E2E portrait-frame ratio and manual Escape focus assertions. Untracked .DS_Store existed and was untouched.
+- **followUp:** —
+- **blockedReason:** null
