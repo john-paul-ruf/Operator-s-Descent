@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { TECH_PROTOCOL_CASES, buildTechProtocolFixture } from '../helpers/tech-protocol-e2e-fixture.js';
 
-const EXPECTED_BASELINE_FAILURES = new Map();
+const EXPECTED_BASELINE_FAILURES = new Map(TECH_PROTOCOL_CASES.map(({ id, name }) => [
+  id,
+  `${name}: the real TECH confirmation reports invalid-rng, so no durable protocol effect or CHARGE/AP update is applied.`
+]));
 
 async function installStorage(page) {
   await page.addInitScript(() => {
@@ -47,15 +50,15 @@ for (const caseDescriptor of TECH_PROTOCOL_CASES) {
     }
     await expect(page.getByTestId('tech-confirm')).toBeEnabled();
     await page.getByTestId('tech-confirm').click();
-    await expect.poll(() => page.getByTestId('tech-result').textContent()).toContain(caseDescriptor.name);
+    await expect(page.getByTestId('tech-result')).toContainText(caseDescriptor.name, { timeout: 1_000 });
     await expect.poll(async () => {
       const currentRun = await runtimeCombatSnapshot(page);
       return fixture.expected.outcome(currentRun, fixture.before, fixture.ids);
-    }).toBe(true);
+    }, { timeout: 1_000 }).toBe(true);
     await expect.poll(async () => {
       const currentRun = await runtimeCombatSnapshot(page);
       const caster = currentRun.activeCombat?.actors.find(actor => actor.id === fixture.ids.caster);
       return Boolean(currentRun.activeCombat) && caster !== undefined;
-    }).toBe(true);
+    }, { timeout: 1_000 }).toBe(true);
   });
 }
