@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-22-mobile-combat-density-v8';
+const CACHE_VERSION = '2026-08-22-pages-artifact-v9';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -121,6 +121,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './data/symbol-table.v3.json',
   './data/themes.json',
   './assets/descent-sigil.woff2',
+  './assets/icons.svg',
 ]);
 
 const SCOPE_URL = new URL(self.registration.scope);

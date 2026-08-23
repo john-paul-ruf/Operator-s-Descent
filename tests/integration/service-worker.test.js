@@ -108,25 +108,21 @@ describe('service worker manifest', () => {
   });
 });
 
-// SESSION-01 (mobile-combat-density-repair checkpoint 3) — the committed
-// console-density and status-strip source predates the v7 cache namespace,
-// so an installed cache-first client could keep serving the pre-repair
-// screen indefinitely. This test names the EXACT predecessor cache
-// (`operator-descent-2026-08-21-icon-density-v7`, the namespace this
-// feature repairs) rather than a synthetic placeholder, so it fails loudly
-// if a future session bumps the version without also updating this pin.
-describe('service worker cache version — mobile-combat-density-repair v7 → v8', () => {
-  const PREDECESSOR_CACHE = 'operator-descent-2026-08-21-icon-density-v7';
-  const CHANGED_RUNTIME_ASSETS = [
-    './src/ui/status-strip.js',
-    './src/ui/console/combat.js',
-    './src/ui/screens/combat.js',
-    './styles/components.css'
-  ];
+// SESSION-01 (github-pages-build-script checkpoint 1) — the runtime icon
+// sprite (./assets/icons.svg) is fetched by src/ui/icon.js through a
+// relative <use> reference but was absent from PRODUCTION_ASSETS, so an
+// installed cache-first client could keep serving screens with missing
+// icons indefinitely. This test names the EXACT predecessor cache
+// (`operator-descent-2026-08-22-mobile-combat-density-v8`, the namespace
+// this feature repairs) rather than a synthetic placeholder, so it fails
+// loudly if a future session bumps the version without also updating this
+// pin.
+describe('service worker cache version — github-pages-build-script v8 → v9', () => {
+  const PREDECESSOR_CACHE = 'operator-descent-2026-08-22-mobile-combat-density-v8';
 
-  it('activation retains the v8 cache and deletes the exact v7 predecessor', async () => {
+  it('activation retains the v9 cache and deletes the exact v8 predecessor', async () => {
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-22-mobile-combat-density-v8');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-22-pages-artifact-v9');
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
 
@@ -143,12 +139,11 @@ describe('service worker cache version — mobile-combat-density-repair v7 → v
     expect(namesAfterActivate).not.toContain(PREDECESSOR_CACHE);
   });
 
-  it('the v8 manifest retains every changed runtime asset from this repair', () => {
+  it('the v9 manifest ships the runtime icon sprite as a production/offline asset', () => {
     const manifest = extractManifest();
-    for (const asset of CHANGED_RUNTIME_ASSETS) {
-      expect(manifest, `${asset} stays in the manifest`).toContain(asset);
-    }
-    // No duplicate entries introduced for the changed paths.
+    expect(manifest).toContain('./assets/icons.svg');
+    expect(manifest).toContain('./assets/descent-sigil.woff2');
+    // No duplicate entries introduced.
     expect(new Set(manifest).size).toBe(manifest.length);
   });
 });
