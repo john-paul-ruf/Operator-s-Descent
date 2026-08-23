@@ -525,6 +525,14 @@ describe('runtime autosave checkpoints', () => {
     expect(bus.dispatch('state:inventory-change', { runState: state })).toBe(true);
     expect(autosaves).toHaveLength(1);
     expect(autosaves[0].reason).toBe('inventory-change');
+    const key = autosaves[0].key;
+    const stored = globalThis.localStorage.getItem(`od_run_${key}`);
+    expect(stored).toBeTruthy();
+    const index = JSON.parse(globalThis.localStorage.getItem('od_runs'));
+    expect(index.some((entry) => entry.key === key)).toBe(true);
+    const restored = decodeRun(stored);
+    expect(restored.success).toBe(true);
+    expect(restored.runState.party[0].equipment).toEqual(state.party[0].equipment);
 
     // Guard: an invalid payload (missing runState) is rejected at the bus
     // contract layer — dispatch returns false and no listener runs, so the
