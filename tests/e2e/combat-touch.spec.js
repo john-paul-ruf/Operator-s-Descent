@@ -152,10 +152,13 @@ async function assertPortraitLayoutRegions(page) {
 
   // Icon-first density (SESSION-08): every visible touch-capable console row
   // holds the 96 CSS-px floor from styles/components.css (tabs, action rows,
-  // direction cells, target rows, confirm buttons — anything that matches
-  // `.console-row` or `.mode-tab`). The blanket 48px exception was retired
-  // once icon-only tabs rendered at 96 across the console shell.
-  const consoleTouchHeights = await page.locator('.console-row:visible, .mode-tab:visible').evaluateAll(
+  // direction cells, target rows, confirm buttons — anything interactive that
+  // matches `.console-row` or `.mode-tab`). The blanket 48px exception was
+  // retired once icon-only tabs rendered at 96 across the console shell.
+  // `:not(.console-static-row):not(.console-static-card)` (console-submenu-
+  // density-and-scroll SESSION-04) excludes the compact read-only rows that
+  // reclaim space below the floor by design.
+  const consoleTouchHeights = await page.locator('.console-row:not(.console-static-row):not(.console-static-card):visible, .mode-tab:visible').evaluateAll(
     (els) => els.map((el) => Math.round(el.getBoundingClientRect().height))
   );
   expect(consoleTouchHeights.length, 'visible touch-capable rows').toBeGreaterThan(0);

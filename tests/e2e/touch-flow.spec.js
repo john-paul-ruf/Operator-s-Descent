@@ -145,11 +145,15 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
   await expect(page.locator('.console-bar')).toHaveClass(/expanded/);
   await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', 'half');
 
-  // Icon-first density (SESSION-08): every visible `.console-row` / `.mode-tab`
-  // honors the strict 96px touch floor set in components.css. The 48px blanket
-  // exception is retired now that icon-only tabs meet the same minimum as every
-  // other touchable row (portrait-usability.spec.js:290 already asserts 96).
-  const visibleRows = page.locator('.console-row:visible, .mode-tab:visible');
+  // Icon-first density (SESSION-08): every visible interactive/composite
+  // `.console-row` / `.mode-tab` honors the strict 96px touch floor set in
+  // components.css. The 48px blanket exception is retired now that icon-only
+  // tabs meet the same minimum as every other touchable row (portrait-usability.spec.js:290
+  // already asserts 96). `:not(.console-static-row):not(.console-static-card)`
+  // (console-submenu-density-and-scroll SESSION-04) keeps this query pointed
+  // at actual touch surfaces only — static/read-only content intentionally
+  // reclaims space below the floor and must never be counted as a control.
+  const visibleRows = page.locator('.console-row:not(.console-static-row):not(.console-static-card):visible, .mode-tab:visible');
   const heights = await visibleRows.evaluateAll((rows) => rows.map((row) => Math.round(row.getBoundingClientRect().height)));
   expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
 

@@ -293,8 +293,11 @@ test.describe('portrait usability integrated acceptance', () => {
     // Every visible touch-capable console row honors the 96 CSS-px floor
     // (portrait rule from styles/components.css). Tabs, action rows, direction
     // cells, target rows, confirm buttons all match either `.console-row` or
-    // `.mode-tab`.
-    const consoleTouch = await visibleMinHeight(page, '.console-row:visible, .mode-tab:visible');
+    // `.mode-tab`. `:not(.console-static-row):not(.console-static-card)`
+    // (console-submenu-density-and-scroll SESSION-04) keeps compact read-only
+    // rows — which intentionally reclaim space below the floor — out of this
+    // control-surface query.
+    const consoleTouch = await visibleMinHeight(page, '.console-row:not(.console-static-row):not(.console-static-card):visible, .mode-tab:visible');
     expect(consoleTouch.count, 'visible touch-capable row count').toBeGreaterThan(0);
     expect(consoleTouch.min, 'min touch-row height (portrait)').toBeGreaterThanOrEqual(96);
 

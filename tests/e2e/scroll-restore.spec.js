@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createExplorationDensityFixture } from '../helpers/console-density-fixture.js';
 
 const QUIET_SETTINGS = {
   masterMute: true,
@@ -202,6 +203,46 @@ test.describe('scroll memory', () => {
     expect(before).toBeGreaterThan(0);
     const rowSelector = '[data-testid^="run-row-"]';
     await clickWithoutScroll(page, rowSelector);
+    await waitTwoFrames(page);
+    const after = await scrollTopOf(page, scrollSelector);
+    expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
+  });
+
+  // console-submenu-density-and-scroll SESSION-04 — the cases above prove
+  // restoration under an injected forced height; this proves the production
+  // GEAR content itself (no CSS override) can overflow and still restore.
+  test('GEAR mode with real fixture content scrolls and restores position without a forced height', async ({ page }) => {
+    const fixture = createExplorationDensityFixture();
+    await page.goto(`/?run=${fixture.fragment.slice(0, 8)}#r=${fixture.fragment}`);
+    await expect(page.getByTestId('import-run-summary')).toBeVisible();
+    await page.getByTestId('import-resume').click();
+    await expect(page.getByTestId('exploration-canvas')).toBeVisible();
+
+    // Reach the console's 'full' expand size (collapsed → half → full) and let
+    // the playfield ResizeObserver's refresh settle before touching scroll —
+    // same proven-stable sequencing as console-submenu-density.spec.js.
+    const gearTab = page.getByTestId('console-tab-gear');
+    await gearTab.click();
+    await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', /half|full/);
+    if ((await page.locator('.console-bar').getAttribute('data-expand-state')) !== 'full') await gearTab.click();
+    await expect(page.locator('.console-bar')).toHaveAttribute('data-expand-state', 'full');
+    await waitTwoFrames(page);
+    await page.waitForTimeout(60);
+
+    const scrollSelector = '.console-content.scroll-area';
+    const geometry = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+    }, scrollSelector);
+    expect(geometry.scrollHeight, 'real GEAR content overflows without any forced CSS').toBeGreaterThan(geometry.clientHeight);
+
+    await setScrollTop(page, scrollSelector, Math.floor(geometry.scrollHeight / 3));
+    const before = await scrollTopOf(page, scrollSelector);
+    expect(before).toBeGreaterThan(0);
+
+    await clickWithoutScroll(page, '[data-testid="console-tab-log"]');
+    await waitTwoFrames(page);
+    await clickWithoutScroll(page, '[data-testid="console-tab-gear"]');
     await waitTwoFrames(page);
     const after = await scrollTopOf(page, scrollSelector);
     expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
