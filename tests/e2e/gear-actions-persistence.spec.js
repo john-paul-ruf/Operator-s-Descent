@@ -37,13 +37,18 @@ async function openGear(page, fragment) {
   await page.getByTestId('console-tab-gear').click();
 }
 
-test('GEAR equip is visible, palette-safe, autosaved, and restored after reload', async ({ page }) => {
-  await openGear(page, gearFixture());
+async function assertVisiblePaletteSafeEquip(page) {
   const equip = page.getByTestId('gear-equip-persistence-sidearm');
   await equip.scrollIntoViewIfNeeded();
   await expect(equip).toBeVisible();
   await expect(equip).toHaveText('EQUIP');
   expect(await equip.evaluate((element) => getComputedStyle(element).color)).not.toBe('rgb(0, 0, 0)');
+  return equip;
+}
+
+test('GEAR equip is visible, palette-safe, autosaved, and restored after reload', async ({ page }) => {
+  await openGear(page, gearFixture());
+  const equip = await assertVisiblePaletteSafeEquip(page);
 
   const before = await page.evaluate(() => {
     const key = Object.keys(localStorage).find((entry) => /^od_run_\d+_\d+$/.test(entry));
@@ -60,4 +65,16 @@ test('GEAR equip is visible, palette-safe, autosaved, and restored after reload'
   await expect(page.getByTestId('exploration-canvas')).toBeVisible();
   await page.getByTestId('console-tab-gear').click();
   await expect(page.getByTestId('gear-equipped-weapon')).toContainText('Sidearm');
+});
+
+test('wide GEAR controls remain visible and palette-safe', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  try {
+    await openGear(page, gearFixture());
+    await expect(page.locator('html')).toHaveAttribute('data-layout', 'wide');
+    await assertVisiblePaletteSafeEquip(page);
+  } finally {
+    await context.close();
+  }
 });

@@ -108,21 +108,12 @@ describe('service worker manifest', () => {
   });
 });
 
-// SESSION-01 (github-pages-build-script checkpoint 1) — the runtime icon
-// sprite (./assets/icons.svg) is fetched by src/ui/icon.js through a
-// relative <use> reference but was absent from PRODUCTION_ASSETS, so an
-// installed cache-first client could keep serving screens with missing
-// icons indefinitely. This test names the EXACT predecessor cache
-// (`operator-descent-2026-08-22-mobile-combat-density-v8`, the namespace
-// this feature repairs) rather than a synthetic placeholder, so it fails
-// loudly if a future session bumps the version without also updating this
-// pin.
-describe('service worker cache version — github-pages-build-script v8 → v9', () => {
-  const PREDECESSOR_CACHE = 'operator-descent-2026-08-22-mobile-combat-density-v8';
+describe('service worker cache version — v9 → v10', () => {
+  const PREDECESSOR_CACHE = 'operator-descent-2026-08-22-pages-artifact-v9';
 
-  it('activation retains the v9 cache and deletes the exact v8 predecessor', async () => {
+  it('activation retains the v10 cache and deletes the exact v9 predecessor', async () => {
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-22-pages-artifact-v9');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-23-gear-equip-save-v10');
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
 
@@ -139,7 +130,7 @@ describe('service worker cache version — github-pages-build-script v8 → v9',
     expect(namesAfterActivate).not.toContain(PREDECESSOR_CACHE);
   });
 
-  it('the v9 manifest ships the runtime icon sprite as a production/offline asset', () => {
+  it('the v10 manifest ships the runtime icon sprite as a production/offline asset', () => {
     const manifest = extractManifest();
     expect(manifest).toContain('./assets/icons.svg');
     expect(manifest).toContain('./assets/descent-sigil.woff2');
