@@ -279,7 +279,7 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     expect(events).toHaveLength(0);
   });
 
-  it('SESSION-05 icon-first-ui-density — enabled EQUIP row is icon-only (check sprite) with aria-label `EQUIP <SLOT>`', () => {
+  it('exposes visible EQUIP text with a slot-specific accessible label for legal items', () => {
     const runState = run([item('fresh-sidearm', 'sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
     const container = new FakeElement('div');
     const context = { runState, data, refresh: () => renderGear(container, context) };
@@ -288,7 +288,8 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     const equip = byTestId(container, 'gear-equip-fresh-sidearm');
     expect(equip).toBeTruthy();
     expect(equip.disabled).toBe(false);
-    expect(equip.classList.contains('icon-only')).toBe(true);
+    expect(equip.textContent).toBe('EQUIP');
+    expect(equip.classList.contains('gear-equip-action')).toBe(true);
     const svg = firstIconChild(equip);
     expect(svg).toBeTruthy();
     const useEl = (svg.children || []).find((c) => c.tagName === 'USE');

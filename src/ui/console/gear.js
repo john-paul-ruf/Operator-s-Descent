@@ -437,20 +437,16 @@ function renderInventoryItem(list, context, character, ui, item, cleanups = []) 
   wrapper.appendChild(text('gear-comparison console-static-row', statDeltaLine(before, after), `gear-compare-${item.id}`));
   wrapper.appendChild(classesChip(item, context.data || {}, `gear-classes-${item.id}`));
   const reason = equipDisabledReason(context, ui, character, item);
-  // SESSION-05 (icon-first-ui-density) — per GAP §3.5 the ENABLED EQUIP row
-  // goes icon-only with a check sprite; the DISABLED path keeps the reason
-  // text (reason chip already renders adjacent). Per §7 Risk 4, aria-label
-  // must include the slot name — `EQUIP <SLOT>` — so screen readers hear the
-  // slot context even when focus moves in without seeing the selected pill.
   const equipAria = `EQUIP ${SLOT_LABELS[ui.slot].toUpperCase()}`;
-  const equip = createButton(reason ? `EQUIP BLOCKED` : '', {
+  const equip = createButton(reason ? 'EQUIP BLOCKED' : 'EQUIP', {
     disabled: Boolean(reason),
     description: reason,
-    label: reason ? undefined : equipAria,
+    label: equipAria,
     icon: reason ? undefined : 'check',
     iconSize: 14,
     onClick: () => requestEquip(context, item)
   });
+  equip.classList.add('gear-equip-action');
   equip.dataset.testid = `gear-equip-${item.id}`;
   wrapper.appendChild(equip);
   // Double-activate = EQUIP. The existing gates (equipDisabledReason, CORRUPT
