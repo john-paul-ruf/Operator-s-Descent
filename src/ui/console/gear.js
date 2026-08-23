@@ -6,7 +6,6 @@ import { INVENTORY_CAP, getInventoryCount, toggleJunkTag, junkAllTagged, getSalv
 
 const SLOTS = ['weapon', 'armor', 'offhand'];
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', offhand: 'Off-hand' };
-const SLOT_ICONS = { weapon: 'sword', armor: 'shield', offhand: 'star' };
 const uiByRun = new WeakMap();
 
 function clear(container) {
@@ -15,7 +14,7 @@ function clear(container) {
 }
 
 function stateFor(runState) {
-  if (!uiByRun.has(runState)) uiByRun.set(runState, { charIndex: 0, slot: 'weapon', pendingCorruptItemId: null, pendingJunkAll: false, notice: '', error: '' });
+  if (!uiByRun.has(runState)) uiByRun.set(runState, { charIndex: 0, pendingCorruptItemId: null, pendingJunkAll: false, notice: '', error: '' });
   return uiByRun.get(runState);
 }
 
@@ -122,19 +121,20 @@ function consumeSwap(context, character) {
   syncCombatActor(actor, character, context.data);
 }
 
-function itemSlotCompatible(slot, item) {
-  if (slot === 'armor') return item?.category === 'armor';
-  return item?.category === 'weapon';
+function resolveEquipSlot(item, data) {
+  if (item?.category === 'armor') return 'armor';
+  if (item?.category !== 'weapon') return null;
+  const slot = data?.equipment?.weapons?.[item.baseType]?.slot;
+  return slot === 'weapon' || slot === 'offhand' ? slot : null;
 }
 
 function itemLegalForCharacter(data, character, item) {
   return canEquip(classDataFor(data, character), item, character?.extensions?.proficiencies || []);
 }
 
-function equipDisabledReason(context, state, character, item) {
+function equipDisabledReason(context, character, item) {
   const swap = combatSwapGate(context, character);
   if (!swap.allowed) return swap.reason;
-  if (!itemSlotCompatible(state.slot, item)) return `Cannot equip ${item.category} in ${SLOT_LABELS[state.slot]}.`;
   if (!itemLegalForCharacter(context.data || {}, character, item)) {
     const cls = classDataFor(context.data || {}, character);
     const who = cls?.name || character?.classId || 'This class';
@@ -181,7 +181,9 @@ function transactionResult(context, result, message) {
 function requestEquip(context, item) {
   const state = stateFor(context.runState);
   const character = context.runState.party[state.charIndex];
-  const reason = equipDisabledReason(context, state, character, item);
+  const slot = resolveEquipSlot(item, context.data);
+  if (!slot) return false;
+  const reason = equipDisabledReason(context, character, item);
   if (reason) {
     state.error = reason;
     state.notice = '';
@@ -196,7 +198,7 @@ function requestEquip(context, item) {
     context.refresh?.();
     return false;
   }
-  return transactionResult(context, equipItem(context.runState, character.id, state.slot, item.id), `Equipped ${itemName(item, context.data)} to ${SLOT_LABELS[state.slot]}.`);
+  return transactionResult(context, equipItem(context.runState, character.id, slot, item.id), `Equipped ${itemName(item, context.data)} to ${SLOT_LABELS[slot]}.`);
 }
 
 function requestUnequip(context, slot) {
@@ -294,19 +296,6 @@ export function render(container, context = {}) {
   }
   container.appendChild(selectors);
 
-  const slotRow = document.createElement('div');
-  slotRow.className = 'gear-slot-row';
-  for (const slot of SLOTS) {
-    const button = createButton(`${SLOT_LABELS[slot]} · ${itemName(character.equipment?.[slot], context.data)}`, {
-      selected: ui.slot === slot,
-      onClick: () => { ui.slot = slot; ui.pendingCorruptItemId = null; context.refresh?.(); },
-      icon: SLOT_ICONS[slot], iconSize: 14
-    });
-    button.classList.add('gear-slot', 'console-row');
-    button.dataset.testid = `gear-slot-${slot}`;
-    slotRow.appendChild(button);
-  }
-  container.appendChild(slotRow);
   container.appendChild(text('mode-indicator', `◈ EQUIPPED — ${character.name || character.classId || `C${ui.charIndex + 1}`}`, 'gear-equipped-heading'));
 
   renderEquipped(container, context, character, ui);
@@ -433,31 +422,29 @@ function renderInventoryItem(list, context, character, ui, item, cleanups = []) 
   wrapper.dataset.testid = `gear-item-${item.id}`;
   wrapper.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data), compact: true }));
   const before = runStats(context.data || {}, character);
-  const after = itemSlotCompatible(ui.slot, item) ? projectedStats(context.data || {}, character, ui.slot, item) : before;
+  const slot = resolveEquipSlot(item, context.data);
+  const after = slot ? projectedStats(context.data || {}, character, slot, item) : before;
   wrapper.appendChild(text('gear-comparison console-static-row', statDeltaLine(before, after), `gear-compare-${item.id}`));
   wrapper.appendChild(classesChip(item, context.data || {}, `gear-classes-${item.id}`));
-  const reason = equipDisabledReason(context, ui, character, item);
-  const equipAria = `EQUIP ${SLOT_LABELS[ui.slot].toUpperCase()}`;
-  const equip = createButton(reason ? 'EQUIP BLOCKED' : 'EQUIP', {
-    disabled: Boolean(reason),
-    description: reason,
-    label: equipAria,
-    icon: reason ? undefined : 'check',
-    iconSize: 14,
-    onClick: () => requestEquip(context, item)
-  });
-  equip.classList.add('gear-equip-action');
-  equip.dataset.testid = `gear-equip-${item.id}`;
-  wrapper.appendChild(equip);
-  // Double-activate = EQUIP. The existing gates (equipDisabledReason, CORRUPT
-  // two-step confirm) run unchanged inside requestEquip, so a corrupt item's
-  // first double-activate surfaces the warning instead of equipping. Skipped
-  // when the item is not equippable so the inert row stays honest.
-  if (!reason) cleanups.push(attachDoubleActivate(wrapper, () => requestEquip(context, item)));
-  if (reason) {
-    const why = text('disabled-reason equip-blocked-reason console-static-row', reason);
-    why.dataset.testid = `gear-equip-reason-${item.id}`;
-    wrapper.appendChild(why);
+  if (slot) {
+    const reason = equipDisabledReason(context, character, item);
+    const equip = createButton(reason ? 'EQUIP BLOCKED' : 'EQUIP', {
+      disabled: Boolean(reason),
+      description: reason,
+      label: `EQUIP ${SLOT_LABELS[slot].toUpperCase()}`,
+      icon: reason ? undefined : 'check',
+      iconSize: 14,
+      onClick: () => requestEquip(context, item)
+    });
+    equip.classList.add('gear-equip-action');
+    equip.dataset.testid = `gear-equip-${item.id}`;
+    wrapper.appendChild(equip);
+    if (!reason) cleanups.push(attachDoubleActivate(wrapper, () => requestEquip(context, item)));
+    if (reason) {
+      const why = text('disabled-reason equip-blocked-reason console-static-row', reason);
+      why.dataset.testid = `gear-equip-reason-${item.id}`;
+      wrapper.appendChild(why);
+    }
   }
   const junk = createButton(item.junkTagged ? 'UNTAG JUNK' : 'TAG JUNK', {
     onClick: () => requestJunkToggle(context, item),

@@ -50,11 +50,9 @@
    hover-only media guard so any coarse-pointer wide surface (e.g.
    1024×1024 touch tablet) still hits the 96px floor. */
 :root[data-layout="wide"] .combat-active-panel,
-:root[data-layout="wide"] .loot-container-header,
-:root[data-layout="wide"] .gear-slot-row { flex-wrap: nowrap; min-width: 0; }
+:root[data-layout="wide"] .loot-container-header { flex-wrap: nowrap; min-width: 0; }
 :root[data-layout="wide"] .combat-active-panel .combat-active-name,
-:root[data-layout="wide"] .loot-container-header,
-:root[data-layout="wide"] .gear-slot-row {
+:root[data-layout="wide"] .loot-container-header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1771,8 +1769,6 @@ button.protocol-card[aria-selected="true"],
 
 .gear-selectors { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .gear-character { padding: 4px 10px; font-size: 10px; }
-.gear-slot-row { display: flex; gap: 8px; margin-bottom: 12px; }
-.gear-slot { padding: 6px 12px; font-size: 10px; }
 .equipped-section { margin-bottom: 12px; }
 .equipped-row { padding: 8px; margin-bottom: 8px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
 .equipped-slot { font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; }

@@ -1,7 +1,5 @@
-// SESSION-06 — GEAR console icon coverage.
-// Slot buttons (sword/shield/star), UNEQUIP (x), TAG/UNTAG JUNK (recycle),
-// JUNK ALL TAGGED (recycle). Focused on presence + click gating; structural
-// gear semantics live in ./party-gear.test.js.
+// GEAR console action coverage. Structural gear semantics live in
+// ./party-gear.test.js.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
@@ -98,20 +96,16 @@ function run(inventory = [], members = [character()]) {
 
 beforeEach(installDocument);
 
-describe('GEAR mode — SESSION-06 icon coverage', () => {
-  it('slot buttons carry sword/shield/star icons and preserve their testids', () => {
+describe('GEAR mode', () => {
+  it('has no manual slot selector', () => {
     const runState = run();
     const container = new FakeElement('div');
     const context = { runState, data, refresh: () => renderGear(container, context) };
     renderGear(container, context);
 
-    for (const slot of ['weapon', 'armor', 'offhand']) {
-      const button = byTestId(container, `gear-slot-${slot}`);
-      expect(button, `missing gear-slot-${slot}`).toBeTruthy();
-      expect(firstIconChild(button), `no icon on gear-slot-${slot}`).toBeTruthy();
-      expect(button.classList.contains('has-icon')).toBe(true);
-      expect(button.classList.contains('gear-slot')).toBe(true);
-    }
+    expect(byTestId(container, 'gear-slot-weapon')).toBeNull();
+    expect(byTestId(container, 'gear-slot-armor')).toBeNull();
+    expect(byTestId(container, 'gear-slot-offhand')).toBeNull();
   });
 
   it('UNEQUIP prefixes an x icon and TAG JUNK prefixes recycle; JUNK ALL prefixes recycle', () => {
@@ -297,6 +291,53 @@ describe('GEAR mode — SESSION-06 icon coverage', () => {
     // aria-label carries the slot so a screen reader hears "Equip Weapon"
     // even without the selected slot pill in reading order.
     expect(equip.getAttribute('aria-label')).toBe('EQUIP WEAPON');
+  });
+
+  it('routes armor directly to Armor without a slot preselection', () => {
+    const armor = item('direct-armor', 'light', { category: 'armor' });
+    const runState = run([armor], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const equip = byTestId(container, 'gear-equip-direct-armor');
+    expect(equip.disabled).toBe(false);
+    expect(equip.getAttribute('aria-label')).toBe('EQUIP ARMOR');
+    equip.click();
+    expect(runState.party[0].equipment.armor.id).toBe('direct-armor');
+  });
+
+  it('routes catalogued shields to Off-hand', () => {
+    const runState = run([item('direct-shield', 'shield')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const equip = byTestId(container, 'gear-equip-direct-shield');
+    expect(equip.getAttribute('aria-label')).toBe('EQUIP OFF-HAND');
+    equip.click();
+    expect(runState.party[0].equipment.offhand.id).toBe('direct-shield');
+  });
+
+  it('keeps class-illegal equipment blocked without a slot reason', () => {
+    const runState = run([item('illegal-heavy', 'heavy_melee')], [character({ classId: 'ghost', equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const reason = byTestId(container, 'gear-equip-reason-illegal-heavy');
+    expect(reason.textContent).toContain("Ghost can't equip");
+    expect(reason.textContent).not.toContain('Cannot equip');
+  });
+
+  it('does not show equip controls or reasons for consumables', () => {
+    const consumable = item('no-equip-consumable', 'sidearm', { category: 'consumable' });
+    const runState = run([consumable]);
+    const container = new FakeElement('div');
+    renderGear(container, { runState, data });
+
+    expect(byTestId(container, 'gear-equip-no-equip-consumable')).toBeNull();
+    expect(byTestId(container, 'gear-equip-reason-no-equip-consumable')).toBeNull();
   });
 
   it('SESSION-05 icon-first-ui-density — blocked EQUIP row keeps text ("EQUIP BLOCKED") + no icon', () => {
