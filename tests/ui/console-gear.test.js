@@ -398,6 +398,156 @@ describe('GEAR mode', () => {
   });
 });
 
+describe('GEAR mode — gear-inventory-filters SESSION-01', () => {
+  function childIndex(container, testid) {
+    return container.children.findIndex((child) => child.dataset?.testid === testid);
+  }
+
+  function filterFixture(memberOverrides = {}) {
+    const legal = item('legal-sidearm', 'sidearm');
+    const illegal = item('illegal-sniper', 'sniper');
+    const consumable = item('ration', 'sidearm', { category: 'consumable' });
+    const tagged = item('tagged-junk', 'sidearm', { junkTagged: true });
+    const unresolvable = item('mystery-item', 'unknown-basetype');
+    const inventory = [legal, illegal, consumable, tagged, unresolvable];
+    const runState = run(inventory, [character({ equipment: { weapon: null, armor: null, offhand: null }, ...memberOverrides })]);
+    return { runState, inventory };
+  }
+
+  const ALL_TESTIDS = ['legal-sidearm', 'illegal-sniper', 'ration', 'tagged-junk', 'mystery-item'];
+
+  it('renders ALL selected by default as an accessible radiogroup before the equipped heading', () => {
+    const { runState } = filterFixture();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const filters = byTestId(container, 'gear-inventory-filters');
+    expect(filters).toBeTruthy();
+    expect(filters.getAttribute('role')).toBe('radiogroup');
+    expect(childIndex(container, 'gear-inventory-filters')).toBeLessThan(childIndex(container, 'gear-equipped-heading'));
+
+    const checked = filters.children.filter((btn) => btn.getAttribute('aria-checked') === 'true');
+    expect(checked).toHaveLength(1);
+    expect(checked[0].dataset.testid).toBe('gear-filter-all');
+    for (const testid of ALL_TESTIDS) expect(byTestId(container, `gear-item-${testid}`)).toBeTruthy();
+  });
+
+  it('EQUIPPABLE shows only slot-resolvable, class/proficiency-legal equipment for the selected character', () => {
+    const { runState } = filterFixture();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-filter-equippable').click();
+
+    expect(byTestId(container, 'gear-filter-equippable').getAttribute('aria-checked')).toBe('true');
+    expect(byTestId(container, 'gear-filter-all').getAttribute('aria-checked')).toBe('false');
+    expect(byTestId(container, 'gear-item-legal-sidearm')).toBeTruthy();
+    expect(byTestId(container, 'gear-item-illegal-sniper')).toBeNull();
+    expect(byTestId(container, 'gear-item-ration')).toBeNull();
+    expect(byTestId(container, 'gear-item-mystery-item')).toBeNull();
+  });
+
+  it('CONSUMABLES and JUNK match their exact predicates; ALL restores the full ordered list', () => {
+    const { runState } = filterFixture();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-filter-consumables').click();
+    expect(byTestId(container, 'gear-item-ration')).toBeTruthy();
+    expect(byTestId(container, 'gear-item-legal-sidearm')).toBeNull();
+    expect(byTestId(container, 'gear-item-tagged-junk')).toBeNull();
+
+    byTestId(container, 'gear-filter-junk').click();
+    expect(byTestId(container, 'gear-item-tagged-junk')).toBeTruthy();
+    expect(byTestId(container, 'gear-item-legal-sidearm')).toBeNull();
+    expect(byTestId(container, 'gear-item-ration')).toBeNull();
+
+    byTestId(container, 'gear-filter-all').click();
+    for (const testid of ALL_TESTIDS) expect(byTestId(container, `gear-item-${testid}`)).toBeTruthy();
+  });
+
+  it('a character switch recomputes the active EQUIPPABLE view instead of freezing the prior selection', () => {
+    const ghostLegal = item('ghost-only-sniper', 'sniper');
+    const breacherLegal = item('breacher-only-heavy', 'heavy_melee');
+    const runState = run(
+      [ghostLegal, breacherLegal],
+      [
+        character({ id: 'breacher-1', classId: 'breacher', equipment: { weapon: null, armor: null, offhand: null } }),
+        character({ id: 'ghost-1', classId: 'ghost', equipment: { weapon: null, armor: null, offhand: null } })
+      ]
+    );
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-filter-equippable').click();
+    expect(byTestId(container, 'gear-item-breacher-only-heavy')).toBeTruthy();
+    expect(byTestId(container, 'gear-item-ghost-only-sniper')).toBeNull();
+
+    byTestId(container, 'gear-character-ghost-1').click();
+    expect(byTestId(container, 'gear-filter-equippable').getAttribute('aria-checked')).toBe('true');
+    expect(byTestId(container, 'gear-item-ghost-only-sniper')).toBeTruthy();
+    expect(byTestId(container, 'gear-item-breacher-only-heavy')).toBeNull();
+  });
+
+  it('an empty filtered result renders gear-filter-empty while an empty pack keeps the existing copy', () => {
+    const { runState } = filterFixture();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    runState.inventory = runState.inventory.filter((entry) => entry.id !== 'ration');
+    byTestId(container, 'gear-filter-consumables').click();
+    const empty = byTestId(container, 'gear-filter-empty');
+    expect(empty).toBeTruthy();
+    expect(empty.textContent).toContain('CONSUMABLES');
+
+    runState.inventory = [];
+    byTestId(container, 'gear-filter-all').click();
+    expect(byTestId(container, 'gear-filter-empty')).toBeNull();
+    const list = byTestId(container, 'gear-inventory');
+    expect(list.children.some((child) => child.textContent === 'Inventory empty.')).toBe(true);
+  });
+
+  it('changing filters cancels pending CORRUPT/junk-all confirmation without mutating inventory or dispatching', () => {
+    const corrupt = item('corrupt-sidearm', 'sidearm', { rarity: 'corrupt', corrupt: true, corruptionValue: 0.1 });
+    const tagged = item('tagged-sidearm', 'sidearm', { junkTagged: true });
+    const runState = run([corrupt, tagged], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const container = new FakeElement('div');
+    const dispatch = vi.fn();
+    const context = { runState, data, bus: { dispatch }, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-equip-corrupt-sidearm').click();
+    expect(byTestId(container, 'gear-corrupt-warning')).toBeTruthy();
+    byTestId(container, 'gear-junk-all').click();
+    expect(byTestId(container, 'gear-junk-all').textContent).toBe('CONFIRM JUNK ALL TAGGED');
+
+    const before = runState.inventory;
+    byTestId(container, 'gear-filter-junk').click();
+
+    expect(byTestId(container, 'gear-corrupt-warning')).toBeNull();
+    expect(byTestId(container, 'gear-junk-all').textContent).toBe('JUNK ALL TAGGED');
+    expect(runState.inventory).toBe(before);
+    expect(dispatch.mock.calls.filter(([event]) => event === 'state:inventory-change')).toHaveLength(0);
+  });
+
+  it('clicking the already-selected filter is a no-op', () => {
+    const { runState } = filterFixture();
+    const container = new FakeElement('div');
+    let refreshCount = 0;
+    const context = { runState, data, refresh: () => { refreshCount++; renderGear(container, context); } };
+    renderGear(container, context);
+
+    refreshCount = 0;
+    byTestId(container, 'gear-filter-all').click();
+    expect(refreshCount).toBe(0);
+  });
+});
+
 describe('GEAR mode — SESSION-02 density contract', () => {
   it('keeps inventory scroll semantics and compact cards inside actionable composite rows', () => {
     const container = new FakeElement('div');

@@ -1769,6 +1769,8 @@ button.protocol-card[aria-selected="true"],
 
 .gear-selectors { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .gear-character { padding: 4px 10px; font-size: 10px; }
+.gear-filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.gear-filter { flex: 1 1 auto; min-width: 72px; padding: 4px 10px; font-size: 10px; text-align: center; }
 .equipped-section { margin-bottom: 12px; }
 .equipped-row { padding: 8px; margin-bottom: 8px; border: 1px solid var(--border-dim); background: var(--bg-panel); }
 .equipped-slot { font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; }

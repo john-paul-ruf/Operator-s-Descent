@@ -8,13 +8,24 @@ const SLOTS = ['weapon', 'armor', 'offhand'];
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', offhand: 'Off-hand' };
 const uiByRun = new WeakMap();
 
+// gear-inventory-filters SESSION-01 — transient, view-only inventory
+// narrowing. Lives in the same per-run WeakMap as the rest of GEAR's UI
+// state; deliberately never touches RunState, the save schema, a URL
+// parameter, local storage, or the bus.
+const INVENTORY_FILTERS = Object.freeze([
+  { id: 'all', label: 'ALL' },
+  { id: 'equippable', label: 'EQUIPPABLE' },
+  { id: 'consumables', label: 'CONSUMABLES' },
+  { id: 'junk', label: 'JUNK' }
+]);
+
 function clear(container) {
   if (typeof container.replaceChildren === 'function') container.replaceChildren();
   else while (container.firstChild) container.removeChild(container.firstChild);
 }
 
 function stateFor(runState) {
-  if (!uiByRun.has(runState)) uiByRun.set(runState, { charIndex: 0, pendingCorruptItemId: null, pendingJunkAll: false, notice: '', error: '' });
+  if (!uiByRun.has(runState)) uiByRun.set(runState, { charIndex: 0, pendingCorruptItemId: null, pendingJunkAll: false, notice: '', error: '', inventoryFilter: 'all' });
   return uiByRun.get(runState);
 }
 
@@ -130,6 +141,22 @@ function resolveEquipSlot(item, data) {
 
 function itemLegalForCharacter(data, character, item) {
   return canEquip(classDataFor(data, character), item, character?.extensions?.proficiencies || []);
+}
+
+function isEquippableInventoryItem(item, data, character) {
+  return Boolean(resolveEquipSlot(item, data))
+    && itemLegalForCharacter(data || {}, character, item);
+}
+
+function matchesInventoryFilter(filterId, item, data, character) {
+  if (filterId === 'equippable') return isEquippableInventoryItem(item, data, character);
+  if (filterId === 'consumables') return item.category === 'consumable';
+  if (filterId === 'junk') return item.junkTagged === true;
+  return true;
+}
+
+function visibleInventoryItems(inventory, filterId, data, character) {
+  return inventory.filter((item) => matchesInventoryFilter(filterId, item, data, character));
 }
 
 function equipDisabledReason(context, character, item) {
@@ -274,6 +301,7 @@ export function render(container, context = {}) {
   }
   const ui = stateFor(runState);
   ui.charIndex = Math.max(0, Math.min(ui.charIndex, (runState.party?.length || 1) - 1));
+  if (!INVENTORY_FILTERS.some((filter) => filter.id === ui.inventoryFilter)) ui.inventoryFilter = 'all';
   const character = runState.party?.[ui.charIndex];
   if (!character) {
     container.appendChild(text('console-empty', 'No party member.', 'gear-empty'));
@@ -296,12 +324,45 @@ export function render(container, context = {}) {
   }
   container.appendChild(selectors);
 
+  renderInventoryFilters(container, context, character, ui);
+
   container.appendChild(text('mode-indicator', `◈ EQUIPPED — ${character.name || character.classId || `C${ui.charIndex + 1}`}`, 'gear-equipped-heading'));
 
   renderEquipped(container, context, character, ui);
   renderInventory(container, context, character, ui);
   if (ui.notice) container.appendChild(text('gear-notice console-static-row', ui.notice, 'gear-notice'));
   if (ui.error) container.appendChild(text('gear-error console-static-row', ui.error, 'gear-error'));
+}
+
+function renderInventoryFilters(container, context, character, ui) {
+  const row = document.createElement('div');
+  row.className = 'gear-filter-row';
+  row.dataset.testid = 'gear-inventory-filters';
+  row.setAttribute('role', 'radiogroup');
+  row.setAttribute('aria-label', 'Inventory filters');
+  for (const filter of INVENTORY_FILTERS) {
+    const isSelected = ui.inventoryFilter === filter.id;
+    // Deliberately omit opts.selected — createButton would also set an
+    // inapplicable aria-selected. The .selected class alone drives the
+    // existing accent treatment; role/aria-checked are set explicitly below
+    // to match the radio semantics (see src/ui/screens/creation.js).
+    const button = createButton(filter.label, {
+      onClick: () => {
+        if (ui.inventoryFilter === filter.id) return;
+        ui.inventoryFilter = filter.id;
+        ui.pendingCorruptItemId = null;
+        ui.pendingJunkAll = false;
+        context.refresh?.();
+      }
+    });
+    button.classList.add('gear-filter', 'console-row');
+    if (isSelected) button.classList.add('selected');
+    button.setAttribute('role', 'radio');
+    button.setAttribute('aria-checked', String(isSelected));
+    button.dataset.testid = `gear-filter-${filter.id}`;
+    row.appendChild(button);
+  }
+  container.appendChild(row);
 }
 
 function renderEquipped(container, context, character, ui) {
@@ -397,12 +458,18 @@ function renderInventory(container, context, character, ui) {
     container.appendChild(warning);
   }
 
+  const visibleInventory = visibleInventoryItems(inventory, ui.inventoryFilter, context.data, character);
   const list = createScrollArea({ label: 'Inventory', focusable: true });
   list.classList.add('inventory-list');
   list.dataset.testid = 'gear-inventory';
-  if (!inventory.length) list.appendChild(text('console-empty', 'Inventory empty.'));
+  if (!inventory.length) {
+    list.appendChild(text('console-empty', 'Inventory empty.'));
+  } else if (!visibleInventory.length) {
+    const activeFilter = INVENTORY_FILTERS.find((filter) => filter.id === ui.inventoryFilter) || INVENTORY_FILTERS[0];
+    list.appendChild(text('console-empty', `No ${activeFilter.label} items.`, 'gear-filter-empty'));
+  }
   const cleanups = [];
-  for (const item of inventory) renderInventoryItem(list, context, character, ui, item, cleanups);
+  for (const item of visibleInventory) renderInventoryItem(list, context, character, ui, item, cleanups);
   list.cleanup = () => cleanups.forEach((fn) => fn());
   container.appendChild(list);
 
