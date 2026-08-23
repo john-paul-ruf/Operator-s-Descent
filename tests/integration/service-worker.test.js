@@ -108,12 +108,12 @@ describe('service worker manifest', () => {
   });
 });
 
-describe('service worker cache version — v9 → v10', () => {
-  const PREDECESSOR_CACHE = 'operator-descent-2026-08-22-pages-artifact-v9';
+describe('service worker cache version — v10 → v11', () => {
+  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-gear-equip-save-v10';
 
-  it('activation retains the v10 cache and deletes the exact v9 predecessor', async () => {
+  it('activation retains the v11 cache and deletes the exact v10 predecessor', async () => {
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-23-gear-equip-save-v10');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-23-auto-slot-gear-equip-v11');
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
 
@@ -130,7 +130,7 @@ describe('service worker cache version — v9 → v10', () => {
     expect(namesAfterActivate).not.toContain(PREDECESSOR_CACHE);
   });
 
-  it('the v10 manifest ships the runtime icon sprite as a production/offline asset', () => {
+  it('the v11 manifest ships the runtime icon sprite as a production/offline asset', () => {
     const manifest = extractManifest();
     expect(manifest).toContain('./assets/icons.svg');
     expect(manifest).toContain('./assets/descent-sigil.woff2');
