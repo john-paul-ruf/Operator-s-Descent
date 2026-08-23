@@ -139,6 +139,12 @@ describe('service worker cache version — v11 → v12', () => {
     // No duplicate entries introduced.
     expect(new Set(manifest).size).toBe(manifest.length);
   });
+
+  it('the v12 manifest pins the GEAR filter client files in the offline release', () => {
+    const manifest = extractManifest();
+    expect(manifest).toContain('./src/ui/console/gear.js');
+    expect(manifest).toContain('./styles/components.css');
+  });
 });
 
 describe('service worker lifecycle', () => {
