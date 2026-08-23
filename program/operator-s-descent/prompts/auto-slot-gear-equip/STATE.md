@@ -14,7 +14,7 @@
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---|---|---|---|---|---|---|
 | 01 | Auto-route inventory equipment and remove manual slot buttons | M09, M17, M18, M25, M33, M34, M56, M60, M64, M79, M95 | `./src/ui/console/gear.js`, `./styles/components.css`, `./tests/ui/console-gear.test.js`, `./tests/e2e/gear-actions-persistence.spec.js`, `./tests/e2e/scroll-restore.spec.js` | done | 2/2 | 2026-08-23 | `notes`: Removed manual GEAR slot selection; armor resolves to armor and catalogued weapons resolve to weapon/offhand at render and activation time. Class/combat/CORRUPT constraints remain. Browser proof confirms direct armor autosave and reload restoration. `followUp`: — |
-| 02 | Release direct GEAR routing through the offline cache | M81, M83, M95 | `./service-worker.js`, `./tests/integration/service-worker.test.js` | pending | — | — | Must land with SESSION-01 for an offline-complete feature. |
+| 02 | Release direct GEAR routing through the offline cache | M81, M83, M95 | `./service-worker.js`, `./tests/integration/service-worker.test.js` | done | 2/2 | 2026-08-23 | `notes`: Advanced offline cache v10→v11; activation deletes operator-descent-2026-08-23-gear-equip-save-v10 and retains operator-descent-2026-08-23-auto-slot-gear-equip-v11. Pinned direct GEAR JS/CSS manifest assertions. `followUp`: No residual SESSION-02 work. |
 
 ## Wave Plan
 
@@ -81,6 +81,26 @@ flowchart TD
     "tests/ui/console-gear.test.js",
     "tests/e2e/gear-actions-persistence.spec.js",
     "tests/e2e/scroll-restore.spec.js"
+  ],
+  "blockedReason": null
+}
+```
+
+### SESSION-02
+
+```json
+{
+  "session": "02",
+  "status": "done",
+  "checkpoint": 2,
+  "notes": "Advanced offline cache v10→v11; activation deletes operator-descent-2026-08-23-gear-equip-save-v10 and retains operator-descent-2026-08-23-auto-slot-gear-equip-v11. Pinned direct GEAR JS/CSS manifest assertions.",
+  "delivered": "Released direct GEAR routing through the versioned offline cache and regression-tested its shipped assets.",
+  "verification": "node --check ./service-worker.js ✓; npx vitest run ./tests/integration/service-worker.test.js ✓ (6); npm run check:assets ✓; full npx vitest run had 3 unrelated failures.",
+  "surprises": "Full Vitest: existing exploration tap failures (2) and sigil lint failures caused by generated test-results error-context files. Concurrent uncommitted changes exist in ./src/ui/console/gear.js and ./styles/components.css; untouched. Untracked .DS_Store untouched.",
+  "followUp": "No residual SESSION-02 work.",
+  "filesTouched": [
+    "./service-worker.js",
+    "./tests/integration/service-worker.test.js"
   ],
   "blockedReason": null
 }
