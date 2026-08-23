@@ -13,7 +13,7 @@
 | # | Session | Modules | Owns | Status | Checkpoint | Completed | Notes |
 |---|---|---|---|---|---|---|---|
 | 01 | Complete the offline manifest and Pages asset contract | M81, M94, M96, M107 | `./service-worker.js`, `./scripts/verify-assets.js`, `./scripts/report-budget.js`, `./tests/integration/service-worker.test.js` | done | 2/2 | 2026-08-23 | Cache runtime SVG sprite (./assets/icons.svg) into PRODUCTION_ASSETS, bump service-worker cache v8→v9, and align verify-assets.js/report-budget.js required-singleton and text-compression lists so cache, verifier, and budget reporter agree. |
-| 02 | Create deterministic Pages artifact staging | M81, M83, M94, M107 | `./scripts/build-pages.js`, `./package.json`, `./.gitignore`, `./tests/tools/build-pages.test.js` | pending | — | — | Consumes SESSION-01's complete manifest, writes only an ignored static staging directory, and introduces no runtime dependency. |
+| 02 | Create deterministic Pages artifact staging | M81, M83, M94, M107 | `./scripts/build-pages.js`, `./package.json`, `./.gitignore`, `./tests/tools/build-pages.test.js` | done | 2/2 | 2026-08-23 | Added ./scripts/build-pages.js — manifest-driven Pages stager (buildPages/parseBuildPagesArgs), npm run build:pages (check:assets-first), /dist/ gitignore entry, and 19 Vitest cases locking artifact exactness, byte identity, stale-output replacement, and unsafe-target/malformed-manifest rejection before any filesystem mutation. |
 | 03 | Publish verified artifact with GitHub Actions | M81, M83, M94 | `./.github/workflows/deploy-pages.yml`, `./README.MD`, `./tests/tooling/github-pages-workflow.test.js` | pending | — | — | Calls the staged artifact command, uploads only the temporary artifact, and records the one-time GitHub Pages setting prerequisite. |
 
 ## Wave Plan
@@ -65,3 +65,8 @@ flowchart TD
 
 - **notes:** Cache runtime SVG sprite (./assets/icons.svg) into PRODUCTION_ASSETS, bump service-worker cache v8→v9, and align verify-assets.js/report-budget.js required-singleton and text-compression lists so cache, verifier, and budget reporter agree.
 - **followUp:** Manifest now cache-consistent for './assets/icons.svg'; SESSION-02 (Pages artifact staging) can safely enumerate PRODUCTION_ASSETS as the complete artifact allowlist including the sprite.
+
+### SESSION-02
+
+- **notes:** Added ./scripts/build-pages.js — manifest-driven Pages stager (buildPages/parseBuildPagesArgs), npm run build:pages (check:assets-first), /dist/ gitignore entry, and 19 Vitest cases locking artifact exactness, byte identity, stale-output replacement, and unsafe-target/malformed-manifest rejection before any filesystem mutation.
+- **followUp:** SESSION-03 can call `npm run build:pages -- --output <runner-tmp-dir>` directly for its GitHub Actions workflow. build-pages.js is not yet a Module Registry entry (M-number) — Jikijitsu/Forge may want to fold it under M94 (Validation Tooling) or assign a new ID at feature close.
