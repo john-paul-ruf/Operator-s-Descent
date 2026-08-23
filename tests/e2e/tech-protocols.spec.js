@@ -1,3 +1,61 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { TECH_PROTOCOL_CASES, buildTechProtocolFixture } from '../helpers/tech-protocol-e2e-fixture.js';
 
-test.describe('TECH protocol browser matrix', () => {});
+const EXPECTED_BASELINE_FAILURES = new Map();
+
+async function installStorage(page) {
+  await page.addInitScript(() => {
+    const store = new Map();
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: key => store.has(key) ? store.get(key) : null,
+        setItem: (key, value) => store.set(key, String(value)),
+        removeItem: key => store.delete(key),
+        clear: () => store.clear(),
+        key: index => [...store.keys()][index] ?? null,
+        get length() { return store.size; }
+      }
+    });
+  });
+}
+
+async function runtimeCombatSnapshot(page) {
+  return page.evaluate(() => import('/src/runtime.js').then(module => module.getRuntimeSnapshot().currentRun));
+}
+
+for (const caseDescriptor of TECH_PROTOCOL_CASES) {
+  test(`${caseDescriptor.school.toUpperCase()} T${caseDescriptor.tier} ${caseDescriptor.name} follows the real TECH workflow`, async ({ page }) => {
+    const baselineReason = EXPECTED_BASELINE_FAILURES.get(caseDescriptor.id);
+    if (!process.env.TECH_PROTOCOL_STRICT && baselineReason) test.fail(true, baselineReason);
+    const fixture = buildTechProtocolFixture(caseDescriptor);
+    await installStorage(page);
+    await page.goto(`/?run=${fixture.fragment.slice(0, 8)}#r=${fixture.fragment}`);
+    await expect(page.getByTestId('import-run-summary')).toContainText('ACTIVE COMBAT SNAPSHOT');
+    await page.getByTestId('import-resume').click();
+    await expect(page.getByTestId('combat-canvas')).toBeVisible();
+    await page.getByTestId('console-tab-tech').click();
+
+    const card = page.getByTestId(`tech-protocol-${caseDescriptor.id}`);
+    await expect(card).toContainText(caseDescriptor.name);
+    await expect(card).toContainText(`${caseDescriptor.chargeCost}`);
+    await expect(card).toContainText(caseDescriptor.effect);
+    await page.getByTestId(`tech-cast-${caseDescriptor.id}`).click();
+    if (fixture.protocol.target) {
+      const targetId = fixture.protocol.target === 'ally' ? fixture.ids.ally : fixture.ids.primary;
+      await page.getByTestId(`tech-target-${targetId}`).click();
+    }
+    await expect(page.getByTestId('tech-confirm')).toBeEnabled();
+    await page.getByTestId('tech-confirm').click();
+    await expect.poll(() => page.getByTestId('tech-result').textContent()).toContain(caseDescriptor.name);
+    await expect.poll(async () => {
+      const currentRun = await runtimeCombatSnapshot(page);
+      return fixture.expected.outcome(currentRun, fixture.before, fixture.ids);
+    }).toBe(true);
+    await expect.poll(async () => {
+      const currentRun = await runtimeCombatSnapshot(page);
+      const caster = currentRun.activeCombat?.actors.find(actor => actor.id === fixture.ids.caster);
+      return Boolean(currentRun.activeCombat) && caster !== undefined;
+    }).toBe(true);
+  });
+}

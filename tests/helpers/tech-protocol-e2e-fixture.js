@@ -75,7 +75,7 @@ export function buildTechProtocolFixture(caseDescriptor) {
   const casterActor = partyActors.find(actor => actor.id === caster.id);
   const allyActor = partyActors.find(actor => actor.id === ally.id);
   const primary = enemyActors[0];
-  const ids = { primary: primary.id, ally: allyActor.id, enemies: enemyActors.map(actor => actor.id) };
+  const ids = { caster: casterActor.id, primary: primary.id, ally: allyActor.id, enemies: enemyActors.map(actor => actor.id) };
   setActor(combat.combatState, casterActor.id, { classId: 'compiler', attributes: caster.attributes, protocols: caster.protocolDeck, protocolDeck: caster.protocolDeck, charge: 30, chargeMax: 30, ap: 2, position: { x: 2, y: 2 } });
   setActor(combat.combatState, allyActor.id, { hp: 1, currentHP: 1, conditions: ally.conditions.map(condition => ({ id: condition.conditionId, ...condition })), position: { x: 3, y: 2 } });
   enemyActors.forEach((actor, index) => setActor(combat.combatState, actor.id, { hp: caseDescriptor.id === 'disrupt-4' && index === 0 ? 1 : 12, hpMax: 12, protocolDefense: 1, attributes: { mgt: 1, fin: 1, vit: 1, res: 1, foc: 1, sig: 1 }, position: { x: 4 + index, y: 2 } }));
