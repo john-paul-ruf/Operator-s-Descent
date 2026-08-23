@@ -56,6 +56,17 @@ Plus you can adjust how it mixes in settings.
 
 ---
 
+## GitHub Pages Deployment
+
+`./.github/workflows/deploy-pages.yml` publishes the game only after a push to `main` or a manual dispatch — it never deploys from a pull request.
+
+- **Local staging:** run `npm run build:pages` to copy the production asset manifest into the git-ignored `./dist/`, or pass `-- --output <dir>` to stage into a temporary or custom directory instead.
+- **CI behavior:** the workflow regenerates the committed CSS/icon assets, fails if that regeneration leaves an uncommitted diff, verifies the production asset manifest, then uploads only that manifest-only staging output as the deployment artifact.
+- **One-time setup:** a repository administrator must set **Settings → Pages → Build and deployment → Source → GitHub Actions** once. After that, the canonical deployment URL appears in the workflow's Actions deployment output.
+- Project asset paths stay relative — there is no fixed site URL, CNAME file, `<base>` tag, or custom-domain procedure to configure here.
+
+---
+
 ## The Agents
 
 ### Agent One — The Compiler
