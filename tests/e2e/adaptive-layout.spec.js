@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createCombatDensityFixture, createExplorationDensityFixture } from '../helpers/console-density-fixture.js';
 
 const REDUCED_SETTINGS = {
   masterMute: true,
@@ -528,4 +529,257 @@ test('pointer-only input floor: interactive controls ≥ 44px tall at wide deskt
   const heights = await controls.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
   expect(heights.length).toBeGreaterThan(0);
   expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. Console submenu density + reachable scrolling — wide dock matrix
+//    (console-submenu-density-and-scroll SESSION-04, checkpoint 2). Lives here
+//    rather than console-submenu-density.spec.js because chromium-wide-1440 /
+//    chromium-wide-1080p / chromium-wide-square are scoped by playwright.config.js
+//    `testMatch` to this file only — a project-level constraint outside this
+//    session's lease (playwright.config.js is not in Owns).
+// ─────────────────────────────────────────────────────────────────────────────
+const WIDE_FINE_PROJECT = 'chromium-wide-1440';
+const WIDE_TOUCH_PROJECT = 'chromium-wide-square';
+const TOUCH_FLOOR = 96;
+const POINTER_FLOOR = 44;
+const EXPLORATION_MODES = ['move', 'party', 'gear', 'tech', 'loot', 'log'];
+const NAMED_SCROLL_TESTIDS = { party: 'party-detail', gear: 'gear-inventory', tech: 'tech-deck', loot: 'loot-items', log: 'log-area' };
+
+async function importRunFragment(page, fragment, { combat = false } = {}) {
+  await page.goto(`/?run=${fragment.slice(0, 8)}#r=${fragment}`);
+  if (combat) await expect(page.getByTestId('import-run-summary')).toContainText('ACTIVE COMBAT SNAPSHOT');
+  else await expect(page.getByTestId('import-run-summary')).toBeVisible();
+  await page.getByTestId('import-resume').click();
+}
+
+// Wide dock tabs never collapse (console.js's click handler returns early for
+// the dock variant), so there is no expand-state to cycle — just switch modes.
+async function visitDockMode(page, modeId) {
+  const tab = page.getByTestId(`console-tab-${modeId}`);
+  if (await tab.isDisabled()) return false;
+  const current = await page.locator('.wide-console-content-body').getAttribute('data-mode');
+  if (current !== modeId) {
+    await tab.click();
+    await expect(page.locator('.wide-console-content-body')).toHaveAttribute('data-mode', modeId);
+  }
+  return true;
+}
+
+async function waitTwoFramesWide(page) {
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+}
+
+// Ensure the mode's scroll surface overflows. Real, fixture-driven content
+// gets only a small bottom marker appended (deterministic reachability
+// target); a mode too sparse to overflow on its own gets the session-
+// authorized test-only sentinel rows — plain divs with an inline height,
+// never a production class, never a stylesheet edit.
+async function ensureOverflowWide(page, selector) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) throw new Error(`missing scroll surface: ${sel}`);
+    const naturallyOverflows = el.scrollHeight > el.clientHeight + 4;
+    let appended = 0;
+    while (el.scrollHeight <= el.clientHeight + 40) {
+      const row = document.createElement('div');
+      row.className = 'test-sentinel-row';
+      row.dataset.testid = `test-sentinel-${appended}`;
+      row.style.height = '40px';
+      row.textContent = `sentinel ${appended}`;
+      el.appendChild(row);
+      appended += 1;
+      if (appended > 60) break;
+    }
+    const marker = document.createElement('div');
+    marker.className = 'test-bottom-marker';
+    marker.dataset.testid = 'test-bottom-marker';
+    marker.style.height = '2px';
+    el.appendChild(marker);
+    return { naturallyOverflows, sentinelsAppended: appended };
+  }, selector);
+}
+
+async function scrollSurfaceGeometryWide(page, selector) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return {
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+      clientWidth: el.clientWidth,
+      scrollWidth: el.scrollWidth,
+      scrollOwner: el.dataset.scrollOwner
+    };
+  }, selector);
+}
+
+async function scrollToMaxAndReadMarkerWide(page, selector) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.scrollTop = el.scrollHeight;
+    const marker = el.querySelector('[data-testid="test-bottom-marker"]');
+    return { containerRect: el.getBoundingClientRect().toJSON(), markerRect: marker.getBoundingClientRect().toJSON() };
+  }, selector);
+}
+
+function rectContainsWide(outer, inner, tolerance = 2) {
+  return (
+    inner.top >= outer.top - tolerance &&
+    inner.bottom <= outer.bottom + tolerance &&
+    inner.left >= outer.left - tolerance &&
+    inner.right <= outer.right + tolerance
+  );
+}
+
+async function staticRowReportWide(page, selector) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return [...el.querySelectorAll('.console-static-row, .console-static-card')]
+      .filter((node) => node.offsetParent !== null)
+      .map((node) => ({
+        minHeight: getComputedStyle(node).minHeight,
+        height: Math.round(node.getBoundingClientRect().height),
+        isCard: node.classList.contains('console-static-card')
+      }));
+  }, selector);
+}
+
+async function controlFloorReportWide(page) {
+  return page.locator('.console-row:not(.console-static-row):not(.console-static-card):visible, .mode-tab:visible')
+    .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+}
+
+async function namedScrollAreaReportWide(page, modeId) {
+  const testid = NAMED_SCROLL_TESTIDS[modeId];
+  if (!testid) return null;
+  const locator = page.getByTestId(testid);
+  if (!(await locator.count())) return null;
+  return locator.evaluate((el) => ({ tabIndex: el.tabIndex, ariaLabel: el.getAttribute('aria-label') }));
+}
+
+test('console density (wide dock): exploration modes reach the true end of their scroll surface, static content stays compact, pointer floor holds', async ({ page }, testInfo) => {
+  test.skip(![WIDE_FINE_PROJECT, WIDE_TOUCH_PROJECT].includes(testInfo.project.name), 'density matrix runs at chromium-wide-1440 (fine pointer) + chromium-wide-square (coarse/touch)');
+  test.slow();
+  const floor = testInfo.project.name === WIDE_TOUCH_PROJECT ? TOUCH_FLOOR : POINTER_FLOOR;
+  const fixture = createExplorationDensityFixture();
+  await importRunFragment(page, fixture.fragment);
+  await expect(page.locator('.wide-shell')).toBeVisible();
+
+  const selector = '.wide-console-content-body.scroll-area[data-scroll-owner="console-mode"]';
+  const results = {};
+
+  for (const modeId of EXPLORATION_MODES) {
+    const available = await visitDockMode(page, modeId);
+    expect(available, `${modeId} tab available`).toBe(true);
+    await waitTwoFramesWide(page);
+
+    const { naturallyOverflows, sentinelsAppended } = await ensureOverflowWide(page, selector);
+    const geometry = await scrollSurfaceGeometryWide(page, selector);
+    expect(geometry.scrollOwner, `${modeId} scroll owner marker`).toBe('console-mode');
+    expect(geometry.scrollHeight, `${modeId} wide surface overflows its viewport`).toBeGreaterThan(geometry.clientHeight);
+    // KNOWN OUT-OF-LEASE DEFECT (see handoff surprises): MOVE mode's D-pad
+    // (styles/components.css `.dpad { grid-template-columns: repeat(3, 96px) }`)
+    // has no wide-dock-width override, so its fixed 3×96px + gaps grid (~296px)
+    // genuinely overflows the narrower wide console-dock column horizontally by
+    // a small, bounded amount. Not fixable from this session's lease
+    // (src/ui/console/move.js and styles/components.css belong to other
+    // sessions). Every other mode must stay flush; MOVE gets a wider — but
+    // still bounded — tolerance so a real regression (e.g. runaway content)
+    // still fails loud.
+    const horizontalTolerance = modeId === 'move' ? 20 : 1;
+    expect(geometry.scrollWidth, `${modeId} wide surface has no horizontal overflow`).toBeLessThanOrEqual(geometry.clientWidth + horizontalTolerance);
+
+    await waitTwoFramesWide(page);
+    const settled = await scrollToMaxAndReadMarkerWide(page, selector);
+    expect(rectContainsWide(settled.containerRect, settled.markerRect), `${modeId} wide bottom sentinel reachable`).toBe(true);
+
+    const staticRows = await staticRowReportWide(page, selector);
+    for (const row of staticRows) {
+      if (row.isCard) {
+        // KNOWN OUT-OF-LEASE DEFECT (see handoff surprises): styles/components.css
+        // ~1580-1589 applies an unqualified `.equipment-card, .protocol-card
+        // { min-height: 96px }` rule that ties with, and beats, the
+        // `.console-static-card { min-height: 0 }` reset (~1009-1012 and the
+        // wide.css fine-pointer 48px rule), so every compact card plateaus at
+        // 96px instead of collapsing. Not fixable from this session's lease.
+        // Guard against further inflation only.
+        expect(row.height, `${modeId} wide static card height sane (${JSON.stringify(row)})`).toBeLessThanOrEqual(TOUCH_FLOOR + 44);
+      } else {
+        const compact = row.minHeight === '0px' || row.height < floor;
+        expect(compact, `${modeId} wide static row not re-inflated by the pointer rule (${JSON.stringify(row)})`).toBe(true);
+      }
+    }
+
+    const namedArea = await namedScrollAreaReportWide(page, modeId);
+    if (namedArea) {
+      expect(namedArea.tabIndex, `${modeId} named scroll area focusable`).toBe(0);
+      expect(namedArea.ariaLabel, `${modeId} named scroll area labeled`).toBeTruthy();
+    }
+
+    const heights = await controlFloorReportWide(page);
+    expect(heights.length, `${modeId} has visible interactive controls`).toBeGreaterThan(0);
+    expect(Math.min(...heights), `${modeId} pointer/touch floor (${floor}px)`).toBeGreaterThanOrEqual(floor);
+
+    results[modeId] = { naturallyOverflows, sentinelsAppended, ...geometry, namedArea };
+  }
+
+  await testInfo.attach(`wide-${testInfo.project.name}-exploration-metrics.json`, {
+    body: JSON.stringify(results, null, 2),
+    contentType: 'application/json'
+  });
+});
+
+test('console density (wide dock): combat mode reaches the true end of its scroll surface, control floor holds', async ({ page }, testInfo) => {
+  test.skip(![WIDE_FINE_PROJECT, WIDE_TOUCH_PROJECT].includes(testInfo.project.name), 'density matrix runs at chromium-wide-1440 (fine pointer) + chromium-wide-square (coarse/touch)');
+  test.slow();
+  const floor = testInfo.project.name === WIDE_TOUCH_PROJECT ? TOUCH_FLOOR : POINTER_FLOOR;
+  const fixture = createCombatDensityFixture();
+  await importRunFragment(page, fixture.fragment, { combat: true });
+  await expect(page.locator('.wide-shell')).toBeVisible();
+
+  const selector = '.wide-console-content-body.scroll-area[data-scroll-owner="console-mode"]';
+  const available = await visitDockMode(page, 'combat');
+  expect(available, 'combat tab available').toBe(true);
+  await waitTwoFramesWide(page);
+
+  const { naturallyOverflows, sentinelsAppended } = await ensureOverflowWide(page, selector);
+  const geometry = await scrollSurfaceGeometryWide(page, selector);
+  expect(geometry.scrollHeight, 'combat wide surface overflows its viewport').toBeGreaterThan(geometry.clientHeight);
+  expect(geometry.scrollWidth, 'combat wide surface has no horizontal overflow').toBeLessThanOrEqual(geometry.clientWidth + 1);
+
+  await waitTwoFramesWide(page);
+  const settled = await scrollToMaxAndReadMarkerWide(page, selector);
+  expect(rectContainsWide(settled.containerRect, settled.markerRect), 'combat wide bottom sentinel reachable').toBe(true);
+
+  const heights = await controlFloorReportWide(page);
+  expect(heights.length).toBeGreaterThan(0);
+  expect(Math.min(...heights), `combat pointer/touch floor (${floor}px)`).toBeGreaterThanOrEqual(floor);
+
+  await testInfo.attach(`wide-${testInfo.project.name}-combat-metrics.json`, {
+    body: JSON.stringify({ naturallyOverflows, sentinelsAppended, ...geometry }, null, 2),
+    contentType: 'application/json'
+  });
+});
+
+test('console density (wide dock): mode switch GEAR → LOG → GEAR restores scroll position', async ({ page }, testInfo) => {
+  test.skip(![WIDE_FINE_PROJECT, WIDE_TOUCH_PROJECT].includes(testInfo.project.name), 'density matrix runs at chromium-wide-1440 (fine pointer) + chromium-wide-square (coarse/touch)');
+  const fixture = createExplorationDensityFixture();
+  await importRunFragment(page, fixture.fragment);
+  await expect(page.locator('.wide-shell')).toBeVisible();
+
+  const selector = '.wide-console-content-body.scroll-area[data-scroll-owner="console-mode"]';
+  await visitDockMode(page, 'gear');
+  await waitTwoFramesWide(page);
+  await ensureOverflowWide(page, selector);
+  const before = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.scrollTop = Math.floor(el.scrollHeight / 3);
+    return el.scrollTop;
+  }, selector);
+  expect(before).toBeGreaterThan(0);
+
+  await visitDockMode(page, 'log');
+  await visitDockMode(page, 'gear');
+  const after = await page.evaluate((sel) => document.querySelector(sel).scrollTop, selector);
+  expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
 });
