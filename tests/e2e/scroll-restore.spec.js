@@ -138,7 +138,8 @@ test.describe('scroll memory', () => {
     await setScrollTop(page, scrollSelector, 120);
     const before = await scrollTopOf(page, scrollSelector);
     expect(before).toBeGreaterThan(0);
-    const samples = await clickAndSampleFrames(page, scrollSelector, '[data-testid="gear-slot-armor"]', 3);
+    const memberId = await page.getByTestId('gear-selectors').locator('[data-testid^="gear-character-"]').first().getAttribute('data-testid');
+    const samples = await clickAndSampleFrames(page, scrollSelector, `[data-testid="${memberId}"]`, 3);
     // No sampled frame — including the one right after the click's synchronous
     // re-render — should show a top-flash. Every sample must be at (or near)
     // the pre-click offset.

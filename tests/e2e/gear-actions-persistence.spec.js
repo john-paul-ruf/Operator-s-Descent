@@ -11,9 +11,9 @@ const QUIET_SETTINGS = {
 
 function gearFixture() {
   const harness = createGameHarness({ seed: 70123, partySize: 1, depth: 2 });
-  harness.runState.party[0].equipment.weapon = null;
+  harness.runState.party[0].equipment.armor = null;
   harness.runState.inventory.push({
-    id: 'persistence-sidearm', category: 'weapon', baseType: 'sidearm',
+    id: 'persistence-armor', category: 'armor', baseType: 'light',
     rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false
   });
   return roundTripRunState(harness.runState).encoded.fragment;
@@ -38,10 +38,12 @@ async function openGear(page, fragment) {
 }
 
 async function assertVisiblePaletteSafeEquip(page) {
-  const equip = page.getByTestId('gear-equip-persistence-sidearm');
+  const equip = page.getByTestId('gear-equip-persistence-armor');
   await equip.scrollIntoViewIfNeeded();
   await expect(equip).toBeVisible();
   await expect(equip).toHaveText('EQUIP');
+  await expect(equip).toHaveAttribute('aria-label', 'EQUIP ARMOR');
+  await expect(page.getByTestId('gear-slot-armor')).toHaveCount(0);
   expect(await equip.evaluate((element) => getComputedStyle(element).color)).not.toBe('rgb(0, 0, 0)');
   return equip;
 }
@@ -64,7 +66,7 @@ test('GEAR equip is visible, palette-safe, autosaved, and restored after reload'
   await page.goto('/#a=exploration&save=current');
   await expect(page.getByTestId('exploration-canvas')).toBeVisible();
   await page.getByTestId('console-tab-gear').click();
-  await expect(page.getByTestId('gear-equipped-weapon')).toContainText('Sidearm');
+  await expect(page.getByTestId('gear-equipped-armor')).toContainText('Light Armor');
 });
 
 test('wide GEAR controls remain visible and palette-safe', async ({ browser, baseURL }) => {
