@@ -1,7 +1,9 @@
-# Operator's Descent
+# [Operator's Descent](https://john-paul-ruf.github.io/Operator-s-Descent/)
 
 > **I did not write a single line of code.**
  
+Live site:[https://john-paul-ruf.github.io/Operator-s-Descent/](https://john-paul-ruf.github.io/Operator-s-Descent/)
+
 This entire repo was a stress test for three AI agents that were used to translate all feature requests, bug reports, and other inputs into actual code.
 
 ---
