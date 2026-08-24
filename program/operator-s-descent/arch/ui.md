@@ -309,3 +309,32 @@ Every existing consumer renders byte-identical DOM (60 component tests + all scr
 - API absent, or any other share rejection → falls through to the pre-existing clipboard/select fallback unchanged (`WORLD LINK COPIED` / `CLIPBOARD UNAVAILABLE — SELECT LINK`).
 
 `data-testid="scorecard-copy-world"` is preserved; the visible/aria label changed from `COPY WORLD LINK` to `SHARE WORLD LINK` to match the new share-first behavior.
+
+<!-- SESSION-04 -->
+### M71 (Combat Screen) — SESSION-04 `hapticPatternForCombatEntry` + opt-in combat haptics
+
+`src/ui/screens/combat.js` exports a new pure function:
+
+```javascript
+export function hapticPatternForCombatEntry(entry) {
+  if (entry?.type === 'death') return [24, 24, 44];
+  if (entry?.type !== 'attack' || entry.hit !== true) return null;
+
+  return entry.crit === true ? [12, 24, 24] : 12;
+}
+```
+
+Maps a resolved combat-log entry to a Vibration API pattern: plain hit → `12`, crit hit →
+`[12, 24, 24]`, death → `[24, 24, 44]`, everything else (misses, non-attack/non-death entry
+types, missing/malformed entries) → `null`.
+
+`mount()` reads `loadSettings().hapticsEnabled` (M45, boolean, default `false`) once at mount —
+no live-preview bus event exists for this setting. A mount-scoped guarded emitter,
+`triggerHaptic(entry)`, calls `navigator.vibrate(pattern)` only when `hapticsEnabled` is true, the
+mapper returns a non-null pattern, and `navigator.vibrate` is a function; any thrown/unsupported
+API is a silent no-op that never touches combat state.
+
+`triggerHaptic` is invoked from `dispatchLogEntry(entry)` — the single point every resolved
+combat-log entry passes through exactly once, regardless of path (immediate party-action dispatch,
+paced enemy log-replay playback, fast-forward, reduced-motion instant dispatch, or unmount flush).
+No other call site was added, so each eligible entry can never vibrate more than once.
