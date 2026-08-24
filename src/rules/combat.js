@@ -539,12 +539,29 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
     triggeredAttacks
   });
 
-  if (hit && isCrit) {
+  if (hit) {
     for (const hook of weapon.effects?.onHit?.conditions ?? []) {
-      if (hook.trigger !== 'critical') continue;
+      if (hook.trigger === 'critical' && !isCrit) continue;
+      if (hook.trigger !== 'critical' && hook.trigger !== 'hit') continue;
+      if (hook.chance != null && hook.chance < 1
+        && rngCursor.nextInt('combat', 100) >= Math.round(hook.chance * 100)) {
+        entry.procs = entry.procs ?? [];
+        entry.procs.push({ conditionId: hook.conditionId, trigger: hook.trigger, chanceFailed: true });
+        continue;
+      }
+      let saveResult = null;
+      if (hook.save) {
+        const dc = 10 + (isMelee
+          ? modifier(attacker.attributes?.mgt ?? 3)
+          : modifier((attacker.effectiveAttributes ?? attacker.attributes)?.fin ?? 3));
+        const natural = rngCursor.nextInt('combat', 20) + 1;
+        const saveModifier = modifier(target.attributes?.[hook.save] ?? 5);
+        saveResult = { natural, modifier: saveModifier, total: natural + saveModifier, dc, attribute: hook.save, success: natural + saveModifier >= dc };
+      }
+      entry.procs = entry.procs ?? [];
+      if (saveResult?.success) { entry.procs.push({ conditionId: hook.conditionId, trigger: hook.trigger, save: saveResult, applied: false }); continue; }
       const result = applyCondition(target, hook.conditionId, {}, rngCursor, conditionsData);
-      entry.criticalEffects = entry.criticalEffects ?? [];
-      entry.criticalEffects.push({ conditionId: hook.conditionId, ...result });
+      entry.procs.push({ conditionId: hook.conditionId, trigger: hook.trigger, save: saveResult, applied: Boolean(result.applied), shielded: Boolean(result.shielded) });
     }
   }
 
