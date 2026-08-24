@@ -38,8 +38,12 @@ for (const caseDescriptor of TECH_PROTOCOL_CASES) {
     await expect(card).toContainText(caseDescriptor.effect);
     await page.getByTestId(`tech-cast-${caseDescriptor.id}`).click();
     if (fixture.protocol.target) {
+      await expect(page.getByTestId('tech-confirm')).toBeDisabled();
       const targetId = fixture.protocol.target === 'ally' ? fixture.ids.ally : fixture.ids.primary;
+      await expect(page.getByTestId(`tech-target-${targetId}`)).toBeVisible();
       await page.getByTestId(`tech-target-${targetId}`).click();
+    } else {
+      await expect(page.locator('[data-testid^="tech-target-"]')).toHaveCount(0);
     }
     await expect(page.getByTestId('tech-confirm')).toBeEnabled();
     await page.getByTestId('tech-confirm').click();
