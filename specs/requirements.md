@@ -514,6 +514,18 @@
   - [ ] Saved configurations are **meta-game data** — they are not part of the run state, not saved in the URL fragment, and not affected by party wipe or run deletion.
   - [ ] A first-time player (no saved configurations) starts with a blank creation screen as before.
 
+### FR-52: High Score Archive (Dead Runs)
+
+- **User story:** As a player, I want to see the highest depths I've reached across every run that has ended, so that I can chase my own record and jump back into a world that gave me a good run.
+- **Acceptance criteria:**
+  - [ ] A High Scores screen lists every run that ended in a party wipe, ranked by depth reached (highest first).
+  - [ ] Each entry shows: world seed, depth reached, environment theme, party sigils/classes, cause of death, and the date the run ended.
+  - [ ] Each entry offers "Restart Same Seed" — routes to Character Creation with the same world seed pre-loaded (same dungeon, new party), identical in effect to the scorecard's restart action (FR-31).
+  - [ ] Runs discarded manually from the Run Library (FR-27) without a party wipe do not appear here — only actual deaths are recorded.
+  - [ ] The archive is capped at the 50 highest depths; a new death that does not exceed the lowest currently-kept depth is not recorded.
+  - [ ] Reachable from the Title screen (a new branch alongside Run Library and Import Link).
+  - [ ] An empty state is shown when no runs have ended yet.
+
 ### FR-33: Offline-First / Service Worker
 
 - **User story:** As a player, I want the game to work fully offline after first load, so that I can play on a plane, a subway, or anywhere without signal.

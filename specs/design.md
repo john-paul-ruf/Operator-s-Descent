@@ -217,18 +217,19 @@ Chrome is icon-first (icon-first-ui-density, 2026-08-21). Every button/tab/toggl
 | Move-mode D-pad — 8 directions | `arrow-*` (all 8) | 14 | — | Already icon-first; CONFIRM cell (`WAIT` / `DESCEND`) stays text (no glyph disambiguates) |
 | Combat actions — Move / Attack / Protocol / Overclock / Item / Retreat / End Turn | `arrow-down-right` / `sword` / `wand-sparkles` / `zap` / `flame` / `arrow-up-right` / `clock` | 16 | — | icon + text; cost chip is content |
 | Combat direction cells (8) | `arrow-*` | 16 | — | icon-only; center cell `X LEFT` stays text |
-| UNDO (combat) / BACK (combat, tech, settings, creation, library, scorecard, import) | `arrow-up-left` / `arrow-left` | 14 | — | icon-only |
+| UNDO (combat) / BACK (combat, tech, settings, creation, library, scorecard, import, highscores) | `arrow-up-left` / `arrow-left` | 14 | — | icon-only |
 | Gear — Weapon / Armor / Off-hand slots | `sword` / `shield` / `star` | 14 | dim | icon + text with equipped item name |
 | Gear — UNEQUIP / CONFIRM CORRUPT EQUIP / EQUIP / TAG JUNK / UNTAG JUNK / JUNK ALL TAGGED | `x` / `triangle-alert` / `check` / `recycle` / `recycle` / `recycle` | 14 | — / danger / accent / dim / dim / danger | destructive rows stay icon + short text |
 | Tech — CAST / OVERCLOCK / BACK | `wand-sparkles` / `zap` / `arrow-left` | 14 | accent / danger / — | CAST enabled = icon-only, blocked = icon + text; OVERCLOCK keeps CHG cost text |
 | Loot — container / OPEN CONTAINER / TAKE / MANAGE JUNK open / MANAGE JUNK closed | `box` or `archive` / `chevron-right` / `download` / `chevron-down` / `chevron-right` | 16 / 14 / 14 / 14 / 14 | dim / accent / accent / dim / dim | primary actions icon-only when enabled, blocked/disabled paths keep text |
 | Log — COPY LINK | `link` | 14 | accent | icon-only when enabled |
 | Status strip / wide dock labels — Depth / Seed / Party / Danger Clock / Corruption / Round | `gauge` / `hash` / `users` / `clock` / `flame` / `sparkles` | 14 | dim | wide-dock only; portrait strip stays text for pixel budget; manual `?` chip stays text |
-| Title — BEGIN NEW RUN / RUN LIBRARY / IMPORT LINK / MANUAL / SETTINGS | `chevron-right` / `archive` / `download` / `scroll-text` / `gauge` | 16 | accent / — / — / — / — | icon + text; SETTINGS reuses `gauge` (see icon-density-gap §7 for the collision note) |
+| Title — BEGIN NEW RUN / RUN LIBRARY / HIGH SCORES / IMPORT LINK / MANUAL / SETTINGS | `chevron-right` / `archive` / `star` / `download` / `scroll-text` / `gauge` | 16 | accent / — / — / — / — / — | icon + text; SETTINGS reuses `gauge` (see icon-density-gap §7 for the collision note) |
 | Settings — MASTER MUTE / GLITCH / SCANLINES & GRAIN / OPERATOR'S MANUAL | `x` / `triangle-alert` / `eye` / `scroll-text` | 14 / 14 / 14 / 16 | — / — / dim / — | icon + text; setting names are not glyph-guessable |
 | Creation — REMOVE / SAVE CONFIG / + SAVE / LOAD / DELETE | `x` / `download` / `download` / `upload` / `x` | 14 | danger / — / — / — / danger | destructive rows stay icon + short text |
 | Library — RESUME / NEW RUN / DELETE (LOCAL STATE) | `chevron-right` / `chevron-right` / `x` | 14–16 | accent / accent / danger | RESUME icon-only per row; DELETE stays icon + short text |
-| Scorecard — COPY WORLD LINK / RESTART SAME SEED / NEW RUN / TITLE / LIBRARY | `link` / `recycle` / `chevron-right` / `arrow-left` / `archive` | 14 | — / — / accent / — / — | TITLE and LIBRARY icon-only |
+| Scorecard — COPY WORLD LINK / RESTART SAME SEED / NEW RUN / TITLE / LIBRARY / HIGH SCORES | `link` / `recycle` / `chevron-right` / `arrow-left` / `archive` / `star` | 14 | — / — / accent / — / — / — | TITLE, LIBRARY, and HIGH SCORES icon-only |
+| High Scores — RESTART SAME SEED / TITLE / NEW RUN | `recycle` / `arrow-left` / `chevron-right` | 14–16 | accent / — / accent | RESTART SAME SEED is icon + text per row; TITLE icon-only |
 | Import — IMPORT / RETURN TO TITLE / FRESH RUN IN THIS WORLD / RESUME RUN | `download` / `arrow-left` / `chevron-right` / `chevron-right` | 14–16 | accent / — / — / accent | primary IMPORT icon-only; FRESH RUN keeps text (mutates run intent) |
 
 Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon-first-ui-density SESSION-01).
@@ -259,6 +260,7 @@ Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon
 | **Slider** | Range input for audio volumes | 0–100% |
 | **Toggle** | Binary switch (settings) | On, off |
 | **Run Row** | Library entry: accent swatch, seed, depth, party sigils | Active, wiped (removed) |
+| **High Score Row** | Archive entry: accent swatch, seed, depth (headline), theme, party sigils (dimmed/dead), cause of death, date, restart action | Populated, empty-state |
 | **Link Input** | Text field for URL paste/import | Empty, entered, error |
 | **Share Link** | Copyable URL display with copy button | Default, copied |
 | **Calibration Card** | 3-option choice at threshold floors | Offered, selected |
@@ -284,6 +286,7 @@ Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon
 | Console — LOOT | `mocks/console-loot.html` | Container contents, item details, take items |
 | Console — LOG | `mocks/console-log.html` | Scrolling event log, timestamped |
 | Run Library | `mocks/library.html` | List of persisted runs with seed, depth, sigils, accent swatch |
+| High Scores | `mocks/highscores.html` | Depth-ranked list of every dead run; restart with the same seed |
 | Settings | `mocks/settings.html` | Audio sliders, glitch toggle, reduced-motion, scanline toggle |
 | Run-End Scorecard | `mocks/scorecard.html` | Final depth, roster, cause of death, seed, share link |
 | Link Import | `mocks/import.html` | Paste link + named failure screens |
@@ -343,6 +346,10 @@ Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon
 1. Character dies (HP 0) → death animation → party continues
 2. 2–4 floors deeper → Echo appears wearing dead character's sigil in red
 3. Kill Echo → reclaim gear
+
+### 8. High Scores Flow
+1. **Title Screen** → START → **High Scores**
+2. → view depth-ranked dead runs → **Restart Same Seed** → **Character Creation** (same world, new party)
 
 ---
 
@@ -684,7 +691,7 @@ The interactive prototype (`mocks/index.html`) links all 15 mock screens togethe
 - `creation.html` "Finalize & Descend" → `exploration.html`
 - `exploration.html` "HOSTILE DETECTED" alert banner → `combat.html`
 - `combat.html` "CONFIRM" button → `scorecard.html` (simulates attack resolution → party wipe path)
-- `scorecard.html` actions → `creation.html` (restart same seed), `creation.html` (new run), `title.html`, `library.html`
+- `scorecard.html` actions → `creation.html` (restart same seed), `creation.html` (new run), `title.html`, `library.html`, `highscores.html`
 
 ### Console Mode Navigation
 All in-play screens (exploration, combat, and 5 console mode mocks) share the 7-mode tab bar. Each tab navigates to its corresponding mock:
@@ -703,6 +710,12 @@ All in-play screens (exploration, combat, and 5 console mode mocks) share the 7-
 - `library.html` any run row → `exploration.html`
 - `library.html` "New Run" → `creation.html`
 - `library.html` "Title" → `title.html`
+
+### High Scores Flow
+- `title.html` → "High Scores" → `highscores.html`
+- `scorecard.html` → "High Scores" → `highscores.html`
+- `highscores.html` any row "RESTART SAME SEED" → `creation.html`
+- `highscores.html` "Title" → `title.html`
 
 ### Import Flow
 - `title.html` → "Import Link" → `import.html`
@@ -732,6 +745,7 @@ The following requirements have visual representation in the updated mocks:
 | FR-34 | `settings.html` | Master mute, master volume, 5 per-layer audio sliders, glitch toggle, reduced-motion, scanline toggle |
 | FR-50 | `console-gear.html` | Inventory cap (7/100), scrap counter, "Junk All Tagged" action, junk toggle concept |
 | FR-51 | `creation.html` | Saved party configurations row (horizontal scroll, named configs, save slot) |
+| FR-52 | `highscores.html` | Depth-ranked dead-run list, seed/theme/party/cause of death/date, restart same seed (populated state only, mirroring `library.html` — no empty-state mock) |
 | FR-28 | `console-log.html` | Copy link action with URL fragment display, full run state share |
 | FR-29 | `import.html` | All 4 named failure screens (truncated, version mismatch, checksum, malformed), seed recovery |
 | FR-23 | All mocks | CRT/VHS effects: scanlines, grain, vignette, tracking band, glitch bars, noise lines, VHS events, border flicker, frame flash, per-element text glitch with chromatic ghosts |
