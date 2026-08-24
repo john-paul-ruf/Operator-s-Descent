@@ -43,6 +43,7 @@ export function deriveStats(character, classData, equipment = {}) {
   const attributes = character?.attributes || {};
   const armor = equipment.armor || character?.armor || {};
   const offhand = equipment.offhand || character?.offhand || {};
+  const weapon = equipment.weapon || character?.weapon || {};
   const classId = classData?.id || character?.classId;
   const armorId = armor.baseType ?? armor.id;
   const ignoresMediumPenalty = armorId === 'medium' && (classId === 'breacher' || classId === 'anchor');
@@ -54,8 +55,8 @@ export function deriveStats(character, classData, equipment = {}) {
   const hpGrowth = Math.max(2, Math.floor(hitDieBase / 2));
   return {
     hpMax: rank(attributes.vit) * 4 + hitDieBase + calibrations * hpGrowth,
-    chargeMax: rank(attributes.res) * 3 + chargeBase + (armor.chargeBonus || 0) + (offhand.chargeBonus || 0),
-    chargeRegen: Math.floor(rank(attributes.res) / 3) + (armor.chargeRegenBonus || 0) + (offhand.chargeRegenBonus || 0),
+    chargeMax: rank(attributes.res) * 3 + chargeBase + (armor.chargeBonus || 0) + (offhand.chargeBonus || 0) + (weapon.chargeBonus || 0),
+    chargeRegen: Math.floor(rank(attributes.res) / 3) + (armor.chargeRegenBonus || 0) + (offhand.chargeRegenBonus || 0) + (weapon.chargeRegenBonus || 0),
     defenseBase: 10 + modifier(effectiveFin) + (armor.defenseBonus || 0) + (offhand.defenseBonus || 0),
     protocolDefenseBase: 10 + modifier(attributes.foc),
     initiativeMod: modifier(effectiveFin),

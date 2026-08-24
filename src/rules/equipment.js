@@ -53,6 +53,8 @@ export function resolveWeaponStats(baseWeapon = {}, affixes = [], affixesData) {
     maxRange: (baseWeapon.maxRange ?? 0) + resolveAffixes(affixes, affixesData).reduce((sum, affix) => sum + (affix.effectData.rangeBonus ?? 0), 0),
     accuracyBonus: (baseWeapon.accuracyBonus ?? 0) + hooks.attack.accuracyBonus,
     defenseBonus: (baseWeapon.defenseBonus ?? 0) + hooks.defense.bonus,
+    chargeBonus: hooks.charge.maxBonus,
+    chargeRegenBonus: hooks.charge.regenBonus,
     affixes: resolveAffixes(affixes, affixesData).map((affix) => affix.id),
     effects: hooks
   };

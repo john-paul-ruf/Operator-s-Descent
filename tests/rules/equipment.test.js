@@ -38,6 +38,14 @@ describe('affix runtime hooks', () => {
     expect(armor).toMatchObject({ defenseBonus: 6, finPenalty: 0, chargeBonus: 2, chargeRegenBonus: 1, ignoreFinPenalty: true, effects: { floorEntry: { shielded: true }, reroll: { perFloor: 1 } } });
   });
 
+  it('emits universal charge affix bonuses on the weapon slot, not just armor', () => {
+    const weapon = resolveWeaponStats({ damageDie: 'd6' }, ['overcharged', 'resonant'], affixesData);
+    expect(weapon).toMatchObject({ chargeBonus: 2, chargeRegenBonus: 1 });
+    const affixless = resolveWeaponStats({ damageDie: 'd6' }, [], affixesData);
+    expect(affixless.chargeBonus).toBe(0);
+    expect(affixless.chargeRegenBonus).toBe(0);
+  });
+
   it('retains die caps, explicit range outcomes, and cover geometry', () => {
     expect(resolveWeaponStats({ damageDie: 'd12' }, [{ id: 'edged', effectData: { dieUpgrade: true } }]).damageDie).toBe('d12');
     expect(evaluateRange({ rangeBand: 'long', minRange: 3, maxRange: 16, accuracyBonus: -1 }, 2)).toMatchObject({ legal: true, reason: 'minimum_range_penalty' });

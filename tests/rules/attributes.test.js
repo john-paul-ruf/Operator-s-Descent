@@ -96,6 +96,13 @@ describe('authoritative formula helpers', () => {
     expect(character.attributes.fin).toBe(6);
   });
 
+  it('includes the weapon slot in charge sums, mirroring armor/offhand', () => {
+    const character = makeCharacter({ attributes: { mgt: 5, fin: 5, vit: 5, res: 6, foc: 5, sig: 5 } });
+    const stats = deriveStats(character, makeClassData({ chargeBase: 4 }), { weapon: { chargeBonus: 2, chargeRegenBonus: 1 } });
+    expect(stats.chargeMax).toBe(24);
+    expect(stats.chargeRegen).toBe(3);
+  });
+
   it('lets Breacher and Anchor ignore medium armor FIN penalties only', () => {
     const character = makeCharacter({ attributes: { mgt: 5, fin: 6, vit: 5, res: 5, foc: 5, sig: 5 } });
     expect(deriveStats(character, makeClassData({ id: 'breacher' }), { armor: { id: 'medium', finPenalty: -1, defenseBonus: 3 } }).initiativeMod).toBe(1);
