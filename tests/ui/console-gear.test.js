@@ -11,7 +11,9 @@ const data = {
   classes: loadData('classes'),
   equipment: loadData('equipment'),
   affixes: loadData('affixes'),
-  protocols: loadData('protocols')
+  protocols: loadData('protocols'),
+  consumables: loadData('consumables'),
+  conditions: loadData('conditions')
 };
 
 class FakeClassList {
@@ -562,5 +564,41 @@ describe('GEAR mode — SESSION-02 density contract', () => {
     expect(byTestId(container, 'gear-inventory-header').classList.contains('console-static-row')).toBe(true);
     expect(itemRow.classList.contains('console-row')).toBe(true);
     expect(itemRow.children.some((child) => child.classList?.contains('console-static-card'))).toBe(true);
+  });
+});
+
+describe('GEAR mode — consumables', () => {
+  it('renders a USE button on a consumable row and no USE button on a weapon row', () => {
+    const runState = run([item('patch-1', 'repair_patch', { category: 'consumable' }), item('weapon-1', 'sidearm')]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    expect(byTestId(container, 'gear-use-patch-1')).toBeTruthy();
+    expect(byTestId(container, 'gear-use-weapon-1')).toBeNull();
+  });
+
+  it('shows USE BLOCKED / "Combat only." for a combat-only consumable outside combat', () => {
+    const runState = run([item('injector-1', 'adrenal_injector', { category: 'consumable' })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const use = byTestId(container, 'gear-use-injector-1');
+    expect(use.textContent).toBe('USE BLOCKED');
+    expect(use.disabled).toBe(true);
+    expect(byTestId(container, 'gear-use-reason-injector-1').textContent).toBe('Combat only.');
+  });
+
+  it('shows USE BLOCKED / combat-list reason for any consumable while context.combatState is set', () => {
+    const runState = run([item('patch-1', 'repair_patch', { category: 'consumable' })]);
+    const container = new FakeElement('div');
+    const context = { runState, data, combatState: {}, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const use = byTestId(container, 'gear-use-patch-1');
+    expect(use.textContent).toBe('USE BLOCKED');
+    expect(use.disabled).toBe(true);
+    expect(byTestId(container, 'gear-use-reason-patch-1').textContent).toBe('Use items from the COMBAT action list during a fight.');
   });
 });

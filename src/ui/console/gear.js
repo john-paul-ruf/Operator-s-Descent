@@ -3,6 +3,8 @@ import { canEquip } from '../../rules/classes.js';
 import { deriveStats } from '../../rules/attributes.js';
 import { describeItem, describeItemStats, equipItem, itemDisplayName, unequipItem, resolveLoadout } from '../../rules/equipment.js';
 import { INVENTORY_CAP, getInventoryCount, toggleJunkTag, junkAllTagged, getSalvageValue } from '../../rules/inventory.js';
+import { applyConsumable } from '../../rules/consumables.js';
+import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 
 const SLOTS = ['weapon', 'armor', 'offhand'];
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', offhand: 'Off-hand' };
@@ -510,6 +512,25 @@ function renderInventoryItem(list, context, character, ui, item, cleanups = []) 
     if (reason) {
       const why = text('disabled-reason equip-blocked-reason console-static-row', reason);
       why.dataset.testid = `gear-equip-reason-${item.id}`;
+      wrapper.appendChild(why);
+    }
+  }
+  if (item.category === 'consumable') {
+    const consumableData = context.data?.consumables?.consumables?.[item.baseType];
+    const blockedReason = context.combatState
+      ? 'Use items from the COMBAT action list during a fight.'
+      : (consumableData?.combatOnly ? 'Combat only.' : '');
+    const use = createButton(blockedReason ? 'USE BLOCKED' : 'USE', {
+      disabled: Boolean(blockedReason),
+      description: blockedReason,
+      onClick: () => requestUseConsumable(context, item),
+      icon: blockedReason ? undefined : 'flame', iconSize: 14
+    });
+    use.dataset.testid = `gear-use-${item.id}`;
+    wrapper.appendChild(use);
+    if (blockedReason) {
+      const why = text('disabled-reason use-blocked-reason console-static-row', blockedReason);
+      why.dataset.testid = `gear-use-reason-${item.id}`;
       wrapper.appendChild(why);
     }
   }
