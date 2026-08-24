@@ -217,6 +217,38 @@ function assertZeroPadding(reader) {
   }
 }
 
+// v7 loot-id pattern codec for top-level id lists (appliedCorruptItemIds,
+// affixFloorLedger.reroll/floorEntry). Mirrors src/state/save-codecs.js
+// writeItemId — the two exist independently so this file stays free of
+// non-schema imports and the item writer isn't reachable from top-level id
+// arrays. Newly-generated loot ids match `l<base36 up to 6>-<0..7>` and
+// encode as 1 bit flag + varUint(hash) + 3 bits suffix; legacy long ids
+// (v6-and-earlier's `loot-<hash>-<n>`) fall through the escape path.
+const TOP_LOOT_ID_PATTERN = /^l([0-9a-z]{1,6})-([0-7])$/;
+function writeCompactId(writer, id) {
+  if (typeof id !== 'string') fail('invalid_string');
+  const match = id.length <= 9 ? TOP_LOOT_ID_PATTERN.exec(id) : null;
+  if (match) {
+    const hashValue = Number.parseInt(match[1], 36);
+    if (Number.isSafeInteger(hashValue) && hashValue >= 0 && hashValue <= 0x7fffffff) {
+      writer.writeBool(true);
+      writer.writeVarUint(hashValue);
+      writer.writeUint(Number(match[2]), 3);
+      return;
+    }
+  }
+  writer.writeBool(false);
+  writeString(writer, id, 96);
+}
+function readCompactId(reader) {
+  if (reader.readBool()) {
+    const hashValue = reader.readVarUint();
+    const suffix = reader.readUint(3);
+    return `l${hashValue.toString(36)}-${suffix}`;
+  }
+  return readString(reader, 96);
+}
+
 function canonicalInput(runState) {
   const serialized = typeof runState?.serialize === 'function' ? runState.serialize() : runState;
   if (!validateRunState(serialized).valid) fail('invalid_run_state');
@@ -268,11 +300,11 @@ export function encodeRunPayload(runState) {
   const appliedCorruptItemIds = state.appliedCorruptItemIds ?? [];
   const affixFloorLedger = state.affixFloorLedger ?? { floor: state.depth, reroll: [], floorEntry: [] };
   writer.writeUint(appliedCorruptItemIds.length, 7);
-  for (const itemId of appliedCorruptItemIds) writeString(writer, itemId, 96);
+  for (const itemId of appliedCorruptItemIds) writeCompactId(writer, itemId);
   writer.writeUint(affixFloorLedger.floor, 8);
   for (const key of ['reroll', 'floorEntry']) {
     writer.writeUint(affixFloorLedger[key].length, 4);
-    for (const itemId of affixFloorLedger[key]) writeString(writer, itemId, 96);
+    for (const itemId of affixFloorLedger[key]) writeCompactId(writer, itemId);
   }
   for (const key of ['enemiesSlain', 'echoesSlain', 'corruptItemsEquipped', 'floorsDescended']) writer.writeVarUint(state.stats?.[key] ?? 0);
   writer.writeUint(state.recentEvents?.length ?? 0, 7);
@@ -320,12 +352,12 @@ export function decodeRunPayload(bytes, bitLength, options = {}) {
     const calibrationLength = integer(reader.readUint(5), 0, 16, 'invalid_flags');
     state.flags = { version: RUN_SCHEMA_VERSION, calibrationFloorsReached: Array.from({ length: calibrationLength }, () => integer(reader.readUint(8), 1, MAX_DEPTH, 'invalid_flags')) };
     const implantLength = integer(reader.readUint(7), 0, MAX_CORRUPT_IMPLANTS, 'invalid_corrupt_implants');
-    state.appliedCorruptItemIds = Array.from({ length: implantLength }, () => readString(reader, 96));
+    state.appliedCorruptItemIds = Array.from({ length: implantLength }, () => readCompactId(reader));
     if (new Set(state.appliedCorruptItemIds).size !== state.appliedCorruptItemIds.length) fail('duplicate_corrupt_implant');
     state.affixFloorLedger = { floor: integer(reader.readUint(8), 1, MAX_DEPTH, 'invalid_affix_ledger'), reroll: [], floorEntry: [] };
     for (const key of ['reroll', 'floorEntry']) {
       const length = integer(reader.readUint(4), 0, MAX_AFFIX_LEDGER_IDS, 'invalid_affix_ledger');
-      state.affixFloorLedger[key] = Array.from({ length }, () => readString(reader, 96));
+      state.affixFloorLedger[key] = Array.from({ length }, () => readCompactId(reader));
       if (new Set(state.affixFloorLedger[key]).size !== state.affixFloorLedger[key].length) fail('duplicate_affix_ledger');
     }
     state.stats = Object.fromEntries(['enemiesSlain', 'echoesSlain', 'corruptItemsEquipped', 'floorsDescended'].map((key) => [key, integer(reader.readVarUint(), 0, 1_000_000_000, 'invalid_stats')]));

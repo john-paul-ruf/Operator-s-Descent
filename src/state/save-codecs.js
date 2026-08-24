@@ -340,9 +340,42 @@ function readConditions(reader) {
   return conditions;
 }
 
+// v7 loot-id pattern codec. Newly-generated loot ids follow `l<base36 up to
+// 6 chars>-<digit 0..7>` (src/rules/loot.js). Encoding as a plain string is
+// 8-10 bytes; the pattern encoding is 1 bit + varUint(hash) + 3 bits suffix,
+// typically 4-5 bytes. Legacy long ids (from pre-CP2 saves migrated forward)
+// fall through the escape path unchanged. Saves ~4-5 chars per loot item on
+// the reachable apex.
+const LOOT_ID_PATTERN = /^l([0-9a-z]{1,6})-([0-7])$/;
+function writeItemId(writer, id) {
+  if (typeof id !== 'string') fail('invalid_item');
+  const match = id.length <= 9 ? LOOT_ID_PATTERN.exec(id) : null;
+  if (match) {
+    const hashValue = Number.parseInt(match[1], 36);
+    // Hash may exceed 2^31 (31-bit truncation is loot.js's choice) — bail if
+    // it doesn't round-trip cleanly through varUint bounds.
+    if (Number.isSafeInteger(hashValue) && hashValue >= 0 && hashValue <= 0x7fffffff) {
+      writer.writeBool(true);
+      writer.writeVarUint(hashValue);
+      writer.writeUint(Number(match[2]), 3);
+      return;
+    }
+  }
+  writer.writeBool(false);
+  writeString(writer, id);
+}
+function readItemId(reader) {
+  if (reader.readBool()) {
+    const hashValue = reader.readVarUint();
+    const suffix = reader.readUint(3);
+    return `l${hashValue.toString(36)}-${suffix}`;
+  }
+  return readString(reader);
+}
+
 export function writeItem(writer, item, symbols) {
   if (!isObject(item) || !CATEGORIES.includes(item.category) || !RARITIES.includes(item.rarity) || !Array.isArray(item.affixes) || item.affixes.length > MAX_AFFIXES || !Number.isFinite(item.salvageValue) || item.salvageValue < 0 || item.salvageValue > 1_000_000 || (item.count !== undefined && (!Number.isInteger(item.count) || item.count < 1 || item.count > INVENTORY_CAP)) || (item.corruptionValue !== undefined && (!Number.isFinite(item.corruptionValue) || item.corruptionValue < 0 || item.corruptionValue > 1_000_000))) fail('invalid_item');
-  writeString(writer, item.id);
+  writeItemId(writer, item.id);
   writer.writeUint(CATEGORIES.indexOf(item.category), 2);
   writeField(writer, symbols, 'item_id', item.baseType, (value) => writeString(writer, value));
   writer.writeUint(RARITIES.indexOf(item.rarity), 3);
@@ -350,8 +383,25 @@ export function writeItem(writer, item, symbols) {
   for (const affix of item.affixes) writeField(writer, symbols, 'affix_id', affix, (value) => writeString(writer, value, 64));
   writer.writeBool(Boolean(item.corrupt));
   writer.writeBool(item.corruptionValue !== undefined);
-  if (item.corruptionValue !== undefined) writeNumber(writer, item.corruptionValue);
-  writeNumber(writer, item.salvageValue);
+  if (item.corruptionValue !== undefined) {
+    // v7 corruptionValue enum: production loot only ever sets 0.1
+    // (CORRUPT_IMPLANT_CORRUPTION in src/rules/loot.js), so the common case
+    // is a 1-bit "is-default" flag instead of an 8-byte double per corrupt
+    // item — saves ~63 bits per corrupt item on the wire.
+    const isDefaultCorruption = item.corruptionValue === 0.1;
+    writer.writeBool(isDefaultCorruption);
+    if (!isDefaultCorruption) writeNumber(writer, item.corruptionValue);
+  }
+  // v7 salvageValue compaction: production data-file values are small
+  // integers 0-4 (equipment.json / consumables.json). The 1-bit "is-integer"
+  // flag routes to varUint (typically 1 byte for 0..127) instead of an
+  // 8-byte double per item — saves ~55 bits per item across the reachable
+  // apex. Non-integer / large legacy values fall back to the raw double
+  // path so migration-forwarded state never dead-ends.
+  const salvageInteger = Number.isInteger(item.salvageValue) && item.salvageValue >= 0 && item.salvageValue <= 1_000_000;
+  writer.writeBool(salvageInteger);
+  if (salvageInteger) writer.writeVarUint(item.salvageValue);
+  else writeNumber(writer, item.salvageValue);
   writer.writeBool(Boolean(item.junkTagged));
   writer.writeBool(item.count !== undefined);
   if (item.count !== undefined) writer.writeVarUint(item.count);
@@ -361,7 +411,7 @@ export function writeItem(writer, item, symbols) {
 }
 
 export function readItem(reader, symbols) {
-  const id = readString(reader);
+  const id = readItemId(reader);
   const category = CATEGORIES[reader.readUint(2)];
   if (!category) fail('invalid_item');
   const baseType = readField(reader, symbols, 'item_id', () => readString(reader));
@@ -372,9 +422,15 @@ export function readItem(reader, symbols) {
   const affixes = Array.from({ length: affixLength }, () => readField(reader, symbols, 'affix_id', () => readString(reader, 64)));
   if (new Set(affixes).size !== affixes.length) fail('duplicate_affix');
   const corrupt = reader.readBool();
-  const corruptionValue = reader.readBool() ? readNumber(reader) : undefined;
-  if (corruptionValue !== undefined && (corruptionValue < 0 || corruptionValue > 1_000_000)) fail('invalid_item');
-  const salvageValue = readNumber(reader);
+  let corruptionValue;
+  if (reader.readBool()) {
+    // v7 corruption enum — see writeItem for rationale.
+    corruptionValue = reader.readBool() ? 0.1 : readNumber(reader);
+    if (corruptionValue < 0 || corruptionValue > 1_000_000) fail('invalid_item');
+  }
+  // v7 salvage compaction — see writeItem.
+  const salvageInteger = reader.readBool();
+  const salvageValue = salvageInteger ? requireInteger(reader.readVarUint(), 0, 1_000_000, 'invalid_item') : readNumber(reader);
   if (salvageValue < 0 || salvageValue > 1_000_000) fail('invalid_item');
   const junkTagged = reader.readBool();
   const count = reader.readBool() ? requireInteger(reader.readVarUint(), 1, INVENTORY_CAP, 'invalid_item') : undefined;

@@ -56,7 +56,8 @@ function combatFitsV7Window(activeCombat) {
 const V7_INVENTORY_CAP = 40;
 const V7_MAX_CORRUPT_IMPLANTS = 32;
 const V7_MAX_EVENTS = 24;
-const V7_MAX_COMBAT_BYTES = 4096;
+// Mirrors run-state.js MAX_COMBAT_BYTES — see the direct-measurement note there.
+const V7_MAX_COMBAT_BYTES = 8192;
 const V7_MAX_SCRAP = 1_000_000_000;
 const V7_MAX_MESSAGE = 72;
 

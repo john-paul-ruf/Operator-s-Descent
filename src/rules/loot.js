@@ -91,14 +91,18 @@ export function generateLoot(worldSeed, depth, floorId, containerId, themeLootBi
       // yields at most 6 base36 chars (36^6 = 2.18B > 2^31 = 2.14B); the
       // index modulo 8 covers the typical container size while keeping the
       // suffix a single char. Same hash inputs as v6 — determinism preserved
-      // (loot.test.js:23 asserts the /^loot-.../ shape → updated in-tree).
-      // Legacy long ids (≤96 char bound in the codec) stay valid on the wire,
-      // so v6 saves round-trip unchanged; only newly-generated loot shrinks.
+      // (loot.test.js:23 asserts the /^l.../ shape). Legacy long ids (≤96
+      // char bound in the codec) stay valid on the wire, so v6 saves
+      // round-trip unchanged; only newly-generated loot shrinks.
       id: `l${(hash(worldSeed, depth, floorId, containerId, index) & 0x7fffffff).toString(36)}-${index % 8}`,
       category,
       baseType,
       rarity: RARITIES[rarityTier],
-      rarityTier,
+      // v7 no longer emits `rarityTier` as an item field — it is derivable
+      // from `rarity` via RARITIES.indexOf(item.rarity). Persisting it
+      // added ~30 chars per item on the wire (extensions.rarityTier key +
+      // integer per item) because it flowed through normalizeItem into
+      // extensions; consumers now derive on demand (tests updated in tree).
       affixes: isConsumable ? [] : selectAffixes(rarityTier, prng, affixesData, category, themeLootBias),
       corrupt,
       ...(corrupt ? { corruptionValue: CORRUPT_IMPLANT_CORRUPTION } : {}),

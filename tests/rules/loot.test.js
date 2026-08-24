@@ -7,6 +7,13 @@ const affixesData = loadData('affixes');
 const consumablesData = loadData('consumables');
 const noBias = { containerDensity: 1, rarityShift: 0, affixPoolBias: {} };
 
+// v7 strips `rarityTier` from the emitted item shape (added ~30 chars per
+// item on the wire — see src/rules/loot.js). Consumers derive it locally
+// from `rarity`; the helper below keeps every test that predicated on
+// rarityTier(item) working without a per-assertion rewrite.
+const RARITY_ORDER = ['stock', 'tuned', 'custom', 'prototype', 'corrupt'];
+const rarityTier = (item) => RARITY_ORDER.indexOf(item.rarity);
+
 function loot(depth, seed = 42, options = {}) {
   return generateLoot(seed, depth, `floor-${depth}`, `container-${seed}`, noBias, equipmentData, affixesData, consumablesData, options);
 }
@@ -27,14 +34,14 @@ describe('generateLoot', () => {
   });
 
   it('enforces standard and vault rarity gates without allowing theme bias to bypass them', () => {
-    expect(gather(4).some((item) => item.rarityTier > 1)).toBe(false);
-    expect(gather(9).filter((item) => item.category !== 'consumable').some((item) => item.rarityTier === 2)).toBe(true);
-    expect(gather(9).some((item) => item.rarityTier >= 3)).toBe(false);
-    expect(gather(19).some((item) => item.rarityTier === 4)).toBe(false);
-    expect(gather(10, { containerType: 'vault' }).some((item) => item.rarityTier === 4)).toBe(true);
+    expect(gather(4).some((item) => rarityTier(item) > 1)).toBe(false);
+    expect(gather(9).filter((item) => item.category !== 'consumable').some((item) => rarityTier(item) === 2)).toBe(true);
+    expect(gather(9).some((item) => rarityTier(item) >= 3)).toBe(false);
+    expect(gather(19).some((item) => rarityTier(item) === 4)).toBe(false);
+    expect(gather(10, { containerType: 'vault' }).some((item) => rarityTier(item) === 4)).toBe(true);
     const overwhelmingBias = { containerDensity: 1, rarityShift: 99, affixPoolBias: {} };
     const shallow = generateLoot(42, 1, 'floor-1', 'container-1', overwhelmingBias, equipmentData, affixesData, consumablesData);
-    expect(shallow.every((item) => item.rarityTier <= 1)).toBe(true);
+    expect(shallow.every((item) => rarityTier(item) <= 1)).toBe(true);
   });
 
   it('creates exact affix counts, IDs only, and three unique major affixes for CORRUPT equipment', () => {
@@ -43,7 +50,7 @@ describe('generateLoot', () => {
       const affixes = item.affixes.map((id) => affixesData.affixes[id]);
       expect(affixes.every((affix) => affix && (affix.category === 'universal' || affix.category === item.category))).toBe(true);
       expect(new Set(item.affixes).size).toBe(item.affixes.length);
-      const expected = { 0: [0, 0], 1: [0, 1], 2: [1, 1], 3: [2, 1], 4: [3, 0] }[item.rarityTier];
+      const expected = { 0: [0, 0], 1: [0, 1], 2: [1, 1], 3: [2, 1], 4: [3, 0] }[rarityTier(item)];
       expect([affixes.filter((affix) => affix.class === 'major').length, affixes.filter((affix) => affix.class === 'minor').length]).toEqual(expected);
       if (item.corrupt) {
         expect(item).toMatchObject({ rarity: 'corrupt', corruptionValue: 0.1 });

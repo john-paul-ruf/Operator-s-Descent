@@ -31,7 +31,14 @@ const MAX_EVENTS = 24;
 const LEGACY_MAX_EVENTS = 64;
 const MAX_BITFIELD = (1n << 64n) - 1n;
 const MAX_EXTENSION_BYTES = 2048;
-const MAX_COMBAT_BYTES = 4096;
+// CP4 direct-measurement: a legal MAX_ACTORS=24 combat snapshot at depth
+// 200 (party × 4 + enemy × 20 with per-actor conditions and stats) serializes
+// to ~6650 bytes of JSON. MAX_COMBAT_BYTES caps the PRE-WIRE JSON so pathological
+// state can't blow the encoder; the wire representation is much smaller (bit-
+// packed positions, symbolized enums). 8192 keeps room for pending effects and
+// a few extra conditions per actor without blocking legal fights (per the CP3
+// note: "a cap below a legal fight would make the game unable to save it").
+const MAX_COMBAT_BYTES = 8192;
 const LEGACY_MAX_COMBAT_BYTES = 12288;
 const ATTRIBUTE_NAMES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
 
