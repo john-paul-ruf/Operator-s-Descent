@@ -92,12 +92,12 @@ describe('MOVE mode', () => {
       expect(confirmButton.disabled).toBe(false);
     });
 
-    it('renders the center button as WAIT and disabled when canDescend is false or omitted', () => {
+    it('renders the center button as a truthful inert NO EXIT HERE state, disabled, when canDescend is false or omitted', () => {
       const container = new FakeElement('div');
       renderMove(container, {});
 
       const confirmButton = byTestId(container, 'move-confirm');
-      expect(confirmButton.textContent).toBe('WAIT');
+      expect(confirmButton.textContent).toBe('NO EXIT HERE');
       expect(confirmButton.disabled).toBe(true);
     });
 
@@ -133,7 +133,7 @@ describe('MOVE mode', () => {
       const container = new FakeElement('div');
       renderMove(container, { canDescend: () => true });
 
-      expect(textOf(byTestId(container, 'move-notice'))).toBe('DESCENT POINT — press CONFIRM to request descent.');
+      expect(textOf(byTestId(container, 'move-notice'))).toBe('DESCENT POINT — press DESCEND to descend.');
     });
 
     it('shows the hostile-contact notice', () => {
@@ -224,33 +224,32 @@ describe('MOVE mode', () => {
       expect(stageMove).not.toHaveBeenCalled();
     });
 
-    it('confirm calls onConfirmDescent when canDescend() is true', () => {
-      const onConfirmDescent = vi.fn();
-      handleInput({ action: 'confirm' }, { canDescend: () => true, onConfirmDescent });
-      expect(onConfirmDescent).toHaveBeenCalled();
+    it('confirm always hands off to the screen-owned onDescend — DESCEND has no separate confirm step', () => {
+      const onDescend = vi.fn(() => true);
+      const result = handleInput({ action: 'confirm' }, { canDescend: () => true, onDescend });
+      expect(onDescend).toHaveBeenCalled();
+      expect(result).toBe(true);
     });
 
-    it('confirm returns false and does not call onConfirmDescent when canDescend() is false', () => {
-      const onConfirmDescent = vi.fn();
-      const result = handleInput({ action: 'confirm' }, { canDescend: () => false, onConfirmDescent });
+    it('confirm still calls onDescend when canDescend() is false — the guard and its truthful feedback live in the screen callback, not duplicated here', () => {
+      const onDescend = vi.fn(() => false);
+      const result = handleInput({ action: 'confirm' }, { canDescend: () => false, onDescend });
+      expect(onDescend).toHaveBeenCalled();
       expect(result).toBe(false);
-      expect(onConfirmDescent).not.toHaveBeenCalled();
     });
 
-    it('confirm returns false and does not call onConfirmDescent when canDescend is absent', () => {
-      const onConfirmDescent = vi.fn();
-      const result = handleInput({ action: 'confirm' }, { onConfirmDescent });
+    it('confirm returns false and does not throw when onDescend is absent', () => {
+      const result = handleInput({ action: 'confirm' }, {});
       expect(result).toBe(false);
-      expect(onConfirmDescent).not.toHaveBeenCalled();
     });
 
-    it('an unrecognized action returns null and calls neither onMove nor onConfirmDescent', () => {
+    it('an unrecognized action returns null and calls neither onMove nor onDescend', () => {
       const onMove = vi.fn();
-      const onConfirmDescent = vi.fn();
-      const result = handleInput({ action: 'nonsense' }, { onMove, onConfirmDescent });
+      const onDescend = vi.fn();
+      const result = handleInput({ action: 'nonsense' }, { onMove, onDescend });
       expect(result).toBeNull();
       expect(onMove).not.toHaveBeenCalled();
-      expect(onConfirmDescent).not.toHaveBeenCalled();
+      expect(onDescend).not.toHaveBeenCalled();
     });
   });
 });

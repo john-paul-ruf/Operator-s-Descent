@@ -296,6 +296,23 @@ describe('exploration screen controller', () => {
     off();
   });
 
+  it('an unavailable DESCEND activation off the exit is non-mutating and reports truthful feedback', async () => {
+    const changes = [];
+    const off = bus.on('state:floor-change', (payload) => changes.push(payload));
+    // Default floor's descentPoint (10,30) is nowhere near the (10,10) start — canDescend is
+    // false. Keyboard Enter reaches MOVE mode's handleInput directly, bypassing the disabled
+    // move-confirm button, so this is the only path that exercises the guard on this input.
+    const { container, runState: state } = await mountExploration();
+
+    expect(byTestId(container, 'move-confirm').disabled).toBe(true);
+    container.dispatch('keydown', keyEvent('Enter'));
+
+    expect(changes).toHaveLength(0);
+    expect(state.partyPosition).toEqual({ x: 10, y: 10 });
+    expect(byTestId(container, 'move-notice').textContent).toBe('NO DESCENT POINT UNDERFOOT.');
+    off();
+  });
+
   it('tears down input and subscriptions on unmount', async () => {
     const { container, controller, runState: state } = await mountExploration();
     controller.unmount();
@@ -384,9 +401,11 @@ describe('exploration screen controller', () => {
     const { container, runState: state } = await mountExploration({ floor: walledFloor });
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
-    // Tap on (15, 15), an unreachable open cell.
+    // Tap on (15, 15), an unreachable open cell. A real pointerup always carries the release
+    // coordinates; omitting them here previously misread as a huge drag past the threshold and
+    // silently disqualified the tap (masking a passing tap-to-move contract as a failing one).
     playfieldBody.dispatch('pointerdown', { pointerId: 4, clientX: 15 * 24 + 12, clientY: 15 * 24 + 12 });
-    playfieldBody.dispatch('pointerup', { pointerId: 4 });
+    playfieldBody.dispatch('pointerup', { pointerId: 4, clientX: 15 * 24 + 12, clientY: 15 * 24 + 12 });
 
     expect(state.partyPosition).toEqual({ x: 10, y: 10 });
     expect(byTestId(container, 'move-notice').textContent).toBe('NO PATH.');
@@ -400,9 +419,10 @@ describe('exploration screen controller', () => {
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
 
     // Tap on (14,10): BFS path [e,e,e,e]. First step (11,10) does not see hostile; second (12,10)
-    // reveals hostile at (13,10) → interrupt → truncate.
+    // reveals hostile at (13,10) → interrupt → truncate. Release coordinates must match the press
+    // so the gesture classifies as a tap rather than a huge (and disqualifying) drag.
     playfieldBody.dispatch('pointerdown', { pointerId: 5, clientX: 14 * 24 + 12, clientY: 10 * 24 + 12 });
-    playfieldBody.dispatch('pointerup', { pointerId: 5 });
+    playfieldBody.dispatch('pointerup', { pointerId: 5, clientX: 14 * 24 + 12, clientY: 10 * 24 + 12 });
 
     expect(combat).toHaveLength(1);
     // Party halted before reaching (14,10); at least one step happened but not all four.

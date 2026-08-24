@@ -5,7 +5,7 @@ const DIRECTIONS = [
   { action: 'move_n', direction: 'n', label: '↑', name: 'North', icon: 'arrow-up' },
   { action: 'move_ne', direction: 'ne', label: '↗', name: 'Northeast', icon: 'arrow-up-right' },
   { action: 'move_w', direction: 'w', label: '←', name: 'West', icon: 'arrow-left' },
-  { action: 'confirm', direction: null, label: 'CONFIRM', name: 'Confirm descent or selection', icon: null },
+  { action: 'confirm', direction: null, label: 'CONFIRM', name: 'Descend', icon: null },
   { action: 'move_e', direction: 'e', label: '→', name: 'East', icon: 'arrow-right' },
   { action: 'move_sw', direction: 'sw', label: '↙', name: 'Southwest', icon: 'arrow-down-left' },
   { action: 'move_s', direction: 's', label: '↓', name: 'South', icon: 'arrow-down' },
@@ -31,14 +31,14 @@ function text(className, value) {
 }
 
 function noticeFor(result, canDescend) {
-  if (canDescend) return 'DESCENT POINT — press CONFIRM to request descent.';
+  if (canDescend) return 'DESCENT POINT — press DESCEND to descend.';
   if (!result) return 'MOVE with arrows, numpad, WASD/QEZC, or the console pad.';
   if (!result.moved) return result.interruptType === 'invalid-direction' ? 'INVALID DIRECTION.' : 'BLOCKED — wall or closed corner.';
   if (result.interruptType === 'hostile') return 'HOSTILE CONTACT — combat requested.';
   if (result.interruptType === 'hunt') return 'HUNT TRIGGERED — combat requested.';
   if (result.interruptType === 'container') return 'CONTAINER DISCOVERED — approach to enable LOOT.';
   if (result.interruptType === 'damage') return 'DAMAGE INTERRUPT — movement stopped.';
-  if (result.interruptType === 'descent') return 'DESCENT DISCOVERED — step onto it and CONFIRM.';
+  if (result.interruptType === 'descent') return 'DESCENT DISCOVERED — step onto it and press DESCEND.';
   if (result.danger?.pendingHunt) return 'HUNT PENDING AFTER CURRENT INTERRUPT.';
   return `MOVED TO ${result.position?.x ?? '?'}:${result.position?.y ?? '?'}.`;
 }
@@ -60,8 +60,8 @@ export function render(container, context = {}) {
   dpad.className = 'dpad move-dpad';
   dpad.setAttribute('aria-label', 'Eight-way movement pad');
   const canDescend = Boolean(context.canDescend?.());
-  const confirmLabel = canDescend ? 'DESCEND' : 'WAIT';
-  const confirmAria = canDescend ? 'Confirm descent' : 'Wait; no descent point underfoot';
+  const confirmLabel = canDescend ? 'DESCEND' : 'NO EXIT HERE';
+  const confirmAria = canDescend ? 'Descend' : 'No exit underfoot';
   for (const entry of DIRECTIONS) {
     const isConfirm = entry.action === 'confirm';
     // Direction buttons carry a lucide sprite (via opts.icon) AND, historically,
@@ -142,9 +142,12 @@ function autoStopRow(label, on, locked, testid) {
 
 export function handleInput(event, context = {}) {
   const action = LEGACY_TO_ACTION[event.action] || event.action;
-  if (action === 'confirm') {
-    return context.canDescend?.() ? context.onConfirmDescent?.() : false;
-  }
+  // DESCEND is a single direct activation: hand off to the screen-owned guarded transition
+  // (context.onDescend) rather than re-checking canDescend here — that guard already
+  // rejects non-mutating and reports truthful feedback when no exit is underfoot, and keyboard
+  // activation reaches this function directly (bypassing any DOM disabled state), so duplicating
+  // the check here would only let it drift out of sync with the one true guard.
+  if (action === 'confirm') return context.onDescend?.() ?? false;
   const direction = ACTION_TO_DIRECTION[action];
   if (!direction) return null;
   return context.onMove?.(direction, { source: event.source || 'console' });

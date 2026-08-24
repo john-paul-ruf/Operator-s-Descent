@@ -172,7 +172,7 @@ function renderLootWith(runState, lootState, extra = {}) {
 beforeEach(installDocument);
 
 describe('TECH mode', () => {
-  it('casts prepared protocols through explicit target confirmation and rules resolution', () => {
+  it('casts prepared protocols through direct target activation and rules resolution', () => {
     const runState = run();
     const actor = { id: 'operator', side: 'party', ap: 2, charge: 10, chargeMax: 10, hp: 30, hpMax: 30, attributes: runState.party[0].attributes, protocols: runState.party[0].protocolDeck, conditions: [], position: { x: 0, y: 0 } };
     const enemy = { id: 'enemy', side: 'enemy', hp: 10, hpMax: 10, protocolDefense: 5, attributes: { foc: 5 }, conditions: [], position: { x: 2, y: 0 } };
@@ -186,8 +186,8 @@ describe('TECH mode', () => {
     expect(textOf(byTestId(container, 'tech-slots'))).toContain('1/5');
     expect(textOf(byTestId(container, 'tech-detail-disrupt-1'))).toContain('Deal 1d6');
     byTestId(container, 'tech-cast-disrupt-1').click();
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
     byTestId(container, 'tech-target-enemy').click();
-    byTestId(container, 'tech-confirm').click();
 
     expect(actor.ap).toBe(1);
     expect(actor.charge).toBe(8);
@@ -223,9 +223,9 @@ describe('TECH mode', () => {
     const { bus, events } = recordingBus();
     const { container } = renderTechWith(runState, { combatState, bus, rngCursor: cursor([0, 19]) });
 
-    // Enter overclock preview and select target
+    // Enter overclock preview — the read-only preview/manual link is available while target
+    // selection is active, before a target activation resolves the cast.
     byTestId(container, 'tech-overclock-disrupt-1').click();
-    byTestId(container, 'tech-target-enemy').click();
 
     const overclockLink = byTestId(container, 'tech-overclock-link');
     expect(overclockLink).toBeTruthy();
@@ -241,7 +241,7 @@ describe('TECH mode', () => {
     expect(hasNestedButtonInButton(container)).toBe(false);
   });
 
-  it('previews overclock risk without consuming RNG, then records failed corruption once', () => {
+  it('previews overclock risk without consuming RNG, then resolves on target activation with recorded corruption', () => {
     const runState = run();
     const actor = { id: 'operator', side: 'party', ap: 2, charge: 10, chargeMax: 10, hp: 30, hpMax: 30, attributes: runState.party[0].attributes, protocols: runState.party[0].protocolDeck, conditions: [], position: { x: 0, y: 0 } };
     const enemy = { id: 'enemy', side: 'enemy', hp: 10, hpMax: 10, protocolDefense: 5, attributes: { foc: 5 }, conditions: [], position: { x: 2, y: 0 } };
@@ -251,12 +251,12 @@ describe('TECH mode', () => {
 
     byTestId(container, 'tech-overclock-disrupt-1').click();
     expect(rngCursor.calls).toBe(0);
-    byTestId(container, 'tech-target-enemy').click();
     expect(textOf(byTestId(container, 'tech-preview'))).toContain('cost 4 CHARGE');
     expect(textOf(byTestId(container, 'tech-preview'))).toContain('vs 13');
     expect(textOf(byTestId(container, 'tech-preview'))).toContain('+0.05');
     expect(rngCursor.calls).toBe(0);
-    byTestId(container, 'tech-confirm').click();
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
+    byTestId(container, 'tech-target-enemy').click();
 
     expect(rngCursor.calls).toBe(2);
     expect(actor.charge).toBe(6);

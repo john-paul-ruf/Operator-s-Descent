@@ -264,7 +264,7 @@ export function mount(container, params = {}) {
     canLoot: () => Boolean(findEligibleLootContainer(lattice, runState)),
     canDescend: () => sameCell(lattice.getPartyPosition(), lattice.getDescentPoint()),
     onMove,
-    onConfirmDescent,
+    onDescend,
     setAutoStopToggle(name, value) {
       autoStopToggles[name] = Boolean(value);
       notice = `${name.toUpperCase()} AUTO-STOP ${autoStopToggles[name] ? 'ON' : 'OFF'}`;
@@ -485,7 +485,7 @@ export function mount(container, params = {}) {
     return handleMoveResult(result);
   }
 
-  function onConfirmDescent() {
+  function onDescend() {
     if (!viewState.canDescend()) {
       notice = 'NO DESCENT POINT UNDERFOOT.';
       consoleController.refresh();

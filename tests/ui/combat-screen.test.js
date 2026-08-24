@@ -1307,8 +1307,8 @@ describe('TECH cast commits through the live combat-owned transaction (tech-prot
     byTestId(container, 'console-tab-tech').click();
     byTestId(container, 'tech-cast-disrupt-1').click();
     byTestId(container, 'tech-target-1').click();
-    byTestId(container, 'tech-confirm').click();
 
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
     const casterLive = combat.combatants.get('hero');
     const targetLive = combat.combatants.get(1);
     expect(casterLive.ap).toBe(1);
@@ -1340,7 +1340,6 @@ describe('TECH cast commits through the live combat-owned transaction (tech-prot
     byTestId(container, 'console-tab-tech').click();
     byTestId(container, 'tech-cast-disrupt-1').click();
     byTestId(container, 'tech-target-1').click();
-    byTestId(container, 'tech-confirm').click();
 
     // renderAll() (the refreshShell contract) replaces the status-bar node on every call — a
     // fresh identity here proves the full screen redraw ran, not just the console's local refresh.
