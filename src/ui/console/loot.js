@@ -36,7 +36,7 @@ function stateFor(runState) {
   // pack never buries the container CONTENTS / OPEN / TAKE controls. The flag lives on
   // the per-run state so an explicit expand survives the re-render that every tag/take
   // triggers.
-  if (!stateByRun.has(runState)) stateByRun.set(runState, { containers: new Map(), pendingJunkAll: false, notice: '', error: '', inventoryOpen: false });
+  if (!stateByRun.has(runState)) stateByRun.set(runState, { containers: new Map(), pendingJunkAll: false, notice: '', error: '', inventoryOpen: false, pickupResult: null });
   return stateByRun.get(runState);
 }
 
@@ -138,6 +138,16 @@ function log(context, type, message, entry = {}) {
   context.bus?.dispatch('ui:log-entry', { type, message, entry, sequence: Date.now(), timestamp: Date.now() });
 }
 
+// SESSION-02 (direct-actions-and-quick-starts) — the durable pickup result
+// surfaced above CONTENTS. Distinct copy for an emptied container so the
+// player can tell a full take apart from one that just closed the source.
+function pickupNoticeText(result) {
+  const inventory = `INVENTORY ${result.inventoryCount}/${result.inventoryCapacity}`;
+  return result.containerCleared
+    ? `CONTAINER CLEARED — ${result.itemName} secured · ${inventory}`
+    : `LOOT ACQUIRED — ${result.itemName} · ${inventory}`;
+}
+
 function takeItem(context, container, itemId) {
   const state = stateFor(context.runState);
   const items = itemsFor(context, container);
@@ -146,7 +156,7 @@ function takeItem(context, container, itemId) {
   const result = addItem(context.runState.inventory || [], item);
   if (!result.success) {
     state.error = result.reason === 'inventory_full' ? 'Inventory full; pickup blocked until space is freed.' : result.reason;
-    state.notice = '';
+    state.pickupResult = null;
     context.refresh?.();
     return false;
   }
@@ -156,8 +166,17 @@ function takeItem(context, container, itemId) {
   if (context.lootState) context.lootState.items = remaining;
   if (!remaining.length) markOpened(context.runState, container);
   state.error = '';
-  state.notice = `Took ${itemName(item, context.data || {})}${remaining.length ? '' : ' · container closed'}.`;
-  log(context, 'loot', state.notice, { itemId, containerId: container.id });
+  // Presentation state is only set after the mutation above succeeds — a
+  // failed take never reaches here, so it can never report a false
+  // acquisition.
+  state.pickupResult = {
+    kind: 'taken',
+    itemName: itemName(item, context.data || {}),
+    inventoryCount: getInventoryCount(result.inventory),
+    inventoryCapacity: INVENTORY_CAP,
+    containerCleared: !remaining.length
+  };
+  log(context, 'loot', pickupNoticeText(state.pickupResult), { itemId, containerId: container.id });
   context.bus?.dispatch('state:loot-taken', { runState: context.runState, itemId, containerId: container.id, containerClosed: !remaining.length });
   context.refresh?.();
   return true;
