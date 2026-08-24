@@ -262,4 +262,14 @@ describe('HP alias invariant', () => {
     expect(healed.hp).toBe(11);
     expect(healed.currentHP).toBe(11);
   });
+
+  it('keeps hp and currentHP coherent when materializing a damage delta into a live combatant', () => {
+    const dualHostile = effectActor('target', 'enemy', { x: 2, y: 0 }, { hp: 20, currentHP: 20, hpMax: 20 });
+    const combatants = new Map([['target', dualHostile]]);
+    const result = applyEffect('disrupt', 1, { targets: [dualHostile] });
+    for (const delta of result.stateDelta.actors) Object.assign(combatants.get(delta.id) || {}, delta);
+    const materialized = combatants.get('target');
+    expect(materialized.hp).toBe(19);
+    expect(materialized.currentHP).toBe(19);
+  });
 });
