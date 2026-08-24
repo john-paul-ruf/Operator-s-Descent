@@ -7,8 +7,18 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const TRANSFER_BUDGET_BYTES = 500 * 1024;
 const FORBIDDEN_PREFIXES = ['./program/', './specs/', './mocks/', './tests/', './tools/', './font-src/', './node_modules/', './docs/'];
 const FORBIDDEN_BASENAMES = new Set(['./package.json', './package-lock.json', './project.json', './pipeline-state.json']);
-const REQUIRED_SINGLETONS = ['./index.html', './service-worker.js', './assets/descent-sigil.woff2', './assets/icons.svg'];
-const TEXT_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg']);
+const REQUIRED_SINGLETONS = [
+  './index.html',
+  './service-worker.js',
+  './manifest.webmanifest',
+  './assets/descent-sigil.woff2',
+  './assets/icons.svg',
+  './assets/app-icon.svg',
+  './assets/app-icon-180.png',
+  './assets/app-icon-192.png',
+  './assets/app-icon-512.png'
+];
+const TEXT_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg', '.webmanifest']);
 
 function workspacePath(asset) {
   return join(ROOT, asset.replace(/^\.\//, ''));

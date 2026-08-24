@@ -110,18 +110,25 @@ describe('service worker manifest', () => {
   });
 });
 
-describe('service worker cache version — v11 → v12', () => {
-  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-auto-slot-gear-equip-v11';
+describe('service worker cache version — v12 → v13 bridge', () => {
+  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-gear-inventory-filters-v12';
 
-  it('activation retains the v12 cache and deletes the exact v11 predecessor', async () => {
+  it('install creates no cache; activation precaches the full v13 manifest and deletes the exact v12 predecessor', async () => {
+    const manifest = extractManifest();
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-23-gear-inventory-filters-v12');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-23-mobile-pwa-hardening-v13');
+    expect(expectedCacheName).toMatch(CACHE_NAME_PATTERN);
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
 
     const install = createEvent();
     worker.listeners.get('install')(install);
     await install.settle();
+
+    const namesAfterInstall = await worker.caches.keys();
+    expect(namesAfterInstall).not.toContain(expectedCacheName);
+    expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
+    expect(worker.self.clients.claim).not.toHaveBeenCalled();
 
     const activate = createEvent();
     worker.listeners.get('activate')(activate);
@@ -130,28 +137,53 @@ describe('service worker cache version — v11 → v12', () => {
     const namesAfterActivate = await worker.caches.keys();
     expect(namesAfterActivate).toContain(expectedCacheName);
     expect(namesAfterActivate).not.toContain(PREDECESSOR_CACHE);
+    expect(worker.caches.stores.get(expectedCacheName).entries.size).toBe(manifest.length);
+    expect(worker.self.clients.claim).toHaveBeenCalledOnce();
   });
 
-  it('the v12 manifest ships the runtime icon sprite as a production/offline asset', () => {
+  it('a global caches.match() lookup — the legacy v12 read path — cannot resolve a v13 response while v13 is only installed', async () => {
+    const worker = loadWorker();
+    const install = createEvent();
+    worker.listeners.get('install')(install);
+    await install.settle();
+
+    const shellMatch = await worker.caches.match('https://example.test/game/index.html');
+    expect(shellMatch).toBeUndefined();
+  });
+
+  it('cache-first and navigation fetch paths read only from the versioned CACHE_NAME, never a foreign cache', async () => {
+    const worker = loadWorker();
+    const install = createEvent();
+    worker.listeners.get('install')(install);
+    await install.settle();
+    const activate = createEvent();
+    worker.listeners.get('activate')(activate);
+    await activate.settle();
+
+    const staleCache = await worker.caches.open('operator-descent-stale-version');
+    await staleCache.put('https://example.test/game/src/main.js', new FakeResponse('stale-content'));
+    await staleCache.put('https://example.test/game/index.html', new FakeResponse('stale-shell'));
+
+    const asset = createEvent({ method: 'GET', url: 'https://example.test/game/src/main.js', mode: 'same-origin', destination: 'script' });
+    worker.listeners.get('fetch')(asset);
+    await expect(asset.response().then((response) => response.text())).resolves.not.toBe('stale-content');
+
+    const navigation = createEvent({ method: 'GET', url: 'https://example.test/game/depth/2', mode: 'navigate', destination: 'document' });
+    worker.listeners.get('fetch')(navigation);
+    await expect(navigation.response().then((response) => response.text())).resolves.not.toBe('stale-shell');
+  });
+
+  it('the v13 manifest ships the PWA manifest and every launcher icon as production/offline assets', () => {
     const manifest = extractManifest();
-    expect(manifest).toContain('./assets/icons.svg');
-    expect(manifest).toContain('./assets/descent-sigil.woff2');
-    // No duplicate entries introduced.
+    for (const asset of ['./manifest.webmanifest', './assets/app-icon.svg', './assets/app-icon-180.png', './assets/app-icon-192.png', './assets/app-icon-512.png']) {
+      expect(manifest).toContain(asset);
+    }
     expect(new Set(manifest).size).toBe(manifest.length);
-  });
-
-  it('the v12 manifest pins the GEAR filter client files in the offline release', () => {
-    const manifest = extractManifest();
-    expect(manifest).toContain('./src/ui/console/gear.js');
-    expect(manifest).toContain('./styles/components.css');
   });
 });
 
 describe('service worker lifecycle', () => {
-  it('precaches the full versioned manifest and deletes only older Operator caches', async () => {
-    const manifest = extractManifest();
-    const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toMatch(CACHE_NAME_PATTERN);
+  it('deletes only older Operator caches on activation, leaving unrelated caches untouched', async () => {
     const worker = loadWorker();
     await worker.caches.open('operator-descent-old');
     await worker.caches.open('unrelated-cache');
@@ -160,22 +192,14 @@ describe('service worker lifecycle', () => {
     worker.listeners.get('install')(install);
     await install.settle();
 
-    const namesAfterInstall = await worker.caches.keys();
-    const cacheName = namesAfterInstall.find((name) => name.startsWith('operator-descent-') && name !== 'operator-descent-old');
-    expect(cacheName).toBe(expectedCacheName);
-    expect(cacheName).toMatch(CACHE_NAME_PATTERN);
-    expect(worker.caches.stores.get(cacheName).entries.size).toBe(manifest.length);
-    expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
-
     const activate = createEvent();
     worker.listeners.get('activate')(activate);
     await activate.settle();
 
     const namesAfterActivate = await worker.caches.keys();
-    expect(namesAfterActivate).toContain(expectedCacheName);
+    expect(namesAfterActivate).toContain(extractCacheName());
     expect(namesAfterActivate).toContain('unrelated-cache');
     expect(namesAfterActivate).not.toContain('operator-descent-old');
-    expect(worker.self.clients.claim).toHaveBeenCalledOnce();
   });
 });
 
@@ -185,6 +209,9 @@ describe('service worker fetch strategy', () => {
     const install = createEvent();
     worker.listeners.get('install')(install);
     await install.settle();
+    const activate = createEvent();
+    worker.listeners.get('activate')(activate);
+    await activate.settle();
 
     const asset = createEvent({ method: 'GET', url: 'https://example.test/game/src/main.js?rev=1', mode: 'same-origin', destination: 'script' });
     worker.listeners.get('fetch')(asset);

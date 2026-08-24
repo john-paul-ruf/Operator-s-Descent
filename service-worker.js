@@ -1,10 +1,11 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-23-gear-inventory-filters-v12';
+const CACHE_VERSION = '2026-08-23-mobile-pwa-hardening-v13';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
 const PRODUCTION_ASSETS = Object.freeze([
   './index.html',
+  './manifest.webmanifest',
   './service-worker.js',
   './styles/base.css',
   './styles/components.css',
@@ -120,6 +121,10 @@ const PRODUCTION_ASSETS = Object.freeze([
   './data/symbol-table.json',
   './data/symbol-table.v3.json',
   './data/themes.json',
+  './assets/app-icon-180.png',
+  './assets/app-icon-192.png',
+  './assets/app-icon-512.png',
+  './assets/app-icon.svg',
   './assets/descent-sigil.woff2',
   './assets/icons.svg',
 ]);
@@ -144,18 +149,18 @@ function offlineResponse(message = 'Operator\'s Descent is offline and this requ
 }
 
 async function cachedShell() {
-  const cached = await caches.match(SHELL_URL);
-  return cached || caches.match(new URL(SHELL_ASSET, SCOPE_URL).href);
+  const cache = await caches.open(CACHE_NAME);
+  return cache.match(SHELL_URL);
 }
 
 async function cacheFirstAsset(request) {
   const url = normalizeURL(new URL(request.url));
-  const cached = await caches.match(url);
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(url);
   if (cached) return cached;
   try {
     const response = await fetch(request);
     if (!response || !response.ok) return response;
-    const cache = await caches.open(CACHE_NAME);
     await cache.put(url, response.clone());
     return response;
   } catch {
@@ -190,16 +195,18 @@ function isSameOrigin(url) {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(scopedAssetURLs()))
-      .then(() => self.skipWaiting())
-  );
+  // v13 bridge — the one-time hop off the legacy v12 worker, which still
+  // resolves offline requests via a global caches.match() lookup. Precaching
+  // is deferred to activation (below) instead of happening here, so an
+  // active v12 tab can never see a v13 response while v13 is still waiting.
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(scopedAssetURLs()))
+      .then(() => caches.keys())
       .then((keys) => Promise.all(keys
         .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
         .map((key) => caches.delete(key))))

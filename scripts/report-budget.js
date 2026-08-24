@@ -15,9 +15,19 @@ import { runSaveStress } from './stress-saves.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const TRANSFER_BUDGET_BYTES = 500 * 1024;
-const TEXT_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg']);
+const TEXT_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg', '.webmanifest']);
 const FORBIDDEN_PREFIXES = ['./program/', './specs/', './mocks/', './tests/', './tools/', './font-src/', './node_modules/', './docs/'];
-const REQUIRED_SINGLETONS = ['./index.html', './service-worker.js', './assets/descent-sigil.woff2', './assets/icons.svg'];
+const REQUIRED_SINGLETONS = [
+  './index.html',
+  './service-worker.js',
+  './manifest.webmanifest',
+  './assets/descent-sigil.woff2',
+  './assets/icons.svg',
+  './assets/app-icon.svg',
+  './assets/app-icon-180.png',
+  './assets/app-icon-192.png',
+  './assets/app-icon-512.png'
+];
 
 function workspacePath(asset) {
   return join(ROOT, asset.replace(/^\.\//, ''));

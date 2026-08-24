@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Operator's Descent">
+  <rect width="512" height="512" fill="#0a0612"/>
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#7ec8e3" stroke-width="16"/>
+  <path d="M256 164 L256 348 M192 284 L256 348 L320 284" fill="none" stroke="#7ec8e3" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="8" fill="#7ec8e3"/>
+</svg>
