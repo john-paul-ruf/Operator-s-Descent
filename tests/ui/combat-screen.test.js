@@ -182,6 +182,13 @@ function findCleanMissSeed() {
   });
 }
 
+// A world seed where the very first 'combat' stream draw is not a natural 1 (fumble). Paired
+// with a caster protocol-attack roll against a very low protocolDefense target, this guarantees
+// the direct TECH hostile cast below lands a hit regardless of the exact non-fumble roll.
+function findHostileCastHitSeed() {
+  return findSeed((seed) => createRNGCursorForRun(seed).nextInt('combat', 20) !== 0);
+}
+
 // Opts a test into hapticsEnabled with a stubbed, spyable Vibration API. `navigator` is a
 // getter-only global in this runtime, so it must be replaced via vi.stubGlobal, not assignment.
 // Callers must call uninstall() (in a finally block) to restore localStorage/navigator.
@@ -1300,6 +1307,82 @@ describe('combat screen controller', () => {
       return false;
     };
     expect(includesText(logArea, 'injected live entry.')).toBe(true);
+    controller.unmount();
+  });
+});
+
+// tech-protocol-e2e-repair SESSION-02 checkpoint 3 — the resume boundary. A direct TECH cast
+// through the real console controls must commit into the SAME runState.activeCombat snapshot a
+// resumed run would decode from, reflecting the post-cast caster ledger and target delta rather
+// than the stale pre-cast state.
+describe('TECH cast commits through the live combat-owned transaction (tech-protocol-e2e-repair SESSION-02)', () => {
+  function techCombatFixture(seed) {
+    const attributes = { mgt: 5, fin: 5, vit: 5, res: 6, foc: 5, sig: 4 };
+    const protocolDeck = [{ school: 'disrupt', tier: 1 }];
+    const state = runState(seed, [makeCharacter({
+      id: 'hero', classId: 'operator', hp: 30, hpMax: 30, charge: 10, chargeMax: 10,
+      attributes, protocolDeck
+    })]);
+    const hero = partyActor({
+      id: 'hero', classId: 'operator', ap: 2, charge: 10, chargeMax: 10,
+      attributes, protocols: protocolDeck, protocolDeck
+    });
+    const enemy = enemyActor({ id: 1, hp: 10, hpMax: 10, protocolDefense: 1, position: { x: 2, y: 1 } });
+    const combat = combatState([hero, enemy]);
+    return { state, combat };
+  }
+
+  it('mounts a resumed combat, casts a hostile TECH protocol through the console, and persists the update into runState.activeCombat', async () => {
+    const { state, combat } = techCombatFixture(findHostileCastHitSeed());
+    const { container, controller, runState: mountedState } = await mountCombat({ state, combat });
+
+    byTestId(container, 'console-tab-tech').click();
+    byTestId(container, 'tech-cast-disrupt-1').click();
+    byTestId(container, 'tech-target-1').click();
+    byTestId(container, 'tech-confirm').click();
+
+    const casterLive = combat.combatants.get('hero');
+    const targetLive = combat.combatants.get(1);
+    expect(casterLive.ap).toBe(1);
+    expect(casterLive.charge).toBe(8);
+    expect(targetLive.hp).toBeLessThan(10);
+
+    // The resumable snapshot must reflect the post-cast values, not the stale pre-cast state.
+    expect(mountedState.activeCombat).toBeTruthy();
+    const snapshotCaster = mountedState.activeCombat.actors.find((actor) => actor.id === 'hero');
+    const snapshotTarget = mountedState.activeCombat.actors.find((actor) => actor.id === 1);
+    expect(snapshotCaster.charge).toBe(8);
+    expect(snapshotCaster.ap).toBe(1);
+    expect(snapshotTarget.hp).toBe(targetLive.hp);
+    expect(snapshotTarget.hp).toBeLessThan(10);
+    // This repair wires actor deltas (hp/currentHP, charge/ap, conditions, position) only —
+    // markers/temporaryEffects/apDebt/grid have no serialized contract and must not appear here.
+    expect(mountedState.activeCombat.markers).toBeUndefined();
+
+    controller.unmount();
+  });
+
+  it('routes the post-cast redraw through the screen-owned renderAll() path without mounting a second console controller', async () => {
+    const { state, combat } = techCombatFixture(findHostileCastHitSeed());
+    const { container, controller } = await mountCombat({ state, combat });
+
+    const statusBarBefore = container.children[0];
+    const consoleBarCountBefore = container.children.filter((child) => (child.className || '').includes('console-bar')).length;
+
+    byTestId(container, 'console-tab-tech').click();
+    byTestId(container, 'tech-cast-disrupt-1').click();
+    byTestId(container, 'tech-target-1').click();
+    byTestId(container, 'tech-confirm').click();
+
+    // renderAll() (the refreshShell contract) replaces the status-bar node on every call — a
+    // fresh identity here proves the full screen redraw ran, not just the console's local refresh.
+    expect(container.children[0]).not.toBe(statusBarBefore);
+    // Exactly one console controller/tray exists before and after — TECH's commit did not spin
+    // up a second one.
+    const consoleBarCountAfter = container.children.filter((child) => (child.className || '').includes('console-bar')).length;
+    expect(consoleBarCountAfter).toBe(consoleBarCountBefore);
+    expect(consoleBarCountAfter).toBe(1);
+
     controller.unmount();
   });
 });
