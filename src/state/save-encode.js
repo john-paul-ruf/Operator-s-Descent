@@ -5,7 +5,12 @@ import { encodeRunPayload } from './save-schema.js';
 
 export const SAVE_VERSION = 2;
 const MAGIC = [0x4f, 0x44];
-const BUDGET = 1500;
+// Single source of the save budget for every transport (localStorage and
+// URL) — the import screen, LOG copy label, migration-corpus test, and
+// release gate all import SAVE_BUDGET rather than re-literaling the number.
+// The CP3 session raises this from 1500 to 1900 per owner directive.
+export const SAVE_BUDGET = 1500;
+const BUDGET = SAVE_BUDGET;
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const EVENT_TRIM_LADDER = Object.freeze([64, 32, 16, 8, 4, 2, 1, 0]);
 

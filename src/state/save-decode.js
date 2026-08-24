@@ -8,6 +8,7 @@ import { SAVE_VERSION, base64urlEncode, crc32 } from './save-encode.js';
 import { V3_SCHEMA_VERSION, readV3Payload } from './versions/read-v3.js';
 import { V4_SCHEMA_VERSION, readV4Payload } from './versions/read-v4.js';
 import { V5_SCHEMA_VERSION, readV5Payload } from './versions/read-v5.js';
+import { V6_SCHEMA_VERSION, readV6Payload } from './versions/read-v6.js';
 
 const MAGIC = [0x4f, 0x44];
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
@@ -19,10 +20,13 @@ const MAX_PAYLOAD_BYTES = 20000;
 // to its schemaVersion forever: v3 saves ALWAYS route through readV3Payload,
 // no matter how far RUN_SCHEMA_VERSION advances. The current reader path
 // (schemaVersion === RUN_SCHEMA_VERSION) uses the live decodeRunPayload.
+// While RUN_SCHEMA_VERSION === v6 the v6 entry below is inert (live wins);
+// it becomes load-bearing when RUN_SCHEMA_VERSION advances to v7 in CP2.
 const FROZEN_READERS = new Map([
   [V3_SCHEMA_VERSION, readV3Payload],
   [V4_SCHEMA_VERSION, readV4Payload],
-  [V5_SCHEMA_VERSION, readV5Payload]
+  [V5_SCHEMA_VERSION, readV5Payload],
+  [V6_SCHEMA_VERSION, readV6Payload]
 ]);
 
 function fail(code) { const error = new RangeError(code); error.code = code; throw error; }
