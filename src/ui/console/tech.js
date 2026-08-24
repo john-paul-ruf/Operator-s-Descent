@@ -240,6 +240,15 @@ function confirmProtocol(context) {
     context.refresh?.();
     return false;
   }
+  // Reject a missing/unusable cursor before any AP or CHARGE is debited — a direct TECH cast
+  // must never leave the caster ledger partially spent because the caller forgot to supply the
+  // live deterministic stream.
+  if (typeof context.rngCursor?.nextInt !== 'function') {
+    ui.error = 'No deterministic RNG cursor available.';
+    ui.notice = '';
+    context.refresh?.();
+    return false;
+  }
   const result = resolveProtocolAction(caster, ui.protocol, target ? [target] : [], { overclocked: ui.overclocked, apAvailable: !context.combatState || (caster.ap ?? 0) > 0 }, context.rngCursor, protocolContext(context));
   if (!result.success) {
     ui.error = result.reason;
@@ -247,14 +256,25 @@ function confirmProtocol(context) {
     context.refresh?.();
     return false;
   }
-  let effect = null;
-  if (result.effectRequest) {
-    effect = applyProtocolEffect(result.stateDelta.caster, result, protocolContext(context), context.rngCursor);
-    if (effect.success) applyActorDeltas(context, effect.stateDelta.actors);
+  // Atomic effect resolution: a hostile/effect cast is only durable once applyProtocolEffect
+  // succeeds. A failure here (invalid effect, invalid RNG) rejects the whole cast — no actor
+  // deltas, no caster ledger spend, no corruption, no cursor advance, no commit.
+  const effect = result.effectRequest
+    ? applyProtocolEffect(result.stateDelta.caster, result, protocolContext(context), context.rngCursor)
+    : null;
+  if (effect && !effect.success) {
+    ui.error = effect.reason || 'protocol-effect-failed';
+    ui.notice = '';
+    context.refresh?.();
+    return false;
   }
+  if (effect) applyActorDeltas(context, effect.stateDelta.actors);
   applyCaster(context, character, activeActor, result.stateDelta.caster);
   if (result.corruptionDelta) context.runState.addCorruption?.(result.corruptionDelta) || (context.runState.corruption = (context.runState.corruption || 0) + result.corruptionDelta);
   context.runState.rngState = context.rngCursor?.getState?.() || context.runState.rngState;
+  // Notify the combat owner (screen commits runState.rngState/activeCombat from the now-mutated
+  // live map) before the local UI/log bookkeeping below.
+  context.commitTechProtocol?.({ result, effect });
   logProtocol(context, result, effect);
   ui.result = result;
   ui.phase = 'browse';
@@ -262,7 +282,9 @@ function confirmProtocol(context) {
   ui.targetId = null;
   ui.error = '';
   ui.notice = `${result.protocol.name} resolved${result.corruptionDelta ? ` · COR +${result.corruptionDelta.toFixed(2)}` : ''}.`;
-  context.refresh?.();
+  // Full-shell redraw when the combat owner supplies one (map/status changed too); otherwise
+  // fall back to the console-local refresh standalone TECH has always used.
+  (context.refreshShell || context.refresh)?.();
   return true;
 }
 

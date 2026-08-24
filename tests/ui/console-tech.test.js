@@ -319,3 +319,90 @@ describe('TECH mode — SESSION-02 density contract', () => {
     expect(byTestId(container, 'tech-slots').classList.contains('console-static-row')).toBe(true);
   });
 });
+
+// tech-protocol-e2e-repair SESSION-02 — direct TECH resolution must be atomic against the
+// live cursor the combat screen supplies via context.rngCursor, and must notify the combat
+// owner (context.commitTechProtocol) exactly once on a successful resolve.
+describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + commit contract', () => {
+  function combatFixture(runState) {
+    const actor = {
+      id: 'operator', side: 'party', ap: 2, charge: 10, chargeMax: 10,
+      hp: 30, hpMax: 30, attributes: runState.party[0].attributes,
+      protocols: runState.party[0].protocolDeck, protocolDeck: runState.party[0].protocolDeck,
+      conditions: [], position: { x: 0, y: 0 }
+    };
+    const enemy = { id: 'enemy', side: 'enemy', hp: 10, hpMax: 10, protocolDefense: 1, attributes: { foc: 5 }, conditions: [], position: { x: 1, y: 0 } };
+    return { actor, enemy, combatState: { turnOrder: ['operator'], currentTurn: 0, combatants: new Map([['operator', actor], ['enemy', enemy]]) } };
+  }
+
+  it('an absent rngCursor leaves the caster ledger and target untouched and surfaces a visible TECH error', () => {
+    const runState = run();
+    const { actor, enemy, combatState } = combatFixture(runState);
+    const container = new FakeElement('div');
+    const context = { runState, data, combatState, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    byTestId(container, 'tech-cast-disrupt-1').click();
+    byTestId(container, 'tech-target-enemy').click();
+    byTestId(container, 'tech-confirm').click();
+
+    expect(actor.ap).toBe(2);
+    expect(actor.charge).toBe(10);
+    expect(enemy.hp).toBe(10);
+    expect(runState.party[0].currentCHARGE).toBe(10);
+    const err = byTestId(container, 'tech-error');
+    expect(err).toBeTruthy();
+    expect(err.textContent).toContain('RNG');
+    expect(byTestId(container, 'tech-result')).toBe(null);
+  });
+
+  it('a valid cursor updates the live target/CHARGE/AP, sets the result row, and invokes the commit callback exactly once', () => {
+    const runState = run();
+    const { actor, enemy, combatState } = combatFixture(runState);
+    const container = new FakeElement('div');
+    const commits = [];
+    const rngCursor = { calls: 0, nextInt() { this.calls += 1; return 19; }, getState: () => ({ marker: 'committed' }) };
+    const context = {
+      runState, data, combatState, rngCursor,
+      commitTechProtocol: (payload) => commits.push(payload),
+      refresh: () => renderTech(container, context)
+    };
+    renderTech(container, context);
+
+    byTestId(container, 'tech-cast-disrupt-1').click();
+    byTestId(container, 'tech-target-enemy').click();
+    byTestId(container, 'tech-confirm').click();
+
+    expect(actor.ap).toBe(1);
+    expect(actor.charge).toBe(8);
+    expect(enemy.hp).toBe(3);
+    expect(commits).toHaveLength(1);
+    expect(commits[0].result.protocol.name).toBeTruthy();
+    expect(commits[0].effect.success).toBe(true);
+    expect(runState.rngState).toEqual({ marker: 'committed' });
+    expect(byTestId(container, 'tech-result')).toBeTruthy();
+  });
+
+  it('uses refreshShell instead of the console-local refresh when the combat owner supplies one', () => {
+    const runState = run();
+    const { combatState } = combatFixture(runState);
+    const container = new FakeElement('div');
+    let refreshCalls = 0;
+    let refreshShellCalls = 0;
+    const rngCursor = { nextInt: () => 19, getState: () => null };
+    const context = {
+      runState, data, combatState, rngCursor,
+      refresh: () => { refreshCalls += 1; renderTech(container, context); },
+      refreshShell: () => { refreshShellCalls += 1; }
+    };
+    renderTech(container, context);
+
+    byTestId(container, 'tech-cast-disrupt-1').click();
+    byTestId(container, 'tech-target-enemy').click();
+    const refreshCallsBeforeConfirm = refreshCalls;
+    byTestId(container, 'tech-confirm').click();
+
+    expect(refreshShellCalls).toBe(1);
+    expect(refreshCalls).toBe(refreshCallsBeforeConfirm);
+  });
+});
