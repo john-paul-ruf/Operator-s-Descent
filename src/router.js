@@ -1,7 +1,7 @@
 import { encodeSeed } from './state/save-encode.js';
 import { decodeSeed } from './state/save-decode.js';
 
-const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
+const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'highscores', 'scorecard', 'import', 'tutorial', 'settings']);
 const ROUTE_SET = new Set(ROUTES);
 const B32_RE = /^[A-Za-z0-9_-]+$/;
 

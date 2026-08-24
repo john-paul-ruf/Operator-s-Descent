@@ -45,7 +45,7 @@ bus.on('runtime:update-deferred', () => {
   updateToastsByParent.get(updateToastParent())?.setDeferred?.(true);
 });
 
-export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
+export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'highscores', 'scorecard', 'import', 'tutorial', 'settings']);
 export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-resolution', 'combat-start', 'loot-taken', 'import-resume', 'explicit-exit', 'inventory-change']);
 
 const ROUTE_SET = new Set(ROUTES);

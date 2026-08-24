@@ -1,6 +1,6 @@
 const handlers = new Map();
 
-const ROUTES = new Set(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
+const ROUTES = new Set(['title', 'creation', 'exploration', 'combat', 'library', 'highscores', 'scorecard', 'import', 'tutorial', 'settings']);
 const SETTING_KEYS = new Set(['mute', 'masterVolume', 'glitch', 'reducedMotion', 'scanlineGrain']);
 const VOLUME_KEY = /^volume:(drone|pulse|sparkle|lead|noiseBed)$/;
 const MANUAL_CLOSE_REASONS = new Set(['escape', 'close-button', 'backdrop', 'programmatic']);

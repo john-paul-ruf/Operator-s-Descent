@@ -285,7 +285,7 @@ describe('router — ROUTES export', () => {
   });
 
   it('matches the runtime route set', () => {
-    expect(new Set(ROUTES)).toEqual(new Set(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']));
+    expect(new Set(ROUTES)).toEqual(new Set(['title', 'creation', 'exploration', 'combat', 'library', 'highscores', 'scorecard', 'import', 'tutorial', 'settings']));
   });
 
   // the-manual SESSION-04 — the tutorial route is retired at the runtime layer
