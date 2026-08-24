@@ -1,11 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { TECH_PROTOCOL_CASES, buildTechProtocolFixture } from '../helpers/tech-protocol-e2e-fixture.js';
 
-const EXPECTED_BASELINE_FAILURES = new Map(TECH_PROTOCOL_CASES.map(({ id, name }) => [
-  id,
-  `${name}: the real TECH confirmation reports invalid-rng, so no durable protocol effect or CHARGE/AP update is applied.`
-]));
-
 async function installStorage(page) {
   await page.addInitScript(() => {
     const store = new Map();
@@ -29,8 +24,6 @@ async function runtimeCombatSnapshot(page) {
 
 for (const caseDescriptor of TECH_PROTOCOL_CASES) {
   test(`${caseDescriptor.school.toUpperCase()} T${caseDescriptor.tier} ${caseDescriptor.name} follows the real TECH workflow`, async ({ page }) => {
-    const baselineReason = EXPECTED_BASELINE_FAILURES.get(caseDescriptor.id);
-    if (!process.env.TECH_PROTOCOL_STRICT && baselineReason) test.fail(true, baselineReason);
     const fixture = buildTechProtocolFixture(caseDescriptor);
     await installStorage(page);
     await page.goto(`/?run=${fixture.fragment.slice(0, 8)}#r=${fixture.fragment}`);
