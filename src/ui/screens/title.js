@@ -11,6 +11,7 @@ import { currentLayoutClass } from '../layout.js';
 const BRANCHES = [
   { id: 'begin-new-run', label: 'BEGIN NEW RUN', route: 'creation', testid: 'title-begin-new-run', icon: 'chevron-right', ariaLabel: '◈ BEGIN NEW RUN', iconTone: 'accent' },
   { id: 'run-library', label: 'RUN LIBRARY', route: 'library', testid: 'title-run-library', icon: 'archive', ariaLabel: '◈ RUN LIBRARY' },
+  { id: 'high-scores', label: 'HIGH SCORES', route: 'highscores', testid: 'title-high-scores', icon: 'star', ariaLabel: '◈ HIGH SCORES' },
   { id: 'import-link', label: 'IMPORT LINK', route: 'import', testid: 'title-import-link', icon: 'download', ariaLabel: '◈ IMPORT LINK' }
 ];
 

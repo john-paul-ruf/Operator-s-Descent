@@ -7,6 +7,7 @@ const SCREEN_MAP = {
   'combat.html': 'src/ui/screens/combat.js',
   'library.html': 'src/ui/screens/library.js',
   'scorecard.html': 'src/ui/screens/scorecard.js',
+  'highscores.html': 'src/ui/screens/highscores.js',
   'import.html': 'src/ui/screens/import.js',
   'tutorial.html': 'src/ui/screens/tutorial.js',
   'settings.html': 'src/ui/screens/settings.js'

@@ -243,11 +243,19 @@ export function mount(container, params = {}) {
     onClick: () => navigate('library')
   });
   libraryButton.dataset.testid = 'scorecard-library';
+  const highScoresButton = createButton('', {
+    label: 'HIGH SCORES',
+    icon: 'star',
+    iconSize: 16,
+    onClick: () => navigate('highscores')
+  });
+  highScoresButton.dataset.testid = 'scorecard-high-scores';
   cleanups.push(
     () => restart.cleanup?.(),
     () => newRun.cleanup?.(),
     () => titleButton.cleanup?.(),
-    () => libraryButton.cleanup?.()
+    () => libraryButton.cleanup?.(),
+    () => highScoresButton.cleanup?.()
   );
 
   const screen = document.createElement('section');
@@ -352,7 +360,7 @@ export function mount(container, params = {}) {
     const secondaryRow = document.createElement('div');
     secondaryRow.style.display = 'flex';
     secondaryRow.style.gap = '8px';
-    secondaryRow.append(titleButton, libraryButton);
+    secondaryRow.append(titleButton, libraryButton, highScoresButton);
     actions.append(restart, newRun, secondaryRow);
     sharePane.appendChild(actions);
 
@@ -424,7 +432,7 @@ export function mount(container, params = {}) {
 
     const actions = document.createElement('div');
     actions.className = 'scorecard-actions';
-    actions.append(restart, newRun, titleButton, libraryButton);
+    actions.append(restart, newRun, titleButton, libraryButton, highScoresButton);
 
     body.append(depthPanel, deletionStatus, rosterPanel, causePanel, seedPanel, sharePanel, stats);
     screen.append(header, body, actions);

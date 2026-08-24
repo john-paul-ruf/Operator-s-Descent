@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-24-manifest-drift-hotfix-v16';
+const CACHE_VERSION = '2026-08-24-high-score-archive-v1';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -103,6 +103,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/ui/screens/combat.js',
   './src/ui/screens/creation.js',
   './src/ui/screens/exploration.js',
+  './src/ui/screens/highscores.js',
   './src/ui/screens/import.js',
   './src/ui/screens/library.js',
   './src/ui/screens/scorecard.js',
