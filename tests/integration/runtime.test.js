@@ -185,9 +185,11 @@ function installDocument() {
   return { html, appRoot, portraitFrame, docListeners };
 }
 
-function installBrowserGlobals({ hasController = false } = {}) {
+function installBrowserGlobals({ hasController = false, waiting = false } = {}) {
   const update = vi.fn(() => Promise.resolve());
-  const register = vi.fn(() => Promise.resolve({ scope: './', update }));
+  const waitingWorker = waiting ? { postMessage: vi.fn() } : null;
+  const registration = { scope: './', update, waiting: waitingWorker, addEventListener: vi.fn() };
+  const register = vi.fn(() => Promise.resolve(registration));
   const swListeners = new Map();
   const addEventListener = vi.fn((type, listener) => {
     swListeners.set(type, [...(swListeners.get(type) || []), listener]);
@@ -217,7 +219,7 @@ function installBrowserGlobals({ hasController = false } = {}) {
     status: 200,
     json: async () => JSON.parse(readFileSync(new URL(`../../${String(file)}`, import.meta.url), 'utf8'))
   });
-  return { register, update, swListeners };
+  return { register, update, swListeners, registration, waitingWorker };
 }
 
 function openFloor() {
@@ -584,7 +586,11 @@ describe('service worker update handling', () => {
     vi.resetModules();
   });
 
-  it('reloads once when a returning visit\'s controller changes', async () => {
+  function findToast() {
+    return doc.portraitFrame.children.find((child) => child.dataset?.testid === 'update-toast');
+  }
+
+  it('never reloads on an unsolicited controllerchange', async () => {
     browser = installBrowserGlobals({ hasController: true });
     const api = await runtime();
     await api.activateRuntime({ initialHash: '' });
@@ -596,8 +602,8 @@ describe('service worker update handling', () => {
     handlers[0]();
     handlers[0]();
 
-    expect(window.location.reload).toHaveBeenCalledTimes(1);
-    expect(api.getRuntimeSnapshot().serviceWorkerStatus.reloading).toBe(true);
+    expect(window.location.reload).not.toHaveBeenCalled();
+    expect(api.getRuntimeSnapshot().serviceWorkerStatus.reloading).toBe(false);
   });
 
   it('does not arm a controllerchange reload on a first-ever visit', async () => {
@@ -623,6 +629,63 @@ describe('service worker update handling', () => {
     await flushAsync();
 
     expect(browser.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('mounts one accessible update toast when the registration already reports a waiting worker', async () => {
+    browser = installBrowserGlobals({ waiting: true });
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    await flushAsync();
+
+    const toast = findToast();
+    expect(toast).toBeTruthy();
+    expect(toast.getAttribute('role')).toBe('status');
+    expect(api.getRuntimeSnapshot().serviceWorkerStatus.updateReady).toBe(true);
+  });
+
+  it('requests activation via SKIP_WAITING on RELOAD, and reloads only after the resulting controller change', async () => {
+    browser = installBrowserGlobals({ hasController: true, waiting: true });
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    await flushAsync();
+
+    const toast = findToast();
+    const button = toast.children.find((child) => child.dataset?.testid === 'update-toast-reload');
+    button.dispatch('click');
+
+    expect(browser.waitingWorker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    expect(window.location.reload).not.toHaveBeenCalled();
+
+    const handlers = browser.swListeners.get('controllerchange') || [];
+    expect(handlers).toHaveLength(1);
+    handlers[0]();
+
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    expect(api.getRuntimeSnapshot().serviceWorkerStatus.reloading).toBe(true);
+  });
+
+  it('shows a deferred retry state and clears reload-pending when the worker reports multiple app windows', async () => {
+    browser = installBrowserGlobals({ hasController: true, waiting: true });
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    await flushAsync();
+
+    const toast = findToast();
+    const label = toast.children.find((child) => child.className === 'update-toast-label');
+    const button = toast.children.find((child) => child.dataset?.testid === 'update-toast-reload');
+    button.dispatch('click');
+    expect(browser.waitingWorker.postMessage).toHaveBeenCalledOnce();
+
+    const messageHandlers = browser.swListeners.get('message') || [];
+    expect(messageHandlers).toHaveLength(1);
+    messageHandlers[0]({ data: { type: 'UPDATE_DEFERRED_MULTI_CLIENT', clientCount: 2 } });
+
+    expect(label.textContent).toBe('CLOSE OTHER GAME TABS — THEN RETRY');
+    expect(button.textContent).toBe('RETRY');
+
+    browser.waitingWorker.postMessage.mockClear();
+    button.dispatch('click');
+    expect(browser.waitingWorker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
   });
 });
 

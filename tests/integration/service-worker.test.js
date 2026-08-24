@@ -83,12 +83,22 @@ function loadWorker() {
   });
   const self = {
     registration: { scope: 'https://example.test/game/' },
-    clients: { claim: vi.fn(() => Promise.resolve()) },
+    clients: { claim: vi.fn(() => Promise.resolve()), matchAll: vi.fn(() => Promise.resolve([])) },
     skipWaiting: vi.fn(() => Promise.resolve()),
     addEventListener(type, handler) { listeners.set(type, handler); }
   };
   vm.runInNewContext(SERVICE_WORKER_SOURCE, { self, caches, fetch, Response: FakeResponse, URL, console });
   return { listeners, caches, fetch, self };
+}
+
+function createMessageEvent(data, source) {
+  const pending = [];
+  return {
+    data,
+    source,
+    waitUntil(promise) { pending.push(Promise.resolve(promise)); },
+    async settle() { await Promise.all(pending); }
+  };
 }
 
 describe('service worker manifest', () => {
@@ -113,7 +123,7 @@ describe('service worker manifest', () => {
 describe('service worker cache version — v12 → v13 bridge', () => {
   const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-gear-inventory-filters-v12';
 
-  it('install creates no cache; activation precaches the full v13 manifest and deletes the exact v12 predecessor', async () => {
+  it('install creates no cache and never calls skipWaiting automatically; activation precaches the full v13 manifest and deletes the exact v12 predecessor', async () => {
     const manifest = extractManifest();
     const expectedCacheName = extractCacheName();
     expect(expectedCacheName).toBe('operator-descent-2026-08-23-mobile-pwa-hardening-v13');
@@ -127,7 +137,7 @@ describe('service worker cache version — v12 → v13 bridge', () => {
 
     const namesAfterInstall = await worker.caches.keys();
     expect(namesAfterInstall).not.toContain(expectedCacheName);
-    expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
+    expect(worker.self.skipWaiting).not.toHaveBeenCalled();
     expect(worker.self.clients.claim).not.toHaveBeenCalled();
 
     const activate = createEvent();
@@ -239,5 +249,63 @@ describe('service worker fetch strategy', () => {
 
     expect(response.status).toBe(503);
     await expect(response.text()).resolves.toContain('offline');
+  });
+});
+
+describe('service worker consent-gated activation', () => {
+  it('ignores any message that is not SKIP_WAITING', async () => {
+    const worker = loadWorker();
+    const event = createMessageEvent({ type: 'PING' });
+    worker.listeners.get('message')(event);
+    await event.settle();
+
+    expect(worker.self.skipWaiting).not.toHaveBeenCalled();
+  });
+
+  it('activates when exactly one in-scope app window is open', async () => {
+    const worker = loadWorker();
+    worker.self.clients.matchAll = vi.fn(() => Promise.resolve([
+      { url: 'https://example.test/game/', postMessage: vi.fn() }
+    ]));
+    const source = { postMessage: vi.fn() };
+
+    const event = createMessageEvent({ type: 'SKIP_WAITING' }, source);
+    worker.listeners.get('message')(event);
+    await event.settle();
+
+    expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
+    expect(source.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('defers and reports the client count when more than one in-scope app window is open', async () => {
+    const worker = loadWorker();
+    worker.self.clients.matchAll = vi.fn(() => Promise.resolve([
+      { url: 'https://example.test/game/', postMessage: vi.fn() },
+      { url: 'https://example.test/game/depth/2', postMessage: vi.fn() }
+    ]));
+    const source = { postMessage: vi.fn() };
+
+    const event = createMessageEvent({ type: 'SKIP_WAITING' }, source);
+    worker.listeners.get('message')(event);
+    await event.settle();
+
+    expect(worker.self.skipWaiting).not.toHaveBeenCalled();
+    expect(source.postMessage).toHaveBeenCalledWith({ type: 'UPDATE_DEFERRED_MULTI_CLIENT', clientCount: 2 });
+  });
+
+  it('ignores windows outside the registration scope when counting in-scope clients', async () => {
+    const worker = loadWorker();
+    worker.self.clients.matchAll = vi.fn(() => Promise.resolve([
+      { url: 'https://example.test/game/', postMessage: vi.fn() },
+      { url: 'https://example.test/other-app/', postMessage: vi.fn() }
+    ]));
+    const source = { postMessage: vi.fn() };
+
+    const event = createMessageEvent({ type: 'SKIP_WAITING' }, source);
+    worker.listeners.get('message')(event);
+    await event.settle();
+
+    expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
+    expect(source.postMessage).not.toHaveBeenCalled();
   });
 });

@@ -274,6 +274,24 @@ describe('semantic components', () => {
     expect(() => toast.cleanup?.()).not.toThrow();
   });
 
+  test('createUpdateToast.setDeferred mutates the same toast in place rather than mounting a duplicate', () => {
+    const toast = createUpdateToast({ onReload: () => {} });
+    const label = toast.children.find((child) => child.className === 'update-toast-label');
+    const button = toast.children.find((child) => child.dataset?.testid === 'update-toast-reload');
+
+    toast.setDeferred(true);
+    expect(label.textContent).toBe('CLOSE OTHER GAME TABS — THEN RETRY');
+    expect(button.textContent).toBe('RETRY');
+    expect(button.getAttribute('aria-label')).toBe('Retry applying the new build');
+    expect(toast.children).toHaveLength(2);
+    expect(toast.getAttribute('role')).toBe('status');
+
+    toast.setDeferred(false);
+    expect(label.textContent).toBe('NEW BUILD CACHED');
+    expect(button.textContent).toBe('RELOAD');
+    expect(button.getAttribute('aria-label')).toBe('Reload to apply the new build');
+  });
+
   test('createManualLink renders a button that dispatches ui:manual-open with target and source', () => {
     const dispatched = [];
     const link = createManualLink('burning', {

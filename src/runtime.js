@@ -19,23 +19,29 @@ import { createUpdateToast } from './ui/components.js';
 import { createManualModal } from './ui/manual/manual-modal.js';
 
 // Runtime-scoped update surfacing (walls-npc-docking SESSION-03). Mounts
-// exactly one CRT toast per hosting document — the WeakSet is keyed on the
-// portrait-frame node so a fresh test document naturally resets tracking.
-const parentsWithUpdateToast = new WeakSet();
+// exactly one CRT toast per hosting document — the WeakMap is keyed on the
+// portrait-frame node so a fresh test document naturally resets tracking and
+// so a later `runtime:update-deferred` can mutate the same toast in place
+// (mobile-pwa-hardening SESSION-01 — consent-gated activation, never an
+// unconditional reload).
+const updateToastsByParent = new WeakMap();
+
+function updateToastParent() {
+  if (typeof document === 'undefined') return null;
+  return document.getElementById?.('portrait-frame') || document.body || null;
+}
+
 bus.on('runtime:update-ready', () => {
-  if (typeof document === 'undefined') return;
-  const parent = document.getElementById?.('portrait-frame') || document.body;
-  if (!parent || parentsWithUpdateToast.has(parent)) return;
-  const toast = createUpdateToast({
-    onReload: () => {
-      if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-        window.location.reload();
-      }
-    }
-  });
-  if (typeof parent.appendChild !== 'function') return;
+  const parent = updateToastParent();
+  if (!parent || updateToastsByParent.has(parent) || typeof parent.appendChild !== 'function') return;
+  const toast = createUpdateToast({ onReload: requestWaitingWorkerActivation });
   parent.appendChild(toast);
-  parentsWithUpdateToast.add(parent);
+  updateToastsByParent.set(parent, toast);
+});
+
+bus.on('runtime:update-deferred', () => {
+  serviceWorkerReloadPending = false;
+  updateToastsByParent.get(updateToastParent())?.setDeferred?.(true);
 });
 
 export const ROUTES = Object.freeze(['title', 'creation', 'exploration', 'combat', 'library', 'scorecard', 'import', 'tutorial', 'settings']);
@@ -43,7 +49,6 @@ export const AUTOSAVE_CHECKPOINTS = Object.freeze(['floor-transition', 'combat-r
 
 const ROUTE_SET = new Set(ROUTES);
 const AUTOSAVE_SET = new Set(AUTOSAVE_CHECKPOINTS);
-const IN_RUN_SURFACES = new Set(['creation', 'exploration', 'combat']);
 const DEFAULT_COMBAT_WINDOW = { originX: 0, originY: 0, width: 8, height: 16 };
 const DEFAULT_ENEMY_WEAPON = { damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 0 };
 const DEFAULT_ATTRIBUTES = { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 };
@@ -80,10 +85,6 @@ let serviceWorkerRegistration = null;
 let lastAutosaveResult = null;
 let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, reloading: false, updateReady: false, scope: null, error: null };
 let manualModal = null;
-
-function isInRunSurface() {
-  return IN_RUN_SURFACES.has(currentRoute);
-}
 
 let gameData = null;
 
@@ -713,6 +714,25 @@ function setupBus() {
   });
 }
 
+// requestWaitingWorkerActivation — the sole path from consent to activation.
+// Called both by the toast's RELOAD action and its RETRY action after a
+// multi-tab deferral; the worker itself decides whether this tab is alone
+// in scope before it ever calls skipWaiting().
+function requestWaitingWorkerActivation() {
+  const waiting = serviceWorkerRegistration?.waiting;
+  if (!waiting || serviceWorkerReloadPending) return false;
+  serviceWorkerReloadPending = true;
+  waiting.postMessage({ type: 'SKIP_WAITING' });
+  return true;
+}
+
+function dispatchUpdateReadyOnce() {
+  if (serviceWorkerUpdateReadyDispatched) return;
+  serviceWorkerUpdateReadyDispatched = true;
+  serviceWorkerStatus = { ...serviceWorkerStatus, updateReady: true };
+  bus.dispatch('runtime:update-ready', {});
+}
+
 function registerServiceWorkerOnce() {
   if (serviceWorkerStarted) return null;
   serviceWorkerStatus = { attempted: true, supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, registered: false, updated: false, reloading: false, updateReady: false, scope: null, error: null };
@@ -720,24 +740,33 @@ function registerServiceWorkerOnce() {
   serviceWorkerStarted = true;
   const hadController = Boolean(navigator.serviceWorker.controller);
   if (hadController) {
+    // Fires only after an approved SKIP_WAITING handoff activates the
+    // waiting worker (clients.claim()) — never on an unsolicited takeover.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (serviceWorkerReloadPending) return;
-      if (isInRunSurface()) {
-        if (serviceWorkerUpdateReadyDispatched) return;
-        serviceWorkerUpdateReadyDispatched = true;
-        serviceWorkerStatus = { ...serviceWorkerStatus, updateReady: true };
-        bus.dispatch('runtime:update-ready', {});
-        return;
-      }
-      serviceWorkerReloadPending = true;
+      if (!serviceWorkerReloadPending) return;
       serviceWorkerStatus = { ...serviceWorkerStatus, reloading: true };
       bus.dispatch('runtime:update-applied', {});
       window.location.reload();
     });
   }
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type !== 'UPDATE_DEFERRED_MULTI_CLIENT') return;
+    serviceWorkerReloadPending = false;
+    bus.dispatch('runtime:update-deferred', { clientCount: event.data.clientCount });
+  });
   return navigator.serviceWorker.register('./service-worker.js').then(async (registration) => {
     serviceWorkerStatus = { ...serviceWorkerStatus, registered: true, scope: registration?.scope || null };
     serviceWorkerRegistration = registration;
+    if (registration?.waiting) dispatchUpdateReadyOnce();
+    if (typeof registration?.addEventListener === 'function') {
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
+        if (!installing || typeof installing.addEventListener !== 'function') return;
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) dispatchUpdateReadyOnce();
+        });
+      });
+    }
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible' || !serviceWorkerRegistration?.update) return;

@@ -194,12 +194,27 @@ function isSameOrigin(url) {
   return url.origin === SCOPE_URL.origin;
 }
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   // v13 bridge — the one-time hop off the legacy v12 worker, which still
   // resolves offline requests via a global caches.match() lookup. Precaching
   // is deferred to activation (below) instead of happening here, so an
   // active v12 tab can never see a v13 response while v13 is still waiting.
-  event.waitUntil(self.skipWaiting());
+  // No automatic skipWaiting(): this worker stays waiting until a single
+  // in-scope client explicitly consents via the SKIP_WAITING message below.
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'SKIP_WAITING') return;
+
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const appWindows = windows.filter((client) => client.url.startsWith(self.registration.scope));
+    if (appWindows.length !== 1) {
+      event.source?.postMessage({ type: 'UPDATE_DEFERRED_MULTI_CLIENT', clientCount: appWindows.length });
+      return;
+    }
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {

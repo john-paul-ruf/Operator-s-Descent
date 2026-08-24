@@ -632,12 +632,16 @@ export const createScreenBody = ({ scroll = true, className = '' } = {}) => {
 
 /**
  * createUpdateToast — persistent CRT-styled "new build cached" notice with a
- * RELOAD action. Mounted in response to `runtime:update-ready` while the user
- * is on an in-run surface (creation/exploration/combat) so a fresh service
- * worker never yanks the page mid-turn.
+ * RELOAD action. Mounted in response to `runtime:update-ready` on every
+ * route; `onReload` requests activation but never reloads unilaterally — the
+ * page only reloads after the resulting `controllerchange` (mobile-pwa-
+ * hardening SESSION-01). `toast.setDeferred(true)` mutates the same toast in
+ * place — no duplicate live region — into a "close other tabs, then retry"
+ * state when the worker reports more than one open app window;
+ * `setDeferred(false)` restores the original copy.
  *
  * @param {{onReload: () => void}} opts
- * @returns {HTMLDivElement}
+ * @returns {HTMLDivElement & {setDeferred: (deferred: boolean) => void}}
  */
 /**
  * createManualLink — shared factory for every "term hyperlink" in the UI
@@ -716,5 +720,10 @@ export function createUpdateToast({ onReload } = {}) {
   button.setAttribute('aria-label', 'Reload to apply the new build');
   const cleanup = typeof onReload === 'function' ? listen(button, 'click', onReload) : undefined;
   toast.append(label, button);
+  toast.setDeferred = (deferred) => {
+    label.textContent = deferred ? 'CLOSE OTHER GAME TABS — THEN RETRY' : 'NEW BUILD CACHED';
+    button.textContent = deferred ? 'RETRY' : 'RELOAD';
+    button.setAttribute('aria-label', deferred ? 'Retry applying the new build' : 'Reload to apply the new build');
+  };
   return withCleanup(toast, cleanup);
 }
