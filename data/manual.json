@@ -40,7 +40,7 @@
           ["link", "the_map", "map"],
           ["text", " to walk to a revealed cell. Hostiles always stop movement; container, descent, and damage stops are shown as "],
           ["link", "console_overview", "console"],
-          ["text", " decisions."]
+          ["text", " decisions. Standing on a discovered exit, the center control activates DESCEND on a single tap (or Enter); off an exit it shows a truthful inert NO EXIT HERE state."]
         ]
       ],
       "seeAlso": ["the_map", "console_overview", "combat_mode"]
@@ -70,7 +70,7 @@
       "title": "COMBAT Mode",
       "body": [
         [
-          ["text", "COMBAT presents one actor turn at a time: choose an action, choose a target or path, then confirm. Cycle targets with Tab or arrows and press Enter; on the "],
+          ["text", "COMBAT presents one actor turn at a time: choose an action, then tap one legal target or destination to execute it. Cycle targets with Tab or arrows and press Enter to activate the highlighted one; on the "],
           ["link", "the_map", "map"],
           ["text", ", tap-to-route then tap the same cell to commit. Turns follow initiative, AP, movement, reactions, and d20 outcomes."]
         ]
@@ -114,7 +114,7 @@
       "title": "TECH Mode",
       "body": [
         [
-          ["text", "TECH shows each prepared protocol, CHARGE cost, target shape, and overclock risk. Select a protocol, choose a legal target, then confirm before CHARGE or RNG is consumed."]
+          ["text", "TECH shows each prepared protocol, CHARGE cost, target shape, and overclock risk. Activate CAST or OVERCLOCK to browse its cost and effect; a protocol with no target resolves immediately, and a targeted protocol resolves the instant you tap — or press Enter on — one legal target."]
         ]
       ],
       "seeAlso": ["party_mode", "combat_mode", "console_overview"]
@@ -354,7 +354,7 @@
           ["text", "Loot is deterministic per container: hash(worldSeed, depth, floorId, containerId) drives every rarity and affix roll, so the same run produces the same drops. Party inventory caps at 100 items — a hard ceiling; a full pack blocks pickup rather than dropping older items."]
         ],
         [
-          ["text", "Tag surplus items as junk in LOOT or GEAR; the Junk-All-Tagged action destroys them and adds each item's salvageValue to the run's scrap counter. Scrap contributes to the run-end scorecard as Scrap Recovered."]
+          ["text", "Tag surplus items as junk in LOOT or GEAR; the Junk-All-Tagged action asks for one confirming tap — junking is irreversible, unlike movement, attacks, casts, and descent, which resolve on a single legal activation — before it destroys them and adds each item's salvageValue to the run's scrap counter. Scrap contributes to the run-end scorecard as Scrap Recovered."]
         ]
       ],
       "seeAlso": ["loot_mode", "gear_mode", "corrupt_items", "descent_and_scoring"]

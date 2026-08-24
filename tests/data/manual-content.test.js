@@ -88,6 +88,42 @@ describe('manual-content: no section body empty', () => {
   });
 });
 
+// direct-actions-and-quick-starts SESSION-05 — combat, TECH, and MOVE all resolve on one legal
+// target/destination/exit activation now; only the destructive Junk-All-Tagged action in
+// loot_and_salvage keeps a confirming tap. These tests fail on stale choose-then-confirm rule
+// help while explicitly allowing that one destructive-op exception.
+describe('manual-content: direct-action contract (no stale choose-then-confirm wording)', () => {
+  const DESTRUCTIVE_CONFIRM_ALLOWLIST = new Set(['loot_and_salvage']);
+
+  it('no section outside the destructive-op allowlist mentions confirming/confirmation', () => {
+    for (const section of manual.sections) {
+      if (DESTRUCTIVE_CONFIRM_ALLOWLIST.has(section.id)) continue;
+      const text = bodyText(section).toLowerCase();
+      expect(text).not.toMatch(/confirm/);
+    }
+  });
+
+  it('COMBAT mode describes one legal target/destination activation', () => {
+    const text = bodyText(manual.sections.find(s => s.id === 'combat_mode')).toLowerCase();
+    expect(text).toContain('tap one legal target or destination to execute it');
+  });
+
+  it('TECH mode describes CAST/OVERCLOCK resolving on target activation', () => {
+    const text = bodyText(manual.sections.find(s => s.id === 'tech_mode')).toLowerCase();
+    expect(text).toContain('resolves the instant you tap');
+  });
+
+  it('MOVE mode describes DESCEND as a direct single activation', () => {
+    const text = bodyText(manual.sections.find(s => s.id === 'move_mode')).toLowerCase();
+    expect(text).toContain('activates descend on a single tap');
+  });
+
+  it('loot_and_salvage is the sole retained destructive confirming tap', () => {
+    const text = bodyText(manual.sections.find(s => s.id === 'loot_and_salvage')).toLowerCase();
+    expect(text).toMatch(/confirm/);
+  });
+});
+
 describe('manual-content: glossary condition sections mirror data/conditions.json semantics', () => {
   for (const conditionId of Object.keys(conditions.conditions)) {
     it(`glossary section ${conditionId} exists`, () => {
