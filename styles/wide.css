@@ -62,9 +62,13 @@
       minmax(280px, var(--wide-left-w, 280px))
       minmax(320px, 1fr)
       max(360px, var(--wide-right-w, 360px));
-    grid-template-rows: 100vh;
-    width: 100vw;
-    height: 100vh;
+    /* mobile-pwa-hardening SESSION-01 — .wide-shell mounts as a child of the
+       safe-area-padded #app-root content box (styles/base.css); 100%/100%
+       fills that already-correct available frame instead of a raw 100vw/
+       100vh that would render its docks under a device cutout. */
+    grid-template-rows: 100%;
+    width: 100%;
+    height: 100%;
     z-index: 10;
   }
   .wide-shell[data-pane-left="collapsed"] {
@@ -330,7 +334,11 @@
   .wide-console-dock {
     display: grid;
     grid-template-columns: 76px 1fr;
-    grid-template-rows: 100vh;
+    /* Mirrors .wide-shell's own row track (100%) — was 100vh to match a
+       .wide-shell that was itself 100vh; now that .wide-shell is safe-area
+       correct, this nested track must follow or its tab column/content pane
+       overflow their actual (shorter, safe-area-padded) box. */
+    grid-template-rows: 100%;
     background: var(--bg-panel);
     border-left: 1px solid var(--border-dim);
     box-shadow: -2px 0 12px rgba(0, 0, 0, 0.6), -1px 0 4px rgba(126, 200, 227, 0.1);

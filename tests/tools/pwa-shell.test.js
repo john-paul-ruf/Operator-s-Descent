@@ -95,3 +95,51 @@ describe('local dev server MIME support', () => {
     expect(mimeMapSource('tools/serve.mjs')).toMatch(mimeEntry);
   });
 });
+
+describe('safe-area CSS contract', () => {
+  const baseCss = readFileSync(resolve(ROOT, 'styles', 'base.css'), 'utf8');
+  const componentsCss = readFileSync(resolve(ROOT, 'styles', 'components.css'), 'utf8');
+  const wideCss = readFileSync(resolve(ROOT, 'styles', 'wide.css'), 'utf8');
+
+  test('base.css declares the four safe-area inset custom properties', () => {
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      expect(baseCss).toMatch(new RegExp(`--safe-area-${side}:\\s*env\\(safe-area-inset-${side},\\s*0px\\)`));
+    }
+  });
+
+  test('#app-root pads its content box with the safe-area variables', () => {
+    const rule = baseCss.match(/#app-root\s*{([^}]*)}/);
+    expect(rule).toBeTruthy();
+    expect(rule[1]).toMatch(/padding:\s*var\(--safe-area-top\)\s+var\(--safe-area-right\)\s+var\(--safe-area-bottom\)\s+var\(--safe-area-left\)/);
+  });
+
+  test('#crt-overlays stays edge-to-edge — no safe-area inset applied', () => {
+    const rule = baseCss.match(/#crt-overlays\s*{([^}]*)}/);
+    expect(rule).toBeTruthy();
+    expect(rule[1]).not.toMatch(/safe-area/);
+    expect(rule[1]).toMatch(/inset:\s*0/);
+  });
+
+  test('.in-run-screen fills the padded frame (100%), never a raw 100vh/100dvh viewport unit', () => {
+    const rule = componentsCss.match(/\.in-run-screen\s*{([^}]*)}/);
+    expect(rule).toBeTruthy();
+    expect(rule[1]).toMatch(/height:\s*100%/);
+    expect(rule[1]).not.toMatch(/height:\s*100d?vh/);
+    expect([...componentsCss.matchAll(/\.in-run-screen\s*{[^}]*}/g)]).toHaveLength(1);
+  });
+
+  test('.update-toast clears the safe-area bottom inset and stays within the safe-area lateral bounds', () => {
+    const rule = componentsCss.match(/\.update-toast\s*{([^}]*)}/);
+    expect(rule).toBeTruthy();
+    expect(rule[1]).toMatch(/bottom:\s*calc\(24px \+ var\(--safe-area-bottom\)\)/);
+    expect(rule[1]).toMatch(/max-width:\s*calc\(100vw - var\(--safe-area-left\) - var\(--safe-area-right\)/);
+  });
+
+  test('wide .wide-shell fills the padded frame (100%), never a raw 100vw/100vh viewport unit', () => {
+    const rule = wideCss.match(/\.wide-shell\s*{([^}]*)}/);
+    expect(rule).toBeTruthy();
+    expect(rule[1]).toMatch(/width:\s*100%/);
+    expect(rule[1]).toMatch(/height:\s*100%/);
+    expect(rule[1]).toMatch(/grid-template-rows:\s*100%/);
+  });
+});

@@ -1239,11 +1239,11 @@ button.protocol-card[aria-selected="true"],
 .in-run-screen {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* mobile-pwa-hardening SESSION-01 — 100% of the already-safe-area-padded
+     #app-root content box, not a raw 100vh/100dvh viewport fill that would
+     bypass that padding and render under a device cutout. */
+  height: 100%;
   min-height: 0;
-}
-@supports (height: 100dvh) {
-  .in-run-screen { height: 100dvh; }
 }
 
 /* Portrait console bar (SESSION-06) — in-flow flex child of the run
@@ -2094,14 +2094,18 @@ button.protocol-card[aria-selected="true"],
 .runtime-data-failure { display: grid; gap: 12px; padding: 24px; color: var(--text-primary); }
 .runtime-failure-action { justify-self: start; }
 
-/* Update toast — surfaced on runtime:update-ready while on an in-run surface.
-   Fixed above the console dock so it never overlaps the tab bar; the RELOAD
-   button keeps a ≥44px hit target per Custom Rule 5 touch targets. */
+/* Update toast — surfaced on runtime:update-ready on every route. Fixed
+   above the console dock so it never overlaps the tab bar; the RELOAD
+   button keeps a ≥44px hit target per Custom Rule 5 touch targets.
+   mobile-pwa-hardening SESSION-01 — bottom offset and a lateral max-width
+   both clear the safe-area insets so a wide (deferred-retry) toast can
+   never extend under a device cutout, even centered via translateX. */
 .update-toast {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + var(--safe-area-bottom));
   transform: translateX(-50%);
+  max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 32px);
   display: flex;
   align-items: center;
   gap: 16px;
