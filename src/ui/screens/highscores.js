@@ -138,6 +138,62 @@ export function mount(container) {
     return element;
   }
 
+  function createEntryCard(entry) {
+    const card = document.createElement('article');
+    card.className = 'run-card';
+    card.dataset.testid = `highscore-row-${entry.key}`;
+
+    const swatch = document.createElement('span');
+    swatch.className = 'accent-swatch';
+    swatch.style.backgroundColor = entry.accentSwatch;
+    swatch.setAttribute('aria-label', `Accent ${entry.accentSwatch}`);
+    card.appendChild(swatch);
+
+    const body = document.createElement('div');
+    body.className = 'run-card-body';
+
+    const head = document.createElement('div');
+    head.className = 'run-card-head';
+    const seed = document.createElement('div');
+    seed.className = 'run-card-seed accent-text glow';
+    seed.textContent = `SEED ${entry.worldSeed}`;
+    const theme = document.createElement('div');
+    theme.className = 'run-card-theme';
+    theme.textContent = themeText(entry);
+    head.append(seed, theme);
+
+    const mid = document.createElement('div');
+    mid.className = 'run-card-mid';
+    const party = document.createElement('div');
+    party.className = 'run-card-party';
+    party.dataset.testid = 'highscore-sigils';
+    appendDeadSigils(party, entry.partySigils);
+    const depthBlock = document.createElement('div');
+    depthBlock.className = 'run-card-depth';
+    const depthLabel = document.createElement('span');
+    depthLabel.className = 'label';
+    depthLabel.textContent = 'DEPTH';
+    const depthValue = document.createElement('span');
+    depthValue.className = 'value accent-text glow';
+    depthValue.textContent = String(entry.depth);
+    depthBlock.append(depthLabel, depthValue);
+    mid.append(party, depthBlock);
+
+    const meta = document.createElement('div');
+    meta.className = 'run-card-meta';
+    meta.textContent = `${classesText(entry)} · CAUSE OF DEATH: ${entry.causeOfDeath} · ${formatDate(entry.endedAt)}`;
+
+    body.append(head, mid, meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'run-card-actions';
+    actions.appendChild(restartButtonFor(entry));
+    body.appendChild(actions);
+
+    card.appendChild(body);
+    return card;
+  }
+
   function renderPortrait(entries) {
     const screen = document.createElement('section');
     screen.className = 'screen-container';
@@ -202,13 +258,87 @@ export function mount(container) {
     return screen;
   }
 
+  function renderWide(entries) {
+    const screen = document.createElement('section');
+    screen.className = 'screen-container wide-library-shell';
+    screen.dataset.wideRoot = '';
+    screen.setAttribute('aria-label', 'High scores');
+
+    const header = document.createElement('header');
+    header.className = 'panel-elevated wide-library-header';
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'micro eyebrow';
+    eyebrow.textContent = '◈ HIGH SCORES';
+    eyebrow.setAttribute('role', 'heading');
+    eyebrow.setAttribute('aria-level', '1');
+    const count = document.createElement('div');
+    count.className = 'headline subheading accent-text glow';
+    count.textContent = `${entries.length} OF ${HIGH_SCORE_CAP} RECORDED`;
+    header.append(eyebrow, count);
+    screen.appendChild(header);
+
+    const body = createScreenBody({ className: 'wide-library-body' });
+    body.dataset.testid = 'highscores-list';
+    if (entries.length === 0) {
+      const empty = createPanel({ title: 'NO FALLEN RUNS YET' });
+      empty.dataset.testid = 'highscores-empty';
+      empty.classList.add('no-limit-hint');
+      const message = document.createElement('p');
+      message.textContent = 'NO FALLEN RUNS YET — DEPTH REACHED AT WIPE BECOMES YOUR SCORE.';
+      empty.appendChild(message);
+      body.appendChild(empty);
+    } else {
+      body.setAttribute('aria-label', 'Recorded high scores');
+      body.tabIndex = 0;
+      const grid = document.createElement('div');
+      grid.className = 'wide-library-grid';
+      grid.dataset.testid = 'highscores-grid';
+      for (const entry of entries) grid.appendChild(createEntryCard(entry));
+      const hint = document.createElement('div');
+      hint.className = 'no-limit-hint';
+      hint.textContent = '◈ RANKED BY DEPTH REACHED, HIGHEST FIRST ◈';
+      grid.appendChild(hint);
+      body.appendChild(grid);
+    }
+    screen.appendChild(body);
+    scrollPane = body;
+
+    const actions = document.createElement('div');
+    actions.className = 'panel wide-library-footer';
+    const titleButton = track(createButton('', {
+      label: '◀ TITLE',
+      icon: 'arrow-left',
+      iconSize: 16,
+      onClick: () => navigate('title')
+    }));
+    titleButton.dataset.testid = 'highscores-title';
+    titleButton.style.flex = '0 0 96px';
+    titleButton.style.minWidth = '96px';
+    const spacer = document.createElement('div');
+    spacer.style.flex = '1';
+    const newRun = track(createButton('◈ NEW RUN', {
+      label: '◈ NEW RUN',
+      icon: 'chevron-right',
+      iconSize: 16,
+      iconTone: 'accent',
+      primary: true,
+      onClick: () => navigate('creation')
+    }));
+    newRun.classList.remove('btn-primary');
+    newRun.dataset.testid = 'highscores-new-run';
+    newRun.style.flex = '0 0 240px';
+    actions.append(titleButton, spacer, newRun);
+    screen.appendChild(actions);
+    return screen;
+  }
+
   function render() {
     captureScroll(scrollPane, SCROLL_KEY);
     cleanupRender();
     container.replaceChildren();
     scrollPane = null;
     const entries = listHighScores();
-    const screen = renderPortrait(entries);
+    const screen = isWide ? renderWide(entries) : renderPortrait(entries);
     container.replaceChildren(screen);
     restoreScroll(scrollPane, SCROLL_KEY);
   }
