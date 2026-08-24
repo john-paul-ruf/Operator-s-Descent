@@ -9,12 +9,19 @@
 | **Intent** | Remove scroll-dependent generic confirmation from normal play, make current state/results visible on touch, and let a new player deploy an editable recommended party quickly. |
 | **Sessions** | 5 |
 | **Plan directory** | `./program/operator-s-descent/prompts/direct-actions-and-quick-starts/` |
-| **External gate** | `./program/operator-s-descent/prompts/tech-protocol-e2e-repair/SESSION-02.md` and `./program/operator-s-descent/prompts/tech-protocol-e2e-repair/SESSION-03.md` must complete before SESSION-03 or SESSION-04 starts. Its SESSION-01 is already done. |
+| **External gate** | Satisfied in git: TECH repair SESSION-02 checkpoint commits `0c880e7`, `6248608`, `f843a2f` and SESSION-03 checkpoint commits `49861a1`, `c27f6c2` completed the live transaction and strict browser matrix before SESSION-04. Do not rerun the repair. |
 
 ## Worktree Coordination at Planning Time
 
-- **External repair lease in progress**: `./tests/ui/combat-screen.test.js` has uncommitted changes identified with `tech-protocol-e2e-repair` SESSION-02. It overlaps this plan’s future SESSION-03 lease. That external session must commit or explicitly hand off the work before SESSION-03 reads, stages, reverts, or changes the file.
+- **Historical external repair overlap**: `./tests/ui/combat-screen.test.js` was leased by the external repair before SESSION-03. That repair is now committed and its gate is satisfied; SESSION-05 receives the file only to reconcile the stale direct-TECH test sequence caused by completed SESSION-04.
 - **Unrelated local artifact**: `./.DS_Store` is untracked and outside every session lease. Do not stage it.
+- **Unrelated metadata artifact**: `./program/operator-s-descent/prompts/tech-protocol-e2e-repair/STATE.md` is deleted in the working tree but exists at `HEAD`; do not stage, restore, or treat that deletion as an unmet source-code gate during this feature.
+
+## Unblock Reconciliation — 2026-08-24
+
+1. **Human override accepted:** SESSION-03's atomic implementation made checkpoints 1 and 2 inseparable. Commit `a3e2846` is accepted as satisfying both declared checkpoints; commit `4e32a9b` satisfies checkpoint 3. Do not manufacture a no-op commit to inflate the count.
+2. **External gate verified:** the five TECH repair checkpoint commits above are ancestors of `HEAD`; a current Chromium TECH matrix passed 20/20 with no quarantine markers.
+3. **Release path repaired:** SESSION-05 now owns the two stale unit-test files whose old `tech-confirm` clicks became invalid when SESSION-04 intentionally removed that control. This keeps the reconciliation inside the final integration lease rather than creating a verification-only session.
 
 ## Session Status
 
@@ -22,9 +29,9 @@
 |---|---|---|---|---|---|---|---|
 | 1 | `./SESSION-01.md` — Add Editable Quick-Start Parties | M92, M69, M95 | `./src/ui/creation-model.js`, `./src/ui/screens/creation.js`, `./tests/ui/creation-model.test.js`, `./tests/ui/creation-screen.test.js` | done | 3/3 | 2026-08-24 | Added three immutable, editable quick-start presets (BREACH DRILL, SCOUT PAIR, FULL CREW) via getQuickStartParties()/load_quick_start; wired a QUICK START chooser before the detailed editor in the portrait creation screen; 4 focused regression tests added. |
 | 2 | `./SESSION-02.md` — Make Loot Pickup Self-Evident | M66, M95 | `./src/ui/console/loot.js`, `./tests/ui/console-loot.test.js` | done | 3/3 | 2026-08-24 | TAKE stays a single direct click; success/final-item feedback now renders above CONTENTS with the current inventory count. |
-| 3 | `./SESSION-03.md` — Replace Combat Confirmation with Direct Actions | M62, M71, M95 | `./src/ui/console/combat.js`, `./src/ui/screens/combat.js`, `./tests/ui/console-combat.test.js`, `./tests/ui/combat-screen.test.js`, `./tests/e2e/combat-touch.spec.js`, `./tests/e2e/mobile-combat-density.spec.js`, `./tests/e2e/touch-flow.spec.js` | blocked | 2/3 | 2026-08-24 (blocked) | Removed generic combat-confirm; wired direct action/target/destination execution (attack/cast/overclock/item/move/retreat/end-turn); targetless protocols cast on card-select; visible action-blocked-reason text added; BACK is the sole surviving cancel control.<br><br>**Blocked:** checkpoint shortfall — 2 checkpoint commits found for handoff checkpoint 3; checkpoints 1 and 2 were combined in commit `a3e2846`. |
+| 3 | `./SESSION-03.md` — Replace Combat Confirmation with Direct Actions | M62, M71, M95 | `./src/ui/console/combat.js`, `./src/ui/screens/combat.js`, `./tests/ui/console-combat.test.js`, `./tests/ui/combat-screen.test.js`, `./tests/e2e/combat-touch.spec.js`, `./tests/e2e/mobile-combat-density.spec.js`, `./tests/e2e/touch-flow.spec.js` | done | 3/3 | 2026-08-24 | Human override accepted: atomic commit `a3e2846` covers checkpoints 1+2 and `4e32a9b` covers checkpoint 3; no fabricated no-op checkpoint is required. Completed direct-combat implementation remains intact. |
 | 4 | `./SESSION-04.md` — Remove the Generic TECH Confirmation Step | M65, M95 | `./src/ui/console/tech.js`, `./tests/ui/console-tech.test.js`, `./tests/helpers/tech-protocol-e2e-fixture.js`, `./tests/e2e/tech-protocols.spec.js` | done | 3/3 | 2026-08-24 | Removed the generic TECH confirmation step: targetless protocols resolve directly on CAST/OVERCLOCK, targeted protocols resolve on one legal target activation; no tech-confirm control renders anywhere. External TECH E2E repair gate (tech-protocol-e2e-repair SESSION-02 + SESSION-03) verified done before starting. |
-| 5 | `./SESSION-05.md` — Direct Descent, Update the Manual, and Release the Cache | M61, M70, M111, M81, M95 | `./src/ui/console/move.js`, `./src/ui/screens/exploration.js`, `./data/manual.json`, `./service-worker.js`, `./tests/ui/move-mode.test.js`, `./tests/ui/exploration-screen.test.js`, `./tests/data/manual-content.test.js`, `./tests/integration/service-worker.test.js`, `./tests/e2e/playtest-feedback.spec.js` | pending | — | — | Integrates the direct-action contract, mobile regression story, and offline cache release. |
+| 5 | `./SESSION-05.md` — Direct Descent, Update the Manual, and Release the Cache | M61, M70, M111, M81, M95 | `./src/ui/console/move.js`, `./src/ui/screens/exploration.js`, `./data/manual.json`, `./service-worker.js`, `./tests/ui/move-mode.test.js`, `./tests/ui/exploration-screen.test.js`, `./tests/ui/combat-screen.test.js`, `./tests/ui/tech-loot-log.test.js`, `./tests/data/manual-content.test.js`, `./tests/integration/service-worker.test.js`, `./tests/e2e/playtest-feedback.spec.js` | pending | — | — | Final integration and cache release; also reconciles the two deliberate SESSION-04 direct-TECH test-contract breaks before final verification. |
 
 ## Wave Plan
 
@@ -33,7 +40,7 @@
 | 1 | SESSION-01 ∥ SESSION-02 | Their write leases are literally disjoint: creation model/screen/tests versus loot console/test. Both use focused unit/UI verification only. |
 | Gate | External TECH repair SESSION-02 → SESSION-03 | The current repair’s live TECH transaction and strict E2E matrix are artifacts that direct-TECH work must consume. |
 | 2 | SESSION-03 ∥ SESSION-04 | COMBAT and TECH leases are disjoint and can begin after the external gate. Both name `playwright:webserver`; Jikijitsu must hold that exclusive resource, so browser execution serializes even though source ownership does not overlap. |
-| 3 | SESSION-05 | One member: the manual and cache release must describe and publish the completed COMBAT/TECH direct-action contract; it also owns the cross-feature mobile acceptance artifact. |
+| 3 | SESSION-05 | One member: the manual and cache release must describe and publish the completed COMBAT/TECH direct-action contract; it also reconciles the stale unit-test contract and owns the cross-feature mobile acceptance artifact. |
 
 ## Dependency Graph
 
@@ -64,8 +71,8 @@ flowchart TD
 | M69 | `./src/ui/screens/creation.js`, `./tests/ui/creation-screen.test.js` | Direct editable QUICK START chooser in the dense builder. |
 | M66 | `./src/ui/console/loot.js`, `./tests/ui/console-loot.test.js` | Above-contents acquisition feedback and truthful cleared/error state. |
 | M62 | `./src/ui/console/combat.js`, `./tests/ui/console-combat.test.js` | Remove generic confirmation UI; expose actual disabled-action reasons. |
-| M71 | `./src/ui/screens/combat.js`, `./tests/ui/combat-screen.test.js` | Direct target/destination/end/retreat execution using existing guarded state paths. |
-| M65 | `./src/ui/console/tech.js`, `./tests/ui/console-tech.test.js` | Browse-versus-cast direct TECH contract without double transaction. |
+| M71 | `./src/ui/screens/combat.js`, `./tests/ui/combat-screen.test.js` | Direct target/destination/end/retreat execution using existing guarded state paths; SESSION-05 reconciles the stale TECH snapshot/redraw test sequence. |
+| M65 | `./src/ui/console/tech.js`, `./tests/ui/console-tech.test.js`, `./tests/ui/tech-loot-log.test.js` | Browse-versus-cast direct TECH contract without double transaction; SESSION-05 removes obsolete generic-confirm test interactions. |
 | M61, M70 | `./src/ui/console/move.js`, `./src/ui/screens/exploration.js`, focused tests | Direct legal DESCEND control and non-mutating unavailable state. |
 | M111 | `./data/manual.json`, `./tests/data/manual-content.test.js` | Accurate direct-action rules copy while retaining rule help links. |
 | M81 | `./service-worker.js`, `./tests/integration/service-worker.test.js` | Cache-version release for static source/data changes. |
