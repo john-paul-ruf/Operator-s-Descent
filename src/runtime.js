@@ -343,7 +343,14 @@ function actorFromSnapshot(actor, runState) {
     moveAvailable: (actor?.moves ?? 0) > 0,
     freeActions: actor?.freeActions ?? 0,
     sigilCodepoint: persistedStats?.sigilCodepoint ?? base.sigilCodepoint ?? codepointFromSigilId(base.sigilId) ?? (enemy ? 0xE030 : 0xE000),
-    defense: persistedStats?.defense ?? derivedStats?.defense ?? base.defense ?? (enemy ? 10 : 0),
+    // Party DEF is derived, never a flat default (Rule 13 parity with hpMax/chargeMax above):
+    // a resumed operator without a resolvable class registry falls back to base.defense ?? 0,
+    // matching src/ui/screens/combat.js's normalizeCombatActor guard so the same combatant
+    // reads the same DEF whether entered fresh or restored from a save.
+    defense: enemy
+      ? (persistedStats?.defense ?? derivedStats?.defense ?? base.defense ?? 10)
+      : (partyDerived?.defenseBase ?? base.defense ?? 0),
+    effectiveAttributes: partyDerived?.effectiveAttributes,
     protocolDefense: persistedStats?.protocolDefense ?? derivedStats?.protocolDefense ?? base.protocolDefense ?? 10,
     behavior: persistedStats?.behavior ?? derivedStats?.behavior ?? base.behavior ?? (enemy ? 'aggressive' : undefined),
     ...(persistedStats?.archetypeId ? { archetypeId: persistedStats.archetypeId } : base.archetypeId ? { archetypeId: base.archetypeId } : {}),

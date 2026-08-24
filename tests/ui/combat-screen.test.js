@@ -37,7 +37,9 @@ const gameData = {
   consumables: loadData('consumables'),
   classes: loadData('classes'),
   themes: loadData('themes'),
-  enemies: loadData('enemies')
+  enemies: loadData('enemies'),
+  equipment: loadData('equipment'),
+  affixes: loadData('affixes')
 };
 
 class FakeClassList {
@@ -1249,6 +1251,52 @@ describe('combat screen controller', () => {
     // without regressing legitimate explicit maxes.
     expect(hero.hpMax).toBe(30);
     expect(hero.chargeMax).toBe(10);
+    controller.unmount();
+    void container;
+  });
+
+  // affixes-take-effect SESSION-04 checkpoint 1 — party DEF becomes real (D8): armor
+  // defenseBonus + Fortified's own +2 both land, and the FIN penalty (operator does not ignore
+  // medium armor's -1, unlike breacher/anchor) shows up in effectiveAttributes.fin.
+  // DEF = 10 + FIN mod(effectiveFin=5 → 0) + armor DEF(3) + Fortified(+2) = 15.
+  it('derives real DEF and effective FIN for a party actor with armor + Fortified', async () => {
+    const armored = partyActor({
+      id: 'hero',
+      classId: 'operator',
+      attributes: { mgt: 8, fin: 6, vit: 6, res: 5, foc: 5, sig: 5 },
+      defense: undefined,
+      equipment: {
+        weapon: null,
+        armor: { id: 'gear_armor', baseType: 'medium', affixes: ['fortified'] },
+        offhand: null
+      }
+    });
+    const combat = combatState([armored, enemyActor()]);
+    const { container, controller } = await mountCombat({ combat });
+    const hero = combat.combatants.get('hero');
+    expect(hero.defense).toBe(15);
+    expect(hero.effectiveAttributes.fin).toBe(5);
+    controller.unmount();
+    void container;
+  });
+
+  it('preserves an explicit party defense over the derived value on entry', async () => {
+    const combat = combatState([partyActor({ id: 'hero' }), enemyActor()]);
+    const { container, controller } = await mountCombat({ combat });
+    const hero = combat.combatants.get('hero');
+    // partyActor default defense=12 — must stick even though it differs from the
+    // class+loadout-derived value (breacher, unarmored → derived DEF would be lower).
+    expect(hero.defense).toBe(12);
+    controller.unmount();
+    void container;
+  });
+
+  it('falls back to undefined defense for a party actor with no resolvable class', async () => {
+    const classless = partyActor({ id: 'hero', classId: 'not-a-real-class', defense: undefined });
+    const combat = combatState([classless, enemyActor()]);
+    const { container, controller } = await mountCombat({ combat });
+    const hero = combat.combatants.get('hero');
+    expect(hero.defense).toBeUndefined();
     controller.unmount();
     void container;
   });

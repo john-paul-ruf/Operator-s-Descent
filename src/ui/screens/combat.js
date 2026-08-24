@@ -76,16 +76,16 @@ function normalizeCondition(condition) {
   return { ...condition, id, conditionId: id, duration: condition?.duration ?? 0 };
 }
 
-// Derive hpMax/chargeMax for a party actor from its class + loadout via the
-// canonical rules.attributes.deriveStats function. Returns null when the class
-// registry is unavailable (test envs without the data pack) so the caller falls
-// back to the pre-derivation path.
-function derivedPartyMaxes(actor, data) {
+// Derive hpMax/chargeMax/defenseBase/effectiveAttributes for a party actor from its class +
+// loadout via the canonical rules.attributes.deriveStats function. Returns null when the class
+// registry is unavailable (test envs without the data pack) so the caller falls back to the
+// pre-derivation path.
+function derivedPartyStats(actor, data) {
   const classData = data?.classes?.classes?.find((entry) => entry.id === actor?.classId) || null;
   if (!classData) return null;
   const loadout = data ? resolveLoadout(actor, data.equipment, data.affixes) : null;
   const derived = deriveStats(actor, classData, loadout || actor?.equipment || {});
-  return { hpMax: derived.hpMax, chargeMax: derived.chargeMax };
+  return { hpMax: derived.hpMax, chargeMax: derived.chargeMax, defenseBase: derived.defenseBase, effectiveAttributes: derived.effectiveAttributes };
 }
 
 function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
@@ -97,15 +97,11 @@ function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
   // damageDie/rangeBand/maxRange. A null loadout (equipment-less enemy) falls
   // through so the caller's UNARMED_WEAPON / archetype fallback stays intact.
   const loadout = data && actor?.equipment ? resolveLoadout(actor, data.equipment, data.affixes) : null;
-  // Derive party maxes when the actor lacks an explicit max — fixes the reported
-  // "HP N/N while injured" bug where an injured party member entering combat would
-  // otherwise fabricate hpMax from currentHP. Enemies, echoes, and snapshot actors
-  // arrive with hpMax already, so this stays null for them and the fallback below
-  // short-circuits before touching `hp`.
-  const derived = side === 'party' && (
-    (actor?.hpMax == null && actor?.maxHP == null) ||
-    (actor?.chargeMax == null && actor?.maxCHARGE == null)
-  ) ? derivedPartyMaxes(actor, data) : null;
+  // Derive party stats for every actor with a resolvable class (not only when hpMax/chargeMax
+  // are missing) — SESSION-04: DEF and FIN-penalized effective attributes must be real for every
+  // party combatant entering combat, not only the injured-resume fallback case. Enemies, echoes,
+  // and actors without a resolvable class fall through to the pre-derivation path below.
+  const derived = side === 'party' ? derivedPartyStats(actor, data) : null;
   return {
     ...actor,
     side,
@@ -120,7 +116,9 @@ function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
     armor: loadout?.armor ?? actor?.armor ?? equipment.armor ?? null,
     offhand: loadout?.offhand ?? actor?.offhand ?? equipment.offhand ?? null,
     sigilCodepoint: actorSigil(actor, side),
-    conditions: (actor?.conditions || []).map(normalizeCondition)
+    conditions: (actor?.conditions || []).map(normalizeCondition),
+    defense: actor?.defense ?? derived?.defenseBase,
+    effectiveAttributes: actor?.effectiveAttributes ?? derived?.effectiveAttributes
   };
 }
 
