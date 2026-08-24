@@ -11,7 +11,7 @@ import { createEnemy } from '../../rules/enemies.js';
 import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalActions, getCharacterDeaths, toCombatSnapshot, reachableMoveCells, isLegalMoveStep, MOVE_RANGE } from '../../rules/combat.js';
 import { createStandardEncounter, completeEncounter } from '../../rules/encounters.js';
 import { distanceCells, getEdgeCoverBonus, isFlanked } from '../../rules/combat-geometry.js';
-import { evaluateRange, resolveLoadout } from '../../rules/equipment.js';
+import { evaluateRange, resolveLoadout, getAffixHooks, useAffixReroll } from '../../rules/equipment.js';
 import { deriveStats } from '../../rules/attributes.js';
 import { createViewportCamera, attachViewportGestures, sizeCanvasToContainer } from '../viewport.js';
 
@@ -88,7 +88,22 @@ function derivedPartyStats(actor, data) {
   return { hpMax: derived.hpMax, chargeMax: derived.chargeMax, defenseBase: derived.defenseBase, effectiveAttributes: derived.effectiveAttributes };
 }
 
-function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
+// Lucky availability (D2/SESSION-01 contract): the first equipped item carrying an unclaimed
+// once-per-floor reroll charge, scanned in equipment order (weapon, armor, offhand). Combat-only,
+// never persisted (D6) — recomputed fresh at every construction from the persisted
+// runState.affixFloorLedger. Returns null when no item qualifies (nothing to reroll with, or
+// every qualifying item is already claimed this floor).
+function luckyRerollFor(equipment, data, runState) {
+  if (!data?.affixes) return null;
+  const claimed = runState?.affixFloorLedger?.reroll || [];
+  for (const item of Object.values(equipment || {})) {
+    if (!item?.id || claimed.includes(item.id)) continue;
+    if (getAffixHooks(item.affixes, data.affixes).reroll.perFloor > 0) return { available: true, itemId: item.id };
+  }
+  return null;
+}
+
+function normalizeCombatActor(actor, fallbackSide = 'party', data = null, runState = null) {
   const side = actorSide(actor, fallbackSide);
   const equipment = actor?.equipment || { weapon: actor?.weapon ?? null, armor: actor?.armor ?? null, offhand: actor?.offhand ?? null };
   const hp = actor?.hp ?? actor?.currentHP ?? 1;
@@ -118,25 +133,26 @@ function normalizeCombatActor(actor, fallbackSide = 'party', data = null) {
     sigilCodepoint: actorSigil(actor, side),
     conditions: (actor?.conditions || []).map(normalizeCondition),
     defense: actor?.defense ?? derived?.defenseBase,
-    effectiveAttributes: actor?.effectiveAttributes ?? derived?.effectiveAttributes
+    effectiveAttributes: actor?.effectiveAttributes ?? derived?.effectiveAttributes,
+    ...(side === 'party' ? { luckyReroll: luckyRerollFor(equipment, data, runState) } : {})
   };
 }
 
-function normalizeEncounter(encounter, data = null) {
+function normalizeEncounter(encounter, data = null, runState = null) {
   if (!encounter || !Array.isArray(encounter.actors)) return null;
   return {
     ...encounter,
     window: encounter.window || DEFAULT_WINDOW,
-    actors: encounter.actors.map((actor) => normalizeCombatActor(actor, actor?.side || 'enemy', data))
+    actors: encounter.actors.map((actor) => normalizeCombatActor(actor, actor?.side || 'enemy', data, runState))
   };
 }
 
-function normalizeCombatState(combatState, data = null) {
+function normalizeCombatState(combatState, data = null, runState = null) {
   if (!combatState) return null;
   const entries = combatState.combatants instanceof Map
-    ? [...combatState.combatants.entries()].map(([id, actor]) => [id, normalizeCombatActor(actor, actor?.side || 'party', data)])
+    ? [...combatState.combatants.entries()].map(([id, actor]) => [id, normalizeCombatActor(actor, actor?.side || 'party', data, runState)])
     : Array.isArray(combatState.combatants)
-      ? combatState.combatants.map((actor) => [actor.id, normalizeCombatActor(actor, actor?.side || 'party', data)])
+      ? combatState.combatants.map((actor) => [actor.id, normalizeCombatActor(actor, actor?.side || 'party', data, runState)])
       : null;
   if (!entries) return null;
   combatState.combatants = new Map(entries);
@@ -163,7 +179,7 @@ function normalizeEnemySpawns(spawns, depth, rngCursor, enemiesData) {
 
 function fallbackEncounter(floor, runState, rngCursor, data) {
   const enemies = data.enemies ? normalizeEnemySpawns(floor?.enemySpawns, runState.depth, rngCursor, data.enemies) : [];
-  return normalizeEncounter(createStandardEncounter(floor, runState.partyPosition || floor?.entryPoint || { x: 0, y: 0 }, runState.party || [], enemies, rngCursor), data);
+  return normalizeEncounter(createStandardEncounter(floor, runState.partyPosition || floor?.entryPoint || { x: 0, y: 0 }, runState.party || [], enemies, rngCursor), data, runState);
 }
 
 function windowLattice(window) {
@@ -372,13 +388,17 @@ function actionFailureMessage(reason) {
 }
 
 export function mount(container, params = {}) {
-  const runState = params.runState;
+  // Reassigned once, at combat-end, when a Lucky reroll charge is claimed onto a cloned
+  // runState (SESSION-04 checkpoint 2) — every other reference in this closure reads the
+  // current binding, so the claim rides the same combat-resolution autosave as the rest of
+  // the terminal sync.
+  let runState = params.runState;
   const floor = params.floor;
   const data = params.data || {};
   const rngCursor = createRNGCursorForRun(runState.worldSeed, runState.rngState);
   const lattice = params.lattice || (floor ? createLattice(floor, runState) : null);
-  const encounter = normalizeEncounter(params.encounter, data) || fallbackEncounter(floor, runState, rngCursor, data) || { id: 'combat', kind: 'standard', window: DEFAULT_WINDOW, actors: [] };
-  const combatState = normalizeCombatState(params.combatState, data) || initiateCombat(encounter, rngCursor);
+  const encounter = normalizeEncounter(params.encounter, data, runState) || fallbackEncounter(floor, runState, rngCursor, data) || { id: 'combat', kind: 'standard', window: DEFAULT_WINDOW, actors: [] };
+  const combatState = normalizeCombatState(params.combatState, data, runState) || initiateCombat(encounter, rngCursor);
   const combatLattice = windowLattice(combatState.window);
   const rulesContext = {
     runState,
@@ -1383,10 +1403,27 @@ export function mount(container, params = {}) {
     finishPlayback();
   }
 
+  // Claims the once-per-floor ledger charge for every Lucky reroll this combat actually used
+  // (D2). One useAffixReroll call per distinct itemId — a duplicate luckyReroll log entry for
+  // the same item (can't happen today since luckyRerollUsed gates one reroll per actor per
+  // combat, but the dedupe stays defensive) never double-claims. A mid-combat autosave made
+  // BEFORE this point can still resurrect the charge on resume — accepted v1 edge, see STATE.md.
+  function claimLuckyRerolls() {
+    const itemIds = new Set();
+    for (const entry of combatState.log) {
+      if (entry?.luckyReroll?.itemId) itemIds.add(entry.luckyReroll.itemId);
+    }
+    for (const itemId of itemIds) {
+      const claim = useAffixReroll(runState, itemId, data.affixes);
+      if (claim.success) runState = claim.runState;
+    }
+  }
+
   function dispatchTerminal() {
     if (!mounted || terminalDispatched || !combatState.ended) return;
     terminalDispatched = true;
     syncRunStateFromCombat(runState, combatState, { removeDead: combatState.result !== 'wipe' });
+    claimLuckyRerolls();
     runState.activeCombat = null;
     const completion = completeEncounter(encounter, combatState);
     if (encounter.kind === 'hunt' && (combatState.result === 'victory' || combatState.result === 'retreat')) runState.dangerClockProgress = 0;

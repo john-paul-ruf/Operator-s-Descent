@@ -1301,6 +1301,57 @@ describe('combat screen controller', () => {
     void container;
   });
 
+  // affixes-take-effect SESSION-04 checkpoint 2 — Lucky availability + the floor claim.
+  function luckyWeaponItem(id = 'lucky_weapon_1') {
+    return { id, category: 'weapon', baseType: 'sidearm', rarity: 'stock', affixes: ['lucky'], corrupt: false, stats: {}, salvageValue: 0, junkTagged: false };
+  }
+
+  it('sets actor.luckyReroll from an unclaimed once-per-floor reroll item on the equipped gear', async () => {
+    const item = luckyWeaponItem();
+    const hero = partyActor({ id: 'hero', equipment: { weapon: item, armor: null, offhand: null } });
+    const combat = combatState([hero, enemyActor()]);
+    const { container, controller } = await mountCombat({ combat });
+    expect(combat.combatants.get('hero').luckyReroll).toEqual({ available: true, itemId: item.id });
+    controller.unmount();
+    void container;
+  });
+
+  it('omits actor.luckyReroll once the item is already claimed on the floor ledger', async () => {
+    const item = luckyWeaponItem();
+    const hero = partyActor({ id: 'hero', equipment: { weapon: item, armor: null, offhand: null } });
+    const combat = combatState([hero, enemyActor()]);
+    const state = runState();
+    state.affixFloorLedger.reroll.push(item.id);
+    const { container, controller } = await mountCombat({ combat, state });
+    expect(combat.combatants.get('hero').luckyReroll).toBeNull();
+    controller.unmount();
+    void container;
+  });
+
+  it('claims a used Lucky reroll onto the floor ledger exactly once at combat end, even with duplicate log entries for the same item', async () => {
+    const item = luckyWeaponItem();
+    const hero = makeCharacter({ id: 'hero', hp: 30, hpMax: 30, charge: 10, chargeMax: 10, equipment: { weapon: item, armor: null, offhand: null } });
+    const state = runState(1234, [hero]);
+    const combat = combatState([
+      partyActor({ id: 'hero', hp: 30, hpMax: 30 }),
+      enemyActor({ hp: 0, hpMax: 1 })
+    ]);
+    // Simulate two Lucky-reroll attack log entries for the same item — the rules layer only
+    // ever emits one per actor per combat (luckyRerollUsed), but the claim dedupes regardless.
+    combat.log.push(
+      { type: 'attack', actorId: 'hero', targetId: 0, hit: true, damage: 1, luckyReroll: { itemId: item.id, firstNatural: 3, keptNatural: 18 } },
+      { type: 'attack', actorId: 'hero', targetId: 0, hit: true, damage: 1, luckyReroll: { itemId: item.id, firstNatural: 4, keptNatural: 19 } }
+    );
+    const payloads = [];
+    const off = bus.on('state:combat-end', (payload) => payloads.push(payload));
+    const { container, controller } = await mountCombat({ combat, state });
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].runState.affixFloorLedger.reroll).toEqual([item.id]);
+    off();
+    controller.unmount();
+    void container;
+  });
+
   // viewState now carries `data` (SESSION-02/03 party/tech/gear consumers) and
   // `logEntries` (LOG mode merges with runState.recentEvents). Both flow through
   // the console shell to the mode context. Clicking the LOG tab renders the
