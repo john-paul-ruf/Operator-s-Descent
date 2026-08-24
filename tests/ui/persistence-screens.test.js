@@ -524,7 +524,7 @@ describe('scorecard screen', () => {
     expect(byTestId(container, 'scorecard-library')).toBeTruthy();
 
     const copyBtn = byTestId(container, 'scorecard-copy-world');
-    expect(copyBtn.getAttribute('aria-label')).toBe('COPY WORLD LINK');
+    expect(copyBtn.getAttribute('aria-label')).toBe('SHARE WORLD LINK');
     expect(iconUseId(copyBtn)).toBe('link');
     const restartBtn = byTestId(container, 'scorecard-restart-seed');
     expect(restartBtn.getAttribute('aria-label')).toBe('RESTART SAME SEED');
@@ -634,5 +634,75 @@ describe('scorecard screen', () => {
     expect(status.textContent).not.toContain('COPIED');
     expect(shareField.focused).toBe(true);
     expect(shareField.value).toContain(`#w=${encodeSeed(777)}`);
+  });
+
+  it('shares the exact seed-only link via the native share sheet when available, without touching the clipboard', async () => {
+    const shareSpy = vi.fn(() => Promise.resolve());
+    globalThis.navigator.share = shareSpy;
+
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const status = byTestId(container, 'scorecard-copy-status');
+    const shareUrl = `http://127.0.0.1:8080/index.html#w=${encodeSeed(777)}`;
+
+    await byTestId(container, 'scorecard-copy-world').click();
+    expect(shareSpy).toHaveBeenCalledWith(expect.objectContaining({ url: shareUrl }));
+    expect(shareSpy.mock.calls[0][0]).not.toHaveProperty('files');
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(status.textContent).toBe('WORLD LINK SHARED');
+  });
+
+  it('reports cancellation on AbortError without falling back to the clipboard', async () => {
+    const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    globalThis.navigator.share = vi.fn(() => Promise.reject(abortError));
+
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const status = byTestId(container, 'scorecard-copy-status');
+
+    await byTestId(container, 'scorecard-copy-world').click();
+    expect(status.textContent).toBe('SHARE CANCELLED');
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the clipboard on a non-cancel share failure', async () => {
+    globalThis.navigator.share = vi.fn(() => Promise.reject(new Error('share target missing')));
+
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const status = byTestId(container, 'scorecard-copy-status');
+    const shareUrl = `http://127.0.0.1:8080/index.html#w=${encodeSeed(777)}`;
+
+    await byTestId(container, 'scorecard-copy-world').click();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(shareUrl);
+    expect(status.textContent).toBe('WORLD LINK COPIED');
+  });
+
+  it('clears the pending label-reset timer on unmount instead of leaking it', async () => {
+    vi.useFakeTimers();
+    const runState = makeState(777, 700, 12);
+    const { mount } = await import('../../src/ui/screens/scorecard.js');
+    const container = new FakeElement('div');
+    const screen = mount(container, { runState, causeOfDeath: 'Party Wipe' });
+
+    const copyBtn = byTestId(container, 'scorecard-copy-world');
+    await copyBtn.click();
+    expect(copyBtn.textContent).toBe('WORLD LINK COPIED');
+
+    screen.unmount();
+    vi.advanceTimersByTime(5000);
+    // The label swap after unmount would throw/no-op against a torn-down
+    // button if the timer were not cleared; asserting the pre-unmount text
+    // is unchanged proves the timeout never fired.
+    expect(copyBtn.textContent).toBe('WORLD LINK COPIED');
   });
 });

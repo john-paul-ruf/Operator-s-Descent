@@ -141,8 +141,14 @@ export function mount(container, params = {}) {
 
   let resetTimer = null;
 
-  async function copyShareLink() {
-    linkDisplay.value = shareLink;
+  function flashLabel(text) {
+    swapButtonLabel(copyBtn, text);
+    if (typeof globalThis.setTimeout !== 'function') return;
+    if (resetTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(resetTimer);
+    resetTimer = globalThis.setTimeout(() => { swapButtonLabel(copyBtn, 'SHARE WORLD LINK'); resetTimer = null; }, 2000);
+  }
+
+  async function copyToClipboard() {
     let copied = false;
     try {
       if (globalThis.navigator?.clipboard?.writeText) {
@@ -159,11 +165,7 @@ export function mount(container, params = {}) {
     }
     if (copied) {
       copyStatus.textContent = 'WORLD LINK COPIED';
-      swapButtonLabel(copyBtn, 'WORLD LINK COPIED');
-      if (typeof globalThis.setTimeout === 'function') {
-        if (resetTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(resetTimer);
-        resetTimer = globalThis.setTimeout(() => { swapButtonLabel(copyBtn, 'COPY WORLD LINK'); resetTimer = null; }, 2000);
-      }
+      flashLabel('WORLD LINK COPIED');
     } else {
       copyStatus.textContent = 'CLIPBOARD UNAVAILABLE — SELECT LINK';
       linkDisplay.focus?.();
@@ -171,8 +173,32 @@ export function mount(container, params = {}) {
     }
   }
 
-  const copyBtn = createButton('COPY WORLD LINK', {
-    label: 'COPY WORLD LINK',
+  async function copyShareLink() {
+    linkDisplay.value = shareLink;
+    if (globalThis.navigator?.share) {
+      try {
+        await globalThis.navigator.share({
+          title: "Operator's Descent",
+          text: 'Join my world in Operator\'s Descent.',
+          url: shareLink,
+        });
+        copyStatus.textContent = 'WORLD LINK SHARED';
+        flashLabel('WORLD LINK SHARED');
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          copyStatus.textContent = 'SHARE CANCELLED';
+          return;
+        }
+        // Any other share failure (unsupported context, permission denial,
+        // etc.) falls through to the honest clipboard fallback below.
+      }
+    }
+    await copyToClipboard();
+  }
+
+  const copyBtn = createButton('SHARE WORLD LINK', {
+    label: 'SHARE WORLD LINK',
     icon: 'link',
     iconSize: 14,
     iconTone: 'accent',
