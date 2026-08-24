@@ -254,6 +254,39 @@ describe('protocol effect handlers', () => {
   it.each(scenarios)('%s', (_, run) => run());
 });
 
+describe('Conducting affix protocol damage', () => {
+  const target = effectActor('target', 'enemy', { x: 2, y: 0 });
+  const nearby = effectActor('nearby', 'enemy', { x: 3, y: 0 });
+
+  it('adds the caster weapon/offhand protocolBonus to a single damage event', () => {
+    const conductingCaster = effectActor('caster', 'party', { x: 0, y: 0 }, { weapon: { effects: { damage: { protocolBonus: 1 } } } });
+    const result = applyEffect('disrupt', 1, { actor: conductingCaster, targets: [target] });
+    expect(changed(result, 'target').hp).toBe(18);
+  });
+
+  it('applies the bonus to every splash target, once per damage event', () => {
+    const conductingCaster = effectActor('caster', 'party', { x: 0, y: 0 }, { offhand: { effects: { damage: { protocolBonus: 1 } } } });
+    const result = applyEffect('disrupt', 2, { actor: conductingCaster, targets: [target], actors: [nearby] });
+    expect(changed(result, 'target').hp).toBe(17);
+    expect(changed(result, 'nearby').hp).toBe(18);
+  });
+
+  it('leaves damage unchanged for a caster with a raw unresolved weapon object', () => {
+    const rawCaster = effectActor('caster', 'party', { x: 0, y: 0 }, { weapon: { damageDie: 'd6' } });
+    const result = applyEffect('disrupt', 1, { actor: rawCaster, targets: [target] });
+    expect(changed(result, 'target').hp).toBe(19);
+  });
+
+  it('keeps a positive affix bonus from dragging the zero-damage floor negative', () => {
+    const weakCaster = effectActor('caster', 'party', { x: 0, y: 0 }, {
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 1, foc: 5, sig: 4 },
+      weapon: { effects: { damage: { protocolBonus: 1 } } }
+    });
+    const result = applyEffect('disrupt', 1, { actor: weakCaster, targets: [target] });
+    expect(changed(result, 'target').hp).toBe(20);
+  });
+});
+
 describe('HP alias invariant', () => {
   it('keeps hp and currentHP coherent when healing a dual-shaped actor', () => {
     const dualAlly = effectActor('ally', 'party', { x: 2, y: 0 }, { hp: 10, currentHP: 10, hpMax: 20 });

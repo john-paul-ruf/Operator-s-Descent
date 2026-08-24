@@ -284,7 +284,9 @@ function alliedActors(caster, state, context) {
 
 function effectDamage(caster, target, request, state, rngCursor, { count = request.effectiveTier, sides = 6, maximum = false, label = 'damage' } = {}) {
   const rolls = maximum ? Array.from({ length: count }, () => sides) : Array.from({ length: count }, () => rngCursor.nextInt('combat', sides) + 1);
-  const amount = Math.max(0, rolls.reduce((total, roll) => total + roll, 0) + modifier(caster.attributes?.res));
+  const affixBonus = (caster.weapon?.effects?.damage?.protocolBonus ?? 0)
+    + (caster.offhand?.effects?.damage?.protocolBonus ?? 0);
+  const amount = Math.max(0, rolls.reduce((total, roll) => total + roll, 0) + modifier(caster.attributes?.res) + affixBonus);
   const next = actorById(state, target);
   const hp = Math.max(0, actorHp(next) - amount);
   const updated = withActorHp(next, hp);
