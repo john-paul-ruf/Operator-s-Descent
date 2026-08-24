@@ -598,6 +598,26 @@ describe('executeAction — item', () => {
     const result = executeAction(state, { type: 'item', actorId: 'a', targetId: 'a', consumableId: 'repair_patch' }, cursor, ctx);
     expect(result.success).toBe(true);
   });
+
+  it('Adrenal Injector costs 0 AP to use, netting a real AP gain (not neutral, not negative)', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const enemy = makeEnemy({ id: 'enemy_1' });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.combatants.get('a').ap = 1; // simulates having already spent one action this turn
+    const result = executeAction(state, { type: 'item', actorId: 'a', targetId: 'a', consumableId: 'adrenal_injector' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(result.apRestored).toBe(1);
+    expect(state.combatants.get('a').ap).toBe(2); // 1 -> restored to 2 -> apCost 0 -> stays 2 (net +1)
+  });
+
+  it('Adrenal Injector at full AP is a harmless no-op, not a loss', () => {
+    const party = [makeCharacter({ id: 'a' })];
+    const enemy = makeEnemy({ id: 'enemy_1' });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a'); // starts at 2 AP
+    const result = executeAction(state, { type: 'item', actorId: 'a', targetId: 'a', consumableId: 'adrenal_injector' }, cursor, baseContext);
+    expect(result.success).toBe(true);
+    expect(state.combatants.get('a').ap).toBe(2); // capped restore (no-op) + 0 AP cost -> unchanged, never negative
+  });
 });
 
 describe('executeAction — retreat', () => {
