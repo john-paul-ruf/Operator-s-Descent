@@ -91,7 +91,10 @@ test('taking a controlled loot item immediately shows its acquisition result abo
 
   const pickupResult = page.getByTestId('loot-pickup-result');
   await expect(pickupResult).toBeVisible();
-  await expect(pickupResult).toHaveText(/^(LOOT ACQUIRED|CONTAINER CLEARED) — .+ · INVENTORY \d+\/100$/);
+  // v7 cap is INVENTORY_CAP=40 (saves-never-fail SESSION-01 CP3). UI already
+  // renders X/CAP dynamically (src/ui/console/loot.js reads INVENTORY_CAP),
+  // so this literal follows the cap.
+  await expect(pickupResult).toHaveText(/^(LOOT ACQUIRED|CONTAINER CLEARED) — .+ · INVENTORY \d+\/40$/);
   // Above CONTENTS: the pickup result renders before the heading in DOM order.
   const contentsHeading = page.getByTestId('loot-contents-heading');
   const order = await page.evaluate(() => {

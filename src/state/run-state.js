@@ -1,5 +1,6 @@
 import { dangerClockBaseRate, corruptionDangerRate } from '../rules/scaling.js';
 import { createRNGCursorForRun } from '../core/rng-cursor.js';
+import { INVENTORY_CAP } from '../rules/inventory.js';
 import { GRID_W, GRID_H } from '../floor/archetypes.js';
 
 // v6 derives fog sizing from the live floor dimensions (floor → state import
@@ -11,14 +12,27 @@ const GRID_WIDTH = GRID_W;
 const GRID_HEIGHT = GRID_H;
 export const FOG_BYTES = Math.ceil((GRID_WIDTH * GRID_HEIGHT) / 8);
 const MAX_DEPTH = 255;
-const MAX_INVENTORY = 100;
+// saves-never-fail SESSION-01 CP3 split "runtime" caps from "load-tolerant"
+// bounds. Runtime mutators (isInventoryFull, recordEvent trim) enforce the
+// STRICT v7 caps (INVENTORY_CAP, MAX_EVENTS, MAX_CORRUPT_IMPLANTS). Load-
+// path normalization enforces LEGACY caps (LEGACY_MAX_*) so pre-v7 saves
+// still deserialize through the frozen readers — the v6→v7 migration hop
+// clamps them to v7 caps before re-encode. Strict enforcement at the wire
+// lives in save-schema.js. Without this split, a v3/v4 save with 100 items
+// would fail deserializeRunState (called inside every frozen reader) and
+// dead-end at load, violating Custom Rule 13.
+const MAX_INVENTORY = INVENTORY_CAP;
+const LEGACY_MAX_INVENTORY = 100;
 const MAX_ECHOES = 2;
-const MAX_CORRUPT_IMPLANTS = 118;
+const MAX_CORRUPT_IMPLANTS = 32;
+const LEGACY_MAX_CORRUPT_IMPLANTS = 118;
 const MAX_AFFIX_LEDGER_IDS = 12;
-const MAX_EVENTS = 64;
+const MAX_EVENTS = 24;
+const LEGACY_MAX_EVENTS = 64;
 const MAX_BITFIELD = (1n << 64n) - 1n;
 const MAX_EXTENSION_BYTES = 2048;
-const MAX_COMBAT_BYTES = 12288;
+const MAX_COMBAT_BYTES = 4096;
+const LEGACY_MAX_COMBAT_BYTES = 12288;
 const ATTRIBUTE_NAMES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
 
 function isPlainObject(value) {
@@ -97,7 +111,8 @@ function normalizeItem(value) {
   if (typeof value.category !== 'string' || typeof value.baseType !== 'string') return null;
   if (!Array.isArray(value.affixes) || value.affixes.length > 8 || !value.affixes.every(id => typeof id === 'string' && id.length <= 64)) return null;
   if (!Number.isFinite(value.salvageValue) || value.salvageValue < 0 || value.salvageValue > 1_000_000) return null;
-  if (value.count !== undefined && !finiteInteger(value.count, 1, 100)) return null;
+  // Load-tolerant: legacy stacks pre-v7 could go up to 100 units.
+  if (value.count !== undefined && !finiteInteger(value.count, 1, LEGACY_MAX_INVENTORY)) return null;
   if (value.corruptionValue !== undefined && (!Number.isFinite(value.corruptionValue) || value.corruptionValue < 0 || value.corruptionValue > 1_000_000)) return null;
   const item = {
     id: value.id,
@@ -259,7 +274,11 @@ function normalizePersistedEvent(event) {
 // per-entry sanitizer directly and rejects invalid input at that boundary.
 function normalizePersistedEvents(value) {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > MAX_EVENTS) return null;
+  // Load-tolerant: pre-v7 saves carry up to LEGACY_MAX_EVENTS (64). Live
+  // v7 mutator recordEvent trims to MAX_EVENTS (24); the migration hop
+  // clamps decoded state to MAX_EVENTS. Reject only if the array is
+  // pathologically large.
+  if (!Array.isArray(value) || value.length > LEGACY_MAX_EVENTS) return null;
   return value.map(normalizePersistedEvent).filter(entry => entry !== undefined);
 }
 
@@ -511,7 +530,13 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
   if (!Array.isArray(input.party) || input.party.length > 4 || (!allowConstructionDefaults && input.party.length < 1)) return null;
   const party = input.party.map(character => normalizeCharacter(character, { sourceVersion, allowConstructionDefaults }));
   if (party.some(character => character === null)) return null;
-  if (!Array.isArray(input.inventory) || input.inventory.length > MAX_INVENTORY) return null;
+  // Load-tolerant inventory cap: pre-v7 saves carry up to
+  // LEGACY_MAX_INVENTORY (100 units in the shipped v3/v4/v5 encoders). Live
+  // mutators (addItem in src/rules/inventory.js, isInventoryFull below)
+  // enforce INVENTORY_CAP (40); the migration hop clamps decoded state to
+  // INVENTORY_CAP before re-encode. Rejecting here would strand every v3/v4
+  // save with >40 items.
+  if (!Array.isArray(input.inventory) || input.inventory.length > LEGACY_MAX_INVENTORY) return null;
   const inventory = input.inventory.map(normalizeItem);
   if (inventory.some(item => item === null)) return null;
   if (!Number.isFinite(input.corruption ?? 0) || input.corruption < 0 || input.corruption > 1_000_000 || !finiteInteger(input.credits ?? 0, 0, 1_000_000_000) || !finiteInteger(input.scrapCounter ?? 0, 0, 1_000_000_000)) return null;
@@ -525,10 +550,15 @@ function normalizeRunState(input, { sourceVersion, allowConstructionDefaults = f
   const flags = input.flags ?? {};
   if (!isPlainObject(flags) || !Array.isArray(flags.calibrationFloorsReached ?? []) || flags.calibrationFloorsReached.length > 16 || !(flags.calibrationFloorsReached ?? []).every(floor => finiteInteger(floor, 1, MAX_DEPTH))) return null;
   const appliedCorruptItemIds = input.appliedCorruptItemIds ?? [];
-  if (!Array.isArray(appliedCorruptItemIds) || appliedCorruptItemIds.length > MAX_CORRUPT_IMPLANTS || !appliedCorruptItemIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 96) || new Set(appliedCorruptItemIds).size !== appliedCorruptItemIds.length) return null;
+  // Load-tolerant: pre-v7 saves carry up to LEGACY_MAX_CORRUPT_IMPLANTS (118).
+  // Migration hop clamps to MAX_CORRUPT_IMPLANTS.
+  if (!Array.isArray(appliedCorruptItemIds) || appliedCorruptItemIds.length > LEGACY_MAX_CORRUPT_IMPLANTS || !appliedCorruptItemIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 96) || new Set(appliedCorruptItemIds).size !== appliedCorruptItemIds.length) return null;
   const affixFloorLedger = input.affixFloorLedger ?? { floor: input.depth, reroll: [], floorEntry: [] };
   if (!isPlainObject(affixFloorLedger) || affixFloorLedger.floor !== input.depth || !['reroll', 'floorEntry'].every(key => Array.isArray(affixFloorLedger[key]) && affixFloorLedger[key].length <= MAX_AFFIX_LEDGER_IDS && affixFloorLedger[key].every(id => typeof id === 'string' && id.length > 0 && id.length <= 96) && new Set(affixFloorLedger[key]).size === affixFloorLedger[key].length)) return null;
-  const activeCombat = input.activeCombat == null ? null : cloneBounded(input.activeCombat, MAX_COMBAT_BYTES);
+  // Load-tolerant: pre-v7 combat snapshots can exceed MAX_COMBAT_BYTES (4096).
+  // Migration hop drops to null if the state exceeds MAX_COMBAT_BYTES; here
+  // we accept up to LEGACY_MAX_COMBAT_BYTES (12288) so decoding succeeds.
+  const activeCombat = input.activeCombat == null ? null : cloneBounded(input.activeCombat, LEGACY_MAX_COMBAT_BYTES);
   if (input.activeCombat != null && activeCombat === undefined) return null;
   const stats = input.stats ?? {};
   const summary = {};

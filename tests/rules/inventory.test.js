@@ -5,11 +5,13 @@ const consumable = (id, count = 1, extra = {}) => ({ id, category: 'consumable',
 
 describe('stack-aware inventory', () => {
   it('counts units, not entries, against the hard cap', () => {
-    expect(INVENTORY_CAP).toBe(100);
-    const inventory = [consumable('patches', 99)];
+    // saves-never-fail SESSION-01 CP3 dropped the cap 100 → 40 so the
+    // reachable apex encodes under SAVE_BUDGET without event-tail trimming.
+    expect(INVENTORY_CAP).toBe(40);
+    const inventory = [consumable('patches', INVENTORY_CAP - 1)];
     expect(addItem(inventory, consumable('next', 2))).toMatchObject({ success: false, reason: 'inventory_full', inventory });
-    expect(getInventoryCount(inventory)).toBe(99);
-    expect(isFull([consumable('full', 100)])).toBe(true);
+    expect(getInventoryCount(inventory)).toBe(INVENTORY_CAP - 1);
+    expect(isFull([consumable('full', INVENTORY_CAP)])).toBe(true);
   });
 
   it('merges identical consumable stacks without mutating its input', () => {

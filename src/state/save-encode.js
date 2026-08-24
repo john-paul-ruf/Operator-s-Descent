@@ -8,11 +8,19 @@ const MAGIC = [0x4f, 0x44];
 // Single source of the save budget for every transport (localStorage and
 // URL) — the import screen, LOG copy label, migration-corpus test, and
 // release gate all import SAVE_BUDGET rather than re-literaling the number.
-// The CP3 session raises this from 1500 to 1900 per owner directive.
-export const SAVE_BUDGET = 1500;
+// saves-never-fail SESSION-01 CP3 raised this 1500 → 1900 per owner directive
+// (2026-08-24): saves are URL fragments that never traverse a server, so the
+// ~2048-char universal interop floor (sitemap limit, legacy-IE 2083) applies
+// to total URL, not just fragment. 1900 fragment + ~50-char origin prefix
+// ≈ 1950 total — comfortably inside the envelope with ~100-char cushion.
+// The reachable-apex budget model (CP4) targets ≤ SAVE_BUDGET-190 so the
+// trim ladder is emergency slack, not load-bearing.
+export const SAVE_BUDGET = 1900;
 const BUDGET = SAVE_BUDGET;
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-const EVENT_TRIM_LADDER = Object.freeze([64, 32, 16, 8, 4, 2, 1, 0]);
+// Rebased to the new MAX_EVENTS=24 (run-state.js). uniqueDescending()
+// dedupes shorter ladders so passing 24 twice at head is safe.
+const EVENT_TRIM_LADDER = Object.freeze([24, 16, 8, 4, 2, 1, 0]);
 
 export function initEncoder(symbolTableData) { initCondenser(symbolTableData); }
 

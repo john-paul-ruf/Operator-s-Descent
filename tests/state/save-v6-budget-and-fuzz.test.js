@@ -19,13 +19,12 @@ import { beforeAll, describe, it, expect } from 'vitest';
 import { createBitReader, createBitWriter } from '../../src/state/bit-codec.js';
 import { compressSync } from '../../src/state/compress/progressive.js';
 import { decodeRun } from '../../src/state/save-decode.js';
-import { encodeRun, initEncoder } from '../../src/state/save-encode.js';
+import { SAVE_BUDGET, encodeRun, initEncoder } from '../../src/state/save-encode.js';
 import { createRunState } from '../../src/state/run-state.js';
+import { INVENTORY_CAP } from '../../src/rules/inventory.js';
 import { makeParty } from '../helpers/fixtures.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
 import { loadData } from '../helpers/data.js';
-
-const BUDGET = 1500;
 
 beforeAll(() => initEncoder(loadData('symbol-table')));
 
@@ -50,7 +49,9 @@ function worstCaseCurrentRun(seed) {
     protocolDeck: [],
     conditions: []
   }));
-  state.inventory = Array.from({ length: 100 }, (_, index) => ({
+  // v7 caps inventory at INVENTORY_CAP (40). The test slices to that number
+  // below; the array is intentionally built at cap size directly.
+  state.inventory = Array.from({ length: INVENTORY_CAP }, (_, index) => ({
     id: `budget_item_${index}`,
     category: index % 3 === 0 ? 'consumable' : index % 3 === 1 ? 'weapon' : 'armor',
     baseType: index % 3 === 0 ? 'med_kit' : index % 3 === 1 ? 'sidearm' : 'light',
@@ -111,21 +112,21 @@ function worstCaseCurrentRun(seed) {
   return state;
 }
 
-describe('v6 budget headroom (SESSION-06 checkpoint 4)', () => {
-  it('realistic worst-case 20x32 run (fully-set fog, 4-op party, 40-item inventory, active combat) fits under 1500 chars', () => {
-    // Note: the aggressive "100-item + full combat + fully-set fog" cap
-    // pre-dates v6 and busts the budget even under v5 — see the existing
-    // save-encode.test.js "throws save_budget_exceeded when the non-event
-    // payload alone busts the budget" test (buildMaximumRun). This test
-    // pins the largest fully-set-fog + full-combat state that DOES fit at
-    // 20x32 today: 4-op party, 40-item inventory. When SESSION-05 flips
-    // dimensions the extra ~240 bytes of fog framing (post-compression)
-    // must still leave this case under budget.
+describe('v7 budget headroom (saves-never-fail SESSION-01 CP3)', () => {
+  it('realistic worst-case 40x64 run (fully-set fog, 4-op party, cap-sized inventory, active combat) fits under SAVE_BUDGET', () => {
+    // v7 sizes every cap so the reachable apex encodes under SAVE_BUDGET
+    // WITHOUT event-tail trimming — see tests/state/save-budget-model.test.js
+    // (CP4) for the full attribution table. This test pins the "fully-set
+    // fog + full combat + cap-sized inventory" state under the raised 1900
+    // budget; if a future GRID_W/GRID_H bump lands, the fog framing must
+    // still leave headroom.
     const state = worstCaseCurrentRun(101);
-    state.inventory = state.inventory.slice(0, 40);
+    // worstCaseCurrentRun already builds INVENTORY_CAP items, but be
+    // defensive if it drifts.
+    state.inventory = state.inventory.slice(0, INVENTORY_CAP);
     const encoded = encodeRun(state);
     expect(encoded.success).toBe(true);
-    expect(encoded.length).toBeLessThan(BUDGET);
+    expect(encoded.length).toBeLessThan(SAVE_BUDGET);
   });
 
   it('bit-codec round-trips a 320-byte fog (SESSION-05 volume) via varUint length + bytes', () => {
@@ -152,7 +153,7 @@ describe('v6 budget headroom (SESSION-06 checkpoint 4)', () => {
   });
 });
 
-describe('v6 fuzz hardening (SESSION-06 checkpoint 4)', () => {
+describe('v7 fuzz hardening (saves-never-fail SESSION-01 CP3)', () => {
   function encodedFragment(seed) {
     const state = createRunState(seed, makeParty(2));
     state.creationTimestamp = 500_000;

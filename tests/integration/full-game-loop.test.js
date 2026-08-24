@@ -1,6 +1,7 @@
 import { beforeAll, afterEach, describe, expect, it } from 'vitest';
 import { generateFloor } from '../../src/floor/generator.js';
-import { addItem, getInventoryCount } from '../../src/rules/inventory.js';
+import { INVENTORY_CAP, addItem, getInventoryCount } from '../../src/rules/inventory.js';
+import { SAVE_BUDGET } from '../../src/state/save-encode.js';
 import { saveRun, listRuns, deleteRunState, getSeed } from '../../src/state/library.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import {
@@ -51,7 +52,7 @@ describe('full game loop integration', () => {
       expect(harness.runState.party).toHaveLength(partySize);
       expect(harness.runState.depth).toBe(1);
       expect(harness.runState.partyPosition).toEqual(harness.floor.entryPoint);
-      expect(invariant.saveLength).toBeLessThan(1500);
+      expect(invariant.saveLength).toBeLessThan(SAVE_BUDGET);
     }
   });
 
@@ -106,7 +107,7 @@ describe('full game loop integration', () => {
     expect(listRuns()).toHaveLength(1);
 
     const resumed = roundTripRunState(harness.runState);
-    expect(resumed.encoded.fragment.length).toBeLessThan(1500);
+    expect(resumed.encoded.fragment.length).toBeLessThan(SAVE_BUDGET);
     expect(resumed.encoded.fragment.length).toBeGreaterThan(firstSave);
     expect(resumed.decoded.depth).toBe(3);
     expect(resumed.decoded.party.map((character) => character.calibrationCount)).toEqual([1, 1, 1, 1]);
@@ -140,7 +141,7 @@ describe('full game loop integration', () => {
     const overflow = attemptOverflowPickup(harness.runState);
     expect(overflow.success).toBe(false);
     expect(overflow.reason).toBe('inventory_full');
-    expect(getInventoryCount(harness.runState.inventory)).toBe(100);
+    expect(getInventoryCount(harness.runState.inventory)).toBe(INVENTORY_CAP);
 
     storage = installMockStorage();
     const saved = saveRun(harness.runState, { themeId: harness.floor.themeId });

@@ -1,4 +1,5 @@
 import { readSymbol, writeSymbol } from './condense.js';
+import { INVENTORY_CAP } from '../rules/inventory.js';
 
 const ATTRIBUTES = ['mgt', 'fin', 'vit', 'res', 'foc', 'sig'];
 const CATEGORIES = ['weapon', 'armor', 'consumable'];
@@ -340,7 +341,7 @@ function readConditions(reader) {
 }
 
 export function writeItem(writer, item, symbols) {
-  if (!isObject(item) || !CATEGORIES.includes(item.category) || !RARITIES.includes(item.rarity) || !Array.isArray(item.affixes) || item.affixes.length > MAX_AFFIXES || !Number.isFinite(item.salvageValue) || item.salvageValue < 0 || item.salvageValue > 1_000_000 || (item.count !== undefined && (!Number.isInteger(item.count) || item.count < 1 || item.count > 100)) || (item.corruptionValue !== undefined && (!Number.isFinite(item.corruptionValue) || item.corruptionValue < 0 || item.corruptionValue > 1_000_000))) fail('invalid_item');
+  if (!isObject(item) || !CATEGORIES.includes(item.category) || !RARITIES.includes(item.rarity) || !Array.isArray(item.affixes) || item.affixes.length > MAX_AFFIXES || !Number.isFinite(item.salvageValue) || item.salvageValue < 0 || item.salvageValue > 1_000_000 || (item.count !== undefined && (!Number.isInteger(item.count) || item.count < 1 || item.count > INVENTORY_CAP)) || (item.corruptionValue !== undefined && (!Number.isFinite(item.corruptionValue) || item.corruptionValue < 0 || item.corruptionValue > 1_000_000))) fail('invalid_item');
   writeString(writer, item.id);
   writer.writeUint(CATEGORIES.indexOf(item.category), 2);
   writeField(writer, symbols, 'item_id', item.baseType, (value) => writeString(writer, value));
@@ -376,7 +377,7 @@ export function readItem(reader, symbols) {
   const salvageValue = readNumber(reader);
   if (salvageValue < 0 || salvageValue > 1_000_000) fail('invalid_item');
   const junkTagged = reader.readBool();
-  const count = reader.readBool() ? requireInteger(reader.readVarUint(), 1, 100, 'invalid_item') : undefined;
+  const count = reader.readBool() ? requireInteger(reader.readVarUint(), 1, INVENTORY_CAP, 'invalid_item') : undefined;
   const stats = readValue(reader);
   if (!isObject(stats)) fail('invalid_item');
   const extensions = reader.readBool() ? readValue(reader) : undefined;

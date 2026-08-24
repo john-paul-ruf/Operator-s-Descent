@@ -1,6 +1,7 @@
 import { createBitReader, createBitWriter } from './bit-codec.js';
 import { getTableVersion, readSymbol, writeSymbol } from './condense.js';
 import { deserializeRunState, validateRunState } from './run-state.js';
+import { INVENTORY_CAP } from '../rules/inventory.js';
 import { readCharacter, readCombatSnapshot, readEcho, readItem, writeCharacter, writeCombatSnapshot, writeEcho, writeItem } from './save-codecs.js';
 
 export const RUN_SCHEMA_VERSION = 7;
@@ -22,11 +23,13 @@ export const RUN_SCHEMA_FIELDS = Object.freeze([
 
 const MAX_DEPTH = 255;
 const MAX_PARTY = 4;
-const MAX_INVENTORY = 100;
+// v7 caps (saves-never-fail SESSION-01 CP3) — mirror the run-state constants
+// and defer to INVENTORY_CAP (M25) as the program-wide single source.
+const MAX_INVENTORY = INVENTORY_CAP;
 const MAX_ECHOES = 2;
 const MAX_THEMES = 12;
-const MAX_EVENTS = 64;
-const MAX_CORRUPT_IMPLANTS = 118;
+const MAX_EVENTS = 24;
+const MAX_CORRUPT_IMPLANTS = 32;
 const MAX_AFFIX_LEDGER_IDS = 12;
 const MAX_VALUE_DEPTH = 8;
 const MAX_VALUE_ENTRIES = 2048;

@@ -7,12 +7,12 @@ import { GRID_W, GRID_H } from '../../src/floor/archetypes.js';
 import { createLattice } from '../../src/exploration/lattice.js';
 import { moveParty, tickDangerClock } from '../../src/exploration/movement.js';
 import { createRunState, validateRunState } from '../../src/state/run-state.js';
-import { encodeRun, initEncoder } from '../../src/state/save-encode.js';
+import { SAVE_BUDGET, encodeRun, initEncoder } from '../../src/state/save-encode.js';
 import { decodeRun } from '../../src/state/save-decode.js';
 import { createCreationModel } from '../../src/ui/creation-model.js';
 import { deriveStats } from '../../src/rules/attributes.js';
 import { generateLoot } from '../../src/rules/loot.js';
-import { addItem, getInventoryCount } from '../../src/rules/inventory.js';
+import { INVENTORY_CAP, addItem, getInventoryCount } from '../../src/rules/inventory.js';
 import { equipItem } from '../../src/rules/equipment.js';
 import { createEnemy, createEcho } from '../../src/rules/enemies.js';
 import { createStandardEncounter, createHuntEncounter, completeEncounter } from '../../src/rules/encounters.js';
@@ -208,7 +208,7 @@ export function fillInventory(runState) {
     stats: {},
     salvageValue: 1,
     junkTagged: false,
-    count: 100
+    count: INVENTORY_CAP
   }];
   return runState.inventory;
 }
@@ -430,12 +430,12 @@ export function roundTripRunState(runState) {
 export function assertRunInvariants(runState, floor = null) {
   const validation = validateRunState(runState.serialize());
   if (!validation.valid) throw new Error(`invalid run state: ${validation.errors.join(',')}`);
-  if (getInventoryCount(runState.inventory) > 100) throw new Error('inventory exceeds cap');
+  if (getInventoryCount(runState.inventory) > INVENTORY_CAP) throw new Error('inventory exceeds cap');
   if (runState.echoQueue.length > 2) throw new Error('echo queue exceeds cap');
   if (runState.party.some((character) => character.currentHP < 0 || character.currentCHARGE < 0)) throw new Error('negative party resource');
   if (runState.partyPosition.x < 0 || runState.partyPosition.x >= GRID_W || runState.partyPosition.y < 0 || runState.partyPosition.y >= GRID_H) throw new Error('party position out of bounds');
   const encoded = encodeRun(runState);
-  if (!encoded.success || encoded.fragment.length >= 1500) throw new Error(`save budget failed: ${encoded.error || encoded.fragment.length}`);
+  if (!encoded.success || encoded.fragment.length >= SAVE_BUDGET) throw new Error(`save budget failed: ${encoded.error || encoded.fragment.length}`);
   if (floor) {
     const floorValidation = validateFloor(floor);
     if (!floorValidation.valid) throw new Error(`invalid floor: ${floorValidation.failures.join(',')}`);

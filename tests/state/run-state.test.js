@@ -137,8 +137,9 @@ describe('deterministic mutators', () => {
   });
 
   it('counts consumable stacks toward the hard inventory cap', () => {
-    const state = makeState({ inventory: [{ ...validItem(), category: 'consumable', count: 100 }] });
-    expect(state.getInventoryCount()).toBe(100);
+    // v7 cap is INVENTORY_CAP=40 (saves-never-fail SESSION-01 CP3).
+    const state = makeState({ inventory: [{ ...validItem(), category: 'consumable', count: 40 }] });
+    expect(state.getInventoryCount()).toBe(40);
     expect(state.isInventoryFull()).toBe(true);
   });
 
@@ -152,10 +153,13 @@ describe('deterministic mutators', () => {
     expect(state.isCellVisited(0, 0)).toBe(false);
   });
 
-  it('caps portable LOG entries at 64 slim persisted events', () => {
+  it('caps portable LOG entries at 24 slim persisted events (v7)', () => {
+    // saves-never-fail SESSION-01 CP3: MAX_EVENTS 64 → 24 so the reachable
+    // apex encodes under SAVE_BUDGET without ladder trimming. In-memory LOG
+    // display (64) stays untouched in src/runtime.js — display ≠ persistence.
     const state = makeState();
-    for (let index = 0; index < 65; index++) state.recordEvent({ type: 'move', message: `step ${index}`, sequence: index });
-    expect(state.recentEvents).toHaveLength(64);
+    for (let index = 0; index < 25; index++) state.recordEvent({ type: 'move', message: `step ${index}`, sequence: index });
+    expect(state.recentEvents).toHaveLength(24);
     expect(state.recentEvents[0]).toEqual({ type: 'move', message: 'step 1', sequence: 1 });
   });
 });
@@ -291,7 +295,11 @@ describe('recordEvent persistence policy (slim events)', () => {
     expect(state.recentEvents).toEqual([{ type: 'move', message: 'party moves N', sequence: 3 }]);
   });
 
-  it('still rejects a recentEvents value that is not an array or exceeds the 64-entry cap', () => {
+  it('still rejects a recentEvents value that is not an array or exceeds the legacy 64-entry cap', () => {
+    // Load-tolerance: normalizeRunState accepts up to LEGACY_MAX_EVENTS=64
+    // (pre-v7 saves in the wild). The v7 write cap is 24; the v6→v7 migration
+    // hop clamps 25..64 down to 24. Anything past 64 is pathological — a
+    // save that couldn't have been produced by any shipped encoder.
     const serialized = makeState().serialize();
     serialized.recentEvents = 'not-an-array';
     expect(deserializeRunState(serialized)).toBeNull();

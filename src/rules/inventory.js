@@ -1,4 +1,10 @@
-export const INVENTORY_CAP = 100;
+// INVENTORY_CAP is the program-wide single source. Reduced 100 → 40 in the
+// saves-never-fail feature (SESSION-01 CP3) so the reachable worst-case
+// state provably encodes under SAVE_BUDGET (1900) — see the CP4 budget model
+// at tests/state/save-budget-model.test.js for the attribution table. Both
+// src/state/run-state.js and src/state/save-schema.js import this instead of
+// carrying duplicates (rules → state is the FORGE-CONFIG-legal flow).
+export const INVENTORY_CAP = 40;
 
 const units = item => Number.isInteger(item?.count) ? item.count : 1;
 const ITEM_FIELDS = new Set(['id', 'category', 'baseType', 'rarity', 'affixes', 'corrupt', 'corruptionValue', 'stats', 'salvageValue', 'junkTagged', 'count', 'extensions']);

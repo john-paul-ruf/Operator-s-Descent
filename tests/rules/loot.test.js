@@ -20,7 +20,10 @@ describe('generateLoot', () => {
     const first = generateLoot(42, 10, 'floor-a', 'container-a', noBias, equipmentData, affixesData, consumablesData);
     expect(first).toEqual(generateLoot(42, 10, 'floor-a', 'container-a', noBias, equipmentData, affixesData, consumablesData));
     expect(first.map((item) => item.id)).not.toEqual(generateLoot(42, 10, 'floor-b', 'container-a', noBias, equipmentData, affixesData, consumablesData).map((item) => item.id));
-    expect(first.every((item) => /^loot-[a-z0-9]+-\d+$/.test(item.id))).toBe(true);
+    // v7 short id: `l<hash-base36>-<idx%8>` ≤ 9 chars (was `loot-<hash>-<idx>`).
+    // See src/rules/loot.js — determinism inputs unchanged, only the string
+    // form shrank. Legacy long ids remain valid at the codec (≤96 char bound).
+    expect(first.every((item) => /^l[a-z0-9]+-\d$/.test(item.id))).toBe(true);
   });
 
   it('enforces standard and vault rarity gates without allowing theme bias to bypass them', () => {

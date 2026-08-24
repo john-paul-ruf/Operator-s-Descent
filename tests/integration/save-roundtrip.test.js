@@ -1,7 +1,8 @@
 import { beforeAll, beforeEach, afterEach, describe, it, expect } from 'vitest';
-import { encodeRun, initEncoder } from '../../src/state/save-encode.js';
+import { SAVE_BUDGET, encodeRun, initEncoder } from '../../src/state/save-encode.js';
 import { decodeRun } from '../../src/state/save-decode.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
+import { INVENTORY_CAP } from '../../src/rules/inventory.js';
 import { saveRun, loadRun, deleteRunState } from '../../src/state/library.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import { buildRealisticRun } from '../helpers/run-builder.js';
@@ -33,8 +34,12 @@ describe('save round-trip — 25-seed property sweep', () => {
   }
 });
 
-describe('save round-trip — budget suite (Custom Rule 6)', () => {
-  const sizes = [0, 1, 2, 3, 5, 10, 25, 50, 75, 100];
+describe('save round-trip — budget suite (Custom Rule 6, v7)', () => {
+  // v7 caps inventory at INVENTORY_CAP=40. Sizes above the cap are illegal
+  // for a live save (validateRunState rejects them) — the migration hop
+  // handles legacy oversized inventories at load. The size sweep here stops
+  // at the cap; the depth-30-cap-inventory stress case covers the ceiling.
+  const sizes = [0, 1, 2, 3, 5, 10, 25, INVENTORY_CAP];
   const lengths = {};
   for (const n of sizes) {
     it(`inventory ${n} items: fragment length recorded`, () => {
@@ -42,15 +47,15 @@ describe('save round-trip — budget suite (Custom Rule 6)', () => {
       const result = encodeRun(state);
       lengths[n] = result.length;
       expect(result.success).toBe(true);
-      expect(result.length).toBeLessThan(1500);
+      expect(result.length).toBeLessThan(SAVE_BUDGET);
       expect(result.fragment).toMatch(/^[A-Za-z0-9_-]+$/);
     });
   }
 
-  it('stress state: depth 30, 100 items, all fog visited, 2 echoes', () => {
+  it(`stress state: depth 30, ${INVENTORY_CAP} items, all fog visited, 2 echoes`, () => {
     const state = buildRealisticRun(42, {
       depth: 30,
-      inventoryItems: 100,
+      inventoryItems: INVENTORY_CAP,
       fogCells: 640,
       echoes: 2,
     });
@@ -60,7 +65,7 @@ describe('save round-trip — budget suite (Custom Rule 6)', () => {
     }
     const result = encodeRun(state);
     expect(result.success).toBe(true);
-    expect(result.length).toBeLessThan(1500);
+    expect(result.length).toBeLessThan(SAVE_BUDGET);
     expect(result.fragment).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 });

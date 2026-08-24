@@ -31,8 +31,16 @@ describe('RunState v2 binary schema', () => {
     }
   });
 
-  it('round-trips the valid maximum state including active combat', () => {
+  it('round-trips the valid maximum state including active combat (v7 caps)', () => {
+    // buildMaximumRun still crams every field to pre-v7 ceilings (100 items,
+    // 118 ledger, 64 events); v7 caps them at 40/32/24. Trim to the new
+    // caps so the state validates, then round-trip. buildMaximumRun stays
+    // outside my lease (tests/helpers/run-builder.js); trimming here is a
+    // localised adapter, not a rewrite of the helper.
     const state = buildMaximumRun(42);
+    state.inventory = state.inventory.slice(0, 40);
+    state.appliedCorruptItemIds = (state.appliedCorruptItemIds ?? []).slice(0, 32);
+    state.recentEvents = state.recentEvents.slice(-24);
     const payload = roundTrip(state);
     expect(payload.bytes.length).toBeGreaterThan(0);
     expect(payload.bitLength).toBeLessThanOrEqual(payload.bytes.length * 8);
