@@ -67,6 +67,34 @@ describe('buildPages — artifact exactness', () => {
     expect(existsSync(join(outputDir, 'stale.txt'))).toBe(false);
   });
 
+  test('ships byte-identical PWA metadata/icons and every browser asset changed by this feature', async () => {
+    const outputDir = join(makeTempDir('bp-out-'), 'artifact');
+
+    await buildPages({ outputDir });
+
+    for (const relPath of [
+      'manifest.webmanifest',
+      'assets/app-icon.svg',
+      'assets/app-icon-180.png',
+      'assets/app-icon-192.png',
+      'assets/app-icon-512.png',
+      'src/runtime.js',
+      'src/state/library.js',
+      'src/ui/components.js',
+      'src/ui/input.js',
+      'src/ui/screens/scorecard.js',
+      'src/ui/screens/settings.js',
+      'src/ui/screens/combat.js',
+      'styles/base.css',
+      'styles/components.css',
+      'styles/wide.css'
+    ]) {
+      const source = readFileSync(join(PROJECT_ROOT, relPath));
+      const staged = readFileSync(join(outputDir, relPath));
+      expect(staged.equals(source)).toBe(true);
+    }
+  });
+
   test('leaves source inputs unchanged and does not invoke build:assets', async () => {
     const before = readFileSync(join(PROJECT_ROOT, 'service-worker.js'));
     const outputDir = join(makeTempDir('bp-out-'), 'artifact');
