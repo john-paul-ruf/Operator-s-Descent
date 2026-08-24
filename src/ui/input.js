@@ -104,15 +104,11 @@ export function createInputHandler(options = {}) {
     bindActionControl(element, action) {
       const canonical = normalizeAction(action);
       const activate = (event) => {
-        const handled = dispatch(canonical, { source: event?.type?.startsWith('touch') ? 'touch' : 'control', event });
+        const handled = dispatch(canonical, { source: 'control', event });
         if (handled && typeof event?.preventDefault === 'function') event.preventDefault();
       };
       element.addEventListener('click', activate);
-      element.addEventListener('touchend', activate, { passive: false });
-      const cleanup = () => {
-        element.removeEventListener('click', activate);
-        element.removeEventListener('touchend', activate);
-      };
+      const cleanup = () => element.removeEventListener('click', activate);
       boundCleanups.push(cleanup);
       return cleanup;
     },
