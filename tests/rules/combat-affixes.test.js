@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { initiateCombat, executeAction } from '../../src/rules/combat.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
+import { modifier } from '../../src/rules/attributes.js';
 import { makeCharacter, makeWeapon, findSeed } from '../helpers/fixtures.js';
 import { loadData } from '../helpers/data.js';
+import { openCombatWindow } from '../helpers/grids.js';
 
 const protocolsData = loadData('protocols');
 const conditionsData = loadData('conditions');
@@ -152,5 +154,103 @@ describe('performAttackRoll — unified on-hit proc engine', () => {
     expect(cursor.getCursor('combat')).toBe(4); // + attack roll + damage roll, nothing more
     const atkLog = state.log.find(e => e.type === 'attack');
     expect(atkLog.procs).toBeUndefined();
+    expect(atkLog.leech).toBeUndefined();
+  });
+});
+
+describe('performAttackRoll — vampiric leech', () => {
+  it('heals the attacker 1 HP on hit, capped at hpMax', () => {
+    const weapon = { ...makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' }), effects: { onHit: { healing: 1 } } };
+    const party = [makeCharacter({ id: 'a', hp: 18, hpMax: 20, weapon })];
+    const enemy = makeEnemy({ defense: 5, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9, 2], 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.hit).toBe(true);
+    expect(atkLog.leech).toBe(1);
+    expect(state.combatants.get('a').hp).toBe(19);
+  });
+
+  it('does not overheal past hpMax and omits leech when nothing was healed', () => {
+    const weapon = { ...makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' }), effects: { onHit: { healing: 1 } } };
+    const party = [makeCharacter({ id: 'a', hp: 20, hpMax: 20, weapon })];
+    const enemy = makeEnemy({ defense: 5, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9, 2], 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.hit).toBe(true);
+    expect(atkLog.leech).toBeUndefined();
+    expect(state.combatants.get('a').hp).toBe(20);
+  });
+
+  it('does not heal on a miss', () => {
+    const weapon = { ...makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' }), effects: { onHit: { healing: 1 } } };
+    const party = [makeCharacter({ id: 'a', hp: 18, hpMax: 20, weapon })];
+    const enemy = makeEnemy({ defense: 30, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9], 'a'); // nat10, total 10 < 30 → miss
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.hit).toBe(false);
+    expect(atkLog.leech).toBeUndefined();
+    expect(state.combatants.get('a').hp).toBe(18);
+  });
+});
+
+describe('performAttackRoll — phasing weapon ignores cover', () => {
+  it('negates a positive cover bonus from intervening walls', () => {
+    const window = openCombatWindow();
+    window.cells[0][2] = 0;
+    window.cells[0][3] = 0; // two blocked crossings — would be full cover (+4) without phasing
+    const weapon = { ...makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }), effects: { attack: { ignoreCover: true } } };
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon })];
+    const enemy = makeEnemy({ position: { x: 4, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9], 'a');
+    state.window = window;
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.coverBonus).toBe(0);
+    expect(atkLog.targetDefense).toBe(10);
+  });
+});
+
+describe('performAttackRoll — effective FIN (attack + initiative)', () => {
+  it('attack modifier uses effectiveAttributes.fin over raw attributes.fin when present', () => {
+    const party = [makeCharacter({
+      id: 'a',
+      attributes: { mgt: 5, fin: 10, vit: 5, res: 5, foc: 5, sig: 5 },
+      effectiveAttributes: { mgt: 5, fin: 1, vit: 5, res: 5, foc: 5, sig: 5 },
+      weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 })
+    })];
+    const enemy = makeEnemy({ defense: 30, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9], 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.attributeModifier).toBe(modifier(1));
+    expect(atkLog.attributeModifier).not.toBe(modifier(10));
+  });
+
+  it('falls back to raw attributes.fin — byte-identical to today — when effectiveAttributes is absent', () => {
+    const party = [makeCharacter({
+      id: 'a',
+      attributes: { mgt: 5, fin: 5, vit: 5, res: 5, foc: 5, sig: 5 },
+      weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 })
+    })];
+    const enemy = makeEnemy({ defense: 30, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9], 'a');
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.attributeModifier).toBe(modifier(5));
+  });
+
+  it('initiative uses effectiveAttributes.fin over raw attributes.fin when present', () => {
+    const heavy = makeCharacter({
+      id: 'a',
+      attributes: { mgt: 5, fin: 10, vit: 5, res: 5, foc: 5, sig: 5 },
+      effectiveAttributes: { mgt: 5, fin: 1, vit: 5, res: 5, foc: 5, sig: 5 }
+    });
+    const enemy = makeEnemy({ id: 'enemy_1' });
+    const cursor = fixedCursor([9, 0]); // a: nat10, enemy: nat1
+    const state = initiateCombat([heavy], [enemy], cursor);
+    expect(state.combatants.get('a').initiative).toBe(10 + modifier(1));
   });
 });

@@ -34,7 +34,8 @@ function buildTurnOrder(combatants, rngCursor) {
   const initiatives = [];
   for (const [id, c] of combatants) {
     const initRoll = rngCursor.nextInt('combat', 20) + 1;
-    const initMod = c.attributes && c.attributes.fin ? modifier(c.attributes.fin) : 0;
+    const initAttributes = c.effectiveAttributes ?? c.attributes;
+    const initMod = initAttributes && initAttributes.fin ? modifier(initAttributes.fin) : 0;
     c.initiative = initRoll + initMod;
     initiatives.push({ id, initiative: c.initiative });
   }
@@ -467,14 +468,14 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
   const isMelee = weapon.rangeBand === 'adjacent';
   const distance = distanceCells(attacker.position, target.position);
   const positioned = distance !== null;
-  const ignoresCover = options.ignoreCover ?? signatureEffectsFor(attacker, 'attack', context).some(effect => effect.parameters?.ignoreCover);
+  const ignoresCover = options.ignoreCover ?? (weapon.effects?.attack?.ignoreCover === true || signatureEffectsFor(attacker, 'attack', context).some(effect => effect.parameters?.ignoreCover));
   const range = positioned
     ? evaluateRange(weapon, distance)
     : { legal: true, band: weapon.rangeBand ?? null, accuracyModifier: weapon.accuracyBonus || 0, reason: 'unpositioned' };
 
   const roll = rngCursor.nextInt('combat', 20) + 1;
   const attribute = isMelee ? 'mgt' : 'fin';
-  const attributeModifier = modifier(attacker.attributes?.[attribute] ?? 3);
+  const attributeModifier = modifier((attacker.effectiveAttributes ?? attacker.attributes)?.[attribute] ?? 3);
   const attackerEffects = getConditionEffects(attacker, conditionsData);
   const blindedPenalty = !isMelee ? (attackerEffects.rangedPenalty || 0) : 0;
   const targetEffects = getConditionEffects(target, conditionsData);
@@ -538,6 +539,13 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
     trigger: options.trigger ?? null,
     triggeredAttacks
   });
+
+  const leech = weapon.effects?.onHit?.healing ?? 0;
+  if (hit && leech > 0) {
+    const healed = Math.min(attacker.hpMax ?? (attacker.hp + leech), attacker.hp + leech) - attacker.hp;
+    attacker.hp += healed;
+    if (healed > 0) entry.leech = healed;
+  }
 
   if (hit) {
     for (const hook of weapon.effects?.onHit?.conditions ?? []) {
