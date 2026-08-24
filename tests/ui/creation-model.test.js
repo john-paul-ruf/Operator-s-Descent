@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blueprintFromDraft, draftFromBlueprint } from '../../src/state/party-configs.js';
-import { applyCreationAction, createCreationDraft, createCreationModel, finalizeCreationDraft, reduceCreationDraft, selectCreationState, validateCreationDraft } from '../../src/ui/creation-model.js';
+import { applyCreationAction, createCreationDraft, createCreationModel, finalizeCreationDraft, getQuickStartParties, reduceCreationDraft, selectCreationState, validateCreationDraft } from '../../src/ui/creation-model.js';
 import { loadData } from '../helpers/data.js';
 
 const gameData = {
@@ -137,6 +137,26 @@ describe('creation finalization and blueprint adapters', () => {
     expect(blueprint).toMatchObject({ name: 'operator shell', pointsSpent: 18, credits: 620, characters: [expect.objectContaining({ sigilCodepoint: 0xe028 })] });
     const loaded = draftFromBlueprint(blueprint);
     expect(selectCreationState(loaded, gameData)).toMatchObject({ pointsSpent: 18, credits: 620 });
+  });
+
+  it('loads a valid, editable quick-start draft that mutates independently of the catalog and other loads', () => {
+    const catalog = getQuickStartParties();
+    expect(catalog.map((preset) => preset.id)).toEqual(['breach-drill', 'scout-pair', 'full-crew']);
+    for (const preset of catalog) expect(preset.members.length).toBeGreaterThan(0);
+
+    const empty = createCreationDraft();
+    const loaded = reduceCreationDraft(empty, { type: 'load_quick_start', id: 'breach-drill' }, gameData);
+    expect(selectCreationState(loaded, gameData).validation.valid).toBe(true);
+
+    const reloaded = reduceCreationDraft(empty, { type: 'load_quick_start', id: 'breach-drill' }, gameData);
+    expect(reloaded).not.toBe(loaded);
+    expect(reloaded.characters[0]).not.toBe(loaded.characters[0]);
+
+    const edited = reduceCreationDraft(loaded, { type: 'buy_attribute', attribute: 'mgt' }, gameData);
+    expect(edited.characters[0].attributes.mgt).toBe(loaded.characters[0].attributes.mgt + 1);
+    expect(getQuickStartParties()).toEqual(catalog);
+
+    expect(reduceCreationDraft(empty, { type: 'load_quick_start', id: 'unknown' }, gameData)).toEqual(empty);
   });
 
   it('exposes a small stateful facade over the pure reducer for later UI wiring', () => {

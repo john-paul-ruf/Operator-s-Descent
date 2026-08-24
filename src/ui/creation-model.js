@@ -96,6 +96,114 @@ function reconcileCharacter(character, gameData) {
 
 function actionSlot(action, draft) { return boundedSlot(action.slot ?? action.index ?? draft.activeSlot, draft.characters); }
 
+function quickStartCharacter(classId, sigil, attributes, equipment, protocols) {
+  return { classId, sigil, attributes, equipment, protocols };
+}
+
+// Immutable, hand-validated quick-start catalog — direct-actions-and-quick-starts SESSION-01.
+// Every draft below is legal under the current classes/equipment/protocols/sigils data and
+// stays well under the 80-point budget so it loads as an ordinary, editable draft.
+const QUICK_START_PARTIES = [
+  {
+    id: 'breach-drill',
+    label: 'BREACH DRILL',
+    summary: 'One Breacher — polearm, heavy armor, shield, Surge.',
+    draft: {
+      activeSlot: 0,
+      finalized: false,
+      originalBlueprint: null,
+      characters: [
+        quickStartCharacter(
+          'breacher', 0xe000,
+          { mgt: 6, fin: 3, vit: 6, res: 5, foc: 3, sig: 4 },
+          { weapon: 'polearm', armor: 'heavy', offhand: 'shield' },
+          [{ school: 'disrupt', tier: 2 }]
+        )
+      ]
+    }
+  },
+  {
+    id: 'scout-pair',
+    label: 'SCOUT PAIR',
+    summary: 'Breacher (polearm, heavy armor, shield, Spark) + Ghost (sniper, light armor, Ping and Spark).',
+    draft: {
+      activeSlot: 0,
+      finalized: false,
+      originalBlueprint: null,
+      characters: [
+        quickStartCharacter(
+          'breacher', 0xe000,
+          { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+          { weapon: 'polearm', armor: 'heavy', offhand: 'shield' },
+          [{ school: 'disrupt', tier: 1 }]
+        ),
+        quickStartCharacter(
+          'ghost', 0xe008,
+          { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+          { weapon: 'sniper', armor: 'light', offhand: null },
+          [{ school: 'scry', tier: 1 }, { school: 'disrupt', tier: 1 }]
+        )
+      ]
+    }
+  },
+  {
+    id: 'full-crew',
+    label: 'FULL CREW',
+    summary: 'Breacher, Ghost, Compiler, and Anchor — heavy melee, sniper, area projector, armor, shields, and all four protocol schools.',
+    draft: {
+      activeSlot: 0,
+      finalized: false,
+      originalBlueprint: null,
+      characters: [
+        quickStartCharacter(
+          'breacher', 0xe000,
+          { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+          { weapon: 'heavy_melee', armor: 'heavy', offhand: 'shield' },
+          [{ school: 'disrupt', tier: 1 }]
+        ),
+        quickStartCharacter(
+          'ghost', 0xe008,
+          { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+          { weapon: 'sniper', armor: 'light', offhand: null },
+          [{ school: 'scry', tier: 1 }]
+        ),
+        quickStartCharacter(
+          'compiler', 0xe010,
+          { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+          { weapon: 'area_projector', armor: 'light', offhand: null },
+          [{ school: 'rewrite', tier: 1 }]
+        ),
+        quickStartCharacter(
+          'anchor', 0xe018,
+          { mgt: 3, fin: 3, vit: 3, res: 3, foc: 3, sig: 3 },
+          { weapon: 'light_ranged', armor: 'medium', offhand: null },
+          [{ school: 'ward', tier: 1 }]
+        )
+      ]
+    }
+  }
+];
+
+function quickStartById(id) {
+  return QUICK_START_PARTIES.find((preset) => preset.id === id) ?? null;
+}
+
+// Return plain data that callers can safely render, but never expose catalog objects for mutation.
+export function getQuickStartParties() {
+  return QUICK_START_PARTIES.map((preset) => ({
+    id: preset.id,
+    label: preset.label,
+    summary: preset.summary,
+    members: preset.draft.characters.map((character) => ({
+      classId: character.classId,
+      weapon: character.equipment.weapon,
+      armor: character.equipment.armor,
+      offhand: character.equipment.offhand,
+      protocols: character.protocols.map((protocol) => ({ ...protocol }))
+    }))
+  }));
+}
+
 export function createCreationDraft(initial = null) {
   return normalizeDraft(initial);
 }
@@ -149,6 +257,9 @@ export function applyCreationAction(draft, action = {}, gameData = {}) {
   } else if (action.type === 'remove_protocol' && characters.length) {
     const slot = actionSlot(action, current);
     characters[slot].protocols = characters[slot].protocols.filter((protocol) => !(protocol.school === action.school && protocol.tier === action.tier));
+  } else if (action.type === 'load_quick_start') {
+    const preset = quickStartById(action.id);
+    return preset ? { draft: normalizeDraft(clone(preset.draft)), result: { success: true } } : { draft: current, result: { success: false, reason: 'unknown_quick_start' } };
   } else if (action.type === 'load_blueprint') {
     const loaded = draftFromBlueprint(action.blueprint);
     if (!loaded) return { draft: current, result: { success: false, reason: 'invalid_blueprint' } };
