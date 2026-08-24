@@ -2,6 +2,7 @@ import { setGameDataCompatibility, getCrtOverlaysController } from './main.js';
 import { loadGameData } from './data-loader.js';
 import { bus } from './state/bus.js';
 import { loadSettings, saveRun, deleteRunState, getRunKey, listRuns, loadRun } from './state/library.js';
+import { recordHighScore } from './state/high-scores.js';
 import { createAudioEngine } from './audio/engine.js';
 import { createGlitchSystem, initGlitchSafePool } from './glitch/glitch.js';
 import { createGrain } from './glitch/grain.js';
@@ -753,6 +754,8 @@ function setupBus() {
     if (key) {
       deleteRunState(key);
     }
+    const theme = themeForFloor(currentFloor);
+    recordHighScore(runState, { theme: theme?.id, accentSwatch: theme?.accentColor, causeOfDeath: 'Party Wipe' });
     currentRunState = null;
     setCurrentFloor(null, null);
     audioEngine?.updateState({ combat: false });
