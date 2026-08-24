@@ -3,7 +3,8 @@ import { bus } from '../../src/state/bus.js';
 import { createRunState } from '../../src/state/run-state.js';
 import { describeEntryDetail, hapticPatternForCombatEntry } from '../../src/ui/screens/combat.js';
 import { saveSettings } from '../../src/state/library.js';
-import { makeCharacter, makeWeapon } from '../helpers/fixtures.js';
+import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
+import { makeCharacter, makeWeapon, findSeed } from '../helpers/fixtures.js';
 import { installMockStorage } from '../helpers/mock-storage.js';
 import { loadData } from '../helpers/data.js';
 import * as viewport from '../../src/ui/viewport.js';
@@ -166,6 +167,36 @@ function byClass(root, className) {
 
 function keyEvent(code) {
   return { code, key: code, repeat: false, preventDefault() { this.prevented = true; } };
+}
+
+// A world seed where the very first 'combat' stream draw (an attacker's d20 attack roll) is
+// neither a natural 1 (a fumble, which triggers its own separate retaliation attack entry) nor a
+// natural 20 (an unconditional auto-hit crit). Paired with a deliberately weak weapon against a
+// high-defense target below, this produces a clean, single miss with no other entries. Valid only
+// for fixtures where combatState.turnStarted is already true (no prior prepareTurn RNG draw) and
+// the attack is the first action taken, matching every combatState() fixture in this file.
+function findCleanMissSeed() {
+  return findSeed((seed) => {
+    const roll = createRNGCursorForRun(seed).nextInt('combat', 20);
+    return roll !== 0 && roll !== 19;
+  });
+}
+
+// Opts a test into hapticsEnabled with a stubbed, spyable Vibration API. `navigator` is a
+// getter-only global in this runtime, so it must be replaced via vi.stubGlobal, not assignment.
+// Callers must call uninstall() (in a finally block) to restore localStorage/navigator.
+function installHaptics() {
+  const storage = installMockStorage();
+  saveSettings({ hapticsEnabled: true });
+  const vibrate = vi.fn();
+  vi.stubGlobal('navigator', { vibrate });
+  return {
+    vibrate,
+    uninstall() {
+      vi.unstubAllGlobals();
+      storage.uninstall();
+    }
+  };
 }
 
 function openWindow() {
@@ -1492,3 +1523,207 @@ describe('combat haptic emission — opt-in guard (checkpoint 1)', () => {
   });
 });
 
+// SESSION-04 checkpoint 2: with a supported, opted-in API, every resolved hit/crit/death fires
+// exactly once — matching hapticPatternForCombatEntry's own output — across every dispatch path
+// (immediate party action, paced enemy playback, fast-forward, unmount flush, reduced motion) and
+// never for misses or non-combat entries.
+describe('combat haptic emission — exactly once, resolved entries only (checkpoint 2)', () => {
+  it('a player hit that also kills its target fires exactly one call per resolved entry, in log order', async () => {
+    const h = installHaptics();
+    try {
+      const state = runState();
+      const combat = combatState([partyActor(), enemyActor({ hp: 1, hpMax: 1 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-attack').click();
+      byTestId(container, 'combat-target-0').click();
+      byTestId(container, 'combat-confirm').click();
+
+      const attackEntry = combat.log.find((entry) => entry.type === 'attack');
+      const deathEntry = combat.log.find((entry) => entry.type === 'death');
+      expect(attackEntry.hit).toBe(true);
+      expect(deathEntry).toBeTruthy();
+      expect(h.vibrate.mock.calls).toEqual([
+        [hapticPatternForCombatEntry(attackEntry)],
+        [hapticPatternForCombatEntry(deathEntry)]
+      ]);
+      controller.unmount();
+    } finally {
+      h.uninstall();
+    }
+  });
+
+  it('a clean attack miss (no fumble/crit) never triggers a call', async () => {
+    const h = installHaptics();
+    try {
+      // accuracyBonus -50 vs defense 8 guarantees a miss on any non-crit roll — findCleanMissSeed
+      // rules out both the crit (nat 20) and the fumble (nat 1, which fires its own retaliation
+      // attack entry) so this exercises a single, uncomplicated miss with nothing else in the log.
+      const weakWeapon = makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: -50 });
+      const state = runState(findCleanMissSeed());
+      const combat = combatState([partyActor({ weapon: weakWeapon }), enemyActor({ hp: 10, hpMax: 10, defense: 8 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-attack').click();
+      byTestId(container, 'combat-target-0').click();
+      byTestId(container, 'combat-confirm').click();
+
+      expect(combat.log).toHaveLength(1);
+      const attackEntry = combat.log[0];
+      expect(attackEntry.type).toBe('attack');
+      expect(attackEntry.hit).toBe(false);
+      expect(h.vibrate).not.toHaveBeenCalled();
+      controller.unmount();
+    } finally {
+      h.uninstall();
+    }
+  });
+
+  it('non-combat entries — a confirmed move and an end-turn — never trigger a call', async () => {
+    const h = installHaptics();
+    try {
+      const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+      const { container, controller } = await mountCombat({ combat });
+
+      byTestId(container, 'combat-action-move').click();
+      byTestId(container, 'combat-dir-s').click();
+      byTestId(container, 'combat-confirm').click();
+
+      expect(combat.log.some((entry) => entry.type === 'move')).toBe(true);
+      expect(h.vibrate).not.toHaveBeenCalled();
+      controller.unmount();
+    } finally {
+      h.uninstall();
+    }
+  });
+
+  it('paces exactly one call per eligible entry through paced enemy log-replay playback timers', async () => {
+    vi.useFakeTimers();
+    const h = installHaptics();
+    try {
+      const state = runState(1, [
+        makeCharacter({ id: 'hero', hp: 1, hpMax: 30 }),
+        makeCharacter({ id: 'ally', hp: 20, hpMax: 20, sigilCodepoint: 0xE001 })
+      ]);
+      const combat = combatState([
+        partyActor({ id: 'hero', hp: 1, hpMax: 30, position: { x: 1, y: 1 } }),
+        enemyActor({ id: 0, position: { x: 2, y: 1 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 40 }) }),
+        partyActor({ id: 'ally', hp: 20, hpMax: 20, position: { x: 5, y: 5 }, sigilCodepoint: 0xE001 })
+      ], ['hero', 0, 'ally']);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      vi.runAllTimers();
+
+      const eligible = combat.log
+        .filter((entry) => entry.type === 'attack' || entry.type === 'death')
+        .map((entry) => hapticPatternForCombatEntry(entry))
+        .filter((pattern) => pattern != null);
+      expect(eligible.length).toBeGreaterThan(0);
+      expect(h.vibrate.mock.calls).toEqual(eligible.map((pattern) => [pattern]));
+      controller.unmount();
+    } finally {
+      h.uninstall();
+      vi.useRealTimers();
+    }
+  });
+
+  it('fast-forwarding mid-playback still fires exactly one call per entry — no double count', async () => {
+    vi.useFakeTimers();
+    const h = installHaptics();
+    try {
+      const combat = combatState([
+        partyActor({ id: 'hero', hp: 1, hpMax: 30 }),
+        enemyActor({ id: 0, position: { x: 2, y: 1 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 40 }) })
+      ], ['hero', 0]);
+      const state = runState(1, [makeCharacter({ id: 'hero', hp: 1, hpMax: 30 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      const playfield = byClass(container, 'combat-playfield');
+      playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
+      playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
+
+      const eligible = combat.log
+        .filter((entry) => entry.type === 'attack' || entry.type === 'death')
+        .map((entry) => hapticPatternForCombatEntry(entry))
+        .filter((pattern) => pattern != null);
+      expect(eligible.length).toBeGreaterThan(0);
+      const expectedCalls = eligible.map((pattern) => [pattern]);
+      expect(h.vibrate.mock.calls).toEqual(expectedCalls);
+      // Draining any leftover timer after fast-forward must not add further calls.
+      vi.runAllTimers();
+      expect(h.vibrate.mock.calls).toEqual(expectedCalls);
+      controller.unmount();
+    } finally {
+      h.uninstall();
+      vi.useRealTimers();
+    }
+  });
+
+  it('unmounting mid-playback flushes remaining entries without double-counting an already-fired one', async () => {
+    vi.useFakeTimers();
+    const h = installHaptics();
+    try {
+      const combat = combatState([
+        partyActor({ id: 'hero', hp: 1, hpMax: 30 }),
+        enemyActor({ id: 0, position: { x: 2, y: 1 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 40 }) })
+      ], ['hero', 0]);
+      const state = runState(1, [makeCharacter({ id: 'hero', hp: 1, hpMax: 30 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+      controller.unmount();
+
+      const eligible = combat.log
+        .filter((entry) => entry.type === 'attack' || entry.type === 'death')
+        .map((entry) => hapticPatternForCombatEntry(entry))
+        .filter((pattern) => pattern != null);
+      expect(eligible.length).toBeGreaterThan(0);
+      const expectedCalls = eligible.map((pattern) => [pattern]);
+      expect(h.vibrate.mock.calls).toEqual(expectedCalls);
+      // A stale timer firing after unmount must not add further calls.
+      vi.runAllTimers();
+      expect(h.vibrate.mock.calls).toEqual(expectedCalls);
+    } finally {
+      h.uninstall();
+      vi.useRealTimers();
+    }
+  });
+
+  it('reduced motion resolves the enemy turn synchronously with exactly one call per eligible entry', async () => {
+    installMatchMedia(true);
+    vi.useFakeTimers();
+    const h = installHaptics();
+    try {
+      const state = runState(1, [
+        makeCharacter({ id: 'hero', hp: 1, hpMax: 30 }),
+        makeCharacter({ id: 'ally', hp: 20, hpMax: 20, sigilCodepoint: 0xE001 })
+      ]);
+      const combat = combatState([
+        partyActor({ id: 'hero', hp: 1, hpMax: 30, position: { x: 1, y: 1 } }),
+        enemyActor({ id: 0, position: { x: 2, y: 1 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, minRange: 0, accuracyBonus: 40 }) }),
+        partyActor({ id: 'ally', hp: 20, hpMax: 20, position: { x: 5, y: 5 }, sigilCodepoint: 0xE001 })
+      ], ['hero', 0, 'ally']);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-end-turn').click();
+      byTestId(container, 'combat-confirm').click();
+
+      expect(vi.getTimerCount()).toBe(0);
+      const eligible = combat.log
+        .filter((entry) => entry.type === 'attack' || entry.type === 'death')
+        .map((entry) => hapticPatternForCombatEntry(entry))
+        .filter((pattern) => pattern != null);
+      expect(eligible.length).toBeGreaterThan(0);
+      expect(h.vibrate.mock.calls).toEqual(eligible.map((pattern) => [pattern]));
+      controller.unmount();
+    } finally {
+      h.uninstall();
+      vi.useRealTimers();
+    }
+  });
+});
