@@ -396,6 +396,80 @@ describe('creation screen workflow', () => {
   });
 });
 
+describe('creation screen — quick start presets', () => {
+  it('renders QUICK START before the detailed editor on a fresh draft with the visible promise, and loading a preset replaces the draft and focuses the selection', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 5050 });
+    const root = byTestId(container, 'creation-root');
+    const section = byTestId(container, 'quick-start-section');
+    expect(section).not.toBeNull();
+    expect(allText(section).join(' ')).toContain('Choose a starting party — edit anything before deployment.');
+    // Rendered before the character rail / tabs (the detailed member editor).
+    expect(root.children.indexOf(section)).toBeLessThan(root.children.indexOf(byTestId(container, 'character-rail')));
+    for (const id of ['breach-drill', 'scout-pair', 'full-crew']) expect(byTestId(container, `quick-start-${id}`)).not.toBeNull();
+
+    const button = byTestId(container, 'quick-start-breach-drill');
+    button.click();
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 26/80');
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('54/80');
+    expect(byTestId(container, 'credits').children[1].textContent).toBe('540');
+    expect(byTestId(container, 'character-slot-0').className).toContain('active');
+    expect(byTestId(container, 'quick-start-breach-drill').focused).toBe(true);
+  });
+
+  it('BREACH DRILL loads the exact requested Breacher composition, not merely its marketing label', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 5051 });
+    byTestId(container, 'quick-start-breach-drill').click();
+
+    byTestId(container, 'tab-gear').click();
+    expect(byTestId(container, 'weapon-polearm').className).toContain('selected');
+    expect(byTestId(container, 'armor-heavy').className).toContain('selected');
+    expect(byTestId(container, 'offhand-shield').className).toContain('selected');
+
+    byTestId(container, 'tab-tech').click();
+    expect(byTestId(container, 'protocol-disrupt-2').className).toContain('selected');
+
+    byTestId(container, 'tab-attrs').click();
+    expect(byTestId(container, 'attribute-mgt').getAttribute('aria-label')).toContain('MIGHT rank 6');
+    expect(byTestId(container, 'attribute-vit').getAttribute('aria-label')).toContain('VITALITY rank 6');
+    expect(byTestId(container, 'attribute-res').getAttribute('aria-label')).toContain('RESONANCE rank 5');
+    expect(byTestId(container, 'attribute-sig').getAttribute('aria-label')).toContain('SIGNAL rank 4');
+  });
+
+  it('replaces an already-edited draft, and reselecting the same quick start reloads an independent, non-stacking draft', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 5052 });
+    addBreacher(container);
+    byTestId(container, 'tab-gear').click();
+    byTestId(container, 'weapon-heavy_melee').click();
+    expect(byTestId(container, 'party-count').textContent).toBe('PARTY 1/4');
+
+    byTestId(container, 'quick-start-scout-pair').click();
+    expect(byTestId(container, 'party-count').textContent).toBe('PARTY 2/4');
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 29/80');
+
+    // Repeated selection reloads the same composition rather than stacking or drifting.
+    byTestId(container, 'quick-start-scout-pair').click();
+    expect(byTestId(container, 'party-count').textContent).toBe('PARTY 2/4');
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 29/80');
+  });
+
+  it('a player can edit a loaded quick-start member and still receive the standard cost/validity feedback — a shortcut, not a parallel character system', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 5053 });
+    byTestId(container, 'quick-start-breach-drill').click();
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 26/80');
+    expect(byTestId(container, 'validation-errors').textContent).toBe('BUILD VALID · READY TO DESCEND.');
+
+    byTestId(container, 'tab-gear').click();
+    byTestId(container, 'offhand-none').click();
+    expect(byTestId(container, 'spent').textContent).toBe('SPENT 23/80');
+    expect(byTestId(container, 'validation-errors').textContent).toBe('BUILD VALID · READY TO DESCEND.');
+
+    byTestId(container, 'tab-class').click();
+    byTestId(container, 'class-ghost').click();
+    // Standard reconciliation applies: sigil, gear, and protocols outside the new class's gates are dropped.
+    expect(byTestId(container, 'validation-errors').textContent).toContain('sigil required');
+  });
+});
+
 describe('creation screen — manual links (portrait)', () => {
   it('header manual chip dispatches character_creation', async () => {
     const { seen, off } = captureManualDispatches();
