@@ -15,7 +15,7 @@ import { saveRun } from '../../state/library.js';
 import { decodeSeed } from '../../state/save-decode.js';
 import { playBootSequence } from '../../glitch/transitions.js';
 import { blueprintFromDraft, deleteConfig, getLastUsed, listConfigs, loadConfig, saveConfig, setLastUsed, validateConfig } from '../../state/party-configs.js';
-import { applyCreationAction, createCreationDraft, selectCreationState } from '../creation-model.js';
+import { applyCreationAction, createCreationDraft, getQuickStartParties, selectCreationState } from '../creation-model.js';
 import { captureScroll, restoreScroll } from '../scroll-memory.js';
 
 const SCROLL_KEY = 'creation:editor';
@@ -125,6 +125,14 @@ function shortBlueprintSummary(config) {
   return `${config.characters?.length ?? 0} OP · ${classes} · ${config.pointsSpent ?? 0} PTS · ${config.credits ?? 0} CR`;
 }
 
+function findByTestId(node, testid) {
+  if (node?.dataset?.testid === testid) return node;
+  for (const child of node?.children ?? []) {
+    const found = findByTestId(child, testid);
+    if (found) return found;
+  }
+  return null;
+}
 
 export function mount(container, params = {}) {
   const data = getData(params);
@@ -193,6 +201,37 @@ export function mount(container, params = {}) {
     render();
   }
 
+  function selectQuickStart(presetId) {
+    dispatch({ type: 'load_quick_start', id: presetId }); // Existing validation and detailed editor render the loaded draft.
+    findByTestId(container, `quick-start-${presetId}`)?.focus?.();
+  }
+
+  function renderQuickStartSection() {
+    const section = document.createElement('section');
+    section.className = 'creation-section quick-start-section panel';
+    section.dataset.testid = 'quick-start-section';
+    section.append(
+      text('p', 'creation-note accent-text glow', '◈ QUICK START'),
+      text('p', 'creation-note', 'Choose a starting party — edit anything before deployment.')
+    );
+    const grid = document.createElement('div');
+    grid.className = 'creation-choice-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Quick start parties');
+    for (const preset of getQuickStartParties()) {
+      const card = createButton(preset.label, {
+        description: preset.summary,
+        onClick: () => selectQuickStart(preset.id)
+      });
+      card.className = 'quick-start-card action-btn console-row';
+      card.dataset.testid = `quick-start-${preset.id}`;
+      card.appendChild(text('span', 'card-detail', preset.summary));
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
+    return section;
+  }
+
   function render() {
     captureScroll(scrollPane, SCROLL_KEY);
     const summary = selectCreationState(draft, data);
@@ -211,6 +250,7 @@ export function mount(container, params = {}) {
     root.style.padding = '0';
     root.dataset.testid = 'creation-root';
     root.appendChild(renderHeader(summary));
+    root.appendChild(renderQuickStartSection());
     root.appendChild(renderCharacterRail(summary));
     root.appendChild(renderTabs());
     const body = createScreenBody({ className: 'creation-body' });
