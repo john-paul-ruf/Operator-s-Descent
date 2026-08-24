@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
 import { deleteRunState, listRuns, loadRun, loadSettings, saveRun } from '../../src/state/library.js';
+import { recordHighScore, listHighScores, HIGH_SCORE_CAP } from '../../src/state/high-scores.js';
 import { base64urlEncode, crc32, encodeRun, encodeSeed, initEncoder, SAVE_BUDGET, SAVE_VERSION } from '../../src/state/save-encode.js';
 import { decodeSeed } from '../../src/state/save-decode.js';
 import { encrypt } from '../../src/state/encrypt.js';
@@ -738,5 +739,76 @@ describe('scorecard screen', () => {
     // button if the timer were not cleared; asserting the pre-unmount text
     // is unchanged proves the timeout never fired.
     expect(copyBtn.textContent).toBe('WORLD LINK COPIED');
+  });
+});
+
+describe('high scores screen', () => {
+  it('shows an explicit empty state when no high scores have been recorded', async () => {
+    const { mount } = await import('../../src/ui/screens/highscores.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    expect(byTestId(container, 'highscores-empty')).toBeTruthy();
+    expect(allText(container).join(' ')).toContain('NO FALLEN RUNS YET');
+    expect(allText(container).join(' ')).toContain(`0 OF ${HIGH_SCORE_CAP} RECORDED`);
+  });
+
+  it('renders recorded high scores ranked by depth, highest first', async () => {
+    recordHighScore(makeState(111, 1000, 5), { causeOfDeath: 'Party Wipe' });
+    recordHighScore(makeState(999, 2000, 9), { causeOfDeath: 'Party Wipe' });
+    recordHighScore(makeState(222, 3000, 3), { causeOfDeath: 'Party Wipe' });
+    expect(listHighScores()).toHaveLength(3);
+
+    const { mount } = await import('../../src/ui/screens/highscores.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    expect(allText(byTestId(container, 'highscores-list')).join(' ')).toMatch(/SEED 999.*SEED 111.*SEED 222/);
+  });
+
+  it('dispatches restart-same-seed with the entry world seed as preloadedSeed', async () => {
+    const recorded = recordHighScore(makeState(444, 4000, 12), { causeOfDeath: 'Party Wipe' });
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/highscores.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    await byTestId(container, `highscore-restart-${recorded.entry.key}`).click();
+    expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 444 } });
+    off();
+  });
+
+  it('renders the wide layout as a run-card grid and still dispatches restart', async () => {
+    installMatchMedia(true);
+    const recorded = recordHighScore(makeState(555, 5000, 8), { causeOfDeath: 'Party Wipe' });
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/highscores.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const screen = container.children[0];
+    expect(screen.classList.contains('wide-library-shell')).toBe(true);
+    expect(screen.dataset.wideRoot).toBe('');
+    expect(byTestId(container, 'highscores-grid')).toBeTruthy();
+
+    await byTestId(container, `highscore-restart-${recorded.entry.key}`).click();
+    expect(seen.at(-1)).toEqual({ screen: 'creation', params: { preloadedSeed: 555 } });
+    off();
+  });
+
+  it('title and new run footer buttons dispatch navigation', async () => {
+    const { mount } = await import('../../src/ui/screens/highscores.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    await byTestId(container, 'highscores-title').click();
+    expect(seen.at(-1)).toEqual({ screen: 'title', params: {} });
+    await byTestId(container, 'highscores-new-run').click();
+    expect(seen.at(-1)).toEqual({ screen: 'creation', params: {} });
+    off();
   });
 });
