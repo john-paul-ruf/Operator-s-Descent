@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
 import { render as renderLoot } from '../../src/ui/console/loot.js';
-import { describeItem } from '../../src/rules/equipment.js';
+import { describeItem, itemDisplayName } from '../../src/rules/equipment.js';
 import { INVENTORY_CAP } from '../../src/rules/inventory.js';
 import { loadData } from '../helpers/data.js';
 
@@ -370,5 +370,93 @@ describe('LOOT mode — SESSION-02 density contract', () => {
     expect(row.classList.contains('console-row')).toBe(true);
     expect(row.children.some((child) => child.classList?.contains('console-static-card'))).toBe(true);
     expect(byTestId(container, 'loot-compare-density-loot').classList.contains('console-static-row')).toBe(true);
+  });
+});
+
+describe('LOOT mode — SESSION-02 pickup result contract', () => {
+  function renderWith(runState, lootState, extra = {}) {
+    const container = new FakeElement('div');
+    const context = { runState, data, lootState, floor: { id: 'floor-1', themeId: 'printer_meat' }, refresh: () => renderLoot(container, context), ...extra };
+    renderLoot(container, context);
+    return { container, context };
+  }
+
+  it('an ordinary take renders a durable LOOT ACQUIRED result above CONTENTS with the current inventory count', () => {
+    const runState = run();
+    const taken = item('loot-ordinary', 'sidearm');
+    const lootState = { container: { id: 30, kind: 'standard', x: 1, y: 1 }, items: [taken, item('loot-remaining', 'polearm')] };
+    const { container } = renderWith(runState, lootState);
+
+    byTestId(container, 'loot-take-loot-ordinary').click();
+
+    const notice = byTestId(container, 'loot-pickup-result');
+    expect(notice).toBeTruthy();
+    expect(notice.textContent).toBe(`LOOT ACQUIRED — ${itemDisplayName(taken, data)} · INVENTORY 1/${INVENTORY_CAP}`);
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.getAttribute('aria-live')).toBe('polite');
+
+    const heading = byTestId(container, 'loot-contents-heading');
+    expect(container.children.indexOf(notice)).toBeLessThan(container.children.indexOf(heading));
+
+    // Source row is gone on the next frame; an untouched item stays put.
+    expect(byTestId(container, 'loot-item-loot-ordinary')).toBeNull();
+    expect(byTestId(container, 'loot-item-loot-remaining')).toBeTruthy();
+  });
+
+  it('taking the final item renders a distinct CONTAINER CLEARED result', () => {
+    const runState = run();
+    const taken = item('loot-last', 'sidearm');
+    const lootState = { container: { id: 31, kind: 'standard', x: 1, y: 1 }, items: [taken] };
+    const { container } = renderWith(runState, lootState);
+
+    byTestId(container, 'loot-take-loot-last').click();
+
+    expect(byTestId(container, 'loot-pickup-result').textContent)
+      .toBe(`CONTAINER CLEARED — ${itemDisplayName(taken, data)} secured · INVENTORY 1/${INVENTORY_CAP}`);
+  });
+
+  it('a capacity failure reports no pickup result, keeps the item in CONTENTS, and states the truthful reason', () => {
+    const fullPack = Array.from({ length: INVENTORY_CAP }, (_, index) => ({
+      id: `pack-${index}`, category: 'consumable', baseType: 'repair_patch', count: 1,
+      rarity: 'stock', affixes: [], stats: {}, salvageValue: 2, junkTagged: false
+    }));
+    const runState = run(fullPack);
+    const blocked = item('loot-full-blocked');
+    const lootState = { container: { id: 32, kind: 'standard', x: 1, y: 1 }, items: [blocked] };
+    const { container } = renderWith(runState, lootState);
+
+    // Force the disabled TAKE to fire, proving the rules-layer guard (not just
+    // the UI gate) is what keeps the pickup honest.
+    const take = byTestId(container, 'loot-take-loot-full-blocked');
+    take.disabled = false;
+    take.click();
+
+    expect(byTestId(container, 'loot-pickup-result')).toBeNull();
+    expect(byTestId(container, 'loot-item-loot-full-blocked')).toBeTruthy();
+    expect(byTestId(container, 'loot-error').textContent).toBe('Inventory full; pickup blocked until space is freed.');
+  });
+
+  it('a second take replaces rather than stacks the pickup result, and a refresh never resurrects an acquired item', () => {
+    const runState = run();
+    const first = item('loot-first', 'sidearm');
+    const second = item('loot-second', 'polearm');
+    const lootState = { container: { id: 33, kind: 'standard', x: 1, y: 1 }, items: [first, second] };
+    const { container, context } = renderWith(runState, lootState);
+
+    byTestId(container, 'loot-take-loot-first').click();
+    expect(byTestId(container, 'loot-pickup-result').textContent).toContain(itemDisplayName(first, data));
+
+    byTestId(container, 'loot-take-loot-second').click();
+    const notice = byTestId(container, 'loot-pickup-result');
+    expect(notice.textContent).toContain(itemDisplayName(second, data));
+    expect(notice.textContent).not.toContain(itemDisplayName(first, data));
+
+    // An unrelated re-render must not resurrect either acquired item or
+    // repeat the inventory-count increment.
+    renderLoot(container, context);
+    expect(byTestId(container, 'loot-item-loot-first')).toBeNull();
+    expect(byTestId(container, 'loot-item-loot-second')).toBeNull();
+    expect(runState.inventory).toHaveLength(2);
+    expect(byTestId(container, 'loot-pickup-result').textContent).toContain(itemDisplayName(second, data));
   });
 });
