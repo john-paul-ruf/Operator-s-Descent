@@ -508,6 +508,25 @@ export function mount(container, params = {}) {
     floor,
     combatState,
     selection,
+    // Live deterministic cursor (M65 direct TECH resolution). Combat owns this
+    // instance — TECH mode consumes it via context.rngCursor rather than creating
+    // its own, so both the attack/effect rolls and the resulting cursor state
+    // stay on the single combat-scoped RNG stream.
+    rngCursor,
+    // Screen-owned commit contract: TECH calls this after a successful direct
+    // cast so the live combat map's post-cast actor deltas (hp/currentHP,
+    // charge/ap, conditions, position) land in runState.rngState and the
+    // resumable runState.activeCombat snapshot — the same persistence path
+    // party-turn actions already go through via afterAction/runResolveWithPlayback.
+    commitTechProtocol() {
+      runState.rngState = rngCursor.getState();
+      syncRunStateFromCombat(runState, combatState);
+      updateRunCombatSnapshot(runState, combatState);
+    },
+    // Full-shell redraw (map + status strip + console) distinct from the console's
+    // own local `refresh` — a successful TECH cast mutates the live combat map, so
+    // the playfield/status must repaint too, not just the TECH panel.
+    refreshShell: renderAll,
     // Full game-data registry — LOG mode uses `data.symbolTable` to init the save
     // encoder on demand, and party/tech/gear panes (S03) read class/loadout tables
     // to derive maxes for the display.
