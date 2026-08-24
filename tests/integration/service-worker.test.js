@@ -120,13 +120,13 @@ describe('service worker manifest', () => {
   });
 });
 
-describe('service worker cache version — v13 → v14 release', () => {
-  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-mobile-pwa-hardening-v13';
+describe('service worker cache version — v14 → v15 release', () => {
+  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-mobile-pwa-hardening-v14';
 
-  it('install precaches the full v14 manifest immediately and never calls skipWaiting automatically; activation deletes the exact v13 predecessor and claims clients', async () => {
+  it('install precaches the full v15 manifest immediately and never calls skipWaiting automatically; activation deletes the exact v14 predecessor and claims clients', async () => {
     const manifest = extractManifest();
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-23-mobile-pwa-hardening-v14');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-24-direct-actions-v15');
     expect(expectedCacheName).toMatch(CACHE_NAME_PATTERN);
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
@@ -151,22 +151,22 @@ describe('service worker cache version — v13 → v14 release', () => {
     expect(worker.self.clients.claim).toHaveBeenCalledOnce();
   });
 
-  it('v14 precaches at install without disturbing the still-active v13 cache; a v13-style isolated lookup on its own cache name never sees v14 bytes', async () => {
+  it('v15 precaches at install without disturbing the still-active v14 cache; a v14-style isolated lookup on its own cache name never sees v15 bytes', async () => {
     const worker = loadWorker();
-    const v13Cache = await worker.caches.open(PREDECESSOR_CACHE);
-    await v13Cache.put('https://example.test/game/index.html', new FakeResponse('v13-shell'));
+    const v14Cache = await worker.caches.open(PREDECESSOR_CACHE);
+    await v14Cache.put('https://example.test/game/index.html', new FakeResponse('v14-shell'));
 
     const install = createEvent();
     worker.listeners.get('install')(install);
     await install.settle();
 
-    // The real active v13 worker's cacheFirstAsset()/cachedShell() read only from its
-    // own closed-over CACHE_NAME (v13's), so it can never observe v14's waiting bytes.
-    const v13Match = await v13Cache.match('https://example.test/game/index.html');
-    expect(await v13Match.text()).toBe('v13-shell');
+    // The real active v14 worker's cacheFirstAsset()/cachedShell() read only from its
+    // own closed-over CACHE_NAME (v14's), so it can never observe v15's waiting bytes.
+    const v14Match = await v14Cache.match('https://example.test/game/index.html');
+    expect(await v14Match.text()).toBe('v14-shell');
 
-    const v14Cache = await worker.caches.open(extractCacheName());
-    expect(v14Cache.entries.size).toBe(extractManifest().length);
+    const v15Cache = await worker.caches.open(extractCacheName());
+    expect(v15Cache.entries.size).toBe(extractManifest().length);
   });
 
   it('cache-first and navigation fetch paths read only from the versioned CACHE_NAME, never a foreign cache', async () => {
@@ -191,7 +191,7 @@ describe('service worker cache version — v13 → v14 release', () => {
     await expect(navigation.response().then((response) => response.text())).resolves.not.toBe('stale-shell');
   });
 
-  it('the v14 manifest ships the PWA manifest and every launcher icon as production/offline assets', () => {
+  it('the v15 manifest ships the PWA manifest and every launcher icon as production/offline assets', () => {
     const manifest = extractManifest();
     for (const asset of ['./manifest.webmanifest', './assets/app-icon.svg', './assets/app-icon-180.png', './assets/app-icon-192.png', './assets/app-icon-512.png']) {
       expect(manifest).toContain(asset);
