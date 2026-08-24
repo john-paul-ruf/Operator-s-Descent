@@ -290,3 +290,22 @@ Every existing consumer renders byte-identical DOM (60 component tests + all scr
 - Added `createMenuAction(item, opts)`, `createMenuGroup(items, opts)`, and `createTabGroup(items, opts)` to `src/ui/components.js`.
 - Actions are native buttons with variant roles, explicit ARIA/test-ID options, optional sprite icons, independent selected/active/disabled state, idempotent `.cleanup()`, and `.setState(nextState)`.
 - Groups expose `.actions`, `.getAction(id)`, `.setItemState(id, state)`, and aggregate idempotent cleanup. Tab groups emit stable `tab-{id}` IDs and panel controls.
+
+<!-- SESSION-03 -->
+<!-- mobile-pwa-hardening SESSION-03 (Jikijitsu append) -->
+### M45 (Library) — `hapticsEnabled` settings field
+
+`defaultSettings()`/`normalizeSettings()` in `./src/state/library.js` gain an additive `hapticsEnabled: boolean` field, defaulting `false`. `loadSettings()`'s return shape now always includes it; malformed/missing values normalize to `false` on both load and `saveSettings()`. Existing saved settings without the field load cleanly and behave unchanged. SESSION-04 (combat haptics) reads this durable value directly via `loadSettings()` at screen mount — no bus event is dispatched for it (unlike audio/visual settings), since there is no live-preview consumer today.
+
+### M76 (Settings Screen) — HAPTIC FEEDBACK toggle
+
+`./src/ui/screens/settings.js` adds a `createToggle` row in the visual panel: `data-testid="settings-haptics"`, label `HAPTIC FEEDBACK`, `zap` icon prefix, standard save/status-feedback flow (`saveCurrent`). No `state:settings-change` bus dispatch (see M45 note above).
+
+### M73 (Scorecard Screen) — native share with clipboard fallback
+
+`./src/ui/screens/scorecard.js`'s world-link action now prefers `navigator.share({ title, text, url: shareLink })` (seed-only URL, unchanged payload) inside the user-activation click handler:
+- Success → status `WORLD LINK SHARED`, button label flashes `WORLD LINK SHARED` for 2s.
+- `AbortError` (user cancellation) → status `SHARE CANCELLED`; clipboard is never touched.
+- API absent, or any other share rejection → falls through to the pre-existing clipboard/select fallback unchanged (`WORLD LINK COPIED` / `CLIPBOARD UNAVAILABLE — SELECT LINK`).
+
+`data-testid="scorecard-copy-world"` is preserved; the visible/aria label changed from `COPY WORLD LINK` to `SHARE WORLD LINK` to match the new share-first behavior.
