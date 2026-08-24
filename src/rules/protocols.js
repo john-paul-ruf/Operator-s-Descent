@@ -233,8 +233,11 @@ function actorHp(actor) {
   return actor?.currentHP ?? actor?.hp ?? 0;
 }
 
-function withActorHp(actor, hp) {
-  return 'currentHP' in actor ? { ...actor, currentHP: hp } : { ...actor, hp };
+function withActorHp(actor, nextHp) {
+  const next = { ...actor };
+  if ('hp' in actor || !('currentHP' in actor)) next.hp = nextHp;
+  if ('currentHP' in actor) next.currentHP = nextHp;
+  return next;
 }
 
 function actorHpMax(actor) {

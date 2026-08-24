@@ -253,3 +253,13 @@ describe('protocol effect handlers', () => {
 
   it.each(scenarios)('%s', (_, run) => run());
 });
+
+describe('HP alias invariant', () => {
+  it('keeps hp and currentHP coherent when healing a dual-shaped actor', () => {
+    const dualAlly = effectActor('ally', 'party', { x: 2, y: 0 }, { hp: 10, currentHP: 10, hpMax: 20 });
+    const result = applyEffect('ward', 1, { targets: [dualAlly] });
+    const healed = changed(result, 'ally');
+    expect(healed.hp).toBe(11);
+    expect(healed.currentHP).toBe(11);
+  });
+});
