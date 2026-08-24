@@ -2815,3 +2815,31 @@ Verification: `npm run design:scan` → 0 err (baseline preserved) / 10 warn / 2
 <!-- SESSION-01 -->
 - M56 `createEquipmentCard(item, opts)` and `createProtocolCard(protocol, opts)` accept `opts.compact === true` for non-clickable article cards, adding `console-static-card` and omitting `console-row`; clickable cards retain their existing classes and behavior.
 
+<!-- high-score-archive SESSION-03 (2026-08-24 — appended by Jikijitsu) -->
+### M116 — High Scores Screen (high-score-archive SESSION-03)
+
+- **Path:** `src/ui/screens/highscores.js`
+- **Owns:** Depth-ranked (highest first) read-only archive of every run that
+  ended in party wipe. Portrait row list + wide run-card grid, both reusing
+  Run Library's (M72) existing `.run-row`/`.run-card`/`.wide-library-*`
+  classes verbatim — no new CSS.
+- **Public API:** `mount(container)` → `{ unmount() }` (same contract as
+  every other screen module; consumed via `src/runtime.js`'s dynamic
+  `import(\`./ui/screens/${name}.js\`)`).
+- **Imports from:** M115 (`listHighScores`, `HIGH_SCORE_CAP`), M34 (bus),
+  M56 (`createButton`, `createPanel`, `createScreenBody`, `createSigilToken`),
+  M100 (`currentLayoutClass`), M103 (`captureScroll`/`restoreScroll`).
+- **Testids:** `highscores-list`, `highscores-empty`, `highscores-grid`
+  (wide only), `highscores-title`, `highscores-new-run`,
+  `highscore-row-${key}`, `highscore-sigils`, `highscore-restart-${key}`.
+- **Route:** `'highscores'` added to the three independently-maintained
+  `ROUTES` constants (`src/router.js`, `src/state/bus.js`, `src/runtime.js`
+  — M102/M34/M86, following this repo's existing hand-duplicated pattern,
+  not refactored). Reachable from Title (M68, new `BRANCHES` entry) and
+  Scorecard (M73, new footer button, both layouts). Registered with the
+  design-compliance scanner (M97 `SCREEN_MAP`) and the service-worker
+  manifest (M81 `PRODUCTION_ASSETS`, `CACHE_VERSION` bumped to
+  `2026-08-24-high-score-archive-v1`).
+
+Verification: `npx vitest run` full suite 3007/3014 pass (7 failures — 6 pre-existing at baseline, 1 a direct consequence of the required `CACHE_VERSION` bump in a file outside this session's lease; see STATE.md Residual Gaps); `npm run design:scan` 0 errors, byte-identical to baseline; browser smoke check via agent-browser (Title → HIGH SCORES → empty state → TITLE), zero console errors. Commits a1018c8 (ckpt1) → 862cbbd (ckpt2) → dcf36f9 (ckpt3) → 58f1910 (ckpt4) → 5ed7090 (ckpt5).
+
