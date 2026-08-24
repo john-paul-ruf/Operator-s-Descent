@@ -115,6 +115,10 @@ describe('service worker manifest', () => {
     expect(manifest).toContain('./styles/components.css');
     expect(manifest).toContain('./data/sigils.json');
     expect(manifest).toContain('./assets/descent-sigil.woff2');
+    expect(manifest).toContain('./data/symbol-table.v6.json');
+    expect(manifest).toContain('./src/state/migrations/v6-to-v7.js');
+    expect(manifest).toContain('./src/state/versions/codecs-v6.js');
+    expect(manifest).toContain('./src/state/versions/read-v6.js');
     expect(manifest.some((asset) => /^(\.\/)?(tests|program|specs|mocks|tools|font-src|node_modules|docs)\//.test(asset))).toBe(false);
     expect(new Set(manifest).size).toBe(manifest.length);
   });
