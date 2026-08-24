@@ -337,6 +337,17 @@ export function describeEntryDetail(entry) {
   }
 }
 
+// Compact Vibration API pattern for a resolved combat-log entry. Feedback is scoped to
+// outcomes the player couldn't have anticipated before resolution — a landed hit, a crit,
+// or a death — never misses, navigation, controls, or actions before their outcome is known.
+// Pure and directly testable; the mount()-scoped emitter below applies the opt-in/support gates.
+export function hapticPatternForCombatEntry(entry) {
+  if (entry?.type === 'death') return [24, 24, 44];
+  if (entry?.type !== 'attack' || entry.hit !== true) return null;
+
+  return entry.crit === true ? [12, 24, 24] : 12;
+}
+
 function markDefeated(runState, ids) {
   for (const id of ids || []) {
     const numeric = typeof id === 'number' ? id : /^\d+$/.test(String(id)) ? Number(id) : NaN;
@@ -481,12 +492,16 @@ export function mount(container, params = {}) {
   playfieldBody.appendChild(canvas);
   const playfield = createPlayfield(canvas);
   playfield.setAccent(themeFor(floor, data) || '#7ec8e3');
-  const reducedMotionSetting = loadSettings().reducedMotion;
+  const settings = loadSettings();
+  const reducedMotionSetting = settings.reducedMotion;
   const prefersReduced = typeof globalThis.window?.matchMedia === 'function'
     && globalThis.window.matchMedia('(prefers-reduced-motion: reduce)')?.matches;
   const reduceMotion = reducedMotionSetting === 'reduce'
     || (reducedMotionSetting !== 'full' && prefersReduced);
   playfield.setPulse(!reduceMotion);
+  // Opt-in preference (SESSION-03 of mobile-pwa-hardening) read once at mount, same as
+  // reducedMotion above — no bus event exists for a live-preview of this setting today.
+  const hapticsEnabled = Boolean(settings.hapticsEnabled);
 
   const viewState = {
     runState,
@@ -1066,8 +1081,26 @@ export function mount(container, params = {}) {
     }
   }
 
+  // Guarded, best-effort Vibration API emitter for a resolved combat-log entry. Opt-in only
+  // (hapticsEnabled), silently inert when the pattern mapper declines, the API is absent
+  // (notably iOS Safari), or the browser call throws. Never touches combat state and never
+  // blocks the surrounding visual/audio feedback in dispatchLogEntry below.
+  function triggerHaptic(entry) {
+    if (!hapticsEnabled) return;
+    const pattern = hapticPatternForCombatEntry(entry);
+    if (pattern == null) return;
+    const vibrate = globalThis.navigator?.vibrate;
+    if (typeof vibrate !== 'function') return;
+    try { vibrate.call(globalThis.navigator, pattern); } catch { /* unsupported/throwing browsers stay silent */ }
+  }
+
+  // dispatchLogEntry is the single point every resolved combat-log entry passes through exactly
+  // once — party actions dispatch here immediately (dispatchNewLogs), enemy actions dispatch here
+  // per playback step (advancePlayback) or all at once on fast-forward/reduced-motion/unmount
+  // flush — so triggerHaptic here can never double-fire for one outcome.
   function dispatchLogEntry(entry) {
     if (!entry) return;
+    triggerHaptic(entry);
     bus.dispatch('ui:log-entry', {
       type: entry.type || 'combat',
       message: formatLog(entry),

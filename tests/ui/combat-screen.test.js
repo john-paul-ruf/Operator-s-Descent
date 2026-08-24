@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
 import { createRunState } from '../../src/state/run-state.js';
-import { describeEntryDetail } from '../../src/ui/screens/combat.js';
+import { describeEntryDetail, hapticPatternForCombatEntry } from '../../src/ui/screens/combat.js';
+import { saveSettings } from '../../src/state/library.js';
 import { makeCharacter, makeWeapon } from '../helpers/fixtures.js';
+import { installMockStorage } from '../helpers/mock-storage.js';
 import { loadData } from '../helpers/data.js';
 import * as viewport from '../../src/ui/viewport.js';
 
@@ -1388,3 +1390,105 @@ describe('combat log dispatch — detail payload', () => {
     controller.unmount();
   });
 });
+
+// SESSION-04 (mobile-pwa-hardening) checkpoint 1: the pure pattern mapper, directly testable.
+describe('hapticPatternForCombatEntry — combat haptic pattern mapping', () => {
+  it('maps a plain hit to a single 12ms pulse', () => {
+    expect(hapticPatternForCombatEntry({ type: 'attack', hit: true })).toBe(12);
+  });
+
+  it('maps a critical hit to the distinct 3-beat crit pattern', () => {
+    expect(hapticPatternForCombatEntry({ type: 'attack', hit: true, crit: true })).toEqual([12, 24, 24]);
+  });
+
+  it('maps a death to the death pattern independent of hit/crit fields', () => {
+    expect(hapticPatternForCombatEntry({ type: 'death', targetId: 'hero' })).toEqual([24, 24, 44]);
+    expect(hapticPatternForCombatEntry({ type: 'death', hit: true, crit: true })).toEqual([24, 24, 44]);
+  });
+
+  it('returns null for a miss', () => {
+    expect(hapticPatternForCombatEntry({ type: 'attack', hit: false })).toBe(null);
+    expect(hapticPatternForCombatEntry({ type: 'attack' })).toBe(null);
+  });
+
+  it('returns null for every non-attack, non-death entry type', () => {
+    for (const type of ['move', 'end-turn', 'wait', 'retreat', 'protocol', 'item', 'condition', 'condition-damage']) {
+      expect(hapticPatternForCombatEntry({ type, hit: true, crit: true })).toBe(null);
+    }
+  });
+
+  it('returns null for missing or malformed entries', () => {
+    expect(hapticPatternForCombatEntry(null)).toBe(null);
+    expect(hapticPatternForCombatEntry(undefined)).toBe(null);
+    expect(hapticPatternForCombatEntry({})).toBe(null);
+  });
+});
+
+// SESSION-04 checkpoint 1: the guarded emitter stays silent when the preference is off or the
+// Vibration API is unusable — even when the mapper produces a real, non-null pattern.
+describe('combat haptic emission — opt-in guard (checkpoint 1)', () => {
+  it('never vibrates when hapticsEnabled is false (default), even for a resolved hit and death', async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { vibrate });
+    try {
+      const state = runState();
+      const combat = combatState([partyActor(), enemyActor({ hp: 1, hpMax: 1 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      byTestId(container, 'combat-action-attack').click();
+      byTestId(container, 'combat-target-0').click();
+      byTestId(container, 'combat-confirm').click();
+
+      expect(combat.log.some((entry) => entry.type === 'death')).toBe(true);
+      expect(vibrate).not.toHaveBeenCalled();
+      controller.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('is a silent no-op when opted in but the browser exposes no Vibration API', async () => {
+    const storage = installMockStorage();
+    saveSettings({ hapticsEnabled: true });
+    try {
+      const state = runState();
+      const combat = combatState([partyActor(), enemyActor({ hp: 1, hpMax: 1 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      expect(() => {
+        byTestId(container, 'combat-action-attack').click();
+        byTestId(container, 'combat-target-0').click();
+        byTestId(container, 'combat-confirm').click();
+      }).not.toThrow();
+
+      expect(combat.log.some((entry) => entry.type === 'death')).toBe(true);
+      controller.unmount();
+    } finally {
+      storage.uninstall();
+    }
+  });
+
+  it('is a silent no-op — and never blocks combat resolution — when navigator.vibrate itself throws', async () => {
+    const storage = installMockStorage();
+    saveSettings({ hapticsEnabled: true });
+    vi.stubGlobal('navigator', { vibrate: () => { throw new Error('blocked by permissions policy'); } });
+    try {
+      const state = runState();
+      const combat = combatState([partyActor(), enemyActor({ hp: 1, hpMax: 1 })]);
+      const { container, controller } = await mountCombat({ state, combat });
+
+      expect(() => {
+        byTestId(container, 'combat-action-attack').click();
+        byTestId(container, 'combat-target-0').click();
+        byTestId(container, 'combat-confirm').click();
+      }).not.toThrow();
+
+      expect(combat.log.some((entry) => entry.type === 'death')).toBe(true);
+      controller.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+      storage.uninstall();
+    }
+  });
+});
+
