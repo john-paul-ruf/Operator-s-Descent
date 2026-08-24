@@ -5,7 +5,9 @@ import { loadData } from '../helpers/data.js';
 
 const data = {
   classes: loadData('classes'),
-  themes: loadData('themes')
+  themes: loadData('themes'),
+  equipment: loadData('equipment'),
+  affixes: loadData('affixes')
 };
 
 function character(id, classId = 'breacher') {
@@ -190,6 +192,42 @@ describe('completeFloorTransition — non-calibration', () => {
     const state = run(42, 1, [char]);
     const begin = beginFloorTransition(state, data);
     const result = completeFloorTransition(state, begin.transitionToken, {}, { data, themesData: data.themes });
+    const expectedRegen = Math.floor(7 / 3);
+    expect(result.runState.party[0].currentCHARGE).toBe(char.currentCHARGE + expectedRegen);
+  });
+
+  it('Resonant armor adds its +1 CHARGE regen bonus from deriveStats on descent', () => {
+    const armor = { id: 'resonant-armor', category: 'armor', baseType: 'light', rarity: 'custom', affixes: ['resonant'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const char = { ...character('char_a'), attributes: { ...character('char_a').attributes, res: 7 }, equipment: { weapon: null, armor, offhand: null } };
+    const state = run(42, 1, [char]);
+    const begin = beginFloorTransition(state, data);
+    const result = completeFloorTransition(state, begin.transitionToken, {}, { data, themesData: data.themes });
+    const expectedRegen = Math.floor(7 / 3) + 1;
+    expect(result.runState.party[0].currentCHARGE).toBe(char.currentCHARGE + expectedRegen);
+  });
+
+  it('Overcharged armor raises the CHARGE-max clamp so recovery lands higher than the unaffixed clamp', () => {
+    const armor = { id: 'overcharged-armor', category: 'armor', baseType: 'light', rarity: 'custom', affixes: ['overcharged'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const attributes = { mgt: 5, fin: 5, vit: 5, res: 9, foc: 5, sig: 5 };
+    const unaffixed = { ...character('char_a'), attributes, currentCHARGE: 26 };
+    const affixed = { ...character('char_a'), attributes, currentCHARGE: 26, equipment: { weapon: null, armor, offhand: null } };
+
+    const stateA = run(42, 1, [unaffixed]);
+    const resultA = completeFloorTransition(stateA, beginFloorTransition(stateA, data).transitionToken, {}, { data, themesData: data.themes });
+    const stateB = run(42, 1, [affixed]);
+    const resultB = completeFloorTransition(stateB, beginFloorTransition(stateB, data).transitionToken, {}, { data, themesData: data.themes });
+
+    expect(resultA.runState.party[0].currentCHARGE).toBe(27);
+    expect(resultB.runState.party[0].currentCHARGE).toBe(29);
+  });
+
+  it('degrades to unaffixed regen when equipment/affixes data is unavailable (test tolerance)', () => {
+    const barebonesData = { classes: data.classes, themes: data.themes };
+    const char = { ...character('char_a'), attributes: { ...character('char_a').attributes, res: 7 } };
+    const state = run(42, 1, [char]);
+    const begin = beginFloorTransition(state, barebonesData);
+    const result = completeFloorTransition(state, begin.transitionToken, {}, { data: barebonesData, themesData: barebonesData.themes });
+    expect(result.error).toBeUndefined();
     const expectedRegen = Math.floor(7 / 3);
     expect(result.runState.party[0].currentCHARGE).toBe(char.currentCHARGE + expectedRegen);
   });

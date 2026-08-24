@@ -1,5 +1,6 @@
 import { deriveStats } from './attributes.js';
 import { getCalibrationOptions, getSignatureTier } from './classes.js';
+import { resolveLoadout } from './equipment.js';
 import { deserializeRunState } from '../state/run-state.js';
 import { generateFloor } from '../floor/generator.js';
 import { getDueEchoes } from './encounters.js';
@@ -167,9 +168,9 @@ export function completeFloorTransition(runState, transitionToken, selections, c
     character.conditions = [];
     const classData = classFor(character, context.data ?? context);
     if (classData) {
-      const stats = deriveStats(character, classData, character.equipment);
-      const regen = Math.floor((character.attributes.res ?? 5) / 3);
-      character.currentCHARGE = Math.min(stats.chargeMax, character.currentCHARGE + regen);
+      const loadout = resolveLoadout(character, context.data?.equipment, context.data?.affixes);
+      const stats = deriveStats(character, classData, loadout || character.equipment);
+      character.currentCHARGE = Math.min(stats.chargeMax, character.currentCHARGE + stats.chargeRegen);
     }
   }
 
