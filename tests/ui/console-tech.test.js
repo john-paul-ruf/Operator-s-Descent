@@ -335,6 +335,8 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
     return { actor, enemy, combatState: { turnOrder: ['operator'], currentTurn: 0, combatants: new Map([['operator', actor], ['enemy', enemy]]) } };
   }
 
+  // direct-actions-and-quick-starts SESSION-04 checkpoint 2 — one legal target activation (a
+  // single click on the target row) IS the cast now; there is no separate tech-confirm tap.
   it('an absent rngCursor leaves the caster ledger and target untouched and surfaces a visible TECH error', () => {
     const runState = run();
     const { actor, enemy, combatState } = combatFixture(runState);
@@ -343,8 +345,8 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
     renderTech(container, context);
 
     byTestId(container, 'tech-cast-disrupt-1').click();
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
     byTestId(container, 'tech-target-enemy').click();
-    byTestId(container, 'tech-confirm').click();
 
     expect(actor.ap).toBe(2);
     expect(actor.charge).toBe(10);
@@ -356,7 +358,7 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
     expect(byTestId(container, 'tech-result')).toBe(null);
   });
 
-  it('a valid cursor updates the live target/CHARGE/AP, sets the result row, and invokes the commit callback exactly once', () => {
+  it('one legal target activation updates the live target/CHARGE/AP, sets the result row, and invokes the commit callback exactly once', () => {
     const runState = run();
     const { actor, enemy, combatState } = combatFixture(runState);
     const container = new FakeElement('div');
@@ -371,7 +373,6 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
 
     byTestId(container, 'tech-cast-disrupt-1').click();
     byTestId(container, 'tech-target-enemy').click();
-    byTestId(container, 'tech-confirm').click();
 
     expect(actor.ap).toBe(1);
     expect(actor.charge).toBe(8);
@@ -381,6 +382,7 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
     expect(commits[0].effect.success).toBe(true);
     expect(runState.rngState).toEqual({ marker: 'committed' });
     expect(byTestId(container, 'tech-result')).toBeTruthy();
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
   });
 
   it('uses refreshShell instead of the console-local refresh when the combat owner supplies one', () => {
@@ -398,12 +400,44 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
     renderTech(container, context);
 
     byTestId(container, 'tech-cast-disrupt-1').click();
+    const refreshCallsBeforeTarget = refreshCalls;
     byTestId(container, 'tech-target-enemy').click();
-    const refreshCallsBeforeConfirm = refreshCalls;
-    byTestId(container, 'tech-confirm').click();
 
     expect(refreshShellCalls).toBe(1);
-    expect(refreshCalls).toBe(refreshCallsBeforeConfirm);
+    expect(refreshCalls).toBe(refreshCallsBeforeTarget);
+  });
+});
+
+// direct-actions-and-quick-starts SESSION-04 checkpoint 2 — invalid target input never mutates
+// resources, and BACK cancels a target selection without spending anything. No tech-confirm
+// control ever renders.
+describe('TECH mode — SESSION-04 (direct-actions-and-quick-starts) checkpoint 2: direct target activation', () => {
+  it('clicking a protocol row (browse-only) never renders tech-confirm and never spends CHARGE', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
+    byTestId(container, 'tech-protocol-disrupt-1').click();
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
+    expect(runState.party[0].currentCHARGE).toBe(10);
+  });
+
+  it('BACK cancels a target selection without mutating CHARGE or the caster ledger', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const rngCursor = { nextInt: () => 19, getState: () => null };
+    const context = { runState, data, rngCursor, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    byTestId(container, 'tech-cast-disrupt-1').click();
+    expect(byTestId(container, 'tech-targets')).toBeTruthy();
+    byTestId(container, 'tech-back').click();
+
+    expect(byTestId(container, 'tech-targets')).toBe(null);
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
+    expect(runState.party[0].currentCHARGE).toBe(10);
   });
 });
 

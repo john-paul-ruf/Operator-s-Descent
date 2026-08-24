@@ -157,12 +157,10 @@ function availabilityReason(context, character, caster, protocol, overclocked) {
   return '';
 }
 
-// direct-actions-and-quick-starts SESSION-04 checkpoint 1 — only the explicit CAST/OVERCLOCK
-// activation is an execution intent. A targetless protocol resolves its existing guarded
-// transaction (confirmProtocol) directly, right here, skipping the confirm phase entirely — no
-// tech-confirm row ever renders for a targetless cast. A targeted protocol still transitions to
-// target selection via the phase machine; checkpoint 2 replaces that leg's confirm tap with
-// direct target activation.
+// direct-actions-and-quick-starts SESSION-04 — browse-vs-cast direct TECH contract. Only the
+// explicit CAST/OVERCLOCK activation is an execution intent. A targetless protocol resolves
+// right here; a targeted protocol transitions to target selection — no rendered tech-confirm
+// step exists anywhere in this module (checkpoint 2 completed the targeted leg).
 function beginProtocol(context, protocol, overclocked) {
   const ui = stateFor(context.runState);
   const activeActor = activeCombatActor(context);
@@ -175,14 +173,14 @@ function beginProtocol(context, protocol, overclocked) {
     context.refresh?.();
     return false;
   }
+  if (targetKind(context.data || {}, protocol) === 'none') return resolveCast(context, protocol, Boolean(overclocked), null);
   ui.protocol = { school: protocol.school, tier: protocol.tier };
   ui.overclocked = Boolean(overclocked);
   ui.targetId = null;
   ui.targetIndex = 0;
-  if (targetKind(context.data || {}, protocol) === 'none') return confirmProtocol(context);
   ui.phase = 'select-target';
   ui.error = '';
-  ui.notice = overclocked ? 'Overclock preview ready — select target and confirm.' : 'Protocol ready — select target and confirm.';
+  ui.notice = overclocked ? 'Overclock ready — select a target.' : 'Protocol ready — select a target.';
   context.refresh?.();
   return true;
 }
@@ -234,15 +232,20 @@ function logProtocol(context, action, effect) {
   context.bus?.dispatch('ui:log-entry', { type: 'combat', message: parts.join(' · '), entry: { action, effect }, sequence: Date.now(), timestamp: Date.now() });
 }
 
-function confirmProtocol(context) {
+// direct-actions-and-quick-starts SESSION-04 checkpoint 2 — the single guarded transaction both
+// beginProtocol (targetless) and selectTarget (targeted) fall through to. Explicit protocol/
+// overclocked/targetId parameters replace the former ui.protocol/ui.targetId reads so a
+// targetless cast can resolve before ui.protocol is ever set, and a targeted cast resolves on
+// one legal target activation — no fork by target mode, no second confirmation tap.
+function resolveCast(context, protocol, overclocked, targetId) {
   const ui = stateFor(context.runState);
   const activeActor = activeCombatActor(context);
   const character = selectedRunCharacter(context.runState, ui, activeActor);
   const caster = casterForContext(context, character, activeActor);
-  if (!ui.protocol || !caster) return false;
-  const targets = targetsFor(context, context.runState, caster, ui.protocol);
-  const target = ui.targetId ? targets.find((entry) => entry.id === ui.targetId) : null;
-  if (targetKind(context.data || {}, ui.protocol) !== 'none' && !target) {
+  if (!protocol || !caster) return false;
+  const targets = targetsFor(context, context.runState, caster, protocol);
+  const target = targetId ? targets.find((entry) => entry.id === targetId) : null;
+  if (targetKind(context.data || {}, protocol) !== 'none' && !target) {
     ui.error = 'Select a valid target.';
     context.refresh?.();
     return false;
@@ -256,7 +259,7 @@ function confirmProtocol(context) {
     context.refresh?.();
     return false;
   }
-  const result = resolveProtocolAction(caster, ui.protocol, target ? [target] : [], { overclocked: ui.overclocked, apAvailable: !context.combatState || (caster.ap ?? 0) > 0 }, context.rngCursor, protocolContext(context));
+  const result = resolveProtocolAction(caster, protocol, target ? [target] : [], { overclocked, apAvailable: !context.combatState || (caster.ap ?? 0) > 0 }, context.rngCursor, protocolContext(context));
   if (!result.success) {
     ui.error = result.reason;
     ui.notice = '';
@@ -295,9 +298,21 @@ function confirmProtocol(context) {
   return true;
 }
 
+// direct-actions-and-quick-starts SESSION-04 checkpoint 2 — one legal target activation
+// resolves the cast through the same resolveCast transaction beginProtocol's targetless
+// branch uses.
+function selectTarget(context, targetId) {
+  const ui = stateFor(context.runState);
+  if (!ui.protocol) return false;
+  return resolveCast(context, ui.protocol, ui.overclocked, targetId);
+}
+
+// Keyboard/D-pad focus-only cycling — moves the highlighted target without resolving anything.
+// `confirm` (Enter) on the currently highlighted target is what activates it (see handleInput),
+// preserving non-visual accessibility without a scrollable CONFIRM control.
 function cycleTarget(context, direction = 1) {
   const ui = stateFor(context.runState);
-  if (!ui.protocol) return null;
+  if (!ui.protocol || ui.phase !== 'select-target') return null;
   const activeActor = activeCombatActor(context);
   const caster = casterForContext(context, selectedRunCharacter(context.runState, ui, activeActor), activeActor);
   const targets = targetsFor(context, context.runState, caster, ui.protocol);
@@ -306,7 +321,6 @@ function cycleTarget(context, direction = 1) {
   const next = (current + direction + targets.length) % targets.length;
   ui.targetId = targets[next].id;
   ui.targetIndex = next;
-  ui.phase = 'confirm';
   context.refresh?.();
   return true;
 }
@@ -385,19 +399,21 @@ function renderProtocolRow(list, context, character, caster, protocol) {
   list.appendChild(row);
 }
 
+// direct-actions-and-quick-starts SESSION-04 checkpoint 2 — one legal target activation
+// resolves the cast directly (selectTarget → resolveCast). There is no separate confirm tap:
+// clicking a target row IS the execution intent for a protocol that requires one.
 function renderTargets(container, context, ui, caster) {
-  if (!ui.protocol || !['select-target', 'confirm'].includes(ui.phase)) return;
+  if (!ui.protocol || ui.phase !== 'select-target') return;
   const targets = targetsFor(context, context.runState, caster, ui.protocol);
   const list = document.createElement('div');
   list.className = 'tech-target-list';
   list.dataset.testid = 'tech-targets';
   if (!targets.length) list.appendChild(text('console-empty', 'No valid targets.'));
-  for (let index = 0; index < targets.length; index++) {
-    const target = targets[index];
+  for (const target of targets) {
     const label = `${target.name || target.id} · HP ${target.hp ?? target.currentHP ?? 0}/${target.hpMax ?? target.maxHP ?? target.hp ?? target.currentHP ?? 0}`;
     const button = createButton(label, {
       selected: ui.targetId === target.id,
-      onClick: () => { ui.targetId = target.id; ui.targetIndex = index; ui.phase = 'confirm'; context.refresh?.(); }
+      onClick: () => selectTarget(context, target.id)
     });
     button.dataset.testid = `tech-target-${target.id}`;
     list.appendChild(button);
@@ -405,15 +421,18 @@ function renderTargets(container, context, ui, caster) {
   container.appendChild(list);
 }
 
-function renderConfirm(container, context, ui, character) {
-  if (!ui.protocol || !['select-target', 'confirm'].includes(ui.phase)) return;
+// direct-actions-and-quick-starts SESSION-04 checkpoint 2 — replaces the removed generic
+// tech-confirm row. Read-only cost/effect preview while a target is being chosen, plus BACK as
+// the sole reversible cancel affordance. No CONFIRM control renders anywhere in this module.
+function renderTargetPreview(container, context, ui, character) {
+  if (!ui.protocol || ui.phase !== 'select-target') return;
   const data = context.data || {};
   const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
   const resolved = protocolDataFor(data, ui.protocol);
   const overclock = overclockPreview(character, data, ui.protocol);
   const preview = ui.overclocked
-    ? `OVERCLOCK: cost ${overclock.cost} CHARGE, effective T${overclock.effectiveTier}, d20+FOC ${modifier(character?.attributes?.foc)} vs ${overclock.threshold}, corruption risk +${overclock.corruptionRisk.toFixed(2)}.`
-    : `CAST: cost ${protocolChargeCost(ui.protocol.tier)} CHARGE, range ${resolved?.range || '—'}, effect ${resolved?.effect || '—'}.`;
+    ? `OVERCLOCK: cost ${overclock.cost} CHARGE, effective T${overclock.effectiveTier}, d20+FOC ${modifier(character?.attributes?.foc)} vs ${overclock.threshold}, corruption risk +${overclock.corruptionRisk.toFixed(2)}. Select a target.`
+    : `CAST: cost ${protocolChargeCost(ui.protocol.tier)} CHARGE, range ${resolved?.range || '—'}, effect ${resolved?.effect || '—'}. Select a target.`;
   const previewNode = text('tech-preview console-static-row', preview, 'tech-preview');
   if (ui.overclocked) {
     previewNode.appendChild(createManualLink('charge_and_overclock', {
@@ -423,9 +442,6 @@ function renderConfirm(container, context, ui, character) {
   container.appendChild(previewNode);
   const row = document.createElement('div');
   row.className = 'tech-confirm-row';
-  const confirm = createButton('CONFIRM', { primary: true, disabled: ui.phase !== 'confirm', onClick: () => confirmProtocol(context) });
-  confirm.dataset.testid = 'tech-confirm';
-  row.appendChild(confirm);
   // SESSION-05 (icon-first-ui-density) — BACK is icon-only per GAP §3.6
   // (arrow-left). aria-label preserves the former visible label.
   const back = createButton('', {
@@ -511,7 +527,7 @@ export function render(container, context = {}) {
   for (const protocol of deck) renderProtocolRow(list, context, character, caster, protocol);
   container.appendChild(list);
   renderTargets(container, context, ui, caster);
-  renderConfirm(container, context, ui, character || caster);
+  renderTargetPreview(container, context, ui, character || caster);
   renderCatalog(container, data);
   if (ui.result) container.appendChild(text('tech-result console-static-row', `Last: ${ui.result.protocol.name} · CHARGE -${ui.result.costs.charge}${ui.result.rolls.overclock ? ` · overclock ${ui.result.rolls.overclock.success ? 'success' : 'failed'}` : ''}`, 'tech-result'));
   if (ui.notice) container.appendChild(text('tech-notice console-static-row', ui.notice, 'tech-notice'));
@@ -525,9 +541,13 @@ export function render(container, context = {}) {
 export function handleInput(event, context = {}) {
   const ui = context.runState ? stateFor(context.runState) : null;
   if (!ui) return null;
+  // Keyboard accessibility for the direct-target contract: Enter activates the currently
+  // highlighted target (cycled via TARGET_CYCLE_ACTIONS below); with nothing highlighted yet
+  // it highlights the first one instead of resolving blind.
   if (event.action === 'confirm') {
-    if (ui.phase === 'confirm') return confirmProtocol(context);
-    if (ui.phase === 'select-target') return cycleTarget(context, 1);
+    if (ui.phase !== 'select-target') return null;
+    if (ui.targetId) return selectTarget(context, ui.targetId);
+    return cycleTarget(context, 1);
   }
   if (event.action === 'cancel') {
     ui.phase = 'browse';
