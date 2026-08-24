@@ -358,7 +358,7 @@ function renderInventoryJunk(container, context, state) {
 export function render(container, context = {}) {
   clear(container);
   const runState = context.runState;
-  const state = runState ? stateFor(runState) : { notice: '', error: '', pendingJunkAll: false };
+  const state = runState ? stateFor(runState) : { notice: '', error: '', pendingJunkAll: false, pickupResult: null };
   const lootState = context.lootState || (context.lattice ? { container: findEligibleLootContainer(context.lattice, runState), items: [] } : null);
   const lootContainer = lootState?.container;
   if (!runState || !lootContainer) {
@@ -396,6 +396,15 @@ export function render(container, context = {}) {
   });
   openButton.dataset.testid = 'loot-open';
   container.appendChild(openButton);
+  // SESSION-02 (direct-actions-and-quick-starts) — the pickup result renders
+  // above CONTENTS, ahead of the scrolling item/inventory sections, so a
+  // successful TAKE is impossible to miss on a short mobile viewport.
+  if (state.pickupResult) {
+    const pickupNotice = text('loot-pickup-result console-static-row', pickupNoticeText(state.pickupResult), 'loot-pickup-result');
+    pickupNotice.setAttribute('role', 'status');
+    pickupNotice.setAttribute('aria-live', 'polite');
+    container.appendChild(pickupNotice);
+  }
   container.appendChild(text('mode-indicator', '◈ CONTENTS', 'loot-contents-heading'));
   if (getInventoryCount(runState.inventory || []) >= INVENTORY_CAP) {
     const dispatch = (event, payload) => context.bus?.dispatch(event, payload);
