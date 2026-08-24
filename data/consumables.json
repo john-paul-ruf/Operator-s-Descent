@@ -51,10 +51,11 @@
     },
     "adrenal_injector": {
       "name": "Adrenal Injector",
-      "effect": "Restore 1 AP to the active character (usable only in combat).",
+      "effect": "Restore 1 AP to the active character as a free action (usable only in combat).",
       "effectData": { "type": "ap_restore", "amount": 1, "target": "active" },
       "minDepth": 5,
       "combatOnly": true,
+      "apCost": 0,
       "salvageValue": 2
     }
   }
