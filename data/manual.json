@@ -351,7 +351,7 @@
       "title": "Loot and Salvage",
       "body": [
         [
-          ["text", "Loot is deterministic per container: hash(worldSeed, depth, floorId, containerId) drives every rarity and affix roll, so the same run produces the same drops. Party inventory caps at 100 items — a hard ceiling; a full pack blocks pickup rather than dropping older items."]
+          ["text", "Loot is deterministic per container: hash(worldSeed, depth, floorId, containerId) drives every rarity and affix roll, so the same run produces the same drops. Party inventory caps at 40 items — a hard ceiling; a full pack blocks pickup rather than dropping older items. The chronicle keeps the newest 24 events in the save; older entries scroll out when a link is copied or the run resumes on another device."]
         ],
         [
           ["text", "Tag surplus items as junk in LOOT or GEAR; the Junk-All-Tagged action asks for one confirming tap — junking is irreversible, unlike movement, attacks, casts, and descent, which resolve on a single legal activation — before it destroys them and adds each item's salvageValue to the run's scrap counter. Scrap contributes to the run-end scorecard as Scrap Recovered."]

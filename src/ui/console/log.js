@@ -1,5 +1,5 @@
 import { createButton, createScrollArea } from '../components.js';
-import { encodeRun, initEncoder } from '../../state/save-encode.js';
+import { encodeRun, initEncoder, SAVE_BUDGET } from '../../state/save-encode.js';
 
 const EVENT_TYPES = {
   combat: '#e83a3a',
@@ -232,10 +232,14 @@ async function copyLink(container, context) {
   }
   try {
     if (context.data?.symbolTable) initEncoder(context.data.symbolTable);
+    // encodeRun is the sole enforcement point for the save budget — it
+    // throws `save_budget_exceeded` if the reachable state cannot fit under
+    // SAVE_BUDGET. Re-asserting a literal here would silently reject valid
+    // fragments after any future budget bump.
     const result = context.encodeRun ? context.encodeRun(context.runState) : encodeRun(context.runState);
     const fragment = typeof result === 'string' ? result : result.fragment;
     const length = result.length ?? fragment.length;
-    if (!fragment || length >= 1500) throw new RangeError('save_budget_exceeded');
+    if (!fragment) throw new RangeError('save_budget_exceeded');
     const link = `${baseUrl()}#r=${fragment}`;
     state.link = link;
     let copied = false;
@@ -281,7 +285,7 @@ export function render(container, context = {}) {
   share.className = isWide ? 'log-share share-panel panel-elevated' : 'log-share panel-elevated';
   share.dataset.testid = 'log-share';
   share.appendChild(Object.assign(document.createElement('div'), { className: 'mode-indicator console-static-row', textContent: '◈ SHARE RUN' }));
-  share.appendChild(Object.assign(document.createElement('div'), { className: 'log-budget console-static-row', textContent: 'URL < 1500 chars' }));
+  share.appendChild(Object.assign(document.createElement('div'), { className: 'log-budget console-static-row', textContent: `URL < ${SAVE_BUDGET} chars` }));
   if (state.link) {
     const fallback = document.createElement('input');
     fallback.type = 'text';

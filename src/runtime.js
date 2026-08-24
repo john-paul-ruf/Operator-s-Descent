@@ -83,8 +83,19 @@ let serviceWorkerReloadPending = false;
 let serviceWorkerUpdateReadyDispatched = false;
 let serviceWorkerRegistration = null;
 let lastAutosaveResult = null;
+// Gate for the chronicle autosave notice. Persisted-event budgets are tight
+// (v7 MAX_EVENTS=24, message ≤72 chars), so 7 checkpoints landing the same
+// degraded-save notice must not flood the tail. Only a state CHANGE emits a
+// row; consecutive identical severities skip. Cleared on a clean save and on
+// shutdownRuntime (both are legitimate "start fresh" boundaries). Kept in
+// module scope alongside lastAutosaveResult so the two clear together.
+let lastAutosaveNotice = null;
 let serviceWorkerStatus = { attempted: false, supported: false, registered: false, updated: false, reloading: false, updateReady: false, scope: null, error: null };
 let manualModal = null;
+// Persisted-event message hard bound (M33 normalizePersistedEvent enforces
+// this on load and on recordEvent). Every autosave notice string must clamp
+// under this so it is never truncated in the chronicle tail.
+const PERSISTED_EVENT_MESSAGE_MAX = 72;
 
 let gameData = null;
 
@@ -410,12 +421,65 @@ function appendRuntimeLogEntry(entry = {}) {
   return payload;
 }
 
+// Compose the chronicle notice for a saveRun result, honoring severity
+// order: failure (error) > eviction (system) > compaction (system) > clean
+// (no notice). Every branch clamps ≤ PERSISTED_EVENT_MESSAGE_MAX so the row
+// is never truncated at recordEvent load time.
+function autosaveNoticeFor(result) {
+  if (!result?.success) {
+    const error = result?.error || result?.reason || 'storage_failed';
+    return { type: 'error', message: `AUTOSAVE FAILED (${error}) — RECENT PROGRESS AT RISK`.slice(0, PERSISTED_EVENT_MESSAGE_MAX) };
+  }
+  if (Array.isArray(result.evicted) && result.evicted.length > 0) {
+    return { type: 'system', message: 'STORAGE FULL — OLDEST ARCHIVED RUN EVICTED TO KEEP THIS SAVE' };
+  }
+  if (result.metrics?.eventsDropped > 0) {
+    return { type: 'system', message: 'AUTOSAVE COMPACTED — OLDEST LOG ENTRIES NOT SAVED' };
+  }
+  return null;
+}
+
+function recordAutosaveNotice(runState, notice) {
+  const payload = {
+    type: notice.type,
+    message: notice.message,
+    timestamp: Date.now()
+  };
+  runtimeLogEntries.push(payload);
+  if (runtimeLogEntries.length > 64) runtimeLogEntries.splice(0, runtimeLogEntries.length - 64);
+  // Record on the state we actually saved — not module-level currentRunState,
+  // which may be null on save-only checkpoints (loot-taken, inventory-change
+  // dispatched without a prior currentRunState-setting event).
+  runState?.recordEvent?.(payload);
+}
+
 function commitAutosave(runState, reason, metadata = {}) {
   if (!runState || !AUTOSAVE_SET.has(reason)) return { success: false, error: 'invalid_checkpoint' };
   const result = saveRun(runState, metadata);
   lastAutosaveResult = { reason, result };
+  const notice = autosaveNoticeFor(result);
+  if (notice) {
+    // Dedupe across consecutive checkpoints — 7 back-to-back saves at the
+    // same degraded severity land ONE row in the chronicle, not seven.
+    if (notice.message !== lastAutosaveNotice) {
+      recordAutosaveNotice(runState, notice);
+      lastAutosaveNotice = notice.message;
+    }
+  } else {
+    // Clean save clears the gate: the next real degradation, no matter what
+    // it is, gets its own row again.
+    lastAutosaveNotice = null;
+  }
   if (result.success) {
-    bus.dispatch('state:autosave-complete', { reason, runState, result, key: result.key, length: result.length });
+    bus.dispatch('state:autosave-complete', {
+      reason,
+      runState,
+      result,
+      key: result.key,
+      length: result.length,
+      metrics: result.metrics,
+      ...(result.evicted ? { evicted: result.evicted } : {})
+    });
   } else {
     const error = result.error || result.reason || 'storage_failed';
     console.warn(`Autosave failed at ${reason}: ${error}`);
@@ -993,6 +1057,7 @@ export function shutdownRuntime() {
   pendingDeathEchoes = [];
   runtimeSettings = null;
   lastAutosaveResult = null;
+  lastAutosaveNotice = null;
   gameData = null;
   setGameDataCompatibility(null);
   bus.dispatch('runtime:shutdown', { route });

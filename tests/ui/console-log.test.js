@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createRunState } from '../../src/state/run-state.js';
 import { createLogEntryElement, render as renderLog } from '../../src/ui/console/log.js';
+import { SAVE_BUDGET } from '../../src/state/save-encode.js';
 import { loadData } from '../helpers/data.js';
 
 const data = {
@@ -325,6 +326,40 @@ describe('createLogEntryElement — detail second line', () => {
     const detail = detailChild(rows[0]);
     expect(detail).not.toBe(null);
     expect(detail.textContent).toBe('d20 14 +3 FIN = 17 vs DEF 15 → HIT · d6=3 dmg');
+  });
+});
+
+// Collect helper for the tests below.
+function collectAll(root, predicate, matches = []) {
+  if (predicate(root)) matches.push(root);
+  for (const child of root.children || []) collectAll(child, predicate, matches);
+  return matches;
+}
+
+describe('LOG mode — budget surfaces derive from SAVE_BUDGET', () => {
+  it('the SHARE RUN panel budget label reads `URL < <SAVE_BUDGET> chars` (never a re-literaled number)', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    renderLog(container, { runState, data, logEntries: [] });
+    const label = collectAll(container, (el) => (el.className || '').includes('log-budget'))[0];
+    expect(label).toBeTruthy();
+    expect(label.textContent).toBe(`URL < ${SAVE_BUDGET} chars`);
+    // Sanity: SAVE_BUDGET is the raised 1900 ceiling after saves-never-fail
+    // SESSION-01. If this ever regresses, the label follows automatically.
+    expect(SAVE_BUDGET).toBe(1900);
+  });
+
+  it('copyLink no longer carries a re-literaled 1500 gate — the sole enforcement point is encodeRun', async () => {
+    // The renderer used to throw `save_budget_exceeded` any time the encoded
+    // fragment length was ≥ 1500, regardless of the exported SAVE_BUDGET.
+    // After the CP2 rework the check is gone; the encoder alone owns the
+    // budget. Verify by reading the log.js source: no bare literal 1500
+    // remains in the copy-link path.
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../../src/ui/console/log.js', import.meta.url), 'utf8');
+    expect(source.includes('1500')).toBe(false);
+    // And the copy-link path uses SAVE_BUDGET only for the display label.
+    expect(source.includes('SAVE_BUDGET')).toBe(true);
   });
 });
 

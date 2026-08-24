@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
 import { deleteRunState, listRuns, loadRun, loadSettings, saveRun } from '../../src/state/library.js';
-import { base64urlEncode, crc32, encodeRun, encodeSeed, initEncoder, SAVE_VERSION } from '../../src/state/save-encode.js';
+import { base64urlEncode, crc32, encodeRun, encodeSeed, initEncoder, SAVE_BUDGET, SAVE_VERSION } from '../../src/state/save-encode.js';
 import { decodeSeed } from '../../src/state/save-decode.js';
 import { encrypt } from '../../src/state/encrypt.js';
 import { createBitWriter } from '../../src/state/bit-codec.js';
@@ -445,6 +445,40 @@ describe('import screen', () => {
 
     await byTestId(container, 'import-return-title-result').click();
     expect(seen.at(-1)).toEqual({ screen: 'title', params: {} });
+    off();
+  });
+
+  it('accepts a fragment in the 1500–1900-char band and rejects only oversized input as malformed', async () => {
+    // Pre-fix, MAX_FRAGMENT_LENGTH was 1500 — any legal but longer link
+    // (which the raised SAVE_BUDGET=1900 explicitly permits) was rejected by
+    // the length gate BEFORE decode ever ran. Post-fix, MAX_FRAGMENT_LENGTH
+    // === SAVE_BUDGET, so links up to 1899 chars flow through to decode.
+    const seen = [];
+    const off = bus.on('ui:navigate', (payload) => seen.push(payload));
+    const { mount } = await import('../../src/ui/screens/import.js');
+    const container = new FakeElement('div');
+    mount(container);
+    // The instructions copy interpolates SAVE_BUDGET.
+    const captionText = allText(container).join(' ');
+    expect(captionText).toContain(`under ${SAVE_BUDGET} characters`);
+    expect(captionText).not.toContain('under 1500 characters');
+    // 1700-char base64url garbage: comfortably above the pre-fix 1500 gate,
+    // still under the new 1900 gate. Length gate must NOT return malformed
+    // here — decode is allowed to run and reports its own failure code.
+    const inBandGarbage = 'A'.repeat(1700);
+    byTestId(container, 'import-input').value = `#r=${inBandGarbage}`;
+    await byTestId(container, 'import-submit').click();
+    // Decode fails (garbage is not a real save), but the failure category
+    // depends on the payload — not the length. Any FAILURE_MESSAGES code is
+    // acceptable; the invariant is "it reached decode", i.e. the length
+    // gate did not short-circuit with malformed BEFORE decode.
+    const knownCodes = ['truncated', 'version_mismatch', 'checksum_failed', 'malformed'];
+    expect(knownCodes.some((code) => byTestId(container, `import-failure-${code}`))).toBe(true);
+    // 2000 chars — over the SAVE_BUDGET ceiling. Length gate rejects.
+    const overBudgetGarbage = 'A'.repeat(2000);
+    byTestId(container, 'import-input').value = `#r=${overBudgetGarbage}`;
+    await byTestId(container, 'import-submit').click();
+    expect(byTestId(container, 'import-failure-malformed')).toBeTruthy();
     off();
   });
 

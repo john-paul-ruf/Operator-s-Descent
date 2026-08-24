@@ -423,8 +423,8 @@
 
 - **User story:** As a player, I want to copy my entire run state into a URL, so that I can resume on any device by pasting a link.
 - **Acceptance criteria:**
-  - [ ] Full run state encodes into a URL fragment: party, current HP and charge, inventory (max 100 items per FR-50), position, depth, flags, corruption, Echo queue, RNG cursor, scrap counter.
-  - [ ] The URL fragment is under 1500 characters (survives any chat client).
+  - [ ] Full run state encodes into a URL fragment: party, current HP and charge, inventory (max 40 items per FR-50), position, depth, flags, corruption, Echo queue, RNG cursor, scrap counter.
+  - [ ] The URL fragment is under 1900 characters (survives any chat client — total URL stays inside the ~2,048-char universal interop floor).
   - [ ] Pasting the URL on any machine reconstructs the run bit-for-bit.
   - [ ] The encoding includes a checksum for integrity validation.
   - [ ] The encoding includes a version identifier for forward/backward compatibility handling.
@@ -487,7 +487,7 @@
 
 - **User story:** As a player, I want a hard inventory cap and a junk/salvage mechanic, so that inventory management is a meaningful decision and the save state stays portable.
 - **Acceptance criteria:**
-  - [ ] The party inventory is capped at **100 items** total (across all characters' unequipped items). This is a hard cap — no item can be picked up if inventory is full.
+  - [ ] The party inventory is capped at **40 items** total (across all characters' unequipped items). This is a hard cap — no item can be picked up if inventory is full.
   - [ ] When inventory is full, the LOOT console mode warns the player and blocks item pickup until space is freed.
   - [ ] The player may **tag items as "junk"** in the LOOT or GEAR console mode. Tagging is a toggle — an item can be un-tagged.
   - [ ] A **"Junk All Tagged"** action destroys all tagged items and converts them to **scrap value**.
@@ -497,7 +497,7 @@
   - [ ] Junking an item is permanent — it cannot be undone. A confirmation prompt appears before "Junk All Tagged" executes.
   - [ ] The scrap counter is saved in the run state and reconstructable from a save link.
   - [ ] Consumable items have a salvage value equal to half their rarity-equivalent value (since consumables have no rarity tiers, a flat value per type is used).
-  - [ ] The 100-item cap is a **design constraint**, not a technical limitation — it guarantees the URL save state is always encodable regardless of play depth or hoarding behavior.
+  - [ ] The 40-item cap is a **design constraint** derived from the save-budget model, not an arbitrary technical limit. Saves ship as URL fragments (never traverse a server), so the transport ceiling is the ~2,048-char universal interop floor for total URL length; `SAVE_BUDGET` (exported from `src/state/save-encode.js`) is 1900. The reachable worst-case run state — 40 items plus the corrupt-ledger, event-tail, and combat-snapshot caps — is sized so it encodes ≤1710 without event trimming, keeping a ~190-char margin. `tests/state/save-budget-model.test.js` builds the reachable apex from live systems and asserts the ceiling; `npm run stress:saves` re-runs the model at release time. Any new persisted field, cap increase, or budget change must re-run the model.
 
 ### FR-51: Saved Party Configurations
 
@@ -953,7 +953,7 @@
 - **Runtime — floor generation:** A validated floor generates in under 100ms on a mid-range mobile device. Regeneration loops must not produce perceptible load times.
 - **Runtime — rendering:** 60fps target on mid-range mobile. The 20×32 lattice with shadowcast LOS must not drop below 30fps. Combat at 8×16 with effects must not drop below 30fps.
 - **Runtime — audio:** WebAudio synthesis must not produce audible glitches, dropouts, or xruns on a mid-range mobile device. Five simultaneous layers must remain within CPU budget.
-- **Runtime — save:** Encoding the full run state to a URL fragment under 1500 chars must complete in under 50ms (no perceptible delay on "copy link").
+- **Runtime — save:** Encoding the full run state to a URL fragment under `SAVE_BUDGET` (1900 chars, exported from `src/state/save-encode.js`) must complete in under 50ms (no perceptible delay on "copy link").
 - **Runtime — save decode:** Decoding a pasted link must complete in under 100ms.
 - **localStorage:** Autosave writes must be non-blocking and complete in under 50ms per write.
 
@@ -993,7 +993,7 @@
 - **No meta-progression:** No run-to-run carryover of any kind.
 - **No vendor nodes:** Credits exist only as the 10:1 unspent-points conversion. No shops, no vendors.
 - **Sigil font is the sole authored asset:** Everything else is code or data files.
-- **URL save must be under 1500 characters:** This constrains the save-state schema density.
+- **URL save must be under 1900 characters (`SAVE_BUDGET`, exported from `src/state/save-encode.js`):** Saves ship as fragments that never traverse a server, so the ~2,048-char universal interop floor bounds total URL length. This constrains save-state schema density; the reachable apex is asserted at ≤1710 by `tests/state/save-budget-model.test.js`.
 
 ---
 
@@ -1015,7 +1015,7 @@
 - The 20×32 lattice with 8-way movement provides enough tactical space for meaningful exploration without being tedious. To be validated at M1.
 - The 8×16 combat window at 2× zoom provides enough space for the three-act engagement (approach, contact, resolution) given 9–12 cells of deployment separation. To be validated at M1.
 - The expanded console overlaying the playfield (leaving ~1024px visible band) is sufficient for targeting decisions without additional panning. To be validated at M1 (Open Question 3).
-- The 1500-character URL limit is sufficient to encode the full save state of a 4-character party at any depth. This constrains the save schema; Architect/DB must design within it.
+- The 1900-character URL-fragment limit (`SAVE_BUDGET`) is sufficient to encode the full save state of a 4-character party at any depth once the v7 caps (inventory 40, events 24, corrupt ledger 32, combat snapshot 8192 B) hold. This constrains the save schema; Architect/DB must design within it.
 - The glitch timing constants from the tarot translate to the larger playfield without re-tuning. They are visual constants, not resolution-dependent. To be validated visually.
 - The five-layer WebAudio synthesis fits within the CPU budget of a mid-range mobile device. To be validated at M7.
 - The deterministic PRNG (seeded by `worldSeed`) is sufficient for both floor generation and combat rolls without cross-contamination. The RNG cursor in the save state tracks position.
@@ -1110,7 +1110,7 @@
 - **Choir:** An enemy archetype that casts DISRUPT and SCRY protocols (up to tier 3) using a CHARGE pool of `(RES × 2) + depth`. Attack rolls use FOC modifier; damage scales with RES modifier. Falls back to melee when out of CHARGE.
 - **Null:** An enemy archetype that applies conditions directly (JAMMED, OVERLOADED, IMMOBILIZED, PANICKED, MARKED) via a d20 + FOC roll vs. target save. Has a 1-turn cooldown between condition applications.
 - **Consumable:** A single-use item found in loot containers that restores HP, CHARGE, removes conditions, or provides combat buffs. Seven types exist (Repair Patch, Med Kit, Charge Cell, Boost Cell, Purge Spike, Shield Capacitor, Adrenal Injector). No rarity tiers or affixes. Enumerated in FR-49.
-- **Inventory cap:** The hard limit of 100 unequipped items in the party inventory. Items cannot be picked up when the cap is reached. Enforced per FR-50.
+- **Inventory cap:** The hard limit of 40 unequipped items in the party inventory. Items cannot be picked up when the cap is reached. Sized by the save-budget model (`tests/state/save-budget-model.test.js`) and enforced per FR-50.
 - **Junk (verb):** The act of tagging items for destruction and converting them to scrap value via the "Junk All Tagged" action. Permanent and irreversible. Enabled by FR-50.
 - **Scrap counter:** A run-wide accumulator tracking the total salvage value of all items junked during the run. Displayed in PARTY/GEAR mode and on the run-end scorecard. Saved in the run state. Enforced by FR-50.
 - **Salvage value:** The scrap value of an item, defined per item type/category in the data files. Added to the scrap counter when the item is junked. Enforced by FR-50.

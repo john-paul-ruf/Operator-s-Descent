@@ -279,6 +279,42 @@ async function runtime() {
   return runtimeApi;
 }
 
+// Storage shim whose setItem behaviour is under test control. Mirrors the
+// browser QuotaExceededError path: a failing setItem is a no-op on the prior
+// stored value. Duplicated locally (tests/state/library.test.js has the
+// same helper) — the two files can't share module state at this layer.
+function installFailableStorage() {
+  const map = new Map();
+  let failuresQueued = 0;
+  let predicate = null;
+  const throwQuota = () => {
+    const err = new Error('quota exceeded');
+    err.name = 'QuotaExceededError';
+    throw err;
+  };
+  const stub = {
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => {
+      if (predicate && predicate(key, String(value), map)) throwQuota();
+      if (failuresQueued > 0) { failuresQueued -= 1; throwQuota(); }
+      map.set(key, String(value));
+    },
+    removeItem: (key) => { map.delete(key); },
+    clear: () => { map.clear(); },
+    key: (index) => [...map.keys()][index] ?? null,
+    get length() { return map.size; }
+  };
+  globalThis.localStorage = stub;
+  return {
+    map,
+    uninstall: () => { delete globalThis.localStorage; },
+    failNextN: (n) => { failuresQueued = n; },
+    rejectWhen: (pred) => { predicate = pred; },
+    clearRejection: () => { predicate = null; failuresQueued = 0; }
+  };
+}
+
+
 beforeEach(() => {
   vi.useRealTimers();
   resetGameDataForTests();
@@ -576,6 +612,122 @@ describe('runtime autosave checkpoints', () => {
     expect(decoded.runState.depth).toBe(state.depth);
     expect(decoded.runState.inventory.length).toBe(state.inventory.length);
     off();
+  });
+});
+
+describe('runtime autosave chronicle notices', () => {
+  it('clean saves emit no chronicle entry — the state tail stays free of autosave rows during normal play', async () => {
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const state = buildRealisticRun(41, { depth: 1, fogCells: 2 });
+    const before = state.recentEvents.length;
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'sig-1', containerId: 2, containerClosed: false });
+    expect(state.recentEvents.length).toBe(before);
+  });
+
+  it('failed saves append exactly one semantic-error entry and dispatch state:autosave-failed with error + result', async () => {
+    storage?.uninstall();
+    const capped = installFailableStorage();
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const failures = [];
+    const off = bus.on('state:autosave-failed', (payload) => failures.push(payload));
+    const state = buildRealisticRun(52, { depth: 1, fogCells: 2 });
+    // Reject every setItem for THIS run's payload — recovery ladder exhausts.
+    capped.rejectWhen((key) => key === `od_run_${state.worldSeed}_${state.creationTimestamp}`);
+    const errsBefore = state.recentEvents.filter((entry) => entry.type === 'error').length;
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'sig-1', containerId: 2, containerClosed: false });
+    const errsAfter = state.recentEvents.filter((entry) => entry.type === 'error');
+    expect(errsAfter.length).toBe(errsBefore + 1);
+    expect(errsAfter.at(-1).message.startsWith('AUTOSAVE FAILED')).toBe(true);
+    expect(errsAfter.at(-1).message).toContain('RECENT PROGRESS AT RISK');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      reason: 'loot-taken',
+      error: 'quota_exceeded',
+      result: expect.objectContaining({ success: false })
+    });
+    off();
+    capped.uninstall();
+    storage = installMockStorage();
+  });
+
+  it('eviction recovery appends exactly one system entry (STORAGE FULL — OLDEST ARCHIVED RUN EVICTED)', async () => {
+    storage?.uninstall();
+    const capped = installFailableStorage();
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    // Seed two other archived runs so the quota-recovery ladder has an
+    // eviction candidate for the payload write that we're about to fail.
+    const older = buildRealisticRun(60, { depth: 1, fogCells: 0 });
+    const middle = buildRealisticRun(61, { depth: 1, fogCells: 0 });
+    bus.dispatch('state:loot-taken', { runState: older, itemId: 'seed-1', containerId: 1, containerClosed: false });
+    bus.dispatch('state:loot-taken', { runState: middle, itemId: 'seed-2', containerId: 1, containerClosed: false });
+    // Bump lastPlayed to force older to be the eviction victim.
+    const entries = JSON.parse(globalThis.localStorage.getItem('od_runs'));
+    for (const entry of entries) {
+      entry.lastPlayed = entry.key === `${older.worldSeed}_${older.creationTimestamp}` ? 1000 : 5000;
+    }
+    globalThis.localStorage.setItem('od_runs', JSON.stringify(entries));
+    // Now dispatch the live save with a queued single-shot failure.
+    const state = buildRealisticRun(62, { depth: 1, fogCells: 0 });
+    capped.failNextN(1);
+    const systemsBefore = state.recentEvents.filter((entry) => entry.type === 'system').length;
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'sig-live', containerId: 2, containerClosed: false });
+    const systemsAfter = state.recentEvents.filter((entry) => entry.type === 'system');
+    expect(systemsAfter.length).toBe(systemsBefore + 1);
+    expect(systemsAfter.at(-1).message).toBe('STORAGE FULL — OLDEST ARCHIVED RUN EVICTED TO KEEP THIS SAVE');
+    capped.uninstall();
+    storage = installMockStorage();
+  });
+
+  it('dedupes consecutive identical notices — the same degraded severity across seven checkpoints lands one row', async () => {
+    storage?.uninstall();
+    const capped = installFailableStorage();
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const state = buildRealisticRun(70, { depth: 1, fogCells: 2 });
+    capped.rejectWhen((key) => key === `od_run_${state.worldSeed}_${state.creationTimestamp}`);
+    for (let index = 0; index < 7; index++) {
+      bus.dispatch('state:loot-taken', { runState: state, itemId: `sig-${index}`, containerId: 2, containerClosed: false });
+    }
+    const errors = state.recentEvents.filter((entry) => entry.type === 'error');
+    expect(errors).toHaveLength(1);
+    capped.uninstall();
+    storage = installMockStorage();
+  });
+
+  it('escalation across severities appends a new row per state change (failure → eviction → clean)', async () => {
+    storage?.uninstall();
+    const capped = installFailableStorage();
+    const api = await runtime();
+    await api.activateRuntime({ initialHash: '' });
+    const state = buildRealisticRun(80, { depth: 1, fogCells: 0 });
+    const stateKey = `od_run_${state.worldSeed}_${state.creationTimestamp}`;
+    // Stage 1 — reject the live save entirely → failure notice.
+    capped.rejectWhen((key) => key === stateKey);
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'a', containerId: 1, containerClosed: false });
+    const errAfterFailure = state.recentEvents.filter((entry) => entry.type === 'error').length;
+    expect(errAfterFailure).toBe(1);
+    // Stage 2 — seed an eviction candidate, clear the predicate, queue ONE
+    // failure so recovery triggers eviction.
+    capped.clearRejection();
+    const older = buildRealisticRun(81, { depth: 1, fogCells: 0 });
+    bus.dispatch('state:loot-taken', { runState: older, itemId: 'seed', containerId: 1, containerClosed: false });
+    capped.failNextN(1);
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'b', containerId: 1, containerClosed: false });
+    const sysAfterEviction = state.recentEvents.filter((entry) => entry.type === 'system').length;
+    expect(sysAfterEviction).toBe(1);
+    // Stage 3 — clean save. No new notice, but gate is cleared so a repeat
+    // failure would emit a fresh error row.
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'c', containerId: 1, containerClosed: false });
+    // Gate is now cleared. Repeat failure → new error row.
+    capped.rejectWhen((key) => key === stateKey);
+    bus.dispatch('state:loot-taken', { runState: state, itemId: 'd', containerId: 1, containerClosed: false });
+    const finalErrors = state.recentEvents.filter((entry) => entry.type === 'error');
+    expect(finalErrors).toHaveLength(2);
+    capped.uninstall();
+    storage = installMockStorage();
   });
 });
 

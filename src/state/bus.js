@@ -80,11 +80,11 @@ export const EVENT_CONTRACTS = Object.freeze({
     validate: hasRunState
   },
   'state:autosave-complete': {
-    description: 'Runtime autosave success. Payload includes checkpoint reason and storage result.',
+    description: 'Runtime autosave success. Payload includes checkpoint reason, storage result, encoder metrics, and (when non-empty) the evicted archived-run keys freed by the quota-recovery ladder.',
     validate: (payload) => isObject(payload) && typeof payload.reason === 'string'
   },
   'state:autosave-failed': {
-    description: 'Runtime autosave failure. Payload includes checkpoint reason and error.',
+    description: 'Runtime autosave failure. Payload includes checkpoint reason, named error, and the raw storage result — the LOG chronicle surfaces this as a semantic-error entry.',
     validate: (payload) => isObject(payload) && typeof payload.reason === 'string' && typeof payload.error === 'string'
   },
   'state:calibration-required': {

@@ -1,11 +1,15 @@
 import { assignLocalRunKey, saveRun } from '../../state/library.js';
 import { decodeRun, decodeSeed } from '../../state/save-decode.js';
+import { SAVE_BUDGET } from '../../state/save-encode.js';
 import { bus } from '../../state/bus.js';
 import { createButton, createPanel, createScreenBody } from '../components.js';
 import { currentLayoutClass } from '../layout.js';
 
 const MAX_IMPORT_TEXT_LENGTH = 2048;
-const MAX_FRAGMENT_LENGTH = 1500;
+// Fragment cap tracks the single save budget exported by save-encode.js. A
+// re-literaled value here would silently reject valid links after any future
+// budget bump; the import screen must accept every valid link.
+const MAX_FRAGMENT_LENGTH = SAVE_BUDGET;
 
 const FAILURE_MESSAGES = {
   truncated: ['TRUNCATED', 'Truncated — the link was cut short.'],
@@ -112,7 +116,7 @@ export function mount(container, params = {}) {
 
   const instructions = document.createElement('p');
   instructions.className = 'caption';
-  instructions.textContent = 'Paste a run link to resume on this device. Full run state remains under 1500 characters.';
+  instructions.textContent = `Paste a run link to resume on this device. Full run state remains under ${SAVE_BUDGET} characters.`;
 
   const input = document.createElement('textarea');
   input.className = 'link-input';
