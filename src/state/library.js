@@ -99,7 +99,8 @@ function defaultSettings() {
     layerVolumes: { drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 },
     glitchEnabled: true,
     reducedMotion: 'system',
-    scanlineGrainEnabled: true
+    scanlineGrainEnabled: true,
+    hapticsEnabled: false
   };
 }
 
@@ -120,7 +121,8 @@ function normalizeSettings(value) {
     },
     glitchEnabled: typeof input.glitchEnabled === 'boolean' ? input.glitchEnabled : defaults.glitchEnabled,
     reducedMotion,
-    scanlineGrainEnabled: typeof input.scanlineGrainEnabled === 'boolean' ? input.scanlineGrainEnabled : defaults.scanlineGrainEnabled
+    scanlineGrainEnabled: typeof input.scanlineGrainEnabled === 'boolean' ? input.scanlineGrainEnabled : defaults.scanlineGrainEnabled,
+    hapticsEnabled: typeof input.hapticsEnabled === 'boolean' ? input.hapticsEnabled : defaults.hapticsEnabled
   };
 }
 

@@ -215,7 +215,8 @@ describe('settings and flags', () => {
       layerVolumes: { drone: 10, pulse: 75, sparkle: 100, lead: 75, noiseBed: 11 },
       glitchEnabled: true,
       reducedMotion: 'system',
-      scanlineGrainEnabled: true
+      scanlineGrainEnabled: true,
+      hapticsEnabled: false
     });
   });
 
@@ -233,8 +234,18 @@ describe('settings and flags', () => {
       glitchEnabled: true,
       reducedMotion: 'reduce',
       scanlineGrainEnabled: true,
+      hapticsEnabled: false,
       futureOption: { retained: true }
     });
+  });
+
+  it('normalizes hapticsEnabled, defaulting false on malformed input and preserving a valid boolean', () => {
+    expect(loadSettings().hapticsEnabled).toBe(false);
+    localStorage.setItem('od_settings', JSON.stringify({ hapticsEnabled: 'yes' }));
+    expect(loadSettings().hapticsEnabled).toBe(false);
+    const saved = saveSettings({ hapticsEnabled: true });
+    expect(saved.success).toBe(true);
+    expect(loadSettings().hapticsEnabled).toBe(true);
   });
 
   it('clamps and rounds masterVolume, defaults on non-finite input, preserves 0', () => {

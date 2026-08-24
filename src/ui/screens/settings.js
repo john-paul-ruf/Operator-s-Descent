@@ -228,6 +228,16 @@ export function mount(container, params = {}) {
   visualPanel.appendChild(texture);
   appendCaption(visualPanel, 'CRT frame texture (independent of glitch)');
 
+  const haptics = createToggle('HAPTIC FEEDBACK', settings.hapticsEnabled, (value) => {
+    settings = { ...settings, hapticsEnabled: value };
+    saveCurrent('HAPTIC FEEDBACK');
+  });
+  haptics.dataset.testid = 'settings-haptics';
+  prefixToggleLabelIcon(haptics, 'zap', 14);
+  cleanups.push(() => haptics.cleanup?.());
+  visualPanel.appendChild(haptics);
+  appendCaption(visualPanel, 'Vibrate on resolved combat hits (where supported)');
+
   // the-manual SESSION-04 — Settings routes the reader into the settings
   // section of the manual via the fixed `settings_help` target id.
   const manualButton = createButton("OPERATOR'S MANUAL", {

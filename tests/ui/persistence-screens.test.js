@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/state/bus.js';
-import { deleteRunState, listRuns, loadRun, saveRun } from '../../src/state/library.js';
+import { deleteRunState, listRuns, loadRun, loadSettings, saveRun } from '../../src/state/library.js';
 import { base64urlEncode, crc32, encodeRun, encodeSeed, initEncoder, SAVE_VERSION } from '../../src/state/save-encode.js';
 import { decodeSeed } from '../../src/state/save-decode.js';
 import { encrypt } from '../../src/state/encrypt.js';
@@ -462,6 +462,28 @@ describe('import screen', () => {
     expect(byTestId(container, 'import-failure-version_mismatch')).toBeNull();
     expect(byTestId(container, 'import-fresh-world')).toBeNull();
     off();
+  });
+});
+
+describe('settings screen', () => {
+  it('renders a false-by-default, accessible haptics toggle and persists the changed value', async () => {
+    const { mount } = await import('../../src/ui/screens/settings.js');
+    const container = new FakeElement('div');
+    mount(container);
+
+    const haptics = byTestId(container, 'settings-haptics');
+    expect(haptics).toBeTruthy();
+    expect(haptics.classList.contains('toggle-row')).toBe(true);
+    const hapticsInput = haptics.children[1];
+    expect(hapticsInput.getAttribute('role')).toBe('switch');
+    expect(hapticsInput.getAttribute('aria-label')).toBe('HAPTIC FEEDBACK');
+    expect(hapticsInput.checked).toBe(false);
+    expect(loadSettings().hapticsEnabled).toBe(false);
+
+    hapticsInput.checked = true;
+    await hapticsInput.dispatch('change');
+
+    expect(loadSettings().hapticsEnabled).toBe(true);
   });
 });
 
