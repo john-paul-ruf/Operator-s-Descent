@@ -157,6 +157,12 @@ function availabilityReason(context, character, caster, protocol, overclocked) {
   return '';
 }
 
+// direct-actions-and-quick-starts SESSION-04 checkpoint 1 — only the explicit CAST/OVERCLOCK
+// activation is an execution intent. A targetless protocol resolves its existing guarded
+// transaction (confirmProtocol) directly, right here, skipping the confirm phase entirely — no
+// tech-confirm row ever renders for a targetless cast. A targeted protocol still transitions to
+// target selection via the phase machine; checkpoint 2 replaces that leg's confirm tap with
+// direct target activation.
 function beginProtocol(context, protocol, overclocked) {
   const ui = stateFor(context.runState);
   const activeActor = activeCombatActor(context);
@@ -173,7 +179,8 @@ function beginProtocol(context, protocol, overclocked) {
   ui.overclocked = Boolean(overclocked);
   ui.targetId = null;
   ui.targetIndex = 0;
-  ui.phase = targetKind(context.data || {}, protocol) === 'none' ? 'confirm' : 'select-target';
+  if (targetKind(context.data || {}, protocol) === 'none') return confirmProtocol(context);
+  ui.phase = 'select-target';
   ui.error = '';
   ui.notice = overclocked ? 'Overclock preview ready — select target and confirm.' : 'Protocol ready — select target and confirm.';
   context.refresh?.();

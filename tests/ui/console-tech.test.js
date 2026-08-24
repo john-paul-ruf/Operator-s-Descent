@@ -406,3 +406,35 @@ describe('TECH mode — SESSION-02 (tech-protocol-e2e-repair) live cursor + comm
     expect(refreshCalls).toBe(refreshCallsBeforeConfirm);
   });
 });
+
+// direct-actions-and-quick-starts SESSION-04 checkpoint 1 — separates browsing from the
+// explicit CAST/OVERCLOCK execution intent. A targetless protocol resolves right on that
+// click; browsing/selecting a protocol never itself spends AP or CHARGE.
+describe('TECH mode — SESSION-04 (direct-actions-and-quick-starts) checkpoint 1: direct targetless cast', () => {
+  it('a targetless protocol resolves directly on CAST with no rendered tech-confirm', () => {
+    // STORM (disrupt-3) is aoe — target: 'none' per targetKind — and operator's protocol
+    // gates allow disrupt up to tier 5, so the deck stays valid.
+    const runState = run([character({ protocolDeck: [{ school: 'disrupt', tier: 3 }] })]);
+    const container = new FakeElement('div');
+    const rngCursor = { nextInt: () => 10, getState: () => ({ marker: 'committed' }) };
+    const context = { runState, data, rngCursor, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    byTestId(container, 'tech-cast-disrupt-3').click();
+
+    expect(byTestId(container, 'tech-confirm')).toBe(null);
+    expect(byTestId(container, 'tech-result')).toBeTruthy();
+    expect(runState.party[0].currentCHARGE).toBe(4);
+  });
+
+  it('browsing/selecting a protocol does not itself spend AP or CHARGE', () => {
+    const runState = run();
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderTech(container, context) };
+    renderTech(container, context);
+
+    byTestId(container, 'tech-protocol-disrupt-1').click();
+
+    expect(runState.party[0].currentCHARGE).toBe(10);
+  });
+});
