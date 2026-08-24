@@ -70,3 +70,41 @@ Current M82 statically imports nearly the whole runtime, fetches all data, regis
 - **Runtime (M86) → M15 (S01):** `actorFromSnapshot` derives party `hpMax`/`chargeMax` from the base character's class + resolved loadout when the persisted stats block lacks explicit maxes, so combat-resume no longer copies `currentHP` into `hpMax`. Import of `deriveStats` added.
 - **Runtime log detail (M86):** `appendRuntimeLogEntry` now propagates the bounded `detail` string into both `runtimeLogEntries` and `recordEvent(payload)`, so the LOG feed shows full d20 breakdowns live or resumed.
 - **Persisted event schema (M33 run-state):** `normalizePersistedEvent` keeps a string `detail` bounded to 96 chars (`PERSISTED_EVENT_DETAIL_MAX`); non-string/empty/missing dropped. Non-breaking — the save-encode event trimmer still absorbs budget pressure; `stress:saves` max fragment 1360 < 1500 (Custom Rule 6 intact, no v7 bump — Design Decision 2).
+
+<!-- SESSION-01 -->
+
+<!-- mobile-pwa-hardening SESSION-01 (Jikijitsu append) -->
+### M80 (HTML shell) — installable PWA identity
+
+`./index.html` gains `<link rel="manifest" href="manifest.webmanifest">`, `<link rel="icon" href="assets/app-icon.svg" type="image/svg+xml">`, `<link rel="apple-touch-icon" href="assets/app-icon-180.png">`, `theme-color`, and `apple-mobile-web-app-*` metadata. All new hrefs are bare-relative (no `./` prefix) to satisfy the M94 reference validator, which prefixes them itself. The viewport meta drops `maximum-scale`/`user-scalable=no` and gains `viewport-fit=cover`; `width=device-width, initial-scale=1` is unchanged. New root singleton `./manifest.webmanifest` (`display: standalone`, `orientation: portrait`, relative `id`/`start_url`/`scope`, 192/512 `any maskable` PNG icons) plus `./assets/app-icon.svg` and its three committed PNG variants (180/192/512).
+
+### M81 (Service worker) — version-scoped cache reads, v13 bridge, consent-gated activation
+
+`CACHE_VERSION` → `2026-08-23-mobile-pwa-hardening-v13`. Every cache read (`cachedShell`, `cacheFirstAsset`) now goes through `caches.open(CACHE_NAME).match(...)` instead of the global `caches.match()` — a worker can never resolve another cache version's response. One-time v12→v13 bridge: `install` no longer calls `cache.addAll()` or `self.skipWaiting()`; precaching moves into `activate` (`cache.open(CACHE_NAME).then(addAll).then(cleanup old caches).then(clients.claim())`, chained so a precache failure blocks cleanup/claim). Consent gate (permanent going forward, not bridge-specific): a new `message` listener accepts only `{ type: 'SKIP_WAITING' }`; before calling `self.skipWaiting()` it calls `self.clients.matchAll({ type: 'window', includeUncontrolled: true })`, filters to `self.registration.scope`, and only proceeds when exactly one in-scope window exists — otherwise it replies to `event.source` with `{ type: 'UPDATE_DEFERRED_MULTI_CLIENT', clientCount }` and leaves the worker waiting. `PRODUCTION_ASSETS` += `./manifest.webmanifest`, `./assets/app-icon.svg`, `./assets/app-icon-{180,192,512}.png` (123 entries total).
+
+### M86 (Hot runtime) — waiting-worker detection and consent-only reload
+
+`./src/runtime.js` public surface (`activateRuntime`, `mountScreen`, `shutdownRuntime`, `getRuntimeSnapshot`) is unchanged; internal update-handling is rebuilt. New `requestWaitingWorkerActivation()` posts `{ type: 'SKIP_WAITING' }` to `registration.waiting` (no-op if none, or if already pending) — this is the *only* path that can trigger `self.skipWaiting()`. `dispatchUpdateReadyOnce()` fires `runtime:update-ready` from either an already-present `registration.waiting` at registration time, or an `updatefound` → installing worker `statechange === 'installed'` while `navigator.serviceWorker.controller` already exists — dispatched on every route now, not gated to in-run surfaces (`isInRunSurface`/`IN_RUN_SURFACES` removed, both now dead). `controllerchange` reloads *only* when `serviceWorkerReloadPending` is true (set solely by `requestWaitingWorkerActivation`); an unsolicited controllerchange (e.g. a first install's `clients.claim()`) never reloads. A new `message` listener on `navigator.serviceWorker` handles `UPDATE_DEFERRED_MULTI_CLIENT`: clears `serviceWorkerReloadPending` and dispatches `runtime:update-deferred` with `clientCount`. The update-toast bus wiring (`runtime:update-ready` / new `runtime:update-deferred`) now tracks the mounted toast in a `WeakMap` (was `WeakSet`) so the deferred event can mutate the same toast via `toast.setDeferred(true)` instead of reloading unilaterally.
+
+### M56 (UI components) — `createUpdateToast` mutation API
+
+`./src/ui/components.js`'s `createUpdateToast({ onReload })` return value gains `toast.setDeferred(deferred: boolean)`: swaps the label/button copy between `NEW BUILD CACHED`/`RELOAD` and `CLOSE OTHER GAME TABS — THEN RETRY`/`RETRY` (and the button's `aria-label`) in place — no duplicate toast or live region. `onReload` still fires on every click regardless of deferred state, so RETRY re-requests activation through the same handler.
+
+### M77/M101 (Base/Wide CSS) — safe-area frame
+
+`./styles/base.css` `:root` gains `--safe-area-{top,right,bottom,left}: env(safe-area-inset-*, 0px)`; `#app-root` (the content frame) is padded with them under the existing global border-box rule. `#crt-overlays` is untouched — stays edge-to-edge. `.in-run-screen` (`./styles/components.css`) and `.wide-shell` + its child `.wide-console-dock` (`./styles/wide.css`) switch their `100vh`/`100dvh`/`100vw` fills to `100%`, so they track the now-safe-area-shrunk `#app-root` content box instead of bypassing it. `.update-toast` gains `bottom: calc(24px + var(--safe-area-bottom))` and a `max-width` clamped by the left/right insets.
+
+### M94/M96 (Static/release validation) — PWA assets are required singletons
+
+`./scripts/verify-assets.js` and `./scripts/report-budget.js` both add `./manifest.webmanifest`, `./assets/app-icon.svg`, `./assets/app-icon-{180,192,512}.png` to `REQUIRED_SINGLETONS`, and `.webmanifest` to `TEXT_EXTENSIONS` (compressed like other text assets for the transfer budget). `./scripts/server.js` / `./tools/serve.mjs` map `.webmanifest` → `application/manifest+json`.
+
+### M95 (Browser acceptance) — `./tests/e2e/pwa-shell.spec.js`
+
+New spec: fetches `manifest.webmanifest` through the Playwright server, asserts its MIME type and parsed install fields; asserts the viewport meta has no `maximum-scale`/`user-scalable` and keeps `viewport-fit=cover`; fetches every linked manifest/icon href and confirms same-origin `2xx`.
+
+### Known follow-up (not this session's lease)
+
+- `./tests/ui/front-door.test.js` still asserts the pre-consent contract (`RELOAD` click → immediate `window.location.reload()`); it now fails because `onReload` requests `SKIP_WAITING` instead. Needs updating to the consent flow.
+- `./tests/tooling/check-tokens.test.js` now reports 4 warning-level findings: the new `--safe-area-*` custom properties are undocumented in `specs/design.md`'s color palette table. These are structural/derived tokens, not palette colors — same category as the existing `DERIVED_SURFACE_TOKENS` allowlist (5 scrollbar/fade tokens) documented outside the extractor anchors in `specs/design.md`. A future session should add `--safe-area-{top,right,bottom,left}` to that same allowlist.
+- `./scripts/lint-sigils.js` `SKIP_DIRS` still lacks `test-results/` (pre-existing debt, noted in `arch/tooling-and-quality.md`) — a concurrent/leftover Playwright run can trip the sigil lint until it's cleaned up manually.
+
