@@ -1,6 +1,6 @@
 import { deriveStats } from './attributes.js';
 import { getCalibrationOptions, getSignatureTier } from './classes.js';
-import { resolveLoadout } from './equipment.js';
+import { applyFloorEntryAffixes, resolveLoadout } from './equipment.js';
 import { deserializeRunState } from '../state/run-state.js';
 import { generateFloor } from '../floor/generator.js';
 import { getDueEchoes } from './encounters.js';
@@ -123,7 +123,7 @@ export function completeFloorTransition(runState, transitionToken, selections, c
   const nextDepth = transitionToken.nextDepth;
   const calRequired = transitionToken.calibrationRequired;
 
-  const nextState = cloneRunState(runState);
+  let nextState = cloneRunState(runState);
   if (!nextState) return { error: 'clone_failed' };
 
   if (calRequired) {
@@ -172,6 +172,11 @@ export function completeFloorTransition(runState, transitionToken, selections, c
       const stats = deriveStats(character, classData, loadout || character.equipment);
       character.currentCHARGE = Math.min(stats.chargeMax, character.currentCHARGE + stats.chargeRegen);
     }
+  }
+
+  if (context.data?.affixes) {
+    const floorEntry = applyFloorEntryAffixes(nextState, context.data.affixes);
+    if (floorEntry.success) nextState = floorEntry.runState;
   }
 
   const themesData = context.themesData ?? context.data?.themes;

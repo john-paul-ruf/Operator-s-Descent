@@ -286,6 +286,47 @@ describe('completeFloorTransition — non-calibration', () => {
   });
 });
 
+describe('completeFloorTransition — Shielding floor entry', () => {
+  it('grants SHIELDED (duration 3) and claims the ledger for a Shielding-equipped member; unaffixed member gets nothing', () => {
+    const armor = { id: 'shielding-armor', category: 'armor', baseType: 'light', rarity: 'custom', affixes: ['shielding'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const shielded = { ...character('char_a'), equipment: { weapon: null, armor, offhand: null } };
+    const plain = character('char_b', 'ghost');
+    const state = run(42, 1, [shielded, plain]);
+    const begin = beginFloorTransition(state, data);
+    const result = completeFloorTransition(state, begin.transitionToken, {}, { data, themesData: data.themes });
+    const partyA = result.runState.party.find(c => c.id === 'char_a');
+    const partyB = result.runState.party.find(c => c.id === 'char_b');
+    expect(partyA.conditions).toEqual([{ conditionId: 'shielded', duration: 3 }]);
+    expect(partyB.conditions).toEqual([]);
+    expect(result.runState.affixFloorLedger.floorEntry).toEqual([armor.id]);
+  });
+
+  it('re-grants Shielding on a second descent since the per-floor ledger resets', () => {
+    const armor = { id: 'shielding-armor', category: 'armor', baseType: 'light', rarity: 'custom', affixes: ['shielding'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const shielded = { ...character('char_a'), equipment: { weapon: null, armor, offhand: null } };
+    const state = run(42, 1, [shielded]);
+    const begin1 = beginFloorTransition(state, data);
+    const result1 = completeFloorTransition(state, begin1.transitionToken, {}, { data, themesData: data.themes });
+    expect(result1.runState.affixFloorLedger.floorEntry).toEqual([armor.id]);
+
+    const begin2 = beginFloorTransition(result1.runState, data);
+    const result2 = completeFloorTransition(result1.runState, begin2.transitionToken, {}, { data, themesData: data.themes });
+    expect(result2.runState.party[0].conditions).toEqual([{ conditionId: 'shielded', duration: 3 }]);
+    expect(result2.runState.affixFloorLedger.floorEntry).toEqual([armor.id]);
+  });
+
+  it('does not duplicate SHIELDED when two Shielding items on the same member both claim floor entry', () => {
+    const armor = { id: 'shielding-armor', category: 'armor', baseType: 'light', rarity: 'custom', affixes: ['shielding'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const weapon = { id: 'shielding-sidearm', category: 'weapon', baseType: 'sidearm', rarity: 'custom', affixes: ['shielding'], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false };
+    const doubleShielded = { ...character('char_a'), equipment: { weapon, armor, offhand: null } };
+    const state = run(42, 1, [doubleShielded]);
+    const begin = beginFloorTransition(state, data);
+    const result = completeFloorTransition(state, begin.transitionToken, {}, { data, themesData: data.themes });
+    expect(result.runState.party[0].conditions).toEqual([{ conditionId: 'shielded', duration: 3 }]);
+    expect([...result.runState.affixFloorLedger.floorEntry].sort()).toEqual([armor.id, weapon.id].sort());
+  });
+});
+
 describe('completeFloorTransition — calibration', () => {
   it('applies calibration selections for all living characters', () => {
     const state = run(42, 2, [character('char_a'), character('char_b', 'ghost')]);
