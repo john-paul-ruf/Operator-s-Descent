@@ -167,7 +167,7 @@ async function assertPortraitLayoutRegions(page) {
   return rects;
 }
 
-test('combat: two-tap on canvas routes then confirms the move; drag pans with no side effects', async ({ page, isMobile }) => {
+test('combat: one tap on canvas executes the move directly; drag pans with no side effects', async ({ page, isMobile }) => {
   await installStableStorage(page);
   const { fragment, partyPos, windowW, windowH } = combatFixture();
   await importCombat(page, fragment);
@@ -201,29 +201,19 @@ test('combat: two-tap on canvas routes then confirms the move; drag pans with no
   }
 
   await expect(page.locator('.combat-ap')).toContainText('MOVE READY');
+  await expect(page.getByTestId('combat-confirm')).toHaveCount(0);
 
-  // Tap 1: routes BFS path; party has NOT moved; feedback rail shows the exact
-  // confirm hint text.
+  // One tap routes the full BFS path AND executes it — no second "tap again" gesture.
   await canvasTap(page, p1.x, p1.y, isMobile);
-  await expect(page.getByTestId('combat-notice')).toHaveText('TAP DESTINATION AGAIN TO CONFIRM.');
-  await expect(page.locator('.combat-ap')).toContainText('MOVE READY');
-
-  // Tap 2 must land on the SAME world cell as tap 1. Tap 1 causes a
-  // re-render whose flex layout may shift the playfield rect by a few
-  // pixels; recompute the tap coord from the live camera state before tap 2
-  // so we hit the same cell instead of the same client pixel.
-  const p2 = await tapCoordForCell(page, dest.x, dest.y, { windowW, windowH, partyPos });
-  await canvasTap(page, p2.x, p2.y, isMobile);
   await expect(page.locator('.combat-ap')).toContainText('MOVE SPENT');
   await expect(page.getByTestId('combat-action-move')).toBeDisabled();
+  await expect(page.getByTestId('combat-confirm')).toHaveCount(0);
 
-  // Snapshot notice text after tap 2 so we can assert the drag doesn't invent
-  // a new notice below.
+  // Snapshot notice text after the move so we can assert the drag doesn't invent one.
   const noticeAfterSpend = await page.getByTestId('combat-notice').textContent();
 
-  // Drag across the canvas — pans the camera only. Notice stays as-is (the
-  // rail may still be showing the last message; the assertion is that a drag
-  // did not overwrite it), MOVE stays spent, no new action fired.
+  // Drag across the canvas — pans the camera only. Notice stays as-is, MOVE stays spent,
+  // no new action fired.
   const canvasBox = await page.getByTestId('combat-canvas').boundingBox();
   const centerX = canvasBox.x + canvasBox.width / 2;
   const centerY = canvasBox.y + canvasBox.height / 2;
@@ -236,7 +226,7 @@ test('combat: two-tap on canvas routes then confirms the move; drag pans with no
   await expect(page.locator('.combat-ap')).toContainText('MOVE SPENT');
 });
 
-test('combat desktop: wheel-zoom keeps the two-tap flow landing on the intended cell', async ({ page, isMobile }) => {
+test('combat desktop: wheel-zoom keeps the one-tap flow landing on the intended cell', async ({ page, isMobile }) => {
   test.skip(Boolean(isMobile), 'wheel-zoom check runs in the desktop project');
 
   await installStableStorage(page);
@@ -283,7 +273,6 @@ test('combat desktop: wheel-zoom keeps the two-tap flow landing on the intended 
   }, { cellX: dest.x, cellY: dest.y, pX: partyPos.x, pY: partyPos.y, aX: partyScreen.x, aY: partyScreen.y, windowW, windowH, cellSize: COMBAT_CELL_SIZE });
 
   await page.mouse.click(destScreen.x, destScreen.y);
-  await expect(page.getByTestId('combat-notice')).toHaveText('TAP DESTINATION AGAIN TO CONFIRM.');
-  await page.mouse.click(destScreen.x, destScreen.y);
   await expect(page.locator('.combat-ap')).toContainText('MOVE SPENT');
+  await expect(page.getByTestId('combat-confirm')).toHaveCount(0);
 });

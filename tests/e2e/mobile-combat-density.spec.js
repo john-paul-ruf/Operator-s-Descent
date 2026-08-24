@@ -256,31 +256,32 @@ async function assertRetreatReachableByScroll(page, label) {
   expect(containedIn(retreatRect, contentRect, 2), `${label} Retreat sits inside the visible console content pane after scroll`).toBe(true);
 }
 
-async function assertMoveFeedbackExpansion(page, testInfo, { partyPos, windowW, windowH, isMobile, label }) {
+// direct-actions-and-quick-starts SESSION-03 — the generic combat-confirm row is gone. A legal
+// map destination tap now executes the move immediately: no scroll-dependent confirm control,
+// no lingering "tap again" notice to read, and the feedback rail never activates for a plain
+// completed move (it is reserved for genuine notices/errors, e.g. a failed retreat).
+async function assertDirectMoveExecutesOnTap(page, { partyPos, windowW, windowH, isMobile, label }) {
   await page.getByTestId('combat-action-move').click();
   const dest = { x: partyPos.x, y: partyPos.y + 2 };
   const point = await tapCoordForCombatCell(page, dest.x, dest.y, { windowW, windowH, partyPos });
   await canvasTap(page, point.x, point.y, isMobile);
 
-  const notice = page.getByTestId('combat-notice');
-  await expect(notice, `${label} move feedback message visible`).toHaveText('TAP DESTINATION AGAIN TO CONFIRM.');
+  await expect(page.getByTestId('combat-confirm'), `${label} no combat-confirm control ever renders`).toHaveCount(0);
   const rail = page.getByTestId('combat-feedback');
-  await expect(rail, `${label} feedback rail marked active`).toHaveAttribute('data-active', 'true');
+  await expect(rail, `${label} feedback rail stays inactive after a completed move`).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('combat-action-move'), `${label} MOVE disabled after the single tap spends it`).toBeDisabled();
+}
 
-  const noticeRect = toRect(await notice.boundingBox());
-  const railRect = toRect(await rail.boundingBox());
-  const tabBarRect = toRect(await page.locator('.console-tab-bar').boundingBox());
-  const playfieldRect = toRect(await page.getByTestId('combat-canvas').boundingBox());
-  expect(containedIn(noticeRect, railRect, 2), `${label} move feedback message contained in the rail`).toBe(true);
-  expect(overlaps(noticeRect, tabBarRect), `${label} move feedback does not overlap the console tab bar`).toBe(false);
-  expect(overlaps(noticeRect, playfieldRect), `${label} move feedback does not overlap the playfield`).toBe(false);
-  expect(railRect.height, `${label} active feedback rail expanded height measured ${railRect.height}px`).toBeGreaterThan(1);
-
-  // Reset through the console's own BACK control (renderConfirm's combat-back
-  // button calls combatCancel() directly) so the selection does not leak into
-  // any later assertion — the party has not moved and AP is untouched.
-  await page.getByTestId('combat-back').click();
-  await expect(page.getByTestId('combat-action-move'), `${label} console returns to choose-action after reset`).toBeVisible();
+// Cancellation stays reversible without a generic confirm to hunt for — BACK is reachable the
+// instant an action is selected (browsing a target list here) and leaves no mutation behind.
+async function assertCancellationLeavesNoMutation(page, { label }) {
+  await page.getByTestId('combat-action-attack').click();
+  const back = page.getByTestId('combat-back');
+  await expect(back, `${label} BACK reachable while browsing targets`).toBeVisible();
+  await back.click();
+  await expect(page.getByTestId('combat-action-attack'), `${label} console returns to choose-action after cancel`).toBeVisible();
+  await expect(page.getByTestId('combat-confirm'), `${label} still no combat-confirm control after cancel`).toHaveCount(0);
+  await expect(page.locator('.status-ap'), `${label} AP untouched by a cancelled selection`).toHaveText('AP 2');
 }
 
 async function runPhoneDensityAcceptance(page, testInfo, { label, statusMax, canvasMin, isMobile, shotName }) {
@@ -291,7 +292,8 @@ async function runPhoneDensityAcceptance(page, testInfo, { label, statusMax, can
   await assertCombatDensityCore(page, { statusMax, canvasMin, label });
   await assertIconsAndAccessibleNames(page, label);
   await assertRetreatReachableByScroll(page, label);
-  await assertMoveFeedbackExpansion(page, testInfo, { partyPos, windowW, windowH, isMobile, label });
+  await assertCancellationLeavesNoMutation(page, { label });
+  await assertDirectMoveExecutesOnTap(page, { partyPos, windowW, windowH, isMobile, label });
 
   const shot = await page.screenshot({ fullPage: false });
   await testInfo.attach(shotName, { body: shot, contentType: 'image/png' });

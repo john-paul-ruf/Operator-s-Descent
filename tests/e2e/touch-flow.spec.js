@@ -243,7 +243,7 @@ test('touch journey: tap-to-move advances party; drag pans without moving', asyn
   expect(afterReleaseOnlyCell).toEqual(afterZoomTapCell);
 });
 
-test('touch combat selects a target first and requires explicit confirm', async ({ page }) => {
+test('touch combat attacks directly on a single target tap — no confirm step', async ({ page }) => {
   await installStableStorage(page);
   const fragment = activeCombatFragment();
   await page.goto(`/?run=${fragment.slice(0, 8)}#r=${fragment}`);
@@ -255,12 +255,11 @@ test('touch combat selects a target first and requires explicit confirm', async 
   await page.getByTestId('combat-action-attack').tap();
   await expect(page.getByTestId('combat-targets')).toBeVisible();
   await expect(page.getByTestId('combat-confirm')).toHaveCount(0);
-
-  await page.locator('[data-testid^="combat-target-"]').first().tap();
-  await expect(page.getByTestId('combat-confirm')).toBeVisible();
   await expect(page.locator('.status-ap')).toHaveText('AP 2');
   await expect(page.locator('button[data-glitch], [role="button"][data-glitch], [data-decision-pending="true"][data-glitch]')).toHaveCount(0);
 
-  await page.getByTestId('combat-confirm').tap();
+  // One tap on a legal target executes the attack directly — no separate confirm gesture.
+  await page.locator('[data-testid^="combat-target-"]').first().tap();
+  await expect(page.getByTestId('combat-confirm')).toHaveCount(0);
   await expect(page.locator('.status-ap')).toContainText(/AP [01]/);
 });
