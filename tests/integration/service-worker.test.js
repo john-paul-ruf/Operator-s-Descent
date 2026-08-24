@@ -120,13 +120,13 @@ describe('service worker manifest', () => {
   });
 });
 
-describe('service worker cache version — v12 → v13 bridge', () => {
-  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-gear-inventory-filters-v12';
+describe('service worker cache version — v13 → v14 release', () => {
+  const PREDECESSOR_CACHE = 'operator-descent-2026-08-23-mobile-pwa-hardening-v13';
 
-  it('install creates no cache and never calls skipWaiting automatically; activation precaches the full v13 manifest and deletes the exact v12 predecessor', async () => {
+  it('install precaches the full v14 manifest immediately and never calls skipWaiting automatically; activation deletes the exact v13 predecessor and claims clients', async () => {
     const manifest = extractManifest();
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-23-mobile-pwa-hardening-v13');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-23-mobile-pwa-hardening-v14');
     expect(expectedCacheName).toMatch(CACHE_NAME_PATTERN);
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
@@ -136,7 +136,8 @@ describe('service worker cache version — v12 → v13 bridge', () => {
     await install.settle();
 
     const namesAfterInstall = await worker.caches.keys();
-    expect(namesAfterInstall).not.toContain(expectedCacheName);
+    expect(namesAfterInstall).toContain(expectedCacheName);
+    expect(worker.caches.stores.get(expectedCacheName).entries.size).toBe(manifest.length);
     expect(worker.self.skipWaiting).not.toHaveBeenCalled();
     expect(worker.self.clients.claim).not.toHaveBeenCalled();
 
@@ -147,18 +148,25 @@ describe('service worker cache version — v12 → v13 bridge', () => {
     const namesAfterActivate = await worker.caches.keys();
     expect(namesAfterActivate).toContain(expectedCacheName);
     expect(namesAfterActivate).not.toContain(PREDECESSOR_CACHE);
-    expect(worker.caches.stores.get(expectedCacheName).entries.size).toBe(manifest.length);
     expect(worker.self.clients.claim).toHaveBeenCalledOnce();
   });
 
-  it('a global caches.match() lookup — the legacy v12 read path — cannot resolve a v13 response while v13 is only installed', async () => {
+  it('v14 precaches at install without disturbing the still-active v13 cache; a v13-style isolated lookup on its own cache name never sees v14 bytes', async () => {
     const worker = loadWorker();
+    const v13Cache = await worker.caches.open(PREDECESSOR_CACHE);
+    await v13Cache.put('https://example.test/game/index.html', new FakeResponse('v13-shell'));
+
     const install = createEvent();
     worker.listeners.get('install')(install);
     await install.settle();
 
-    const shellMatch = await worker.caches.match('https://example.test/game/index.html');
-    expect(shellMatch).toBeUndefined();
+    // The real active v13 worker's cacheFirstAsset()/cachedShell() read only from its
+    // own closed-over CACHE_NAME (v13's), so it can never observe v14's waiting bytes.
+    const v13Match = await v13Cache.match('https://example.test/game/index.html');
+    expect(await v13Match.text()).toBe('v13-shell');
+
+    const v14Cache = await worker.caches.open(extractCacheName());
+    expect(v14Cache.entries.size).toBe(extractManifest().length);
   });
 
   it('cache-first and navigation fetch paths read only from the versioned CACHE_NAME, never a foreign cache', async () => {
@@ -183,7 +191,7 @@ describe('service worker cache version — v12 → v13 bridge', () => {
     await expect(navigation.response().then((response) => response.text())).resolves.not.toBe('stale-shell');
   });
 
-  it('the v13 manifest ships the PWA manifest and every launcher icon as production/offline assets', () => {
+  it('the v14 manifest ships the PWA manifest and every launcher icon as production/offline assets', () => {
     const manifest = extractManifest();
     for (const asset of ['./manifest.webmanifest', './assets/app-icon.svg', './assets/app-icon-180.png', './assets/app-icon-192.png', './assets/app-icon-512.png']) {
       expect(manifest).toContain(asset);

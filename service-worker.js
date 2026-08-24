@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'operator-descent-';
-const CACHE_VERSION = '2026-08-23-mobile-pwa-hardening-v13';
+const CACHE_VERSION = '2026-08-23-mobile-pwa-hardening-v14';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_ASSET = './index.html';
 const FAILURE_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -194,13 +194,18 @@ function isSameOrigin(url) {
   return url.origin === SCOPE_URL.origin;
 }
 
-self.addEventListener('install', () => {
-  // v13 bridge — the one-time hop off the legacy v12 worker, which still
-  // resolves offline requests via a global caches.match() lookup. Precaching
-  // is deferred to activation (below) instead of happening here, so an
-  // active v12 tab can never see a v13 response while v13 is still waiting.
+self.addEventListener('install', (event) => {
+  // v14 resumes install-time precaching. This is safe because every read
+  // path (cacheFirstAsset, cachedShell) is isolated to this script's own
+  // closed-over CACHE_NAME via caches.open(CACHE_NAME) — never a global
+  // caches.match() — so the still-active predecessor worker's own isolated
+  // cache reads can never see these bytes while this worker is waiting.
+  // v13's activation-time precache was a one-time bridge measure to protect
+  // a live legacy v12 tab (which does use global caches.match()); with v12
+  // gone, precaching while waiting is the standing pattern again.
   // No automatic skipWaiting(): this worker stays waiting until a single
   // in-scope client explicitly consents via the SKIP_WAITING message below.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(scopedAssetURLs())));
 });
 
 self.addEventListener('message', (event) => {
@@ -219,9 +224,7 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(scopedAssetURLs()))
-      .then(() => caches.keys())
+    caches.keys()
       .then((keys) => Promise.all(keys
         .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
         .map((key) => caches.delete(key))))
