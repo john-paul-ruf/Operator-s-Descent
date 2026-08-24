@@ -459,6 +459,25 @@ function signatureEffectsFor(actor, hook, context) {
   return applySignatureModifier(hook, {}, capabilities).effects;
 }
 
+// A single d20 attack resolution against a fixed modifier sum/defense — shared by the initial
+// roll and a Lucky reroll so both draws are scored identically.
+function rollAttack(rngCursor, modifierSum, defense, rangeLegal) {
+  const natural = rngCursor.nextInt('combat', 20) + 1;
+  const total = natural + modifierSum;
+  const isCrit = natural === 20;
+  const isFumble = natural === 1;
+  const hit = rangeLegal && !isFumble && (isCrit || total >= defense);
+  return { natural, total, isCrit, isFumble, hit };
+}
+
+// Lucky keeps the better of two outcomes: a hit beats a miss, a non-fumble beats a fumble,
+// otherwise the higher total wins.
+function isBetterRoll(candidate, current) {
+  if (candidate.hit !== current.hit) return candidate.hit;
+  if (candidate.isFumble !== current.isFumble) return !candidate.isFumble;
+  return candidate.total > current.total;
+}
+
 // Shared by on-turn attacks and reactions (opportunity attacks, fumble counters) so both paths
 // get identical range/cover/flank/crit resolution and logging. Never touches AP — callers that
 // spend an action (executeAttack) decrement it themselves; reactions never do.
@@ -473,7 +492,6 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
     ? evaluateRange(weapon, distance)
     : { legal: true, band: weapon.rangeBand ?? null, accuracyModifier: weapon.accuracyBonus || 0, reason: 'unpositioned' };
 
-  const roll = rngCursor.nextInt('combat', 20) + 1;
   const attribute = isMelee ? 'mgt' : 'fin';
   const attributeModifier = modifier((attacker.effectiveAttributes ?? attacker.attributes)?.[attribute] ?? 3);
   const attackerEffects = getConditionEffects(attacker, conditionsData);
@@ -484,12 +502,20 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
   const flanked = positioned && isFlanked(target, sideMates(combatState, attacker), combatState.window);
   const flankBonus = flanked ? FLANK_ATTACK_BONUS : 0;
 
-  const total = roll + attributeModifier + (range.accuracyModifier ?? 0) + markedBonus + blindedPenalty + flankBonus;
+  const modifierSum = attributeModifier + (range.accuracyModifier ?? 0) + markedBonus + blindedPenalty + flankBonus;
   const defense = Math.max(targetEffects.defenseFloor, (target.defense || 10) + coverBonus + targetEffects.defenseBonus + targetEffects.defensePenalty);
 
-  const isCrit = roll === 20;
-  const isFumble = roll === 1;
-  const hit = range.legal && !isFumble && (isCrit || total >= defense);
+  let rollOutcome = rollAttack(rngCursor, modifierSum, defense, range.legal);
+  let luckyReroll = null;
+  if (!rollOutcome.hit && range.legal && attacker.side === 'party' && attacker.luckyReroll?.available && !attacker.luckyRerollUsed) {
+    const first = rollOutcome;
+    const second = rollAttack(rngCursor, modifierSum, defense, range.legal);
+    attacker.luckyRerollUsed = true;
+    const keepSecond = isBetterRoll(second, first);
+    luckyReroll = { itemId: attacker.luckyReroll.itemId, firstNatural: first.natural, keptNatural: keepSecond ? second.natural : first.natural };
+    if (keepSecond) rollOutcome = second;
+  }
+  const { natural: roll, total, isCrit, isFumble, hit } = rollOutcome;
 
   const dieSize = parseInt(weapon.damageDie?.slice(1) || '6', 10);
   let damage = 0;
@@ -539,6 +565,8 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
     trigger: options.trigger ?? null,
     triggeredAttacks
   });
+
+  if (luckyReroll) entry.luckyReroll = luckyReroll;
 
   const leech = weapon.effects?.onHit?.healing ?? 0;
   if (hit && leech > 0) {

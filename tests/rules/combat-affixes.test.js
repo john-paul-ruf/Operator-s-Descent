@@ -254,3 +254,92 @@ describe('performAttackRoll — effective FIN (attack + initiative)', () => {
     expect(state.combatants.get('a').initiative).toBe(10 + modifier(1));
   });
 });
+
+describe('performAttackRoll — Lucky auto-reroll', () => {
+  function luckyWeapon() {
+    return makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' });
+  }
+
+  it('miss + available → draws a second d20, keeps the better result, sets the use flag', () => {
+    const party = [makeCharacter({ id: 'a', weapon: luckyWeapon() })];
+    const enemy = makeEnemy({ defense: 12, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 4, 14, 2], 'a'); // nat5 (miss) → nat15 (hit) → damage
+    const actor = state.combatants.get('a');
+    actor.luckyReroll = { available: true, itemId: 'lucky_1' };
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.hit).toBe(true);
+    expect(actor.luckyRerollUsed).toBe(true);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.luckyReroll).toEqual({ itemId: 'lucky_1', firstNatural: 5, keptNatural: 15 });
+    expect(atkLog.naturalRoll).toBe(15);
+  });
+
+  it('second miss still consumes the use and keeps the better (still-losing) roll', () => {
+    const party = [makeCharacter({ id: 'a', weapon: luckyWeapon() })];
+    const enemy = makeEnemy({ defense: 12, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 4, 3], 'a'); // nat5 (miss) → nat4 (still miss, worse)
+    const actor = state.combatants.get('a');
+    actor.luckyReroll = { available: true, itemId: 'lucky_1' };
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.hit).toBe(false);
+    expect(actor.luckyRerollUsed).toBe(true);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.luckyReroll).toEqual({ itemId: 'lucky_1', firstNatural: 5, keptNatural: 5 });
+  });
+
+  it('a fumble is rerolled before the fumble-reaction opportunity attack fires', () => {
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: luckyWeapon() })];
+    const target = makeEnemy({ id: 'target', position: { x: 1, y: 0 }, defense: 5, hp: 100, hpMax: 100 });
+    const reactor = makeEnemy({ id: 'reactor', position: { x: 0, y: 1 }, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [target, reactor], [0, 0, 0, 0, 14, 2], 'a'); // nat1 (fumble) → nat15 (hit) → damage
+    const actor = state.combatants.get('a');
+    actor.luckyReroll = { available: true, itemId: 'lucky_1' };
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'target' }, cursor, baseContext);
+    expect(result.hit).toBe(true);
+    expect(result.fumble).toBe(false);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.luckyReroll.firstNatural).toBe(1);
+    expect(atkLog.triggeredAttacks).toHaveLength(0);
+    expect(state.log.filter(e => e.type === 'attack')).toHaveLength(1);
+  });
+
+  it('no reroll when unavailable, already used, or the attacker is on the enemy side', () => {
+    const missSetup = () => {
+      const party = [makeCharacter({ id: 'a', weapon: luckyWeapon() })];
+      const enemy = makeEnemy({ defense: 12, hp: 100, hpMax: 100 });
+      return startCombat(party, [enemy], [0, 0, 4], 'a'); // nat5 (miss); no second value queued
+    };
+
+    const unavailable = missSetup();
+    const r1 = executeAction(unavailable.state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, unavailable.cursor, baseContext);
+    expect(r1.hit).toBe(false);
+    expect(unavailable.state.log.find(e => e.type === 'attack').luckyReroll).toBeUndefined();
+
+    const used = missSetup();
+    used.state.combatants.get('a').luckyReroll = { available: true, itemId: 'lucky_1' };
+    used.state.combatants.get('a').luckyRerollUsed = true;
+    const r2 = executeAction(used.state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, used.cursor, baseContext);
+    expect(r2.hit).toBe(false);
+    expect(used.state.log.find(e => e.type === 'attack').luckyReroll).toBeUndefined();
+
+    const enemyParty = [makeCharacter({ id: 'a', hp: 100, hpMax: 100 })];
+    const enemyAttacker = makeEnemy({ id: 'enemy_1', weapon: luckyWeapon(), defense: 12 });
+    const { state: enemyState, cursor: enemyCursor } = startCombat(enemyParty, [enemyAttacker], [0, 0, 4], 'enemy_1');
+    enemyState.combatants.get('enemy_1').luckyReroll = { available: true, itemId: 'lucky_1' };
+    const r3 = executeAction(enemyState, { type: 'attack', actorId: 'enemy_1', targetId: 'a' }, enemyCursor, baseContext);
+    expect(r3.hit).toBe(false);
+    expect(enemyState.log.find(e => e.type === 'attack').luckyReroll).toBeUndefined();
+  });
+
+  it('a hit never triggers a reroll, even when available', () => {
+    const party = [makeCharacter({ id: 'a', weapon: luckyWeapon() })];
+    const enemy = makeEnemy({ defense: 5, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], [0, 0, 9, 2], 'a'); // nat10 hits def5
+    const actor = state.combatants.get('a');
+    actor.luckyReroll = { available: true, itemId: 'lucky_1' };
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.hit).toBe(true);
+    expect(actor.luckyRerollUsed).toBeUndefined();
+    expect(state.log.find(e => e.type === 'attack').luckyReroll).toBeUndefined();
+  });
+});
