@@ -1,5 +1,5 @@
 import { encodeRun } from './save-encode.js';
-import { decodeRun } from './save-decode.js';
+import { decodeRun, decodeSeed } from './save-decode.js';
 
 const KEY_RUNS = 'od_runs';
 const KEY_SETTINGS = 'od_settings';
@@ -7,6 +7,11 @@ const KEY_FLAGS = 'od_flags';
 const RUN_PREFIX = 'od_run_';
 const LAYERS = ['drone', 'pulse', 'sparkle', 'lead', 'noiseBed'];
 const LOCAL_RUN_KEY = '__operatorDescentLocalRunKey';
+// Quota-recovery ceiling per saveRun call (saves-never-fail SESSION-02 D4).
+// One save may sweep orphans/dead once, then evict the OLDEST archived runs
+// oldest-lastPlayed-first, never the current run's key. Cap is a safety
+// backstop; in practice one or two evictions clears any real device.
+const MAX_EVICTIONS_PER_SAVE = 8;
 
 function getStorage() {
   try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
@@ -92,6 +97,117 @@ function readIndex(storage) {
 
 function writeIndex(storage, index) { return write(storage, KEY_RUNS, JSON.stringify(index)); }
 
+// Enumerate every raw storage key. Some hostile-storage stubs in tests omit
+// `length`/`key`, so guard defensively and return [] rather than throwing.
+function listStorageKeys(storage) {
+  const keys = [];
+  const length = typeof storage?.length === 'number' ? storage.length : 0;
+  for (let index = 0; index < length; index++) {
+    const key = typeof storage.key === 'function' ? storage.key(index) : null;
+    if (typeof key === 'string') keys.push(key);
+  }
+  return keys;
+}
+
+// Orphaned run payloads: `od_run_*` values with no matching entry in the
+// index. First sweep target — cheap, safe, cannot delete a live archived run.
+function orphanRunKeys(storage, index) {
+  const known = new Set(index.map((entry) => entry.key));
+  return listStorageKeys(storage)
+    .filter((key) => key.startsWith(RUN_PREFIX))
+    .map((key) => key.slice(RUN_PREFIX.length))
+    .filter((key) => !known.has(key));
+}
+
+// Runs already marked dead (alive === false) whose payload can be removed
+// during the sweep pass without additional eviction bookkeeping.
+function deadIndexKeys(index) {
+  return index.filter((entry) => entry.alive === false).map((entry) => entry.key);
+}
+
+// Eviction candidates: living archived runs, oldest lastPlayed first, never
+// the current save's own key. Ties break stably (Array.prototype.sort is
+// stable in every runtime we target).
+function evictionCandidates(index, currentKey) {
+  return index
+    .filter((entry) => entry.alive !== false && entry.key !== currentKey)
+    .sort((a, b) => (a.lastPlayed ?? 0) - (b.lastPlayed ?? 0));
+}
+
+// Best-effort payload + index atomic write. Either the pair lands or the
+// caller sees the first failure — a failed setItem is a no-op on the prior
+// stored value, so the last good save always survives a total recovery bust.
+function tryWriteRunPair(storage, key, fragment, entryBase) {
+  const payload = write(storage, RUN_PREFIX + key, fragment);
+  if (!payload.success) return payload;
+  const indexResult = readIndex(storage);
+  if (!indexResult.success) return indexResult;
+  const index = indexResult.index;
+  const existing = index.findIndex((item) => item.key === key);
+  const nextEntry = existing >= 0 ? { ...index[existing], ...entryBase } : entryBase;
+  if (existing >= 0) index[existing] = nextEntry;
+  else index.push(nextEntry);
+  const indexWrite = writeIndex(storage, index);
+  if (!indexWrite.success) return indexWrite;
+  return { success: true, entry: nextEntry };
+}
+
+// Sweep orphans + dead-index payloads once per saveRun. Return `true` iff at
+// least one key was freed so the caller knows to retry the write.
+function sweepOrphansAndDead(storage, currentKey) {
+  const indexResult = readIndex(storage);
+  const index = indexResult.success ? indexResult.index : [];
+  const orphans = orphanRunKeys(storage, index);
+  const dead = deadIndexKeys(index).filter((key) => key !== currentKey);
+  const removed = new Set([...orphans, ...dead]);
+  if (removed.size === 0) return false;
+  for (const removedKey of removed) remove(storage, RUN_PREFIX + removedKey);
+  if (dead.length > 0) {
+    const nextIndex = index.filter((entry) => !(entry.alive === false && entry.key !== currentKey));
+    writeIndex(storage, nextIndex);
+  }
+  return true;
+}
+
+// Evict a single archived run. Removes its payload and stamps `alive: false,
+// evicted: true` in the index so the LOG chronicle notice can attribute it.
+function evictOldestArchived(storage, currentKey) {
+  const indexResult = readIndex(storage);
+  const index = indexResult.success ? indexResult.index : [];
+  const candidates = evictionCandidates(index, currentKey);
+  if (candidates.length === 0) return null;
+  const victim = candidates[0];
+  remove(storage, RUN_PREFIX + victim.key);
+  const nextIndex = index.map((entry) => entry.key === victim.key ? { ...entry, alive: false, evicted: true } : entry);
+  writeIndex(storage, nextIndex);
+  return victim.key;
+}
+
+// Main recovery loop for saveRun. Order: sweep-once → evict-oldest (capped) →
+// give up. Any non-quota storage error short-circuits and is surfaced as-is;
+// quota_exceeded escalates until the ladder is exhausted.
+function writeRunWithRecovery(storage, key, fragment, entryBase, evictedOut) {
+  let sweepAttempted = false;
+  let evictions = 0;
+  while (true) {
+    const attempt = tryWriteRunPair(storage, key, fragment, entryBase);
+    if (attempt.success) return attempt;
+    if (attempt.error !== 'quota_exceeded') return attempt;
+    let progress = false;
+    if (!sweepAttempted) {
+      sweepAttempted = true;
+      if (sweepOrphansAndDead(storage, key)) progress = true;
+    }
+    if (!progress) {
+      if (evictions >= MAX_EVICTIONS_PER_SAVE) return { success: false, error: 'quota_exceeded' };
+      const evictedKey = evictOldestArchived(storage, key);
+      if (!evictedKey) return { success: false, error: 'quota_exceeded' };
+      evictedOut.push(evictedKey);
+      evictions += 1;
+    }
+  }
+}
+
 function defaultSettings() {
   return {
     masterMute: false,
@@ -146,13 +262,9 @@ export function saveRun(runState, metadata = {}) {
   const key = getRunKey(runState) || `${runState.worldSeed >>> 0}_${creationTimestamp}`;
   attachLocalRunKey(runState, key);
   const localCreationTimestamp = keyTimestamp(key, creationTimestamp);
-  const stateWrite = write(storage, RUN_PREFIX + key, encoded.fragment);
-  if (!stateWrite.success) return stateWrite;
-  const indexResult = readIndex(storage);
-  if (!indexResult.success) return indexResult;
   const now = Date.now();
   const party = Array.isArray(runState?.party) ? runState.party : [];
-  const entry = {
+  const entryBase = {
     ...(isObject(metadata) ? metadata : {}),
     key,
     worldSeed: runState.worldSeed >>> 0,
@@ -165,12 +277,17 @@ export function saveRun(runState, metadata = {}) {
     alive: true,
     lastPlayed: now
   };
-  const index = indexResult.index;
-  const existing = index.findIndex((item) => item.key === key);
-  if (existing >= 0) index[existing] = { ...index[existing], ...entry };
-  else index.push(entry);
-  const indexWrite = writeIndex(storage, index);
-  return indexWrite.success ? { success: true, key, length: encoded.length, metadata: normalizeEntry(entry) } : indexWrite;
+  const evicted = [];
+  const result = writeRunWithRecovery(storage, key, encoded.fragment, entryBase, evicted);
+  if (!result.success) return result;
+  return {
+    success: true,
+    key,
+    length: encoded.length,
+    metrics: encoded.metrics,
+    ...(evicted.length ? { evicted } : {}),
+    metadata: normalizeEntry(result.entry)
+  };
 }
 
 export function loadRun(key) {
@@ -181,7 +298,17 @@ export function loadRun(key) {
   if (!raw.success) return raw;
   if (!raw.value) return { success: false, error: 'not_found' };
   const decoded = decodeRun(raw.value);
-  if (decoded.success) attachLocalRunKey(decoded.runState, safeKey);
+  if (decoded.success) {
+    if (decoded.runState) attachLocalRunKey(decoded.runState, safeKey);
+    return decoded;
+  }
+  // Custom Rule 13 floor: if the payload cannot decode as a run but does
+  // decode as a bare `#w=` seed encoding, surface that so the caller can
+  // route the player to a fresh run in the same world instead of dead-ending.
+  const seedResult = decodeSeed(raw.value);
+  if (seedResult.success) {
+    return { success: false, error: 'seed_only', recoveredSeed: seedResult.seed };
+  }
   return decoded;
 }
 
