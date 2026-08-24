@@ -244,8 +244,7 @@ describe('console/combat.js — direction cells + BACK icons (SESSION-05 icon-fi
       combatGetActiveActor: () => active,
       combatGetLegalActions: () => ({ actions: ['attack'], legalMoveDirections: [] }),
       combatGetTargets: () => [makeEnemy({ id: 'enemy' })],
-      combatGetPreview: () => ({ distance: 1, range: { band: 'adjacent', legal: true }, coverBonus: 0, flanked: false, targetLegal: true }),
-      combatCanConfirm: () => true
+      combatGetPreview: () => ({ distance: 1, range: { band: 'adjacent', legal: true }, coverBonus: 0, flanked: false, targetLegal: true })
     });
     const back = byTestId(container, 'combat-back');
     expect(back).toBeTruthy();
@@ -931,7 +930,7 @@ describe('console/combat.js — static density markers', () => {
       layout: 'wide'
     });
 
-    for (const testid of ['combat-active', 'initiative-rail', 'combat-hint']) {
+    for (const testid of ['combat-active', 'initiative-rail']) {
       const node = byTestId(container, testid);
       expect(node, `${testid} exists`).toBeTruthy();
       expect(node.classList.contains('console-static-row')).toBe(true);
@@ -942,5 +941,105 @@ describe('console/combat.js — static density markers', () => {
       expect(button.classList.contains('console-row')).toBe(true);
       expect(button.classList.contains('console-static-row')).toBe(false);
     }
+  });
+});
+
+// SESSION-03 (direct-actions-and-quick-starts) — the generic combat-confirm row is gone. A
+// disabled action's reason is now visible text inside the card (not title/aria-description
+// only), and BACK is the only control that survives, rendered whenever an action is selected
+// and nothing is resolving — not just the old single 'confirm' phase.
+describe('console/combat.js — direct-action contract (SESSION-03 direct-actions-and-quick-starts)', () => {
+  it('never renders a combat-confirm control, in any phase', () => {
+    for (const selection of [
+      { phase: 'choose-action', actionType: null, targetId: null },
+      { phase: 'choose-target', actionType: 'attack', targetId: null },
+      { phase: 'confirm', actionType: 'attack', targetId: 'enemy' }
+    ]) {
+      const container = new FakeElement('div');
+      renderCombat(container, renderContext({
+        active: makeActive({ ap: 2, weapon: { damageDie: 'd6', maxRange: 1 } }),
+        enemies: [makeEnemy({ id: 'enemy' })],
+        selection,
+        previewFor: () => ({ distance: 1, range: { band: 'adjacent', legal: true, reason: 'in_range' }, coverBonus: 0, flanked: false, targetLegal: true })
+      }));
+      expect(byTestId(container, 'combat-confirm'), `phase ${selection.phase}`).toBe(null);
+    }
+  });
+
+  it('a disabled action button carries a visible action-blocked-reason span derived from the real reason, in addition to title/aria-description', () => {
+    const active = makeActive({ ap: 1, weapon: null });
+    const context = {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['move', 'attack', 'cast', 'overclock', 'item', 'retreat', 'wait', 'end-turn'], legalMoveDirections: [] }),
+      combatGetTargets: () => [],
+      combatGetPreview: () => null,
+      combatGetItems: () => [],
+      protocolsData: { schools: {} }
+    };
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    const button = byTestId(container, 'combat-action-attack');
+    expect(button.disabled).toBe(true);
+    const reasonSpan = (button.children || []).find((c) => (c.className || '').split(/\s+/).includes('action-blocked-reason'));
+    expect(reasonSpan, 'visible blocked-reason span').toBeTruthy();
+    expect(reasonSpan.textContent).toBe('NO WEAPON EQUIPPED');
+    // title/aria-description stay intact for pointer tooltip + assistive tech.
+    expect(button.getAttribute('title')).toBe('No weapon equipped.');
+    expect(button.getAttribute('aria-description')).toBe('No weapon equipped.');
+  });
+
+  it('an enabled action button carries no action-blocked-reason span', () => {
+    const active = makeActive({ ap: 1 });
+    const context = {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'choose-action', actionType: null, targetId: null },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['wait', 'end-turn'], legalMoveDirections: [] }),
+      combatGetTargets: () => [],
+      combatGetPreview: () => null
+    };
+    const container = new FakeElement('div');
+    renderCombat(container, context);
+    const button = byTestId(container, 'combat-action-end-turn');
+    const reasonSpan = (button.children || []).find((c) => (c.className || '').split(/\s+/).includes('action-blocked-reason'));
+    expect(reasonSpan).toBeFalsy();
+  });
+
+  it('BACK renders during choose-target, choose-protocol, and choose-item browsing — not only the old confirm phase', () => {
+    const active = makeActive({ ap: 2, protocols: [{ school: 'disrupt', tier: 1 }] });
+    for (const selection of [
+      { phase: 'choose-target', actionType: 'attack', targetId: null },
+      { phase: 'choose-protocol', actionType: 'cast', targetId: null },
+      { phase: 'choose-item', actionType: 'item', targetId: null }
+    ]) {
+      const container = new FakeElement('div');
+      renderCombat(container, {
+        combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+        selection,
+        combatGetActiveActor: () => active,
+        combatGetLegalActions: () => ({ actions: ['attack', 'cast', 'item'], legalMoveDirections: [] }),
+        combatGetTargets: () => [],
+        combatGetPreview: () => null,
+        combatGetItems: () => [],
+        protocolsData: { schools: { disrupt: { tiers: [{ name: 'Spark', chargeCost: 2 }] } } }
+      });
+      expect(byTestId(container, 'combat-back'), `phase ${selection.phase}`).toBeTruthy();
+    }
+  });
+
+  it('BACK is absent while resolving — nothing to cancel mid-execution', () => {
+    const active = makeActive({ ap: 2 });
+    const container = new FakeElement('div');
+    renderCombat(container, {
+      combatState: { combatants: new Map([[active.id, active]]), turnOrder: [active.id], currentTurn: 0 },
+      selection: { phase: 'confirm', actionType: 'attack', targetId: 'enemy', resolving: true },
+      combatGetActiveActor: () => active,
+      combatGetLegalActions: () => ({ actions: ['attack'], legalMoveDirections: [] }),
+      combatGetTargets: () => [makeEnemy({ id: 'enemy' })],
+      combatGetPreview: () => ({ distance: 1, range: { band: 'adjacent', legal: true }, coverBonus: 0, flanked: false, targetLegal: true })
+    });
+    expect(byTestId(container, 'combat-back')).toBe(null);
   });
 });

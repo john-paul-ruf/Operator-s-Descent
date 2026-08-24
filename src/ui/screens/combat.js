@@ -556,8 +556,7 @@ export function mount(container, params = {}) {
     combatSelectItem: selectItem,
     combatCycleTarget: cycleTarget,
     combatCancel: cancelSelection,
-    combatConfirm: confirmSelection,
-    combatCanConfirm: canConfirm
+    combatConfirm: confirmSelection
   };
   // Screen-owned feedback rail. Sibling of the console (NOT a child of
   // `.console-content`) so notices/errors stay visible regardless of console
@@ -770,8 +769,23 @@ export function mount(container, params = {}) {
     if ((type === 'attack' || type === 'cast' || type === 'overclock' || type === 'item') && targets.length) {
       selection.targetId = targets[0].id;
     }
+    // Explicit END TURN / RETREAT controls execute directly on their single press — there is no
+    // subsequent target/destination tap for either, so ACTION_PHASES already parked them at
+    // 'confirm' above. Route straight through the same guarded execution boundary every other
+    // direct activation uses (validationError, stale-selection check, executeAction).
+    if (type === 'retreat' || type === 'end-turn') return confirmSelection();
     renderAll();
     return true;
+  }
+
+  // Protocol data classifier local to this screen (mirrors src/ui/console/tech.js's private
+  // targetKind — no shared export exists in src/rules/protocols.js, and that module is outside
+  // this session's Reads). A protocol whose authored effect resolves against the floor/every
+  // enemy/an area rather than a single picked actor has no legal target tap to wait for, so
+  // selecting it IS the explicit cast action.
+  function protocolIsTargetless(protocol) {
+    const effect = protocolData(data, protocol)?.effectData || {};
+    return effect.target === 'floor' || effect.target === 'all_enemies' || effect.target === 'enemies' || effect.target === 'aoe' || effect.type === 'reshape';
   }
 
   function selectProtocol(protocol) {
@@ -782,11 +796,18 @@ export function mount(container, params = {}) {
       return false;
     }
     selection.protocol = { school: protocol.school, tier: protocol.tier };
+    selection.error = null;
+    if (protocolIsTargetless(protocol)) {
+      // Browsing the protocol card IS the cast action — no target tap follows.
+      selection.targetId = null;
+      selection.targetIndex = 0;
+      selection.phase = 'confirm';
+      return confirmSelection();
+    }
     selection.phase = 'choose-target';
     const targets = targetsForSelection();
     selection.targetId = targets[0]?.id ?? null;
     selection.targetIndex = 0;
-    selection.error = null;
     renderAll();
     return true;
   }
@@ -803,6 +824,10 @@ export function mount(container, params = {}) {
     return true;
   }
 
+  // Direct activation: one legal target tap executes the pending action (attack/cast/
+  // overclock/item) immediately — there is no separate confirm step to wait for. Keyboard
+  // target cycling (cycleTarget, below) stays browse-only; Enter remains the non-visual
+  // commit for that path.
   function selectTarget(targetId) {
     if (!isPartyTurn()) return false;
     const targets = targetsForSelection();
@@ -828,8 +853,7 @@ export function mount(container, params = {}) {
     selection.targetIndex = index;
     selection.phase = 'confirm';
     selection.error = null;
-    renderAll();
-    return true;
+    return confirmSelection();
   }
 
   function cycleTarget(delta) {
@@ -908,7 +932,10 @@ export function mount(container, params = {}) {
     return true;
   }
 
-  // Tap-to-destination: replace movePath with the BFS shortest route to the tapped cell.
+  // Direct activation: one legal map destination tap replaces movePath with the full BFS
+  // shortest route to the tapped cell AND executes it immediately — no second "tap again to
+  // confirm" gesture. A D-pad-built path stays reachable through the keyboard/D-pad Enter
+  // accelerator (handleInput → combatConfirm) for accessibility.
   function selectDestination(cell) {
     if (!isPartyTurn() || selection.actionType !== 'move') return false;
     const info = getMoveRange().get(`${cell.x},${cell.y}`);
@@ -921,8 +948,7 @@ export function mount(container, params = {}) {
     selection.direction = selection.movePath[0];
     selection.phase = 'confirm';
     selection.error = null;
-    renderAll();
-    return true;
+    return confirmSelection();
   }
 
   function cancelSelection() {
@@ -949,14 +975,6 @@ export function mount(container, params = {}) {
     return true;
   }
 
-  function canConfirm() {
-    if (!isPartyTurn()) return false;
-    // Move confirms as soon as the movePath is non-empty; other actions require the confirm phase.
-    if (selection.actionType === 'move' && (selection.movePath?.length ?? 0) > 0) return !validationError();
-    if (selection.phase !== 'confirm') return false;
-    return !validationError();
-  }
-
   function validationError() {
     const actor = getActiveActor(combatState);
     if (!actor || actor.side !== 'party') return 'WAIT FOR A PARTY TURN';
@@ -977,10 +995,12 @@ export function mount(container, params = {}) {
     }
     if (selection.actionType === 'cast' || selection.actionType === 'overclock') {
       if (!selection.protocol || !actor.protocols?.some((protocol) => protocol.school === selection.protocol.school && protocol.tier === selection.protocol.tier)) return 'SELECT A VALID PROTOCOL';
-      const target = combatState.combatants.get(selection.targetId);
-      if (!target || target.hp <= 0) return 'SELECT A LIVING TARGET';
-      const preview = previewForTarget(selection.targetId);
-      if (preview && preview.targetLegal === false) return 'OUT OF RANGE — MOVE OR RETARGET';
+      if (!protocolIsTargetless(selection.protocol)) {
+        const target = combatState.combatants.get(selection.targetId);
+        if (!target || target.hp <= 0) return 'SELECT A LIVING TARGET';
+        const preview = previewForTarget(selection.targetId);
+        if (preview && preview.targetLegal === false) return 'OUT OF RANGE — MOVE OR RETARGET';
+      }
     }
     if (selection.actionType === 'item') {
       if (!consumableItems(runState).some((item) => item.id === selection.itemId || item.baseType === selection.itemId)) return 'SELECT A VALID ITEM';
@@ -1456,13 +1476,9 @@ export function mount(container, params = {}) {
     };
   }
 
-  function pathEndpointKey() {
-    const actor = getActiveActor(combatState);
-    if (!actor || !(selection.movePath?.length)) return null;
-    const end = pathEndpoint(actor);
-    return `${end.x},${end.y}`;
-  }
-
+  // Direct activation: one legal canvas tap executes. Attack/cast/overclock/item tap a target
+  // cell; move taps a reachable destination cell — both route through selectTarget/
+  // selectDestination, which now confirm inline. No second "tap again" gesture.
   function onCanvasTap({ clientX, clientY }) {
     if (!mounted) return;
     // A tap during enemy playback fast-forwards to completion instead of selecting anything.
@@ -1478,26 +1494,14 @@ export function mount(container, params = {}) {
       return;
     }
     if (selection.actionType === 'move' && (selection.phase === 'choose-path' || selection.phase === 'confirm')) {
-      const endpointKey = pathEndpointKey();
-      const tappedKey = `${cell.x},${cell.y}`;
-      if (endpointKey && tappedKey === endpointKey && canConfirm()) {
-        confirmSelection();
-        return;
-      }
-      if (getMoveRange().has(tappedKey) && selectDestination(cell)) {
-        selection.notice = 'TAP DESTINATION AGAIN TO CONFIRM.';
-        renderAll();
-      }
+      if (getMoveRange().has(`${cell.x},${cell.y}`)) selectDestination(cell);
       return;
     }
     if (selection.phase === 'choose-action') {
       const legal = legalActions().actions || [];
       if (!legal.includes('move')) return;
       if (!getMoveRange().has(`${cell.x},${cell.y}`)) return;
-      if (chooseAction('move') && selectDestination(cell)) {
-        selection.notice = 'TAP DESTINATION AGAIN TO CONFIRM.';
-        renderAll();
-      }
+      if (chooseAction('move')) selectDestination(cell);
     }
   }
 

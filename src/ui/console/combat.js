@@ -67,6 +67,18 @@ function createActionCost(text) {
   return cost;
 }
 
+// SESSION-03 (direct-actions-and-quick-starts) — promotes a disabled action's reason from
+// title/aria-description-only metadata to a visible line inside the card. Touch users cannot
+// rely on hover to read a title attribute, so a dark ATTACK button must explain itself without
+// one. Strips the trailing period from the sentence-case reason and upper-cases it to match the
+// rest of the action card's visible text (verb + compact cost chip).
+function createBlockedReason(text) {
+  const span = document.createElement('span');
+  span.className = 'action-blocked-reason';
+  span.textContent = text.replace(/\.$/, '').toUpperCase();
+  return span;
+}
+
 function clear(container) {
   if (typeof container.replaceChildren === 'function') container.replaceChildren();
   else while (container.firstChild) container.removeChild(container.firstChild);
@@ -321,6 +333,7 @@ function renderActions(container, context, legalActions) {
     if (icon) button.prepend(icon);
     const cost = COMPACT_COST[action.id];
     if (cost) button.appendChild(createActionCost(cost));
+    if (reason) button.appendChild(createBlockedReason(reason));
     list.appendChild(button);
   }
   container.appendChild(list);
@@ -507,18 +520,18 @@ function renderTargets(container, context) {
   container.appendChild(list);
 }
 
-function renderConfirm(container, context) {
+// SESSION-03 (direct-actions-and-quick-starts) — replaces the removed generic CONFIRM row.
+// Every normal-play action now executes directly on its legal target/destination activation
+// (see src/ui/screens/combat.js), so the only control this row still owns is a reversible
+// bail-out: BACK. Rendered whenever an action is selected and nothing is actively resolving —
+// covers choose-target/choose-protocol/choose-item/choose-path browsing states, not just the
+// old single 'confirm' phase, so a touch user can cancel out of ANY in-progress action pick
+// without hunting for a keyboard Escape. Reuses `.combat-confirm-row`'s existing flex/gap/margin
+// styling (styles/components.css is outside this session's lease) rather than a new class.
+function renderCancel(container, context) {
   const selection = context.selection || {};
   const row = document.createElement('div');
   row.className = 'combat-confirm-row';
-  const confirm = createButton(selection.resolving ? 'RESOLVING' : 'CONFIRM', {
-    primary: true,
-    disabled: !context.combatCanConfirm?.(),
-    onClick: () => context.combatConfirm?.()
-  });
-  confirm.dataset.testid = 'combat-confirm';
-  if (context.layout === 'wide') confirm.classList.add('btn-confirm');
-  row.appendChild(confirm);
   // SESSION-05 (icon-first-ui-density) — BACK is icon-only per GAP §3.3 (arrow-left).
   // aria-label preserves the former visible label verbatim (`BACK`).
   const back = createButton('', {
@@ -579,8 +592,7 @@ export function render(container, context = {}) {
   if (selection.phase === 'choose-protocol') renderProtocols(container, context, active);
   if (selection.phase === 'choose-item') renderItems(container, context);
   if (selection.phase === 'choose-target' || (selection.phase === 'confirm' && ['attack', 'cast', 'overclock', 'item'].includes(selection.actionType))) renderTargets(container, context);
-  if (selection.phase === 'confirm') renderConfirm(container, context);
-  else if (selection.actionType) appendText(container, 'combat-hint console-static-row', 'Select an option, then confirm.', 'combat-hint');
+  if (selection.actionType && !selection.resolving) renderCancel(container, context);
 }
 
 export function handleInput(event, context = {}) {

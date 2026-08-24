@@ -348,19 +348,19 @@ describe('combat screen controller', () => {
     expect(containsNode(consoleContent, error)).toBe(false);
   });
 
-  it('requires target selection and explicit confirmation before resolving an attack', async () => {
+  it('a legal target tap executes the attack directly — no separate confirm step', async () => {
     const combat = combatState([partyActor(), enemyActor({ hp: 10, hpMax: 10 })]);
     const { container } = await mountCombat({ combat });
 
     byTestId(container, 'combat-action-attack').click();
-    byTestId(container, 'combat-target-0').click();
-
     expect(combat.combatants.get(0).hp).toBe(10);
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
-    byTestId(container, 'combat-confirm').click();
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
+
+    byTestId(container, 'combat-target-0').click();
 
     expect(combat.log.some((entry) => entry.type === 'attack')).toBe(true);
     expect(combat.combatants.get('hero').ap).toBe(1);
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
   });
 
   it('cycles targets from the keyboard and confirms the selected target with Enter', async () => {
@@ -382,7 +382,10 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-move').click();
     byTestId(container, 'combat-dir-s').click();
-    byTestId(container, 'combat-confirm').click();
+    // D-pad-built paths keep the keyboard/D-pad Enter accelerator as their commit route —
+    // there is no rendered combat-confirm control to click.
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
+    container.dispatch('keydown', keyEvent('Enter'));
 
     const hero = combat.combatants.get('hero');
     expect(hero.position).toEqual({ x: 1, y: 2 });
@@ -403,7 +406,7 @@ describe('combat screen controller', () => {
     expect(byTestId(container, 'combat-dir-center').textContent).toBe('2 LEFT');
     expect(byTestId(container, 'combat-undo')).not.toBe(null);
 
-    byTestId(container, 'combat-confirm').click();
+    container.dispatch('keydown', keyEvent('Enter'));
 
     const hero = combat.combatants.get('hero');
     expect(hero.position).toEqual({ x: 2, y: 3 });
@@ -412,7 +415,7 @@ describe('combat screen controller', () => {
     expect(moveLog.path).toEqual(['s', 's', 'e']);
   });
 
-  it('tapping a reachable canvas cell fills the shortest-route path and enables confirm', async () => {
+  it('tapping a reachable canvas cell fills the shortest-route path and executes it in one tap', async () => {
     const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
     const { container } = await mountCombat({ combat });
 
@@ -423,12 +426,11 @@ describe('combat screen controller', () => {
     playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
     playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
-    byTestId(container, 'combat-confirm').click();
-
     const hero = combat.combatants.get('hero');
     expect(hero.position).toEqual({ x: 3, y: 3 });
+    expect(hero.moveAvailable).toBe(false);
     expect(combat.log.find((entry) => entry.type === 'move').steps).toBe(2);
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
   });
 
   it('dragging past the 6px threshold does not fire a tap-select', async () => {
@@ -449,72 +451,44 @@ describe('combat screen controller', () => {
     expect(byTestId(container, 'combat-undo')).toBe(null);
   });
 
-  it('tapping the canvas during choose-action enters move with a BFS path and confirm-hint notice', async () => {
+  it('tapping the canvas during choose-action enters move and executes the BFS-routed path in one tap', async () => {
     const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
     const { container } = await mountCombat({ combat });
 
     const playfield = byClass(container, 'combat-playfield');
-    // No prior action click — the tap must promote choose-action → move → routed path.
+    // No prior action click — the tap must promote choose-action → move → routed path → execute.
     playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
     playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
 
     const hero = combat.combatants.get('hero');
-    // First tap only routes; hero has not moved.
-    expect(hero.position).toEqual({ x: 1, y: 1 });
-    // BFS path enters confirm phase and the tap-again hint appears in the console notice slot.
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
-    expect(byTestId(container, 'combat-notice').textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
-  });
-
-  it('a second tap on the routed destination executes the move via the canvas', async () => {
-    const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
-    const { container } = await mountCombat({ combat });
-
-    byTestId(container, 'combat-action-move').click();
-    const playfield = byClass(container, 'combat-playfield');
-    // Tap 1: route BFS path to (3,3) — 2 SE steps. Portrait zoom puts cell (3,3) at screen (224,224).
-    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
-    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
-    expect(byTestId(container, 'combat-notice').textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
-
-    // Tap 2: same cell → confirm inline, no separate CONFIRM click.
-    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
-    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
-
-    const hero = combat.combatants.get('hero');
-    expect(hero.position).toEqual({ x: 3, y: 3 });
+    // One tap routes the full BFS path AND executes it — no intermediate confirm gesture.
+    expect(hero.position).toEqual({ x: 2, y: 2 });
     expect(hero.moveAvailable).toBe(false);
-    expect(combat.log.find((entry) => entry.type === 'move').steps).toBe(2);
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
   });
 
-  it('tapping a different reachable cell re-routes instead of confirming', async () => {
+  it('tapping a different reachable cell after one move executes the new leg instead of the stale destination', async () => {
     const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
     const { container } = await mountCombat({ combat });
 
     byTestId(container, 'combat-action-move').click();
     const playfield = byClass(container, 'combat-playfield');
     // Tap 1: cell (2,2) — 1 SE step. Screen (160,160) under portrait zoom = world (120,120).
+    // Executes immediately; hero lands at (2,2) and MOVE is spent for the turn.
     playfield.dispatch('pointerdown', { clientX: 160, clientY: 160 });
     playfield.dispatch('pointerup', { clientX: 160, clientY: 160 });
-    // Tap 2: a DIFFERENT reachable cell (3,3) — re-routes (2 SE), does not confirm the (2,2) path.
-    playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
-    playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
     const hero = combat.combatants.get('hero');
-    // Hero has not moved — no confirmation happened.
-    expect(hero.position).toEqual({ x: 1, y: 1 });
-    // Confirm is still enabled: a valid routed path exists (to the new destination).
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
-    // Confirming through the console now executes the re-routed 2-step path.
-    byTestId(container, 'combat-confirm').click();
-    expect(hero.position).toEqual({ x: 3, y: 3 });
+    expect(hero.position).toEqual({ x: 2, y: 2 });
+    expect(hero.moveAvailable).toBe(false);
+    expect(byTestId(container, 'combat-action-move').disabled).toBe(true);
   });
 
-  it('tapping an enemy cell during choose-target selects that target unchanged', async () => {
+  it('tapping an enemy cell during choose-target executes the attack against that target directly', async () => {
     // Custom Rule 11: strengthened per SESSION-05's range gate — this fixture originally used
     // an adjacent-band weapon (maxRange 1) with a target at (3,3) distance 2, which the range
     // gate now legitimately rejects. Hero gets a short-band weapon (maxRange 5) so the tap on
-    // enemy 1 stays inside legal range and the test still exercises tap→select routing.
+    // enemy 1 stays inside legal range and the test still exercises tap→execute routing.
     const shortRangeWeapon = makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 5, minRange: 0, accuracyBonus: 40 });
     const combat = combatState([
       partyActor({ weapon: shortRangeWeapon }),
@@ -529,8 +503,11 @@ describe('combat screen controller', () => {
     playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
     playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
 
-    expect(byTestId(container, 'combat-target-1').getAttribute('aria-selected')).toBe('true');
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
+    const attackEntry = combat.log.find((entry) => entry.type === 'attack');
+    expect(attackEntry).toBeTruthy();
+    expect(attackEntry.targetId).toBe(1);
+    expect(combat.combatants.get('hero').ap).toBe(1);
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
   });
 
   it('wheel events on the playfield never fire a tap-select', async () => {
@@ -572,7 +549,6 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-attack').click();
     byTestId(container, 'combat-target-0').click();
-    byTestId(container, 'combat-confirm').click();
 
     expect(events).toHaveLength(1);
     expect(events[0].result).toBe('victory');
@@ -590,7 +566,6 @@ describe('combat screen controller', () => {
     const { container } = await mountCombat({ state, combat });
 
     byTestId(container, 'combat-action-retreat').click();
-    byTestId(container, 'combat-confirm').click();
 
     expect(events).toHaveLength(1);
     expect(events[0].result).toBe('retreat');
@@ -615,8 +590,8 @@ describe('combat screen controller', () => {
       const { container } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
-      // Enemy playback is paced via setTimeout; runAllTimers completes every animation step.
+      // END TURN executes directly on its single press. Enemy playback is paced via setTimeout;
+      // runAllTimers completes every animation step.
       vi.runAllTimers();
 
       expect(deaths).toHaveLength(1);
@@ -648,19 +623,21 @@ describe('combat screen controller', () => {
     expect(byClass(container, 'console-dim-layer')).toBe(null);
   });
 
-  it('targeting sub-mode renders inside the dock using target-info/target-name/target-detail and btn-confirm', async () => {
+  it('targeting sub-mode renders inside the dock using target-info/target-name/target-detail; the target tap executes directly', async () => {
     installMatchMedia(true);
     const combat = combatState([partyActor(), enemyActor({ hp: 10, hpMax: 10 })]);
     const { container } = await mountCombat({ combat });
 
     byTestId(container, 'combat-action-attack').click();
-    byTestId(container, 'combat-target-0').click();
 
     const preview = byTestId(container, 'combat-selected-preview');
     expect(preview.className).toContain('target-info');
     expect(byClass(preview, 'target-name')).not.toBe(null);
     expect(byClass(preview, 'target-detail')).not.toBe(null);
-    expect(byTestId(container, 'combat-confirm').className).toContain('btn-confirm');
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
+
+    byTestId(container, 'combat-target-0').click();
+    expect(combat.log.some((entry) => entry.type === 'attack')).toBe(true);
   });
 
   it('wide mount attaches pane handles + collapse buttons and cleans them up on unmount', async () => {
@@ -731,7 +708,6 @@ describe('combat screen controller', () => {
       expect(consoleEl.dataset.expandState).toBe('half');
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       // Enemy playback in progress — console must NOT collapse.
       expect(consoleEl.dataset.expandState).toBe('half');
       vi.runAllTimers();
@@ -758,7 +734,6 @@ describe('combat screen controller', () => {
 
       // End turn → enemy playback pass → user collapse persists.
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       expect(consoleEl.dataset.expandState).toBe('collapsed');
 
       // New party turn — still collapsed. The player reopens it explicitly.
@@ -779,7 +754,7 @@ describe('combat screen controller', () => {
     expect(() => bus.dispatch('ui:console-collapse')).not.toThrow();
   });
 
-  it('first destination tap sets the exact confirm-notice; the completed move clears the rail', async () => {
+  it('a destination tap executes the move directly and leaves the feedback rail cleared', async () => {
     vi.useFakeTimers();
     try {
       const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
@@ -789,18 +764,14 @@ describe('combat screen controller', () => {
       byTestId(container, 'combat-action-move').click();
       playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
       playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
-
-      const notice = byTestId(container, 'combat-notice');
-      expect(notice.textContent).toBe('TAP DESTINATION AGAIN TO CONFIRM.');
-      expect(notice.hidden).toBe(false);
-
-      byTestId(container, 'combat-confirm').click();
       vi.runAllTimers();
 
-      // finalizeAfterAction clears selection.notice — the rail syncs and hides.
-      const cleared = byTestId(container, 'combat-notice');
-      expect(cleared.textContent).toBe('');
-      expect(cleared.hidden).toBe(true);
+      const hero = combat.combatants.get('hero');
+      expect(hero.position).toEqual({ x: 3, y: 3 });
+      // One tap executed the move directly — no lingering "tap again" notice.
+      const notice = byTestId(container, 'combat-notice');
+      expect(notice.textContent).toBe('');
+      expect(notice.hidden).toBe(true);
       controller.unmount();
     } finally {
       vi.useRealTimers();
@@ -813,7 +784,13 @@ describe('combat screen controller', () => {
   it('feedback rail carries an explicit active flag that flips with notice/error and never removes the live-region mount', async () => {
     vi.useFakeTimers();
     try {
-      const combat = combatState([partyActor(), enemyActor({ position: { x: 6, y: 6 } })]);
+      // An out-of-range keyboard-confirmed attack surfaces an error without spending AP —
+      // a reliable, RNG-free way to activate the rail now that a legal tap executes instantly.
+      const combat = combatState([
+        partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
+        enemyActor({ id: 0, position: { x: 2, y: 1 }, hp: 10, hpMax: 10 }),
+        enemyActor({ id: 1, position: { x: 6, y: 6 }, hp: 10, hpMax: 10 })
+      ], ['hero', 0, 1]);
       const { container, controller } = await mountCombat({ combat });
       const rail = byTestId(container, 'combat-feedback');
 
@@ -821,10 +798,9 @@ describe('combat screen controller', () => {
       expect(rail.classList.contains('is-active')).toBe(false);
       expect(rail.dataset.active).toBe('false');
 
-      byTestId(container, 'combat-action-move').click();
-      const playfield = byClass(container, 'combat-playfield');
-      playfield.dispatch('pointerdown', { clientX: 224, clientY: 224 });
-      playfield.dispatch('pointerup', { clientX: 224, clientY: 224 });
+      byTestId(container, 'combat-action-attack').click();
+      container.dispatch('keydown', keyEvent('Tab'));
+      container.dispatch('keydown', keyEvent('Enter'));
 
       expect(rail.classList.contains('is-active')).toBe(true);
       expect(rail.dataset.active).toBe('true');
@@ -834,7 +810,7 @@ describe('combat screen controller', () => {
       expect(byTestId(container, 'combat-notice')).not.toBe(null);
       expect(byTestId(container, 'combat-error')).not.toBe(null);
 
-      byTestId(container, 'combat-confirm').click();
+      byTestId(container, 'combat-action-end-turn').click();
       vi.runAllTimers();
 
       expect(rail.classList.contains('is-active')).toBe(false);
@@ -875,7 +851,6 @@ describe('combat screen controller', () => {
       const dock = byClass(container, 'wide-console-dock');
       expect(dock).not.toBe(null);
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       vi.runAllTimers();
       // Dock remains rendered; the presence controller is a no-op for isWide=true.
       expect(byClass(container, 'wide-console-dock')).not.toBe(null);
@@ -925,7 +900,6 @@ describe('combat screen controller', () => {
       const { container, controller } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       vi.runAllTimers();
       expect(wipes).toHaveLength(1);
 
@@ -953,13 +927,14 @@ describe('combat screen controller', () => {
       // set combat.turnOrder currentTurn to hero, append a completed move entry, and observe.
       // Here we exercise the full end-turn round-trip and check the animated frame after ~1 step.
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       // A pending timer must exist: enemy playback scheduled setTimeout at ≥ MOVE_STEP_MS.
       expect(vi.getTimerCount()).toBeGreaterThan(0);
       // Drain a single 140ms tick — at most one intermediate step advances, then the queue re-schedules.
       vi.advanceTimersByTime(140);
-      // Selection stays resolving (input gated) until all timers drain.
-      expect(byTestId(container, 'combat-confirm').disabled).toBe(true);
+      // Selection stays resolving (input gated) until all timers drain — every action card is
+      // dark with the same reason.
+      expect(byTestId(container, 'combat-action-attack').disabled).toBe(true);
+      expect(byTestId(container, 'combat-action-attack').getAttribute('title')).toBe('Action resolving.');
       // Fully drain the queue — combat resolution completes.
       vi.runAllTimers();
       controller.unmount();
@@ -968,18 +943,17 @@ describe('combat screen controller', () => {
     }
   });
 
-  it('input is gated during playback: clicking CONFIRM or dispatching keydown does not advance state', async () => {
+  it('input is gated during playback: clicking a resolving-disabled action or dispatching keydown does not advance state', async () => {
     vi.useFakeTimers();
     try {
       const combat = combatState([partyActor(), enemyActor({ id: 0, position: { x: 2, y: 1 } })], ['hero', 0]);
       const { container } = await mountCombat({ combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
-      // During playback the confirm button is disabled and keyboard is rejected.
-      const confirm = byTestId(container, 'combat-confirm');
+      // During playback every action card is disabled ("Action resolving.") and keyboard confirm
+      // is rejected by confirmSelection's own resolving guard.
       const startLog = combat.log.length;
-      if (confirm) confirm.click();
+      byTestId(container, 'combat-action-attack').click();
       container.dispatch('keydown', keyEvent('Enter'));
       // No new log entries would be appended by rejected input — the engine ran once and stopped.
       expect(combat.log.length).toBe(startLog);
@@ -998,7 +972,6 @@ describe('combat screen controller', () => {
       const { container, controller } = await mountCombat({ combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       const timersBefore = vi.getTimerCount();
       expect(timersBefore).toBeGreaterThan(0);
 
@@ -1031,7 +1004,6 @@ describe('combat screen controller', () => {
       const { container } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
 
       // Reduced motion → instant dispatch. Death and party-membership updates land synchronously
       // and no playback timers were ever scheduled.
@@ -1063,8 +1035,8 @@ describe('combat screen controller', () => {
       const { container } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
-      // Between confirm and timer drain, the terminal event has NOT fired yet.
+      // Between the direct END TURN activation and timer drain, the terminal event has NOT
+      // fired yet.
       expect(events).toHaveLength(0);
       expect(wipes).toHaveLength(0);
       vi.runAllTimers();
@@ -1091,7 +1063,6 @@ describe('combat screen controller', () => {
       const { container } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       expect(vi.getTimerCount()).toBeGreaterThan(0);
       const playfield = byClass(container, 'combat-playfield');
       // Tap the canvas — playback's onTap fires fastForwardPlayback instead of a cell selection.
@@ -1119,7 +1090,6 @@ describe('combat screen controller', () => {
       const { container, controller } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       // At least one enemy log entry is now in combatState.log (attack, and probably death).
       const totalEntries = combat.log.length;
       expect(totalEntries).toBeGreaterThan(0);
@@ -1146,12 +1116,11 @@ describe('combat screen controller', () => {
       const { container } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      const afterPartyDispatch = logEvents.length;
-      byTestId(container, 'combat-confirm').click();
-      // Between confirm and timer drain, enemy log entries have NOT all been dispatched yet: at
-      // most one has fired (the first playback step), and there may be more pending.
+      // END TURN executes directly: the party's own end-turn entry (and any playback steps that
+      // complete before the first paced timer fires) are already dispatched by the time click()
+      // returns; enemy entries still pending playback have NOT all been dispatched yet.
       const midDispatch = logEvents.length;
-      expect(midDispatch).toBeGreaterThanOrEqual(afterPartyDispatch);
+      expect(midDispatch).toBeGreaterThan(0);
       vi.runAllTimers();
       // After playback, every log entry has been dispatched (cursor is caught up).
       expect(logEvents.length).toBeGreaterThanOrEqual(midDispatch);
@@ -1237,7 +1206,7 @@ describe('combat screen controller', () => {
     controller.unmount();
   });
 
-  it('range gate does not block legal in-range attacks — confirm still fires the action', async () => {
+  it('range gate does not block legal in-range attacks — the target tap fires the action directly', async () => {
     const combat = combatState([
       partyActor({ id: 'hero', position: { x: 1, y: 1 } }),
       enemyActor({ id: 0, position: { x: 2, y: 1 }, hp: 10, hpMax: 10 })
@@ -1246,9 +1215,8 @@ describe('combat screen controller', () => {
 
     byTestId(container, 'combat-action-attack').click();
     byTestId(container, 'combat-target-0').click();
-    expect(byTestId(container, 'combat-confirm').disabled).toBe(false);
-    byTestId(container, 'combat-confirm').click();
     expect(combat.log.some((entry) => entry.type === 'attack')).toBe(true);
+    expect(byTestId(container, 'combat-confirm')).toBe(null);
 
     controller.unmount();
   });
@@ -1494,7 +1462,6 @@ describe('combat log dispatch — detail payload', () => {
 
     byTestId(container, 'combat-action-attack').click();
     byTestId(container, 'combat-target-0').click();
-    byTestId(container, 'combat-confirm').click();
 
     const attackDispatch = events.find((event) => event.type === 'attack');
     expect(attackDispatch).toBeTruthy();
@@ -1551,7 +1518,6 @@ describe('combat haptic emission — opt-in guard (checkpoint 1)', () => {
 
       byTestId(container, 'combat-action-attack').click();
       byTestId(container, 'combat-target-0').click();
-      byTestId(container, 'combat-confirm').click();
 
       expect(combat.log.some((entry) => entry.type === 'death')).toBe(true);
       expect(vibrate).not.toHaveBeenCalled();
@@ -1572,7 +1538,6 @@ describe('combat haptic emission — opt-in guard (checkpoint 1)', () => {
       expect(() => {
         byTestId(container, 'combat-action-attack').click();
         byTestId(container, 'combat-target-0').click();
-        byTestId(container, 'combat-confirm').click();
       }).not.toThrow();
 
       expect(combat.log.some((entry) => entry.type === 'death')).toBe(true);
@@ -1594,7 +1559,6 @@ describe('combat haptic emission — opt-in guard (checkpoint 1)', () => {
       expect(() => {
         byTestId(container, 'combat-action-attack').click();
         byTestId(container, 'combat-target-0').click();
-        byTestId(container, 'combat-confirm').click();
       }).not.toThrow();
 
       expect(combat.log.some((entry) => entry.type === 'death')).toBe(true);
@@ -1620,7 +1584,6 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
 
       byTestId(container, 'combat-action-attack').click();
       byTestId(container, 'combat-target-0').click();
-      byTestId(container, 'combat-confirm').click();
 
       const attackEntry = combat.log.find((entry) => entry.type === 'attack');
       const deathEntry = combat.log.find((entry) => entry.type === 'death');
@@ -1649,7 +1612,6 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
 
       byTestId(container, 'combat-action-attack').click();
       byTestId(container, 'combat-target-0').click();
-      byTestId(container, 'combat-confirm').click();
 
       expect(combat.log).toHaveLength(1);
       const attackEntry = combat.log[0];
@@ -1670,7 +1632,7 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
 
       byTestId(container, 'combat-action-move').click();
       byTestId(container, 'combat-dir-s').click();
-      byTestId(container, 'combat-confirm').click();
+      container.dispatch('keydown', keyEvent('Enter'));
 
       expect(combat.log.some((entry) => entry.type === 'move')).toBe(true);
       expect(h.vibrate).not.toHaveBeenCalled();
@@ -1696,7 +1658,6 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
       const { container, controller } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       vi.runAllTimers();
 
       const eligible = combat.log
@@ -1724,7 +1685,6 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
       const { container, controller } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       const playfield = byClass(container, 'combat-playfield');
       playfield.dispatch('pointerdown', { clientX: 152, clientY: 152 });
       playfield.dispatch('pointerup', { clientX: 152, clientY: 152 });
@@ -1758,7 +1718,6 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
       const { container, controller } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
       controller.unmount();
 
       const eligible = combat.log
@@ -1794,7 +1753,6 @@ describe('combat haptic emission — exactly once, resolved entries only (checkp
       const { container, controller } = await mountCombat({ state, combat });
 
       byTestId(container, 'combat-action-end-turn').click();
-      byTestId(container, 'combat-confirm').click();
 
       expect(vi.getTimerCount()).toBe(0);
       const eligible = combat.log
