@@ -1498,6 +1498,60 @@ describe('describeEntryDetail — breakdown formatting', () => {
     expect(describeEntryDetail(entry)).toBe('d20 1 +2 FIN = 3 vs DEF 14 → MISS FUMBLE');
   });
 
+  // affixes-take-effect SESSION-04 checkpoint 3 — LUCKY / LEECH / proc fragments appended to
+  // the attack detail line, guarded on field presence so pre-existing logs render unchanged.
+  it('appends a LUCKY fragment when the attack carries a resolved reroll', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 15, attribute: 'mgt', attributeModifier: 3,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 18, targetDefense: 14,
+      hit: true, crit: false, fumble: false,
+      damage: 4, damageDie: 'd6', damageRoll: 4,
+      luckyReroll: { itemId: 'lucky_1', firstNatural: 3, keptNatural: 15 }
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 15 +3 MGT = 18 vs DEF 14 → HIT · d6=4 dmg · LUCKY 3→15');
+  });
+
+  it('appends a LEECH fragment when the attack healed the attacker', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 12, attribute: 'mgt', attributeModifier: 2,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 14, targetDefense: 10,
+      hit: true, crit: false, fumble: false,
+      damage: 3, damageDie: 'd6', damageRoll: 3, leech: 1
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 12 +2 MGT = 14 vs DEF 10 → HIT · d6=3 dmg · LEECH +1');
+  });
+
+  it('appends per-proc fragments for applied, resisted, and fizzled on-hit affixes, in order', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 16, attribute: 'mgt', attributeModifier: 3,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 19, targetDefense: 12,
+      hit: true, crit: false, fumble: false,
+      damage: 5, damageDie: 'd8', damageRoll: 5,
+      procs: [
+        { conditionId: 'corroded', trigger: 'hit', applied: true },
+        { conditionId: 'jammed', trigger: 'hit', save: { attribute: 'foc', success: true }, applied: false },
+        { conditionId: 'jammed', trigger: 'hit', chanceFailed: true }
+      ]
+    };
+    expect(describeEntryDetail(entry)).toBe(
+      'd20 16 +3 MGT = 19 vs DEF 12 → HIT · d8=5 dmg · ▸ CORRODED applied · ▸ JAMMED resisted (FOC save) · ▸ JAMMED fizzled'
+    );
+  });
+
+  it('omits every affix fragment on a pre-affix attack entry (no luckyReroll/leech/procs fields)', () => {
+    const entry = {
+      type: 'attack', naturalRoll: 10, attribute: 'mgt', attributeModifier: 1,
+      weaponAccuracy: 0, markedBonus: 0, blindedPenalty: 0, flankBonus: 0,
+      coverBonus: 0, roll: 11, targetDefense: 14,
+      hit: false, crit: false, fumble: false,
+      damage: 0, damageDie: 'd6', damageRoll: null
+    };
+    expect(describeEntryDetail(entry)).toBe('d20 10 +1 MGT = 11 vs DEF 14 → MISS');
+  });
+
   it('formats a retreat success and failure with the 15 threshold', () => {
     expect(describeEntryDetail({ type: 'retreat', roll: 17, success: true })).toBe('d20 17 vs 15 → ESCAPE');
     expect(describeEntryDetail({ type: 'retreat', roll: 8, success: false })).toBe('d20 8 vs 15 → FAIL');

@@ -291,7 +291,36 @@ function describeAttackDetail(entry) {
     outcome = ' → MISS';
     if (entry.fumble) outcome += ' FUMBLE';
   }
-  return parts.join(' ') + total + defense + outcome;
+  const affixChunks = describeAffixFragments(entry);
+  const affixSuffix = affixChunks.length ? ` · ${affixChunks.join(' · ')}` : '';
+  return parts.join(' ') + total + defense + outcome + affixSuffix;
+}
+
+// One proc's outcome, in house voice — mirrors the three shapes performAttackRoll's on-hit
+// proc loop can push (src/rules/combat.js): a chance-gated hook that failed to trigger, a
+// hook the target's save resisted, or a hook that landed. Any other shape (e.g. a shielded
+// block with no save) renders no fragment — the guard stays silent rather than guess.
+function describeProcFragment(proc) {
+  if (!proc) return null;
+  const label = String(proc.conditionId || 'condition').toUpperCase();
+  if (proc.chanceFailed) return `▸ ${label} fizzled`;
+  if (proc.save?.success) return `▸ ${label} resisted (${String(proc.save.attribute || '').toUpperCase()} save)`;
+  if (proc.applied) return `▸ ${label} applied`;
+  return null;
+}
+
+// Compact affix fragments appended to the attack detail line (SESSION-04): Lucky reroll,
+// Vampiric leech, and any on-hit/on-crit condition procs from performAttackRoll's proc loop.
+// Every chunk guards on field presence so pre-existing (pre-affix) attack logs render unchanged.
+function describeAffixFragments(entry) {
+  const chunks = [];
+  if (entry.luckyReroll) chunks.push(`LUCKY ${entry.luckyReroll.firstNatural}→${entry.luckyReroll.keptNatural}`);
+  if (Number.isFinite(entry.leech) && entry.leech > 0) chunks.push(`LEECH +${entry.leech}`);
+  for (const proc of entry.procs || []) {
+    const fragment = describeProcFragment(proc);
+    if (fragment) chunks.push(fragment);
+  }
+  return chunks;
 }
 
 function describeRetreatDetail(entry) {
