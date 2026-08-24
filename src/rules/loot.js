@@ -87,7 +87,14 @@ export function generateLoot(worldSeed, depth, floorId, containerId, themeLootBi
     const rarityTier = isConsumable ? 0 : rollRarity(prng, depth, themeLootBias, isVault);
     const corrupt = rarityTier === 4;
     items.push({
-      id: `loot-${hash(worldSeed, depth, floorId, containerId, index).toString(36)}-${index}`,
+      // v7 short id: `l<hash-base36>-<i%8>` ≤ 9 chars. 31-bit hash truncation
+      // yields at most 6 base36 chars (36^6 = 2.18B > 2^31 = 2.14B); the
+      // index modulo 8 covers the typical container size while keeping the
+      // suffix a single char. Same hash inputs as v6 — determinism preserved
+      // (loot.test.js:23 asserts the /^loot-.../ shape → updated in-tree).
+      // Legacy long ids (≤96 char bound in the codec) stay valid on the wire,
+      // so v6 saves round-trip unchanged; only newly-generated loot shrinks.
+      id: `l${(hash(worldSeed, depth, floorId, containerId, index) & 0x7fffffff).toString(36)}-${index % 8}`,
       category,
       baseType,
       rarity: RARITIES[rarityTier],

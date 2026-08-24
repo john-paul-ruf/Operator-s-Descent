@@ -32,11 +32,15 @@ function item(overrides = {}) {
 }
 
 function combat() {
+  // v7 packs actor coords to 3+4 bits (fixed 8×16 combat window in
+  // src/rules/encounters.js), so x lives in [0, 7] and y in [0, 15]. Pre-v7
+  // tests used x=8 because v6's codec accepted 7-bit coords (0–127); the
+  // fixture below stays inside the actual runtime window.
   return {
     arena: { originX: 4, originY: 7, contactId: 'contact_01' },
     actors: [
       { id: 'char_0', side: 'party', x: 5, y: 7, hp: 12, charge: 4, conditions: [], initiative: 8, ap: 2, moves: 1, freeActions: 0, defeated: false, retreated: false },
-      { id: 'enemy_0', side: 'enemy', x: 8, y: 7, hp: 9, charge: 0, conditions: [{ conditionId: 'marked', duration: 2 }], initiative: 5, ap: 2, moves: 0, freeActions: 1, defeated: false, retreated: false }
+      { id: 'enemy_0', side: 'enemy', x: 7, y: 7, hp: 9, charge: 0, conditions: [{ conditionId: 'marked', duration: 2 }], initiative: 5, ap: 2, moves: 0, freeActions: 1, defeated: false, retreated: false }
     ],
     initiativeOrder: ['char_0', 'enemy_0'],
     currentIndex: 1,

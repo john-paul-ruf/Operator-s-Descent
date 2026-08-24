@@ -14,6 +14,7 @@
 import { v3ToV4 } from './migrations/v3-to-v4.js';
 import { v4ToV5 } from './migrations/v4-to-v5.js';
 import { v5ToV6 } from './migrations/v5-to-v6.js';
+import { v6ToV7 } from './migrations/v6-to-v7.js';
 
 const STEPS = [];
 
@@ -65,6 +66,12 @@ try {
 
 try {
   registerMigration(v5ToV6);
+} catch (error) {
+  if (error?.code !== 'duplicate_migration') throw error;
+}
+
+try {
+  registerMigration(v6ToV7);
 } catch (error) {
   if (error?.code !== 'duplicate_migration') throw error;
 }

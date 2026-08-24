@@ -14,6 +14,36 @@ const ENCOUNTER_TYPES = ['standard', 'hunt'];
 // conditions still decode without a schema bump wound.
 export const CONDITION_IDS = ['blinded', 'burning', 'corroded', 'immobilized', 'jammed', 'marked', 'overloaded', 'panicked', 'shielded'];
 
+// v7 calibration-option enum (alphabetical for stability). Mirrors the
+// concatenated `default` pool ids in data/classes.json's calibrationOptions
+// — six classes × four options each = 24 ids. Cheaper than a full symbol
+// table for a bounded, static pool: the codec writes a 1-bit known flag +
+// 5-bit index (32-slot space fits all 24 with room to spare) instead of a
+// varUint length + up to 96 raw bytes. Session direct-measurement showed
+// this was ~15.6 chars per calibration choice → ~1000 chars saved across a
+// 4-op × 16-cal apex. Unknown option ids (post-launch pools, mods) fall
+// through the string escape path exactly like CONDITION_IDS. Any drift in
+// data/classes.json's calibration pools MUST bump RUN_SCHEMA_VERSION; the
+// save-codecs.test.js drift test locks the two lists together.
+export const CALIBRATION_OPTION_IDS = [
+  'anchor_deck', 'anchor_mgt', 'anchor_projector', 'anchor_vit',
+  'breacher_deck', 'breacher_mgt', 'breacher_range', 'breacher_vit',
+  'compiler_deck', 'compiler_foc', 'compiler_res', 'compiler_shield',
+  'ghost_deck', 'ghost_fin', 'ghost_polearm', 'ghost_sig',
+  'operator_deck', 'operator_projector', 'operator_res', 'operator_sig',
+  'oracle_deck', 'oracle_foc', 'oracle_shield', 'oracle_sig'
+];
+
+// v7 persisted-event-type enum. Mirrors the `type` values that recordEvent /
+// game systems emit; the encoder writes a 1-bit known flag + 4-bit index
+// (16-slot space, plus the ubiquitous 'info' default) instead of a varUint
+// length + 1–16 raw bytes per event. Unknown types (mods, future extensions)
+// escape to raw string, so a drift here is soft rather than dead-ending.
+export const EVENT_TYPE_IDS = [
+  'attack', 'calibration', 'combat', 'damage', 'discovery', 'error',
+  'heal', 'info', 'loot', 'move', 'progression', 'system', 'x'
+];
+
 // Pinned v5 enemy-hp baselines — a codec-side snapshot of the
 // (vit * 4 + hpBonus) formula that createEnemy / deriveEnemyStats apply for
 // every shipped archetype (data/enemies.json). Kept as a plain table so the
@@ -369,7 +399,14 @@ export function writeCharacter(writer, character, symbols) {
   for (const choice of calibrationChoices) {
     if (!isObject(choice)) fail('invalid_character');
     writer.writeVarUint(requireInteger(choice.floor, 1, 255, 'invalid_character'));
-    writeString(writer, choice.optionId, MAX_ID);
+    // v7 calibration optionId enum: 1-bit known flag + 5-bit index (24 known
+    // ids in a 32-slot space) vs v6's varUint length + raw bytes. Unknown
+    // ids fall through the string escape path.
+    const optionIndex = CALIBRATION_OPTION_IDS.indexOf(choice.optionId);
+    const optionKnown = optionIndex >= 0;
+    writer.writeBool(optionKnown);
+    if (optionKnown) writer.writeUint(optionIndex, 5);
+    else writeString(writer, choice.optionId, MAX_ID);
   }
   writeField(writer, symbols, 'signature_tier', requireInteger(character.signatureTier ?? 1, 1, 3, 'invalid_character'), (value) => writer.writeVarUint(value));
   const equipment = character.equipment ?? {};
@@ -400,7 +437,18 @@ export function readCharacter(reader, symbols) {
   const calibrationCount = requireInteger(readField(reader, symbols, 'calibration_count', () => reader.readVarUint()), 0, 16, 'invalid_character');
   const calibrationLength = reader.readUint(5);
   if (calibrationLength > MAX_CALIBRATIONS) fail('invalid_character');
-  const calibrationChoices = Array.from({ length: calibrationLength }, () => ({ floor: requireInteger(reader.readVarUint(), 1, 255, 'invalid_character'), optionId: readString(reader) }));
+  const calibrationChoices = Array.from({ length: calibrationLength }, () => {
+    const floor = requireInteger(reader.readVarUint(), 1, 255, 'invalid_character');
+    let optionId;
+    if (reader.readBool()) {
+      const optionIndex = reader.readUint(5);
+      if (optionIndex >= CALIBRATION_OPTION_IDS.length) fail('invalid_character');
+      optionId = CALIBRATION_OPTION_IDS[optionIndex];
+    } else {
+      optionId = readString(reader);
+    }
+    return { floor, optionId };
+  });
   const signatureTier = requireInteger(readField(reader, symbols, 'signature_tier', () => reader.readVarUint()), 1, 3, 'invalid_character');
   const equipment = Object.fromEntries(['weapon', 'armor', 'offhand'].map((slot) => [slot, reader.readBool() ? readItem(reader, symbols) : null]));
   const deckLength = reader.readUint(5);
@@ -680,8 +728,14 @@ function writeActor(writer, actor, enemyContext) {
   if (!isObject(actor) || !SIDES.includes(actor.side)) fail('invalid_actor');
   writeCombatActorId(writer, actor.id, enemyContext);
   writer.writeUint(SIDES.indexOf(actor.side), 2);
-  writer.writeUint(requireInteger(actor.x, 0, 127, 'invalid_actor'), 7);
-  writer.writeUint(requireInteger(actor.y, 0, 127, 'invalid_actor'), 7);
+  // v7 packed position: the combat window is fixed 8×16 (WINDOW_WIDTH ×
+  // WINDOW_HEIGHT in src/rules/encounters.js), so actor.x fits in 3 bits
+  // and actor.y in 4 bits — 7 bits total per position vs v6's 14. Legal
+  // combats produced by toCombatSnapshot always fall in this range; any
+  // v6 payload with a stale out-of-range actor lands in the v6→v7 clamping
+  // migration (SESSION-01 CP3), which drops oversized combat to null.
+  writer.writeUint(requireInteger(actor.x, 0, 7, 'invalid_actor'), 3);
+  writer.writeUint(requireInteger(actor.y, 0, 15, 'invalid_actor'), 4);
   writer.writeVarUint(requireInteger(actor.hp, 0, 255, 'invalid_actor'));
   writer.writeVarUint(requireInteger(actor.charge ?? 0, 0, 255, 'invalid_actor'));
   writeConditions(writer, actor.conditions ?? []);
@@ -700,8 +754,9 @@ function readActor(reader, enemyContext) {
   return {
     id,
     side,
-    x: reader.readUint(7),
-    y: reader.readUint(7),
+    // v7 packed position (3+4 bits) — see writeActor.
+    x: reader.readUint(3),
+    y: reader.readUint(4),
     hp: requireInteger(reader.readVarUint(), 0, 255, 'invalid_actor'),
     charge: requireInteger(reader.readVarUint(), 0, 255, 'invalid_actor'),
     conditions: readConditions(reader),

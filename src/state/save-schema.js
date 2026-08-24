@@ -3,7 +3,7 @@ import { getTableVersion, readSymbol, writeSymbol } from './condense.js';
 import { deserializeRunState, validateRunState } from './run-state.js';
 import { readCharacter, readCombatSnapshot, readEcho, readItem, writeCharacter, writeCombatSnapshot, writeEcho, writeItem } from './save-codecs.js';
 
-export const RUN_SCHEMA_VERSION = 6;
+export const RUN_SCHEMA_VERSION = 7;
 
 // v6 widens the on-wire fog to accommodate any grid size that fits in the
 // fog-of-war budget (self-sizing framing: varUint length + bytes). 4096 bytes
@@ -109,6 +109,18 @@ function writeValue(writer, value, depth = 0) {
     writeValue(writer, entry, depth + 1);
   }
 }
+
+// A prior CP2 draft added a dedicated persisted-event codec (1-bit hasSequence
+// + 1-bit type-known + 4-bit index + bounded strings). It shrank the RAW
+// payload but got PARSED WORSE by the progressive compression stack: the
+// generic writeValue form repeats 'type'/'message'/'sequence' key strings on
+// every event, and those repetitions compress almost to zero — the compact
+// form leaves nothing for the reducer to exploit. Net effect: reduces
+// raw-bytes but INCREASES fragment length by ~15–30 chars per 8-event tail.
+// Reverted. The verbose writeValue form is deliberately kept for recentEvents.
+// (The EVENT_TYPE_IDS export in save-codecs.js is unused by this file today,
+// but stays exported for a future context-aware compression pass if/when the
+// compression stack learns not to penalize enums.)
 
 function readValue(reader, depth = 0) {
   if (depth > MAX_VALUE_DEPTH) fail('value_depth');

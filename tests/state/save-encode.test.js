@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, it, expect } from 'vitest';
 import {
   SAVE_VERSION,
@@ -187,5 +189,56 @@ describe('encodeRun — trim-to-fit ladder', () => {
     const state = buildMaximumRun(42);
     state.recentEvents = [];
     expect(() => encodeRun(state)).toThrow(/save_budget_exceeded/);
+  });
+});
+
+// Temporary CP2 assertion — the v7 wire compaction lives in three levers:
+//   1. Calibration `optionId` → 1-bit known + 5-bit index (was varUint +
+//      raw bytes) — the direct-measurement lever worth ~15.6 chars per
+//      choice, so a full 4-op × 16-cal state (max legal) sheds ~1000 chars.
+//   2. Combat actor position → 3+4 bits (was 7+7) for the fixed 8×16 window.
+//   3. Newly-generated loot ids → ≤9 chars (was ~15).
+// v6-maxed captured at CP1 has none of these (no calibrations, no combat,
+// its loot ids were pre-shortened by the fixture generator), so it can't
+// show the compaction. Build a calibration-heavy state instead and assert
+// it fits under SAVE_BUDGET — the shrinkage is proven by "this doesn't
+// throw under a state that busted 1500 in v6 direct-measurement" (D8 probe).
+// The fuller apex attribution table is the CP4 budget-model responsibility.
+describe('v7 wire compaction (SESSION-01 CP2)', () => {
+  it('a 4-op × 16-calibration state encodes under SAVE_BUDGET (v6 direct-measurement placed calibration history at +998 chars)', () => {
+    const state = buildRealisticRun(42, { depth: 5, inventoryItems: 0, fogCells: 0, echoes: 0, recentEvents: 0 });
+    // Grow the party to 4 (buildRealisticRun defaults to 2).
+    while (state.party.length < 4) {
+      const template = state.party[0];
+      state.party.push({
+        ...template,
+        id: `operator_${state.party.length + 1}`,
+        attributes: { ...template.attributes },
+        equipment: { weapon: null, armor: null, offhand: null },
+        protocolDeck: [],
+        conditions: []
+      });
+    }
+    // 16 calibration choices per operator × 4 operators = 64 choices.
+    for (let index = 0; index < state.party.length; index++) {
+      state.party[index].calibrationCount = 16;
+      state.party[index].calibrationChoices = Array.from({ length: 16 }, (_, choice) => ({
+        floor: choice + 1,
+        // Rotate through the 24-entry CALIBRATION_OPTION_IDS pool so the enum
+        // path is fully exercised. All ids fit — no escape path.
+        optionId: [
+          'anchor_deck', 'anchor_mgt', 'anchor_projector', 'anchor_vit',
+          'breacher_deck', 'breacher_mgt', 'breacher_range', 'breacher_vit',
+          'compiler_deck', 'compiler_foc', 'compiler_res', 'compiler_shield',
+          'ghost_deck', 'ghost_fin', 'ghost_polearm', 'ghost_sig'
+        ][(index * 4 + choice) % 16]
+      }));
+      state.party[index].signatureTier = 3;
+    }
+    const encoded = encodeRun(state);
+    expect(encoded.success).toBe(true);
+    // eslint-disable-next-line no-console
+    console.log(`[CP2 wire] 4-op × 16-cal state: ${encoded.length} chars (SAVE_BUDGET=1500 today, 1900 after CP3)`);
+    expect(encoded.length).toBeLessThan(1500);
   });
 });
