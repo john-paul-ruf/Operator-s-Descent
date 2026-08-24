@@ -69,7 +69,7 @@ describe('input handler', () => {
     expect(actions).toEqual(['move_e']);
   });
 
-  test('touch controls dispatch the same semantic action as keyboard without playfield zones', () => {
+  test('native click is the sole control activation path; a stray touchend performs no action and destroy() tears down the click listener', () => {
     const input = createInputHandler({ legacyActions: false });
     const root = new FakeElement('div');
     const control = new FakeElement('button');
@@ -78,10 +78,21 @@ describe('input handler', () => {
     input.bindActionControl(control, 'move_n');
     input.onAction((action, details) => actions.push(`${details.source}:${action}`));
 
-    root.dispatch('touchstart', { preventDefault() { this.prevented = true; } });
+    // Cancelled touches, embedded WebViews, and assistive taps can still dispatch a
+    // touchend ahead of the browser's native click — it must be inert on its own.
     control.dispatch('touchend', { preventDefault() { this.prevented = true; } });
-    root.dispatch('keydown', keyEvent('ArrowUp'));
+    expect(actions).toEqual([]);
 
-    expect(actions).toEqual(['touch:move_n', 'keyboard:move_n']);
+    // The synthetic sequence's native click still fires — and fires exactly once.
+    control.dispatch('click', { preventDefault() { this.prevented = true; } });
+    expect(actions).toEqual(['control:move_n']);
+
+    // Keyboard dispatch remains a distinct, equivalent activation path.
+    root.dispatch('keydown', keyEvent('ArrowUp'));
+    expect(actions).toEqual(['control:move_n', 'keyboard:move_n']);
+
+    input.destroy();
+    control.dispatch('click', { preventDefault() { this.prevented = true; } });
+    expect(actions).toEqual(['control:move_n', 'keyboard:move_n']);
   });
 });
