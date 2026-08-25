@@ -250,6 +250,7 @@ export function mount(container, params = {}) {
     runState,
     floor,
     data,
+    rngCursor,
     // Runtime-tracked log entries injected via params.logEntries — LOG mode merges
     // them with runState.recentEvents so persistent history stays visible alongside
     // live activity.
