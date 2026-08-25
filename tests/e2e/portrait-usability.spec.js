@@ -284,14 +284,18 @@ test.describe('portrait usability integrated acceptance', () => {
     expect(rects.playfield.height, 'playfield height (icon-first floor)')
       .toBeGreaterThanOrEqual(playfieldFloor);
 
-    // Cap the console tab bar height (SESSION-08) — mode-tab min-height is 96,
-    // and the icon-only tab treatment collapses padding so the bar row itself
-    // stays close to that minimum. 104px leaves 8px slack for the flex-row
-    // wrapper without allowing a re-inflation to text-tab heights.
+    // Cap the console tab bar height (SESSION-08) — mode-tab min-height is 48
+    // (lowered 96→48 by touch-target-density-pass SESSION-02), and the
+    // icon-only tab treatment collapses padding so the bar row itself stays
+    // close to that minimum. 104px is retained as a fixed anti-inflation cap
+    // (originally sized to give 8px slack over the 96px floor); it now leaves
+    // ample slack over the 48px floor and blocks any re-inflation to
+    // text-tab heights — flagged for a proportional re-scale as follow-up.
     expect(rects.tabBar.height, 'console tab bar max height').toBeLessThanOrEqual(104);
 
-    // Every visible touch-capable console row honors the 96 CSS-px floor
-    // (portrait rule from styles/components.css). Tabs, action rows, direction
+    // Every visible touch-capable console row honors the 48 CSS-px floor
+    // (portrait rule from styles/components.css, lowered 96→48 by
+    // touch-target-density-pass SESSION-02). Tabs, action rows, direction
     // cells, target rows, confirm buttons all match either `.console-row` or
     // `.mode-tab`. `:not(.console-static-row):not(.console-static-card)`
     // (console-submenu-density-and-scroll SESSION-04) keeps compact read-only
@@ -299,7 +303,7 @@ test.describe('portrait usability integrated acceptance', () => {
     // control-surface query.
     const consoleTouch = await visibleMinHeight(page, '.console-row:not(.console-static-row):not(.console-static-card):visible, .mode-tab:visible');
     expect(consoleTouch.count, 'visible touch-capable row count').toBeGreaterThan(0);
-    expect(consoleTouch.min, 'min touch-row height (portrait)').toBeGreaterThanOrEqual(96);
+    expect(consoleTouch.min, 'min touch-row height (portrait)').toBeGreaterThanOrEqual(48);
 
     // First reachable move destination — 2 south of party — derived from the
     // live canvas rect and the same camera math the runtime uses.
@@ -353,8 +357,11 @@ test.describe('portrait usability integrated acceptance', () => {
 
     // SESSION-08 chrome ceilings for exploration mode. Icon-first density
     // measured the portrait exploration strip at ~66px in SESSION-05 and the
-    // tab bar at 96px; caps at 72/104 give small slack for font-metric
-    // variance while blocking any re-inflation.
+    // tab bar at 48px (lowered 96→48 by touch-target-density-pass SESSION-02);
+    // caps at 72/104 are retained as fixed anti-inflation ceilings — they
+    // originally gave small slack over the 96px floor and now leave ample
+    // slack over the 48px floor while blocking any re-inflation. Flagged
+    // for a proportional re-scale as follow-up.
     const stripRect = toRect(rects.status);
     const tabBarRect = toRect(rects.tabBar);
     expect(stripRect.height, 'exploration status strip max height').toBeLessThanOrEqual(72);
@@ -447,7 +454,7 @@ test.describe('portrait usability integrated acceptance', () => {
   });
 
   // ── Checkpoint 3 — wide-square settings + cross-feature smoke ────────────
-  test('wide-square settings at 1024×1024: rows ≥ 96px, contained, labels/inputs/values disjoint, consecutive rows disjoint, BACK usable', async ({ page }, testInfo) => {
+  test('wide-square settings at 1024×1024: rows ≥ 48px, contained, labels/inputs/values disjoint, consecutive rows disjoint, BACK usable', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== TALL_PROJECT, 'wide-square case runs at chromium-portrait (viewport reshape)');
     test.slow();
     await installStableStorage(page);
@@ -467,7 +474,7 @@ test.describe('portrait usability integrated acceptance', () => {
     const rows = page.locator('.wide-settings-body .toggle-row, .wide-settings-body .slider-row, .wide-settings-body .motion-options');
     const heights = await rows.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
     expect(heights.length).toBeGreaterThan(0);
-    expect(Math.min(...heights), 'min settings row height').toBeGreaterThanOrEqual(96);
+    expect(Math.min(...heights), 'min settings row height').toBeGreaterThanOrEqual(48);
 
     const rowInfo = await rows.evaluateAll((els) => els.map((el) => {
       const rect = el.getBoundingClientRect().toJSON();
