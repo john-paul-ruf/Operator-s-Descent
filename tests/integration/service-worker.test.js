@@ -124,13 +124,13 @@ describe('service worker manifest', () => {
   });
 });
 
-describe('service worker cache version — high-score-archive-v1 → tech-reveal-fog-wiring-v1 release', () => {
+describe('service worker cache version — high-score-archive-v1 → tech-reveal-fog-wiring-v2 release', () => {
   const PREDECESSOR_CACHE = 'operator-descent-2026-08-24-manifest-drift-hotfix-v16';
 
   it('install precaches the full v16 manifest immediately and never calls skipWaiting automatically; activation deletes the exact v15 predecessor and claims clients', async () => {
     const manifest = extractManifest();
     const expectedCacheName = extractCacheName();
-    expect(expectedCacheName).toBe('operator-descent-2026-08-25-tech-reveal-fog-wiring-v1');
+    expect(expectedCacheName).toBe('operator-descent-2026-08-25-tech-reveal-fog-wiring-v2');
     expect(expectedCacheName).toMatch(CACHE_NAME_PATTERN);
     const worker = loadWorker();
     await worker.caches.open(PREDECESSOR_CACHE);
