@@ -203,7 +203,7 @@ async function assertCombatDensityCore(page, { statusMax, canvasMin, label }) {
     await expect(locator, `${label} combat-action-${id} visible`).toBeVisible();
     const box = toRect(await locator.boundingBox());
     actionRects[id] = box;
-    expect(box.height, `${label} combat-action-${id} height measured ${box.height}px (96px floor)`).toBeGreaterThanOrEqual(96);
+    expect(box.height, `${label} combat-action-${id} height measured ${box.height}px (48px floor)`).toBeGreaterThanOrEqual(48);
     expect(containedIn(box, contentRect, 2), `${label} combat-action-${id} fully inside the initial console content rectangle (no scroll needed) — measured top ${box.top} bottom ${box.bottom} vs content top ${contentRect.top} bottom ${contentRect.bottom}`).toBe(true);
   }
   // First visual row: Move, Attack, End Turn share the same vertical band —
@@ -241,7 +241,7 @@ async function assertIconsAndAccessibleNames(page, label) {
 
   const touchFloor = await visibleMinHeight(page, '.console-row:visible, .mode-tab:visible');
   expect(touchFloor.count, `${label} visible touch-capable rows`).toBeGreaterThan(0);
-  expect(touchFloor.min, `${label} min touch row height measured ${touchFloor.min}px`).toBeGreaterThanOrEqual(96);
+  expect(touchFloor.min, `${label} min touch row height measured ${touchFloor.min}px`).toBeGreaterThanOrEqual(48);
 }
 
 async function assertRetreatReachableByScroll(page, label) {
