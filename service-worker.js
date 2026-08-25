@@ -64,6 +64,7 @@ const PRODUCTION_ASSETS = Object.freeze([
   './src/state/compress/progressive.js',
   './src/state/condense.js',
   './src/state/encrypt.js',
+  './src/state/high-scores.js',
   './src/state/library.js',
   './src/state/migrations/v3-to-v4.js',
   './src/state/migrations/v4-to-v5.js',
