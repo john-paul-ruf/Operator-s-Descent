@@ -13,9 +13,9 @@
      pointer-only. The inner `@media (hover: hover) and (pointer: fine) and
      not (any-pointer: coarse)` guard ensures this NEVER matches when any
      coarse pointer is available (touch tablets, hybrid laptops, etc.), so
-     wide surfaces with a touch pointer keep the 96px touch floor from
+     wide surfaces with a touch pointer keep the 48px touch floor from
      styles/components.css. Scope is limited to `.wide-console-content-body`
-     so `.wide-settings-body` rows always hit their 96px floor regardless
+     so `.wide-settings-body` rows always hit their 48px floor regardless
      of pointer capability. */
   @media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
     .wide-console-content-body .console-row:not(.console-static-row):not(.console-static-card),
@@ -668,7 +668,8 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     SETTINGS SCREEN (wide) — two-column form, 96px row floor
+     SETTINGS SCREEN (wide) — two-column form, 48px row floor (lowered 96 →
+     48 by touch-target-density-pass SESSION-02)
      ═══════════════════════════════════════════════════════════════════════════ */
   .wide-settings-shell {
     position: relative;
@@ -709,7 +710,7 @@
   }
   .wide-settings-body .toggle-row,
   .wide-settings-body .slider-row {
-    min-height: 96px;
+    min-height: 48px;
     padding: 10px 12px;
     border-top: 1px solid var(--border-dim);
     align-items: center;
@@ -718,7 +719,7 @@
   .wide-settings-body .panel > .toggle-row:first-child,
   .wide-settings-body .panel > .slider-row:first-child { border-top: 0; }
   .wide-settings-body .motion-options {
-    min-height: 96px;
+    min-height: 48px;
     padding: 10px 12px;
     border-top: 1px solid var(--border-dim);
   }
@@ -751,7 +752,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 96px;
+    min-height: 48px;
     padding: 8px 12px;
     border-top: 1px solid var(--border-dim);
   }
@@ -1226,8 +1227,8 @@
     flex-wrap: wrap;
   }
   .wide-roster .char-slot {
-    width: 96px;
-    height: 96px;
+    width: 48px;
+    height: 48px;
     border: 1px solid var(--border-dim);
     background: var(--bg-panel);
     display: flex;
@@ -1458,7 +1459,7 @@
     border: 1px solid var(--border-dim);
     cursor: pointer;
     transition: all 0.15s ease;
-    min-height: 96px;
+    min-height: 48px;
     text-align: left;
     display: flex;
     flex-direction: column;
