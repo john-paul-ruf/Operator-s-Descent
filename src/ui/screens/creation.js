@@ -250,11 +250,11 @@ export function mount(container, params = {}) {
     root.style.padding = '0';
     root.dataset.testid = 'creation-root';
     root.appendChild(renderHeader(summary));
-    if (!summary.characters.length) root.appendChild(renderQuickStartSection());
     root.appendChild(renderCharacterRail(summary));
     root.appendChild(renderTabs());
     const body = createScreenBody({ className: 'creation-body' });
     body.dataset.testid = 'creation-body';
+    if (!summary.characters.length) body.appendChild(renderQuickStartSection());
     body.appendChild(renderActiveTab(summary));
     root.appendChild(body);
     root.appendChild(renderFooter(summary));

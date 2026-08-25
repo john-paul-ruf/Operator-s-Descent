@@ -399,12 +399,13 @@ describe('creation screen workflow', () => {
 describe('creation screen — quick start presets', () => {
   it('renders QUICK START before the detailed editor on a fresh draft with the visible promise, and loading a preset replaces the draft and dismisses the section', async () => {
     const { container } = await mountCreation({ preloadedSeed: 5050 });
-    const root = byTestId(container, 'creation-root');
     const section = byTestId(container, 'quick-start-section');
     expect(section).not.toBeNull();
     expect(allText(section).join(' ')).toContain('Choose a starting party — edit anything before deployment.');
-    // Rendered before the character rail / tabs (the detailed member editor).
-    expect(root.children.indexOf(section)).toBeLessThan(root.children.indexOf(byTestId(container, 'character-rail')));
+    // Rendered inside the scrollable body pane, as the first child ahead of the active tab panel.
+    const body = byTestId(container, 'creation-body');
+    expect(section.parentNode).toBe(body);
+    expect(body.children.indexOf(section)).toBe(0);
     for (const id of ['breach-drill', 'scout-pair', 'full-crew']) expect(byTestId(container, `quick-start-${id}`)).not.toBeNull();
 
     byTestId(container, 'quick-start-breach-drill').click();
