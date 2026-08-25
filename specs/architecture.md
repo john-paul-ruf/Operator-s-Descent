@@ -1180,7 +1180,7 @@ Injected DOM (children of `shell`, absolutely positioned over the grid gaps):
 
 Bounds (px; mirror the outer `.wide-shell` grid floors so a request never asks for a track narrower than CSS renders):
 - Left (telemetry): min 280, max 480, default 280, collapsed rail 48.
-- Right (console): min 360, max 640, default 360, collapsed rail 96.
+- Right (console): min 360, max 640, default 360, collapsed rail 48.
 
 Persistence (rides `src/state/library.js` settings passthrough — no schema change):
 - `settings.widePanes = { left: <px number | 'collapsed'>, right: <px number | 'collapsed'> }`.
@@ -1197,7 +1197,7 @@ Interactions:
 
 `.wide-shell` grid-template-columns now `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, calc(100vh * 9 / 16)) minmax(360px, var(--wide-right-w, 360px))`. Playfield middle track invariant (Rule 8: 9:16 portrait proportion).
 - `.wide-shell[data-pane-left="collapsed"]` swaps the left track to `48px`.
-- `.wide-shell[data-pane-right="collapsed"]` swaps the right track to `96px` — tab column (`.wide-console-tabs`) stays visible; `.wide-console-content` is hidden.
+- `.wide-shell[data-pane-right="collapsed"]` swaps the right track to `48px` — tab column (`.wide-console-tabs`) stays visible; `.wide-console-content` is hidden.
 - Handle hit-area 8px with accent hover glow; collapse buttons meet the 44px touch-target minimum per design.md.
 
 **M70/M71 — Screen integration (unchanged shell assembly, new post-mount hookup)**
@@ -1356,7 +1356,7 @@ grid-template-columns:
   minmax(max(360px, var(--wide-right-w, 360px)), 1fr);
 ```
 
-`justify-content: center` on `.wide-shell` centers the track group symmetrically when no track is `1fr` (i.e. any `data-pane-right="collapsed"` variant); with `1fr` in play the grid always fills the viewport-right edge (no dead gutter). The `data-pane-left="collapsed"` variant keeps `1fr` on the third column; the `data-pane-right="collapsed"` and both-collapsed variants use fixed 96px rails and rely on `justify-content: center`.
+`justify-content: center` on `.wide-shell` centers the track group symmetrically when no track is `1fr` (i.e. any `data-pane-right="collapsed"` variant); with `1fr` in play the grid always fills the viewport-right edge (no dead gutter). The `data-pane-left="collapsed"` variant keeps `1fr` on the third column; the `data-pane-right="collapsed"` and both-collapsed variants use fixed 48px rails and rely on `justify-content: center`.
 
 Playfield middle track stays aspect-locked at `calc(100vh * 9 / 16)` (Custom Rule 8 — descent premise is vertical).
 
@@ -1521,8 +1521,8 @@ Grid templates (each of the four pane-state combinations):
 
 - default (both open): `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) max(360px, var(--wide-right-w, 360px))`
 - `[data-pane-left="collapsed"]`: `48px minmax(320px, 1fr) max(360px, var(--wide-right-w, 360px))`
-- `[data-pane-right="collapsed"]`: `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) 96px`
-- both collapsed: `48px minmax(320px, 1fr) 96px`
+- `[data-pane-right="collapsed"]`: `minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) 48px`
+- both collapsed: `48px minmax(320px, 1fr) 48px`
 
 Contract deltas:
 
@@ -1536,7 +1536,7 @@ Contract deltas:
   `max-width: calc(100vh * 9 / 16)` and `align-self: center` were removed). In every layout
   class the canvas fills its playfield container.
 - Rails stay flush at every pane combination; no `justify-content: center` on the shell.
-- Bounds guarantee: middle ≥ 320px; console dock ≥ 360px (open) or exactly 96px (collapsed);
+- Bounds guarantee: middle ≥ 320px; console dock ≥ 360px (open) or exactly 48px (collapsed);
   telemetry ≥ 280px (open) or exactly 48px (collapsed).
 
 <!-- map-pan-zoom SESSION-02 -->
@@ -2700,7 +2700,7 @@ Screen inventory (row 11) and FR-34 in `specs/design.md` amended to name the
 master-volume slider alongside master mute and the five per-layer sliders,
 in both portrait and wide compositions. Portrait and wide mocks
 (`mocks/settings.html`, `mocks/wide/settings.html`) gain the corresponding
-`slider-row`; the wide mock wraps it in a `settings-row` to keep the 96px
+`slider-row`; the wide mock wraps it in a `settings-row` to keep the 48px
 touch-row floor.
 
 **No public-API changes to M76's exports.** Live dispatch remains
