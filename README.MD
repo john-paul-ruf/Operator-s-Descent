@@ -39,9 +39,9 @@ An infinite-depth cyberpunk-themed rogue-like with glitchy retro visuals, hosted
 ## The ideas
 **State compression** 
 
-With a deterministic world seed, the save pipeline only has to preserve the mutable edge of the run. The encoder first normalizes that run state, writes it into a compact bit-level schema with symbol-table lookups for common IDs, then tries a small stack of reversible compression passes and keeps the shortest valid result. That compressed payload is encrypted, framed with version/table/seed/bit-length/layer metadata plus a CRC, and base64url-encoded into a portable URL fragment under the 1,500-character budget.
+With a deterministic world seed, the save pipeline only has to preserve the mutable edge of the run. The encoder first normalizes that run state, writes it into a compact bit-level schema with symbol-table lookups for common IDs, then tries a small stack of reversible compression passes and keeps the shortest valid result. That compressed payload is encrypted, framed with version/table/seed/bit-length/layer metadata plus a CRC, and base64url-encoded into a portable URL fragment under the 1,900-character budget.
 
-This means every run saved in local storage is 1,500 characters or less. 
+This means every run saved in local storage is 1,900 characters or less. 
 
 **Dynamic music engine** 
 
