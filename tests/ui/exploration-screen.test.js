@@ -14,6 +14,11 @@ const gameData = {
   // hydrator returns raw stubs and combatants enter combat unhydrated. Mirrors the runtime
   // game-data registry produced by src/data-loader.js (combat-and-ux-feedback-pass SESSION-01).
   enemies: loadData('enemies'),
+  // Classes + protocols registries — required by the TECH console mode (deck validation,
+  // protocol lookup) for the rngCursor-wiring regression test below. Mirrors the runtime
+  // game-data registry the same way the enemies entry above does.
+  classes: loadData('classes'),
+  protocols: loadData('protocols'),
 };
 
 class FakeClassList {
@@ -839,6 +844,24 @@ describe('exploration screen controller', () => {
       return false;
     };
     expect(includesText(logArea, 'exploration injected entry.')).toBe(true);
+    controller.unmount();
+  });
+
+  it('casts a targetless TECH protocol (REVEAL) from the exploration console — regression for the missing rngCursor', async () => {
+    const ghost = makeCharacter({
+      id: 'ghost-1', classId: 'ghost', sigilId: 'pua-e010',
+      currentHP: 20, currentCHARGE: 32, protocolDeck: [{ school: 'scry', tier: 4 }]
+    });
+    const state = createRunState(999, [ghost], { partyPosition: { x: 10, y: 10 } });
+    const { container, controller } = await mountExploration({ runState: state });
+
+    byTestId(container, 'console-tab-tech').click();
+    byTestId(container, 'tech-cast-scry-4').click();
+
+    expect(byTestId(container, 'tech-error')).toBe(null);
+    expect(textOf(byTestId(container, 'tech-result'))).toContain('REVEAL');
+    expect(textOf(byTestId(container, 'tech-result'))).toContain('CHARGE -8');
+    expect(state.party[0].currentCHARGE).toBe(24);
     controller.unmount();
   });
 
