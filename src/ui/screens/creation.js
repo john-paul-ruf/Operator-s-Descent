@@ -1103,7 +1103,7 @@ export function mount(container, params = {}) {
       });
       row.dataset.testid = `attribute-${key}`;
       row.classList.add('panel');
-      row.style.minHeight = '96px';
+      row.style.minHeight = '48px';
       row.setAttribute('aria-label', `${ATTR_NAMES[key]} rank ${rank}, modifier ${modifier(rank)}`);
       const meter = document.createElement('span');
       meter.className = 'bar-track';
