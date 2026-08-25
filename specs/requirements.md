@@ -178,7 +178,7 @@
     |---|---|
     | Attack (melee or ranged) | 1 AP |
     | Cast a protocol | 1 AP |
-    | Use a consumable item | 1 AP |
+    | Use a consumable item | 1 AP (0 AP for the Adrenal Injector — see FR-49) |
     | Overclock a protocol | 1 AP (in addition to the CHARGE cost) |
     | Retreat (begin retreat) | 1 AP |
     | Reload / swap weapon via GEAR mode | 0 AP (free, once per turn) |
@@ -948,11 +948,12 @@
     | Boost Cell | Restore full CHARGE to one character. | Depth 10+ |
     | Purge Spike | Remove one condition from one character. | Depth 3+ |
     | Shield Capacitor | Apply SHIELDED to one character. | Depth 8+ |
-    | Adrenal Injector | Restore 1 AP to the active character (usable only in combat). | Depth 5+ |
+    | Adrenal Injector | Restore 1 AP to the active character as a free action — costs 0 AP to use, not the standard 1 AP consumable cost (usable only in combat). | Depth 5+ |
   - [ ] Consumables are single-use — they are consumed on use and removed from inventory.
   - [ ] Consumables are used via the GEAR or PARTY console mode (placement by Designer), or via the COMBAT mode action list during combat.
   - [ ] Using a consumable in combat costs 1 AP (per the AP cost table in FR-11).
   - [ ] Using a consumable outside combat is free (no AP cost — AP only exists in combat).
+  - [ ] **Exception:** the Adrenal Injector's own use costs 0 AP, not the standard 1 AP consumable-use cost — since its effect only restores 1 AP (capped at the 2-AP turn maximum), charging the standard fee would make it break-even at best and AP-negative at full AP, defeating its purpose as a burst/tempo item.
   - [ ] Consumables do not have rarity tiers or affixes — they are fixed-effect items.
   - [ ] Consumables stack in inventory (display count per type, e.g., "Repair Patch ×3").
   - [ ] Consumables are saved in the run state and reconstructable from a save link.

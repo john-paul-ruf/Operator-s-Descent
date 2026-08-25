@@ -253,7 +253,7 @@
         [
           ["text", "Combat rolls initiative once at encounter start: d20 + "],
           ["link", "fin", "FIN"],
-          ["text", " modifier. Each character gets one move action per turn plus 2 AP. Attack, cast, use item, overclock, and begin-retreat each cost 1 AP; a weapon swap through GEAR is free (once per turn) and class signature free actions cost 0 AP."]
+          ["text", " modifier. Each character gets one move action per turn plus 2 AP. Attack, cast, use item, overclock, and begin-retreat each cost 1 AP (the Adrenal Injector is a free-action exception — see its glossary entry); a weapon swap through GEAR is free (once per turn) and class signature free actions cost 0 AP."]
         ],
         [
           ["text", "Unspent AP does not carry over between turns. A move action covers one 8-directional cell and cannot be exchanged for AP or vice versa. Combat ends when one side is entirely down."]
@@ -827,7 +827,7 @@
       "title": "Adrenal Injector",
       "body": [
         [
-          ["text", "Restore 1 AP to the active character (usable only in combat). Appears from depth 5+."]
+          ["text", "Restore 1 AP to the active character as a free action — this item costs 0 AP to use, not the standard 1 AP item cost (usable only in combat). Appears from depth 5+."]
         ]
       ],
       "seeAlso": ["ap_and_initiative", "combat_mode", "loot_and_salvage"]
