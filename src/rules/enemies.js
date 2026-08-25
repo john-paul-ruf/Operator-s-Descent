@@ -1,6 +1,6 @@
 import { enemyStatScale } from './scaling.js';
 import { modifier } from './attributes.js';
-import { distanceCells, getEdgeCoverBonus, findApproachPath, flankStepCandidates } from './combat-geometry.js';
+import { distanceCells, getEdgeCoverBonus, findApproachPath, flankStepCandidates, hasLineOfSight } from './combat-geometry.js';
 
 const NEVER_RETREAT = new Set(['drone', 'construct', 'apex']);
 const NULL_CONDITIONS = ['jammed', 'overloaded', 'immobilized', 'panicked', 'marked'];
@@ -165,10 +165,16 @@ function nullAction(enemy, target, combatState, rngCursor) {
 // maxRange 1) — the only ranged options are Choir casting DISRUPT (band 3) and Null applying
 // a condition (band 2). FR-43 says a drained Choir "falls back to a melee attack" and a Null
 // on cooldown "uses its melee attack"; both scenarios drop engage range back to 1 here so the
-// AI closes to strike instead of standing at stand-off range whiffing every turn.
-function engageRange(enemy, combatState) {
-  if (enemy.archetypeId === 'choir' && enemy.protocolAccess && (enemy.charge ?? 0) >= 2) return 3;
-  if (enemy.archetypeId === 'null' && enemy.protocolAccess && enemy.nullCooldownRound !== combatState.round) return 2;
+// AI closes to strike instead of standing at stand-off range whiffing every turn. LOS extends
+// that principle: if a solid wall blocks the ranged option from the caster's current cell,
+// fall through to melee range so the AI closes instead of standing at stand-off attempting
+// an action the weapon-attack path would refuse anyway. When `target` isn't known (legacy
+// caller shape) or geometry is missing, the LOS check is skipped — behavior matches pre-LOS.
+function engageRange(enemy, combatState, target) {
+  const window = combatState?.window;
+  const canReach = !target?.position || !enemy.position || hasLineOfSight(window, enemy.position, target.position);
+  if (enemy.archetypeId === 'choir' && enemy.protocolAccess && (enemy.charge ?? 0) >= 2 && canReach) return 3;
+  if (enemy.archetypeId === 'null' && enemy.protocolAccess && enemy.nullCooldownRound !== combatState.round && canReach) return 2;
   return 1;
 }
 
@@ -271,7 +277,7 @@ export function enemyAI(enemy, combatState, rngCursor, context = {}) {
   }
 
   const target = selectPriorityTarget(enemy, combatants, partyMembers);
-  const range = engageRange(enemy, combatState);
+  const range = engageRange(enemy, combatState, target);
   const distance = chebyshev(enemy, target);
   const canMove = enemy.moveAvailable !== false;
 

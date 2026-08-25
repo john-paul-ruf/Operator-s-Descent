@@ -315,6 +315,50 @@ describe('enemyAI — move action carries capability-based desiredRange (Custom 
     expect(action).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 1 });
   });
 
+  it('charged choir with a wall on the direct LOS → desiredRange 1 (closes instead of firing through the wall)', () => {
+    // A wall cell at (3,0) sits on the straight line from (0,0) to (5,0) — LOS-blocked.
+    // The charged choir must fall through to melee-close, not stand off attempting to cast
+    // a spell the weapon-attack path (and, once SESSION-03 wires the seam, the protocol
+    // path) would refuse for the same reason.
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('choir', 3, cursor, enemiesData);
+    enemy.charge = 4;
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } };
+    const window = { originX: 0, originY: 0, width: 8, height: 16,
+      cells: Array.from({ length: 16 }, () => Array(8).fill(1)) };
+    window.cells[0][3] = 0;
+    const state = { combatants: new Map([[enemy.id, enemy], ['p1', target]]), round: 1, window };
+    expect(enemyAI(enemy, state, cursor)).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 1 });
+  });
+
+  it('null off cooldown with a wall on the direct LOS → desiredRange 1 (closes instead of applying a condition through the wall)', () => {
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('null', 3, cursor, enemiesData);
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } };
+    const window = { originX: 0, originY: 0, width: 8, height: 16,
+      cells: Array.from({ length: 16 }, () => Array(8).fill(1)) };
+    window.cells[0][3] = 0;
+    const state = { combatants: new Map([[enemy.id, enemy], ['p1', target]]), round: 1, window };
+    expect(enemyAI(enemy, state, cursor)).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 1 });
+  });
+
+  it('charged choir with a clear LOS → still desiredRange 3 (LOS gate composes with, not replaces, the charge check)', () => {
+    // Same 8x16 window as the LOS-blocked test, but no walls. The charged choir must keep
+    // its stand-off range 3 — proving the new LOS gate is a further gate on the ranged
+    // branch, not an accidental replacement of it.
+    const cursor = createRNGCursorForRun(1);
+    const enemy = createEnemy('choir', 3, cursor, enemiesData);
+    enemy.charge = 4;
+    enemy.position = { x: 0, y: 0 };
+    const target = { id: 'p1', side: 'party', hp: 30, position: { x: 5, y: 0 } };
+    const window = { originX: 0, originY: 0, width: 8, height: 16,
+      cells: Array.from({ length: 16 }, () => Array(8).fill(1)) };
+    const state = { combatants: new Map([[enemy.id, enemy], ['p1', target]]), round: 1, window };
+    expect(enemyAI(enemy, state, cursor)).toMatchObject({ type: 'move', targetId: 'p1', desiredRange: 3 });
+  });
+
   it('pathing consumes no RNG — cursor unchanged across an AI call that emits a move action', () => {
     const cursor = createRNGCursorForRun(1);
     const enemy = createEnemy('drone', 1, cursor, enemiesData);
