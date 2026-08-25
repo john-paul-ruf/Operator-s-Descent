@@ -25,8 +25,8 @@ describe('extract-design-spec', () => {
     expect(rules.find((r) => r.target === 'Small controls (sliders, toggles)')).toEqual({ target: 'Small controls (sliders, toggles)', px: 2 });
   });
 
-  it('extracts the 96px touch target minimum', () => {
-    expect(extractTouchTargetMinHeight()).toBe(96);
+  it('extracts the 48px touch target minimum', () => {
+    expect(extractTouchTargetMinHeight()).toBe(48);
   });
 
   it('extracts 7 glitch timing entries matching src/glitch/glitch.js GLITCH_TIMINGS', () => {

@@ -92,8 +92,8 @@ stage → CONFIRM buffer is retired.
 
 Base unit: **4px**. Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96, 128.
 
-Console row height: **96px minimum** for a touch-capable control or composite
-action surface (touch target per FR-15). Static readouts, articles, and log
+Console row height: **48px minimum** for a touch-capable control or composite
+action surface (touch target per FR-15). **[AMENDED 2026-08-25 via touch-target-density-pass]** Lowered from 96px by owner directive; the uniformity guarantee below (every touch-capable row/tab/action hits the same floor, no per-control exceptions) is unchanged — only the magnitude moved. Static readouts, articles, and log
 content use intrinsic height through `.console-static-row` or
 `.console-static-card`; they are content, not touch targets.
 
@@ -200,7 +200,7 @@ Chrome is icon-first (icon-first-ui-density, 2026-08-21). Every button/tab/toggl
 
 | Property | Rule |
 |----------|------|
-| Visible box | ≥ **96px** on any touch-capable row (unchanged, per **Spacing System** and the class-independent floor in **Adaptive Layout System → Input target rules**) |
+| Visible box | ≥ **48px** on any touch-capable row (unchanged, per **Spacing System** and the class-independent floor in **Adaptive Layout System → Input target rules**) |
 | Glyph size | 14px on chips/pills/toggles; 16px on primary action buttons; 20px on the seven console tabs; 24px permitted for D-pad cells and title branches; sizes clamp via `ALLOWED_SIZES = {14, 16, 20, 24}` in `src/ui/icon.js` |
 | Accessible name | `aria-label` MANDATORY — value equals the former visible label verbatim (e.g. tab aria stays `LABEL · Key N`); `title` mirrors `aria-label` for pointer discoverability; a text button whose `opts.label` differs from the visible label also gets a title mirror |
 | Nameless guard | `createButton('', { icon })` throws when neither `opts.label` nor `opts.title` supplies an accessible name — silent nameless buttons never ship |
@@ -369,7 +369,7 @@ Full inventory and per-surface rationale in `docs/icon-density-gap.md` §3 (icon
   longer auto-pans the playfield).
 - **Mode switching:** Tap/click tab, or keyboard shortcut (1–7 keys mapped to modes).
 - **Keyboard parity:** Arrow keys / numpad / WASD for MOVE. Tab to cycle modes. Enter to confirm. Escape to collapse.
-- **Touch parity:** 96px minimum row height. Tap-to-select + confirm step for combat targeting; map surfaces accept tap-to-move (overworld) and tap-to-route + tap-again-to-confirm (combat) per **Movement Interaction**.
+- **Touch parity:** 48px minimum row height. Tap-to-select + confirm step for combat targeting; map surfaces accept tap-to-move (overworld) and tap-to-route + tap-again-to-confirm (combat) per **Movement Interaction**.
 
 ### Combat Targeting
 - COMBAT mode lists available actions (Attack, Cast, Item, Retreat).
@@ -449,7 +449,7 @@ viewport width up to the class boundary and has no fixed max-width cap in produc
 **Wide game-screen shell (exploration, combat).** A three-region grid running the full
 viewport height. Region names are the CSS grid-area identifiers; region proportions are
 derived from the current portrait dimensions in `styles/components.css` (`.console-tab-bar`
-min-height 96px, `.console-bar.expanded` height 720px, `.status-strip` min-height 48px) — the
+min-height 48px, `.console-bar.expanded` height 720px, `.status-strip` min-height 48px) — the
 playfield column preserves the portrait aspect, the docks receive the width the portrait
 design would have letterboxed away.
 
@@ -461,14 +461,14 @@ design would have letterboxed away.
 
 The grid template is `grid-template-columns: minmax(280px, var(--wide-left-w, 280px)) minmax(320px, 1fr) max(360px, var(--wide-right-w, 360px));` with `grid-template-rows: 100vh;` on the shell. At the 900px minimum breakpoint the three regions sum to their floors (960px, matching the breakpoint — see the collapsed rail values below for the compact-mode floor). The middle playfield track always holds 1fr and absorbs surplus width; the docks are fixed at their user-chosen widths.
 
-**Surplus-width distribution (AMENDED 2026-08-17 via map-pan-zoom).** The playfield column absorbs ALL surplus viewport width in every pane state via the middle track's 1fr — the map docks and fills the entire center. The telemetry column stays at its user-chosen width (unbounded growth adds nothing to a stacked readout), and the console dock is fixed at `max(360px, --wide-right-w)` — `--wide-right-w` is again the dock's fixed user-chosen width (not a floor), so a drag to 500px sets the dock at exactly 500px. Tracks always sum to 100vw so both rails stay flush to their viewport edges at every pane combination — collapsed (48px / 96px) or open. The `--wide-middle-w` helper var is retired; the right resize handle is re-anchored from the viewport-right by the dock's own fixed width (`max(360px, --wide-right-w) - 4px`).
+**Surplus-width distribution (AMENDED 2026-08-17 via map-pan-zoom).** The playfield column absorbs ALL surplus viewport width in every pane state via the middle track's 1fr — the map docks and fills the entire center. The telemetry column stays at its user-chosen width (unbounded growth adds nothing to a stacked readout), and the console dock is fixed at `max(360px, --wide-right-w)` — `--wide-right-w` is again the dock's fixed user-chosen width (not a floor), so a drag to 500px sets the dock at exactly 500px. Tracks always sum to 100vw so both rails stay flush to their viewport edges at every pane combination — collapsed (48px / 48px) or open. The `--wide-middle-w` helper var is retired; the right resize handle is re-anchored from the viewport-right by the dock's own fixed width (`max(360px, --wide-right-w) - 4px`).
 
 **Wide dock sizing and collapse (M100).** Both docks are user-resizable and user-collapsible. The M100 pane controller (`attachWidePanes` in `src/ui/layout.js`) owns `--wide-left-w`, `--wide-right-w`, `data-pane-left`, and `data-pane-right` on the wide shell.
 
 | Pane | Bounds (open) | Default | Collapsed rail width | Persisted key |
 |------|---------------|---------|----------------------|---------------|
 | Telemetry (left) | 280–480px | 280px | 48px (chevron-only) | `settings.widePanes.left` |
-| Console (right) | 360–640px | 360px | 96px (tab column stays usable) | `settings.widePanes.right` |
+| Console (right) | 360–640px | 360px | 48px (tab column stays usable) | `settings.widePanes.right` |
 
 The open-state minimums (280 / 360) match the outer `.wide-shell` grid floors so the CSS never renders a track narrower than the pane state can request; users widen from the default, and collapse handles the compact rail state instead.
 
@@ -476,9 +476,9 @@ Behavior:
 
 - **Resize.** Pointer-drag an 8px handle straddling each dock/playfield gap. Keyboard-focus a handle (`role="separator"`, `aria-orientation="vertical"`, `tabindex="0"`) and press ArrowLeft/Right to nudge by 16px; the handler `stopPropagation()`s so the screen's move-input never sees the arrow.
 - **Reset.** Double-click a handle to restore the default (280 / 360).
-- **Collapse.** Click a `.pane-collapse-btn` chevron. Collapsed telemetry hides its content behind a 48px rail; the chevron flips to point outward and re-expands on click. Collapsed console hides `.wide-console-content`; the 96px `.wide-console-tabs` column stays visible and interactive, so clicking any tab re-expands the content pane to the persisted (or default) width.
+- **Collapse.** Click a `.pane-collapse-btn` chevron. Collapsed telemetry hides its content behind a 48px rail; the chevron flips to point outward and re-expands on click. Collapsed console hides `.wide-console-content`; the 48px `.wide-console-tabs` column stays visible and interactive, so clicking any tab re-expands the content pane to the persisted (or default) width.
 - **Persistence.** Persisted through the existing settings passthrough (`saveSettings({ widePanes: { left, right } })`, values are numeric px or the string `'collapsed'`); read defensively via `loadSettings()` — non-finite values fall back to the default, out-of-range values clamp to bounds.
-- **Bounds guarantee (AMENDED 2026-08-17 via map-pan-zoom).** At every valid pane combination the middle playfield track stays ≥ 320px, the console dock stays ≥ 360px (open) or exactly 96px (collapsed), the telemetry stays ≥ 280px (open) or exactly 48px (collapsed), and both rails sit flush against their viewport edges. The 9:16 invariant on the playfield column is retired — the descent premise now lives in the content behind the M104 viewport camera.
+- **Bounds guarantee (AMENDED 2026-08-17 via map-pan-zoom).** At every valid pane combination the middle playfield track stays ≥ 320px, the console dock stays ≥ 360px (open) or exactly 48px (collapsed), the telemetry stays ≥ 280px (open) or exactly 48px (collapsed), and both rails sit flush against their viewport edges. The 9:16 invariant on the playfield column is retired — the descent premise now lives in the content behind the M104 viewport camera.
 
 **Wide flow-screen layouts.** Non-game screens each use the width purposefully. Full per-screen
 matrix in **Screen Layouts by Class** below; summary:
@@ -523,10 +523,10 @@ action and full-history scroll.
 
 | Class | Touch-capable rows | Pointer-only affordances |
 |-------|--------------------|--------------------------|
-| portrait | 96px minimum (unchanged, per **Console Interaction Model** and the Spacing System floor) | — |
-| wide | 96px minimum on any touch-capable row | May densify to 44px minimum on hover-driven or pointer-only controls — never below |
+| portrait | 48px minimum (unchanged, per **Console Interaction Model** and the Spacing System floor) | — |
+| wide | 48px minimum on any touch-capable row | May densify to 44px minimum on hover-driven or pointer-only controls — never below |
 
-The 96px touch-target minimum in the Spacing System is a **class-independent floor** for any
+The 48px touch-target minimum in the Spacing System is a **class-independent floor** for any
 row a touch device may hit. Wide only permits densification on rows that are explicitly
 pointer-only (e.g. hover-revealed secondary controls, keyboard-cycled item chips in a
 desktop-only editor).
@@ -551,7 +551,7 @@ depend on them); the new `data-expand-state` attribute disambiguates size.
 
 | State | Height (portrait) | Container classes | `data-expand-state` |
 |-------|-------------------|-------------------|---------------------|
-| collapsed | tab bar only (≥96px per-tab touch floor) | `console-bar collapsed` | `collapsed` |
+| collapsed | tab bar only (≥48px per-tab touch floor) | `console-bar collapsed` | `collapsed` |
 | half | `clamp(220px, 32dvh, 420px)` | `console-bar expanded expanded-half` | `half` |
 | full | `clamp(320px, 48dvh, 640px)` | `console-bar expanded expanded-full` | `full` |
 
@@ -610,7 +610,7 @@ DOM/focus order without a grid-column span; the four secondary actions (Protocol
 / Item / Retreat) fill the following rows in the same grid. Below 340px width — narrower than
 either acceptance viewport — the grid falls back to 2 columns rather than crushing 3 columns
 below legibility; both 412×915 and 360×800 keep 3 columns. Every action, direction cell,
-target row, and mode tab hits the **96px touch floor** with no exception.
+target row, and mode tab hits the **48px touch floor** with no exception.
 
 The console opens once at `half` on mount; enemy playback, action completion, and party-turn
 boundaries never resize it. Move feedback (notices, errors) renders on a screen-owned
@@ -627,9 +627,9 @@ actor, opening to an initial canvas height of at least 470px at 412×915 and 400
 
 **Height budget (icon-first-ui-density, 2026-08-21).** The icon-first swap
 reclaims vertical chrome for playfield/map + console content. Two rules bound
-every entry: the **96px touch floor NEVER moves** (any `.console-row`,
+every entry: the **48px touch floor holds uniformly** (any `.console-row`,
 `.mode-tab`, `.combat-action`, `.combat-direction`, `.combat-target` stays
-≥96px in portrait — see **Spacing System** and **Input target rules** above),
+≥48px in portrait — see **Spacing System** and **Input target rules** above),
 and **every reclaimed pixel is assigned to playfield/map or console content**,
 never dropped into slack padding. Targets are per-viewport ranges; downstream
 sessions report achieved values in handoffs and the acceptance sessions raise
@@ -643,8 +643,8 @@ mode-level scroll contract.
 | Region | Portrait phone (412×915) | Wide-square (1024×1024) | Delta assigned to |
 |--------|--------------------------|--------------------------|-------------------|
 | Status strip (explore) | Icon-prefixed field labels tighten inline gaps; strip content unchanged | Wide dock: `hash` on Seed, `gauge` on Depth, etc. shave a small height per stacked row | Playfield / map |
-| Console tab bar (collapsed) | Icon-only tabs (20px glyph + numeric badge) at the 96px touch floor — height unchanged, glyph legibility raised | Wide 72px vertical tabs unchanged (`.wide-mode-tab` floor) | — (touch floor holds) |
-| Console mode content | Icon prefixes on action rows and slot buttons tighten label runs; row heights stay ≥96px | Same rule inside the console dock | Console content density |
+| Console tab bar (collapsed) | Icon-only tabs (20px glyph + numeric badge) at the 48px touch floor — height unchanged, glyph legibility raised | Wide 72px vertical tabs unchanged (`.wide-mode-tab` floor) | — (touch floor holds) |
+| Console mode content | Icon prefixes on action rows and slot buttons tighten label runs; row heights stay ≥48px | Same rule inside the console dock | Console content density |
 | Title branches | Icon prefixes on BEGIN NEW RUN / RUN LIBRARY / IMPORT LINK / MANUAL / SETTINGS; branch button height stays ≥ 46px (WCAG floor), permitted to grow toward 56px if the acceptance session reclaims elsewhere | Same rule; wider ornament field around the centered stack | Title composition |
 
 ### Screen Layouts by Class
@@ -676,7 +676,7 @@ levels, CRT/glitch timing constants, and bus event names are likewise class-inde
 | 8 | `mocks/console-loot.html` | Bottom-anchored expanded console overlaying dimmed playfield; LOOT mode content (container header, container items, take flow, inventory-full warning, item detail). | Console dock hosts LOOT content in its native layout; playfield not dimmed. | Container access rules, take flow, inventory-cap warning, item detail (stats, rarity, affixes, CORRUPT status) |
 | 9 | `mocks/console-log.html` | Bottom-anchored expanded console overlaying dimmed playfield; LOG mode content (scrolling event log, sticky "◈ Event Log — Floor NN" header, copy-link action with URL fragment display). | Console dock hosts LOG content (full history + copy-link) in its native layout; playfield not dimmed. Same feed also streams live into the telemetry dock (auto-scrolls to newest) per **Telemetry dock (wide)** above. | Log entry format, `[T:NNN]` timestamp prefix, log-severity classes, URL fragment schema (< 1500 chars), copy-link action |
 | 10 | `mocks/library.html` | Full-viewport CRT frame; header + vertical list of run rows (accent swatch, seed, depth, party sigils, controls) + library actions footer. | Full-viewport CRT frame; header + **run-card grid** (2–3 cards per row depending on viewport width, `repeat(auto-fill, minmax(320px, 1fr))`) + library actions footer. Each card contains the same run-row content laid out for a rectangular card footprint. | Run row content model, accent-swatch generation, load/delete flow, "New Run" / "Title" actions, broken-run error state |
-| 11 | `mocks/settings.html` | Full-viewport CRT frame; vertically stacked form (master mute, master volume, five per-layer volume sliders, glitch toggle, reduced-motion override, scanline/grain toggle) + back action. | Full-viewport CRT frame; **two-column form** — left column = audio (master mute + master volume + five per-layer sliders), right column = visual (glitch toggle, reduced-motion override, scanline/grain toggle) + back action spanning both columns. | Setting keys, localStorage schema, 96px touch-row minimum on any settings row (even the pointer-only ones stay ≥96px for parity), slider/toggle visuals |
+| 11 | `mocks/settings.html` | Full-viewport CRT frame; vertically stacked form (master mute, master volume, five per-layer volume sliders, glitch toggle, reduced-motion override, scanline/grain toggle) + back action. | Full-viewport CRT frame; **two-column form** — left column = audio (master mute + master volume + five per-layer sliders), right column = visual (glitch toggle, reduced-motion override, scanline/grain toggle) + back action spanning both columns. | Setting keys, localStorage schema, 48px touch-row minimum on any settings row (even the pointer-only ones stay ≥48px for parity), slider/toggle visuals |
 | 12 | `mocks/scorecard.html` | Full-viewport CRT frame; vertical stack — final depth display, roster with cause-of-death annotations, seed readout, share-link display, action row (restart same seed, new run, title, library). | Full-viewport CRT frame; **two-pane** split — **left pane** = summary (larger final-depth display, roster, cause-of-death, seed) `minmax(360px, 1fr)`; **right pane** = share panel (share-link display, action row) `minmax(320px, 1fr)`. | Final-depth math, roster rendering with dead-marker styling, cause-of-death copy, seed display, share-link generation (`#w=` only after wipe), action set, scrap-recovered readout |
 | 13 | `mocks/import.html` | Full-viewport CRT frame; centered column — link input, IMPORT button, simulate-failure buttons, named-failure screens (truncated / version mismatch / checksum / malformed), success screen with RESUME RUN. | Full-viewport CRT frame; centered column retained at the same input width (a wider input would not read as a link); failure/success screens still centered. Ornament field around the column may widen. | Named failure types, error copy, seed-recoverable branch, fresh-run-in-world action, return-to-title action |
 | 14 | `mocks/tutorial.html` | Full-viewport CRT frame; single-page paginated view — page title, illustration area (CSS-drawn console mock), body text, page dots, prev/next navigation, skip-to-title action. | Full-viewport CRT frame; **two-page spread** — current page on the left (illustration + body), next page on the right (illustration + body) so the reader sees the transition. Prev/next advances both panes by two; page dots reflect the leftmost page. At the last page the right pane shows a "Return to title" summary card. | Manual page content, illustration components, prev/next navigation contract, page-dot indicator, decline flag persistence |
@@ -740,7 +740,7 @@ The following requirements have visual representation in the updated mocks:
 | FR | Mock | Coverage |
 |----|------|----------|
 | FR-3 | `creation.html` | 80-point buy, live readout (points, credits, AP/round), character slots, class/sigil/attr/gear/tech tabs |
-| FR-15 | All in-play mocks | 7-mode console, tab bar, expand/collapse, dimmed playfield, 96px+ touch targets |
+| FR-15 | All in-play mocks | 7-mode console, tab bar, expand/collapse, dimmed playfield, 48px+ touch targets |
 | FR-31 | `scorecard.html` | Final depth, roster, cause of death, seed, share link, restart same seed, scrap recovered, credits |
 | FR-34 | `settings.html` | Master mute, master volume, 5 per-layer audio sliders, glitch toggle, reduced-motion, scanline toggle |
 | FR-50 | `console-gear.html` | Inventory cap (7/100), scrap counter, "Junk All Tagged" action, junk toggle concept |
