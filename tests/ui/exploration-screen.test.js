@@ -865,6 +865,34 @@ describe('exploration screen controller', () => {
     controller.unmount();
   });
 
+  it('REVEAL fills fogState and repaints the canvas — regression for the visually-hidden map', async () => {
+    const ghost = makeCharacter({
+      id: 'ghost-1', classId: 'ghost', sigilId: 'pua-e010',
+      currentHP: 20, currentCHARGE: 32, protocolDeck: [{ school: 'scry', tier: 4 }]
+    });
+    const state = createRunState(999, [ghost], { partyPosition: { x: 10, y: 10 } });
+    // Chebyshev ~50 from the party — well outside losRadius (sig 5 → max 10),
+    // so this container is provably unrevealed on mount.
+    const farFloor = floor({ containers: [{ id: 0, x: 35, y: 60 }] });
+    const { container, controller, runState: run } = await mountExploration({ runState: state, floor: farFloor });
+    const ctx = byTestId(container, 'exploration-canvas').getContext('2d');
+    const containerDrawn = () => ctx.calls.some(([name, style, char]) => name === 'fillText' && style === '#e8d23a' && char === '▣');
+
+    expect(containerDrawn()).toBe(false);
+
+    byTestId(container, 'console-tab-tech').click();
+    byTestId(container, 'tech-cast-scry-4').click();
+
+    expect(containerDrawn()).toBe(true);
+    // Persists into the save, not just the live in-memory fogState (REVEAL sets
+    // no revealDuration — see Context — so a fresh decode with nothing currently
+    // in LOS must still show the far cell as visited).
+    const { createFogState } = await import('../../src/exploration/shadowcast.js');
+    const persisted = createFogState(run.fogOfWar, new Set());
+    expect(persisted[60 * 40 + 35]).toBeGreaterThan(0);
+    controller.unmount();
+  });
+
   it('drag pans past the legacy 20×32 boundary without moving the party', async () => {
     const { container, runState: state } = await mountExploration();
     const { playfieldBody } = sizeBody(container, { width: 480, height: 768 });
