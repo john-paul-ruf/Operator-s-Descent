@@ -270,6 +270,28 @@ export function mount(container, params = {}) {
       autoStopToggles[name] = Boolean(value);
       notice = `${name.toUpperCase()} AUTO-STOP ${autoStopToggles[name] ? 'ON' : 'OFF'}`;
       consoleController.refresh();
+    },
+    // A successful TECH cast's reveal markers (REVEAL's stateDelta.markers —
+    // revealFloor/revealContainers/revealDescent, no duration = permanent) are
+    // the only signal the effect happened; nothing else touches fogState.
+    // Filling every cell to 2 (fully visible) satisfies all three markers at
+    // once given playfield.js's own gating (floor/descent need fog !== 0,
+    // containers need fog === 2) — the existing per-move updateFogOfWar/
+    // syncVisitedBitmap cycle handles fade-back and persistence with no
+    // further change.
+    commitTechProtocol({ effect } = {}) {
+      const markers = effect?.stateDelta?.markers;
+      if (!markers?.revealFloor && !markers?.revealContainers && !markers?.revealDescent) return;
+      fogState.fill(2);
+      syncVisitedBitmap(fogState, runState.fogOfWar);
+    },
+    // Full-shell redraw distinct from the console's own local `refresh` — a
+    // successful TECH cast may have mutated fogState (above), so the canvas
+    // must repaint too, not just the TECH panel. Mirrors combat.js's
+    // refreshShell: renderAll (which also ends in consoleController.refresh()).
+    refreshShell() {
+      renderPlayfield();
+      consoleController.refresh();
     }
   };
 
