@@ -135,6 +135,16 @@ const PRODUCTION_ASSETS = Object.freeze([
   './assets/icons.svg',
 ]);
 
+// Deployed to GitHub Pages, but deliberately NOT precached and NOT counted
+// against the app-shell transfer budget: social / link-preview crawlers (Open
+// Graph, Twitter/X cards) fetch these, and the app never needs them to boot or
+// run offline. build-pages.js stages them into the Pages artifact alongside
+// PRODUCTION_ASSETS; the fetch handler leaves them to the network. Keep this
+// list and PRODUCTION_ASSETS disjoint (verify-assets.js enforces it).
+const DEPLOY_ONLY_ASSETS = Object.freeze([
+  './assets/og-card.png',
+]);
+
 const SCOPE_URL = new URL(self.registration.scope);
 const ASSET_URLS = new Set(PRODUCTION_ASSETS.map((asset) => normalizeURL(new URL(asset, SCOPE_URL))));
 const SHELL_URL = normalizeURL(new URL(SHELL_ASSET, SCOPE_URL));

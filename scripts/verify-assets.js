@@ -5,6 +5,7 @@ import { brotliCompressSync, gzipSync, constants as zlibConstants } from 'node:z
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const TRANSFER_BUDGET_BYTES = 500 * 1024;
+const DEPLOY_ONLY_BUDGET_BYTES = 1024 * 1024;    // deployed-but-not-precached assets (e.g. social share cards)
 const FORBIDDEN_PREFIXES = ['./program/', './specs/', './mocks/', './tests/', './tools/', './font-src/', './node_modules/', './docs/'];
 const FORBIDDEN_BASENAMES = new Set(['./package.json', './package-lock.json', './project.json', './pipeline-state.json']);
 const REQUIRED_SINGLETONS = [
@@ -44,6 +45,12 @@ function extractManifest() {
   if (!match) throw new Error('service-worker.js: missing PRODUCTION_ASSETS manifest');
   const assets = [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
   return { source, assets };
+}
+
+function extractDeployOnly(source) {
+  const match = source.match(/const\s+DEPLOY_ONLY_ASSETS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/);
+  if (!match) return [];
+  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
 }
 
 function expectedAssets() {
@@ -136,6 +143,39 @@ function measure(assets) {
   }, { raw: 0, gzip: 0, brotli: 0 });
 }
 
+function validateDeployOnly(deployOnly, precacheAssets, errors) {
+  const precacheSet = new Set(precacheAssets);
+  const seen = new Set();
+  for (const asset of deployOnly) {
+    if (!asset.startsWith('./')) errors.push(`${asset}: deploy-only paths must start with ./`);
+    if (asset.includes('..')) errors.push(`${asset}: parent traversal is forbidden`);
+    if (seen.has(asset)) errors.push(`${asset}: duplicate deploy-only entry`);
+    seen.add(asset);
+    if (precacheSet.has(asset)) errors.push(`${asset}: must not appear in both PRODUCTION_ASSETS and DEPLOY_ONLY_ASSETS`);
+    if (FORBIDDEN_BASENAMES.has(asset) || FORBIDDEN_PREFIXES.some((prefix) => asset.startsWith(prefix))) {
+      errors.push(`${asset}: forbidden non-production asset in deploy-only manifest`);
+    }
+    if (/\.map$|\.md$|\.py$|\.lock$/.test(asset)) errors.push(`${asset}: generated/dev/documentation asset is forbidden`);
+    try {
+      statSync(workspacePath(asset));
+    } catch {
+      errors.push(`${asset}: deploy-only entry does not exist`);
+    }
+  }
+}
+
+function measureRaw(assets) {
+  let total = 0;
+  for (const asset of assets) {
+    try {
+      total += readFileSync(workspacePath(asset)).length;
+    } catch {
+      /* missing files are reported by validateDeployOnly */
+    }
+  }
+  return total;
+}
+
 function main() {
   const { source, assets } = extractManifest();
   const expected = expectedAssets();
@@ -147,9 +187,17 @@ function main() {
   if (/navigator\.serviceWorker\.register/.test(source)) errors.push('service-worker.js: service worker script must not register itself');
   if (/importScripts\s*\(/.test(source)) errors.push('service-worker.js: external script imports are forbidden');
 
+  const deployOnly = extractDeployOnly(source);
+  validateDeployOnly(deployOnly, assets, errors);
+
   const totals = measure(assets);
   if (totals.gzip > TRANSFER_BUDGET_BYTES && totals.brotli > TRANSFER_BUDGET_BYTES) {
     errors.push(`transfer budget exceeded: gzip=${totals.gzip}, brotli=${totals.brotli}, budget=${TRANSFER_BUDGET_BYTES}`);
+  }
+
+  const deployOnlyBytes = measureRaw(deployOnly);
+  if (deployOnlyBytes > DEPLOY_ONLY_BUDGET_BYTES) {
+    errors.push(`deploy-only budget exceeded: raw=${deployOnlyBytes}, budget=${DEPLOY_ONLY_BUDGET_BYTES}`);
   }
 
   if (errors.length > 0) {
@@ -163,6 +211,9 @@ function main() {
   console.log(`gzip transfer bytes: ${totals.gzip}`);
   console.log(`brotli transfer bytes: ${totals.brotli}`);
   console.log(`transfer budget: ${TRANSFER_BUDGET_BYTES}`);
+  console.log(`deploy-only assets: ${deployOnly.length}`);
+  console.log(`deploy-only raw bytes: ${deployOnlyBytes}`);
+  console.log(`deploy-only budget: ${DEPLOY_ONLY_BUDGET_BYTES}`);
 }
 
 main();

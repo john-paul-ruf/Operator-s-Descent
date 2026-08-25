@@ -16,6 +16,13 @@ function extractManifest() {
   return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
 }
 
+function extractDeployOnly() {
+  const source = readFileSync(join(PROJECT_ROOT, 'service-worker.js'), 'utf8');
+  const match = source.match(/const\s+DEPLOY_ONLY_ASSETS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/);
+  if (!match) return [];
+  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
+}
+
 function listFiles(dir, prefix = '') {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -36,17 +43,20 @@ afterEach(() => {
 });
 
 describe('buildPages — artifact exactness', () => {
-  test('stages exactly the PRODUCTION_ASSETS manifest, byte-identical, into a temp output dir', async () => {
+  test('stages exactly the PRODUCTION_ASSETS + DEPLOY_ONLY_ASSETS manifests, byte-identical, into a temp output dir', async () => {
     const manifest = extractManifest();
-    const expected = manifest.map((asset) => asset.slice(2)).sort();
+    const deployOnly = extractDeployOnly();
+    const expected = [...manifest, ...deployOnly].map((asset) => asset.slice(2)).sort();
     const outputDir = join(makeTempDir('bp-out-'), 'artifact');
 
     const result = await buildPages({ outputDir });
 
-    expect(result.assetCount).toBe(manifest.length);
+    expect(result.assetCount).toBe(manifest.length + deployOnly.length);
+    expect(result.precacheCount).toBe(manifest.length);
+    expect(result.deployOnlyCount).toBe(deployOnly.length);
     expect(listFiles(outputDir)).toEqual(expected);
 
-    for (const relPath of ['index.html', 'service-worker.js', 'assets/descent-sigil.woff2', 'assets/icons.svg']) {
+    for (const relPath of ['index.html', 'service-worker.js', 'assets/descent-sigil.woff2', 'assets/icons.svg', ...deployOnly.map((asset) => asset.slice(2))]) {
       const source = readFileSync(join(PROJECT_ROOT, relPath));
       const staged = readFileSync(join(outputDir, relPath));
       expect(staged.equals(source)).toBe(true);
@@ -201,7 +211,7 @@ describe('build-pages CLI', () => {
     const outputDir = join(makeTempDir('bp-cli-'), 'artifact');
     const stdout = execFileSync(process.execPath, [CLI_PATH, '--output', outputDir], { cwd: PROJECT_ROOT, encoding: 'utf8' });
 
-    expect(stdout).toMatch(/Staged \d+ production assets/);
+    expect(stdout).toMatch(/Staged \d+ assets \(\d+ precache \+ \d+ deploy-only\)/);
     expect(existsSync(join(outputDir, 'index.html'))).toBe(true);
   });
 

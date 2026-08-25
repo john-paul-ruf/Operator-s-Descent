@@ -2,7 +2,8 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { createGameHarness, loadGameDataFixture, lootFirstContainer, queueSingleDeathEcho, roundTripRunState, startStandardCombat } from '../tests/helpers/game-fixture.js';
 import { decodeRun } from '../src/state/save-decode.js';
-import { encodeRun } from '../src/state/save-encode.js';
+import { encodeRun, SAVE_BUDGET } from '../src/state/save-encode.js';
+import { INVENTORY_CAP } from '../src/rules/inventory.js';
 
 const EVENT_TAIL_COUNTS = [0, 4, 8, 16, 32, 64];
 const EVENT_TAIL_MIN_SURVIVORS = 8; // when count >= this, at least this many must survive
@@ -26,8 +27,12 @@ function markDenseRun(runState) {
   }
 }
 
+// A single inventory slot filled to the program-wide stack cap. Uses
+// INVENTORY_CAP directly so this worst-case fixture tracks the cap instead of
+// drifting (it was pinned at a stale 100 after the cap was cut 100 → 40, which
+// built an illegal over-cap stack that writeItem rightly rejected).
 function capStack() {
-  return { id: 'cap_stack', category: 'consumable', baseType: 'repair_patch', rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false, count: 100 };
+  return { id: 'cap_stack', category: 'consumable', baseType: 'repair_patch', rarity: 'stock', affixes: [], corrupt: false, stats: {}, salvageValue: 1, junkTagged: false, count: INVENTORY_CAP };
 }
 
 function addPartyPressure(runState) {
@@ -108,7 +113,7 @@ function fixtures() {
   return [
     ['legal-minimum', minimum.runState],
     ['typical-depth-12', typical.runState],
-    ['stack-aware-100-item-cap', inventoryCap.runState],
+    [`stack-aware-${INVENTORY_CAP}-item-cap`, inventoryCap.runState],
     ['four-operator-deep-dense', deepParty.runState],
     ['two-echo-queue', echoes.runState],
     ['deep-active-combat-boundary', activeCombat.runState],
@@ -159,7 +164,7 @@ function runEventTailStress() {
       const encoded = encodeRun(runState);
       const encodeMs = performance.now() - encodeStart;
       if (!encoded.success) throw new Error(`${fixtureName}@${count}events: encode failed`);
-      if (encoded.fragment.length >= 1500) throw new Error(`${fixtureName}@${count}events: save length ${encoded.fragment.length} exceeds budget`);
+      if (encoded.fragment.length >= SAVE_BUDGET) throw new Error(`${fixtureName}@${count}events: save length ${encoded.fragment.length} exceeds budget`);
       if (count > 0 && encoded.metrics.eventsKept === 0) throw new Error(`${fixtureName}@${count}events: trim ladder dropped ALL events — resuming player would lose full history`);
       if (count >= EVENT_TAIL_MIN_SURVIVORS && encoded.metrics.eventsKept < EVENT_TAIL_MIN_SURVIVORS) {
         throw new Error(`${fixtureName}@${count}events: only ${encoded.metrics.eventsKept} events survived, below floor of ${EVENT_TAIL_MIN_SURVIVORS}`);
@@ -189,7 +194,7 @@ export function runSaveStress() {
     const secondDecode = decodeRun(encoded.fragment);
     const decodeMs = performance.now() - decodeStart;
     if (!secondDecode.success) throw new Error(`${name}: second decode failed ${secondDecode.error}`);
-    if (encoded.fragment.length >= 1500) throw new Error(`${name}: save length ${encoded.fragment.length} exceeds budget`);
+    if (encoded.fragment.length >= SAVE_BUDGET) throw new Error(`${name}: save length ${encoded.fragment.length} exceeds budget`);
     if (JSON.stringify(decoded.serialize()) !== JSON.stringify(secondDecode.runState.serialize())) throw new Error(`${name}: decode invariant drift`);
     cases.push({
       name,

@@ -18,6 +18,15 @@ function extractManifest(rootDir) {
   return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
 }
 
+// Assets deployed to the Pages artifact but intentionally not precached by the
+// service worker (e.g. social share cards). Optional — absent in older shells.
+function extractDeployOnly(rootDir) {
+  const source = readFileSync(join(rootDir, 'service-worker.js'), 'utf8');
+  const match = source.match(/const\s+DEPLOY_ONLY_ASSETS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/);
+  if (!match) return [];
+  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
+}
+
 function validateManifest(assets, rootDir) {
   if (assets.length === 0) throw new Error('PRODUCTION_ASSETS manifest is empty');
   const seen = new Set();
@@ -65,7 +74,9 @@ function resolveOutputDir(outputDir, rootDir, assets) {
 
 export async function buildPages({ rootDir = PROJECT_ROOT, outputDir } = {}) {
   const resolvedRoot = resolve(rootDir);
-  const assets = extractManifest(resolvedRoot);
+  const precacheAssets = extractManifest(resolvedRoot);
+  const deployOnlyAssets = extractDeployOnly(resolvedRoot);
+  const assets = [...precacheAssets, ...deployOnlyAssets];
   validateManifest(assets, resolvedRoot);
   const resolvedOutput = resolveOutputDir(outputDir, resolvedRoot, assets);
 
@@ -87,7 +98,7 @@ export async function buildPages({ rootDir = PROJECT_ROOT, outputDir } = {}) {
     throw error;
   }
 
-  return { outputDir: resolvedOutput, assetCount: assets.length, assets };
+  return { outputDir: resolvedOutput, assetCount: assets.length, precacheCount: precacheAssets.length, deployOnlyCount: deployOnlyAssets.length, assets };
 }
 
 export function parseBuildPagesArgs(argv) {
@@ -109,7 +120,7 @@ export function parseBuildPagesArgs(argv) {
 async function runCli(argv) {
   const args = parseBuildPagesArgs(argv);
   const result = await buildPages({ outputDir: args.output ? resolve(args.output) : undefined });
-  console.log(`Staged ${result.assetCount} production assets to ${result.outputDir}`);
+  console.log(`Staged ${result.assetCount} assets (${result.precacheCount} precache + ${result.deployOnlyCount} deploy-only) to ${result.outputDir}`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
