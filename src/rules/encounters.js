@@ -395,6 +395,56 @@ export function deployBands(window, partyCount, hostileCount) {
   return { partyPositions, hostilePositions };
 }
 
+// Combat chaining — combat-and-ux-feedback-pass SESSION-01.
+// CHAIN_ANCHOR_RANGE mirrors HOSTILE_CONTACT_RANGE (src/exploration/movement.js): the same
+// threshold that triggers combat contact also defines who joins the fight around the contact
+// point. Duplicated here deliberately because the rules layer must not import from the
+// exploration layer (FORGE-CONFIG Architecture dependency flow).
+const CHAIN_ANCHOR_RANGE = 2;
+// CHAIN_LINK_RANGE = anchor + 1: once the initial group is seated, other spawns join if they
+// stand within one extra cell of ANY already-chained spawn — the transitive "chain" that pulls
+// a distant spawn in via a bridge of nearby ones.
+const CHAIN_LINK_RANGE = 3;
+// Cap total combatants at 1 (contact) + this. Floor spawn density (8+2*floor/3 across 40x64)
+// keeps this from binding in typical play; it exists to bound the pathological dense cluster.
+const MAX_CHAIN_ADDITIONAL = 6;
+
+function chebyshevXY(a, b) {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+// Transitive closure over activeSpawns rooted at contactSpawn. Passes:
+//   1. Any spawn within CHAIN_ANCHOR_RANGE of contactPoint joins.
+//   2. Iterate: any spawn within CHAIN_LINK_RANGE of any already-chained spawn joins.
+//   3. Repeat until a full pass adds nothing new — or the cap is hit.
+// Deterministic: iterates activeSpawns in its given order every pass; stops immediately when
+// chained.size === 1 + MAX_CHAIN_ADDITIONAL. Returns [contactSpawn, ...pulled-in spawns].
+export function gatherChainedSpawns(activeSpawns, contactPoint, contactSpawn) {
+  const chained = new Map();
+  if (contactSpawn) chained.set(contactSpawn.id, contactSpawn);
+  const capReached = () => chained.size >= 1 + MAX_CHAIN_ADDITIONAL;
+  let changed = true;
+  while (changed && !capReached()) {
+    changed = false;
+    for (const spawn of activeSpawns) {
+      if (capReached()) break;
+      if (chained.has(spawn.id)) continue;
+      const nearContact = contactPoint ? chebyshevXY(spawn, contactPoint) <= CHAIN_ANCHOR_RANGE : false;
+      let nearChained = false;
+      if (!nearContact) {
+        for (const member of chained.values()) {
+          if (chebyshevXY(spawn, member) <= CHAIN_LINK_RANGE) { nearChained = true; break; }
+        }
+      }
+      if (nearContact || nearChained) {
+        chained.set(spawn.id, spawn);
+        changed = true;
+      }
+    }
+  }
+  return [...chained.values()];
+}
+
 // Turns a bare floor spawn stub ({id, x, y, archetypeId, ...}) into a combat-ready actor.
 // Idempotent — an already-hydrated actor (hp/hpMax/defense present) passes through untouched,
 // so this is safe to call on encounter.actors that arrived pre-hydrated from another caller.

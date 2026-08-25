@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createStandardEncounter, createHuntEncounter, completeEncounter, getDueEchoes, consumeEcho, injectEcho, deployBands } from '../../src/rules/encounters.js';
+import { createStandardEncounter, createHuntEncounter, completeEncounter, getDueEchoes, consumeEcho, injectEcho, deployBands, gatherChainedSpawns } from '../../src/rules/encounters.js';
 import { createEnemy } from '../../src/rules/enemies.js';
 // windowMetricsOfWindow / buildRawWindow below are local mirrors used by the widening tests.
 import { createRunState } from '../../src/state/run-state.js';
@@ -519,6 +519,64 @@ describe('createHuntEncounter — spawn hydration (combat-and-ux-feedback-pass S
       expect(foe.behavior).toBeDefined();
       expect(foe.id).toMatch(/^hunt_/);
     }
+  });
+});
+
+describe('gatherChainedSpawns — transitive combat chaining (combat-and-ux-feedback-pass SESSION-01)', () => {
+  it('pulls in a second spawn within CHAIN_ANCHOR_RANGE (2) of the contact point', () => {
+    const contact = { x: 10, y: 10 };
+    const contactSpawn = { id: 1, x: 10, y: 10 };
+    const nearby = { id: 2, x: 12, y: 10 };                     // Chebyshev 2 from contact — chains
+    const outOfRange = { id: 3, x: 16, y: 10 };                 // Chebyshev 6 from contact, 4 from #2 — beyond both anchor and link range
+    const chained = gatherChainedSpawns([contactSpawn, nearby, outOfRange], contact, contactSpawn);
+    const ids = chained.map(s => s.id).sort();
+    expect(ids).toEqual([1, 2]);
+  });
+
+  it('chains transitively: a distant spawn pulled in via a bridge, NOT direct range of contact', () => {
+    // Contact at (10,10). Bridge at (12,10) — Chebyshev 2 from contact (anchor range) → chains.
+    // Distant at (15,10) — Chebyshev 5 from contact (out of anchor range) but Chebyshev 3 from
+    // the bridge (link range) → chains only via the bridge. This is the "chain" property; a
+    // pure radius filter around the contact point would exclude the distant spawn.
+    const contact = { x: 10, y: 10 };
+    const contactSpawn = { id: 1, x: 10, y: 10 };
+    const bridge = { id: 2, x: 12, y: 10 };
+    const distant = { id: 3, x: 15, y: 10 };
+    const chained = gatherChainedSpawns([contactSpawn, bridge, distant], contact, contactSpawn);
+    const ids = chained.map(s => s.id).sort();
+    expect(ids).toEqual([1, 2, 3]);
+  });
+
+  it('excludes a spawn beyond CHAIN_LINK_RANGE (3) of every chained member', () => {
+    const contact = { x: 10, y: 10 };
+    const contactSpawn = { id: 1, x: 10, y: 10 };
+    const bridge = { id: 2, x: 12, y: 10 };                     // chains (dist 2 from contact)
+    const isolated = { id: 9, x: 20, y: 20 };                   // dist 10 from contact, 8 from bridge — never chains
+    const chained = gatherChainedSpawns([contactSpawn, bridge, isolated], contact, contactSpawn);
+    const ids = chained.map(s => s.id).sort();
+    expect(ids).toEqual([1, 2]);
+  });
+
+  it('caps chained total at 1 + MAX_CHAIN_ADDITIONAL (7) even for a dense mutually-adjacent cluster', () => {
+    const contact = { x: 10, y: 10 };
+    const contactSpawn = { id: 0, x: 10, y: 10 };
+    // 12 additional spawns, each Chebyshev 1 or 2 from every other — all would chain in an
+    // uncapped world. The cap holds the pull at 6 additional (7 total).
+    const cluster = [];
+    for (let i = 1; i <= 12; i++) {
+      cluster.push({ id: i, x: 10 + (i % 3), y: 10 + Math.floor(i / 3) });
+    }
+    const chained = gatherChainedSpawns([contactSpawn, ...cluster], contact, contactSpawn);
+    expect(chained.length).toBe(7);
+    // The contact is always included, whatever the cluster iteration order.
+    expect(chained.map(s => s.id)).toContain(0);
+  });
+
+  it('empty spawn list returns just the contact spawn (no chain to build)', () => {
+    const contact = { x: 5, y: 5 };
+    const contactSpawn = { id: 42, x: 5, y: 5 };
+    const chained = gatherChainedSpawns([], contact, contactSpawn);
+    expect(chained).toEqual([contactSpawn]);
   });
 });
 
