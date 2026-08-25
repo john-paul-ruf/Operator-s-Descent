@@ -73,6 +73,7 @@ let mountSequence = 0;
 let gestureAudioContext = null;
 let runtimeAudioContext = null;
 let gestureResumeCleanup = null;
+let visibilityAudioCleanup = null;
 let busUnsubscribers = [];
 let layoutControllerCleanup = null;
 let runtimeActive = false;
@@ -544,6 +545,21 @@ function installGestureResume() {
   gestureResumeCleanup = cleanup;
 }
 
+function installVisibilityAudioControl() {
+  if (visibilityAudioCleanup) return;
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  const onVisibilityChange = () => {
+    if (!audioEngine) return;
+    if (document.hidden || document.visibilityState === 'hidden') audioEngine.suspend?.();
+    else audioEngine.resume?.()?.catch?.(() => {});
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  visibilityAudioCleanup = () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    visibilityAudioCleanup = null;
+  };
+}
+
 function startAudioEngine(settings = loadSettings()) {
   if (gestureAudioContext) {
     runtimeAudioContext = gestureAudioContext;
@@ -887,6 +903,7 @@ export async function activateRuntime({ audioContext, initialHash = '' } = {}) {
 
   runtimeSettings = loadSettings();
   startAudioEngine(runtimeSettings);
+  installVisibilityAudioControl();
   visualSettings = {
     glitchEnabled: Boolean(runtimeSettings.glitchEnabled),
     reducedMotion: runtimeSettings.reducedMotion
@@ -1051,6 +1068,8 @@ export function shutdownRuntime() {
   audioEngine = null;
   gestureResumeCleanup?.();
   gestureResumeCleanup = null;
+  visibilityAudioCleanup?.();
+  visibilityAudioCleanup = null;
   if (gestureAudioContext) {
     gestureAudioContext.close?.().catch?.(() => {});
     gestureAudioContext = null;

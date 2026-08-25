@@ -72,6 +72,10 @@ export function createAudioEngine(initialAudioContext = null) {
       if (audioContext?.suspend) return audioContext.suspend();
       return Promise.resolve();
     },
+    resume() {
+      if (audioContext?.resume) return audioContext.resume();
+      return Promise.resolve();
+    },
     stop() {
       conductor?.stop?.();
       for (const layer of Object.values(layers)) layer.stop?.();
