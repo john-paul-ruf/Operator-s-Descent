@@ -10,7 +10,7 @@ import { createRNGCursorForRun } from '../../core/rng-cursor.js';
 import { createLattice } from '../../exploration/lattice.js';
 import { findExplorationPath, moveParty, computeExplorationProximity, pruneEmptyCaches } from '../../exploration/movement.js';
 import { computeLOS, createFogState, updateFogOfWar, syncVisitedBitmap } from '../../exploration/shadowcast.js';
-import { createHuntEncounter, createStandardEncounter } from '../../rules/encounters.js';
+import { createHuntEncounter, createStandardEncounter, gatherChainedSpawns } from '../../rules/encounters.js';
 import { findEligibleLootContainer } from '../console/loot.js';
 
 function clear(element) {
@@ -419,9 +419,22 @@ export function mount(container, params = {}) {
     const position = lattice.getPartyPosition();
     const contactEntity = result.contactEntity || result.discoveredEntity;
     const contact = contactEntity || position;
+    // Standard-contact combats gather every hostile transitively chained off the contact
+    // point (see gatherChainedSpawns in ../../rules/encounters.js) instead of engaging the
+    // single triggering spawn — grouped enemies now enter the fight together. Hunts already
+    // deploy multiple enemies by design, so their branch is untouched. The options object
+    // hands the archetype registry + depth to the hydrator so contact-triggered enemies
+    // arrive with their real hp/defense/attributes (combat-and-ux-feedback-pass SESSION-01).
     const encounter = result.interruptType === 'hunt'
       ? createHuntEncounter(floor, position, runState.party, runState, rngCursor, data)
-      : createStandardEncounter(floor, contact, runState.party, [contactEntity].filter(Boolean), rngCursor);
+      : createStandardEncounter(
+          floor,
+          contact,
+          runState.party,
+          contactEntity ? gatherChainedSpawns(lattice.getActiveEnemySpawns(), contact, contactEntity) : [],
+          rngCursor,
+          { enemiesData: data?.enemies, depth: runState.depth }
+        );
     runState.rngState = rngCursor.getState();
     notice = result.interruptType === 'hunt' ? 'HUNT CONTACT REQUESTED.' : 'HOSTILE CONTACT — ENGAGING.';
     bus.dispatch('state:combat-start', { runState, floor, lattice, encounter, reason: result.interruptType || 'contact', contact, moveResult: result });
