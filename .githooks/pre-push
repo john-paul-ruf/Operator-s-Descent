@@ -1,0 +1,19 @@
+#!/bin/sh
+# Auto-installed via `npm install`/`npm ci`'s `prepare` script (see ./package.json).
+# Mirrors exactly what ./.github/workflows/deploy-pages.yml's build job checks —
+# a push that fails here would also fail CI. Bypass only for a genuine
+# emergency: `git push --no-verify`.
+
+echo "predeploy gate -- mirrors the GitHub Pages CI build job"
+npm run predeploy
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "predeploy gate failed -- this push would fail CI's build job."
+  echo "Fix the errors above, or bypass in a genuine emergency with:"
+  echo "  git push --no-verify"
+  exit 1
+fi
+
+exit 0
