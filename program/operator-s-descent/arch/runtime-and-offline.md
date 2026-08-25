@@ -108,3 +108,17 @@ New spec: fetches `manifest.webmanifest` through the Playwright server, asserts 
 - `./tests/tooling/check-tokens.test.js` now reports 4 warning-level findings: the new `--safe-area-*` custom properties are undocumented in `specs/design.md`'s color palette table. These are structural/derived tokens, not palette colors — same category as the existing `DERIVED_SURFACE_TOKENS` allowlist (5 scrollbar/fade tokens) documented outside the extractor anchors in `specs/design.md`. A future session should add `--safe-area-{top,right,bottom,left}` to that same allowlist.
 - `./scripts/lint-sigils.js` `SKIP_DIRS` still lacks `test-results/` (pre-existing debt, noted in `arch/tooling-and-quality.md`) — a concurrent/leftover Playwright run can trip the sigil lint until it's cleaned up manually.
 
+
+<!-- SESSION-05 — combat-and-ux-feedback-pass, 2026-08-24 -->
+
+### M86 Hot Runtime — visibility-driven audio lifecycle
+
+- `activateRuntime` installs a `visibilitychange` document listener via new
+  internal `installVisibilityAudioControl()` (mirrors the existing
+  `installGestureResume` shape). On `document.hidden` / `visibilityState ===
+  'hidden'` the runtime calls `audioEngine.suspend()`; on any other value it
+  calls `audioEngine.resume()`. `shutdownRuntime` invokes the stored
+  `visibilityAudioCleanup` to remove the listener.
+- This is a second, independent `visibilitychange` listener alongside the
+  existing service-worker update re-check inside `registerServiceWorkerOnce`;
+  both are additive and non-interacting.
