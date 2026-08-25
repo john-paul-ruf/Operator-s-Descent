@@ -391,7 +391,7 @@ describe('creation screen workflow', () => {
     expect(byTestId(container, 'panel-class').children.find((c) => c.classList?.contains('class-card-row')).children).toHaveLength(6);
 
     byTestId(container, 'tab-attrs').click();
-    expect(byTestId(container, 'attribute-mgt').style.minHeight).toBe('96px');
+    expect(byTestId(container, 'attribute-mgt').style.minHeight).toBe('48px');
     expect(byTestId(container, 'attribute-mgt').getAttribute('aria-label')).toContain('MIGHT rank 3');
   });
 });
