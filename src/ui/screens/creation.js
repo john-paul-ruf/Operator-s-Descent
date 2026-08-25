@@ -276,6 +276,7 @@ export function mount(container, params = {}) {
       renderWideReadout(summary),
       manualLink('character_creation', { variant: 'chip' }),
       renderWideRoster(summary),
+      ...(summary.characters.length ? [] : [renderWideQuickStart()]),
       renderWideSavedConfigs(summary)
     );
 
@@ -458,6 +459,30 @@ export function mount(container, params = {}) {
     list.appendChild(saveSlot);
     section.appendChild(list);
     if (notice) section.appendChild(text('p', notice.startsWith('LOADED') || notice.startsWith('SAVED') ? 'creation-note' : 'creation-error', notice));
+    return section;
+  }
+
+  function renderWideQuickStart() {
+    const section = document.createElement('div');
+    section.className = 'wide-quick-start';
+    section.dataset.testid = 'wide-quick-start-section';
+    section.appendChild(text('div', 'wide-quick-start-heading', '◈ QUICK START'));
+    section.appendChild(text('p', 'wide-quick-start-note', 'Choose a starting party — edit anything before deployment.'));
+    const grid = document.createElement('div');
+    grid.className = 'wide-quick-start-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Quick start parties');
+    for (const preset of getQuickStartParties()) {
+      const card = createButton(preset.label, {
+        description: preset.summary,
+        onClick: () => selectQuickStart(preset.id)
+      });
+      card.className = 'wide-quick-start-card action-btn console-row';
+      card.dataset.testid = `wide-quick-start-${preset.id}`;
+      card.appendChild(text('span', 'card-detail', preset.summary));
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
     return section;
   }
 

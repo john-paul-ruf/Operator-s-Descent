@@ -1256,6 +1256,55 @@
     font-size: 10px;
   }
 
+  /* Quick Start — empty-state affordance rendered above Saved configs when
+     the party is empty (combat-and-ux-feedback-pass SESSION-04). Mirrors
+     the portrait quick-start-section role in the wide left column: heading,
+     tagline, then a stack of preset cards. Sized for the wide left pane
+     (`minmax(360px, 40%)` per `.wide-creation-shell`) using the same
+     tokens as neighboring `.wide-saved-configs`. */
+  .wide-quick-start {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-dim);
+    display: flex;
+    flex-direction: column;
+  }
+  .wide-quick-start-heading {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent);
+    margin-bottom: 6px;
+  }
+  .wide-quick-start-note {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin: 0 0 10px;
+    letter-spacing: 0.05em;
+  }
+  .wide-quick-start-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .wide-quick-start-card {
+    padding: 10px 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-dim);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .wide-quick-start-card:hover { border-color: var(--accent); }
+  .wide-quick-start-card .card-detail {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
   /* Saved configs list */
   .wide-saved-configs {
     padding: 14px 20px;
