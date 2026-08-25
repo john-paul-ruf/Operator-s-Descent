@@ -1223,6 +1223,100 @@ describe('combat screen controller', () => {
     controller.unmount();
   });
 
+  // Line-of-sight gate (SESSION-03 of combat-and-ux-feedback-pass). SESSION-02 shipped the
+  // rules-layer primitive hasLineOfSight(lattice, from, to) plus the 'no_line_of_sight'
+  // reason string; this session wires it into the UI's three attack-legality gates
+  // (previewForTarget, actionTargeting, selectTarget-via-preview). A weapon in-range by
+  // Chebyshev distance but blocked by an interior wall must render as disabled with the
+  // 'NO LINE OF SIGHT' reason chip, disable the ATTACK action when nothing has LOS, and
+  // refuse a keyboard-cycled walled selection at commit.
+  function windowWithWallAt(cells) {
+    const grid = Array.from({ length: 16 }, () => Array(8).fill(1));
+    for (const { x, y } of cells) grid[y][x] = 0;
+    return { originX: 0, originY: 0, width: 8, height: 16, cells: grid };
+  }
+
+  function shortRangeWeapon() {
+    return makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 5, minRange: 0, accuracyBonus: 40 });
+  }
+
+  it('a wall between attacker and target reports NO LINE OF SIGHT and disables the row (previewForTarget LOS gate)', async () => {
+    // Hero (1,1) with a legal adjacent enemy 0 at (1,2) (no wall on that segment, keeps ATTACK
+    // enabled so the target list renders) plus a walled enemy 1 at (5,1). LOS from (1,1) to
+    // (5,1) traverses (3,1), which is a wall — corner:false interior block. Distance 4 is
+    // inside the short-band weapon's maxRange 5, so the range check passes and only the LOS
+    // gate refuses. Verifies previewForTarget downgrades range.reason to 'no_line_of_sight'
+    // and renderTargets picks that up via the pre-existing REASON_LABEL entry.
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 }, weapon: shortRangeWeapon() }),
+      enemyActor({ id: 0, position: { x: 1, y: 2 }, hp: 10, hpMax: 10 }),
+      enemyActor({ id: 1, position: { x: 5, y: 1 }, hp: 10, hpMax: 10 })
+    ], ['hero', 0, 1]);
+    combat.window = windowWithWallAt([{ x: 3, y: 1 }]);
+    const { container, controller } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    // The legal companion keeps the target list open.
+    expect(byTestId(container, 'combat-target-0').disabled).toBe(false);
+    const walledRow = byTestId(container, 'combat-target-1');
+    expect(walledRow.disabled).toBe(true);
+    expect(walledRow.className).toContain('is-illegal');
+    // The reason chip surfaces the specific LOS string, not the fallback 'out of range' text —
+    // proves REASON_LABEL['no_line_of_sight'] resolved rather than falling through to 'illegal'.
+    expect(walledRow.textContent).toContain('NO LINE OF SIGHT');
+    controller.unmount();
+  });
+
+  it('LOS-blocked as the sole in-range target disables ATTACK action with "No targets in range." (actionTargeting LOS gate)', async () => {
+    // Only one enemy exists, at distance 2 (in-range for the short weapon) but wall-blocked.
+    // actionTargeting reports legal:0, combatActionDisabledReason returns 'No targets in range.',
+    // and the ATTACK button renders disabled with that reason as its title.
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 }, weapon: shortRangeWeapon() }),
+      enemyActor({ id: 0, position: { x: 3, y: 1 }, hp: 10, hpMax: 10 })
+    ]);
+    combat.window = windowWithWallAt([{ x: 2, y: 1 }]);
+    const { container, controller } = await mountCombat({ combat });
+
+    const attack = byTestId(container, 'combat-action-attack');
+    expect(attack.disabled).toBe(true);
+    expect(attack.getAttribute('title')).toBe('No targets in range.');
+    // The disabled action is inert — clicking it must not open a target list.
+    attack.click();
+    expect(byTestId(container, 'combat-targets')).toBe(null);
+    controller.unmount();
+  });
+
+  it('selectTarget refuses a keyboard-cycled walled target (validationError surfaces OUT OF RANGE)', async () => {
+    // Two enemies: 0 at (2,1) has no wall (legal, distance 1); 1 at (3,1) sits behind a wall at
+    // (2,1)-ish path — put the wall at (3,0)... no wait, LOS from (1,1) to (3,1) passes through
+    // (2,1). If we put the wall at (2,1), enemy 0 at (2,1) is co-located with a wall. Use a
+    // different layout: hero (1,1), legal enemy 0 at (1,2) (adjacent, no wall on segment),
+    // walled enemy 1 at (5,1) with wall at (3,1). LOS from (1,1) to (5,1) traverses (2,1),
+    // (3,1), (4,1); (3,1) is a wall → interior block. Distance 4 is inside the short weapon's
+    // maxRange 5, so the range check passes and only LOS refuses.
+    const combat = combatState([
+      partyActor({ id: 'hero', position: { x: 1, y: 1 }, weapon: shortRangeWeapon() }),
+      enemyActor({ id: 0, position: { x: 1, y: 2 }, hp: 10, hpMax: 10 }),
+      enemyActor({ id: 1, position: { x: 5, y: 1 }, hp: 10, hpMax: 10 })
+    ], ['hero', 0, 1]);
+    combat.window = windowWithWallAt([{ x: 3, y: 1 }]);
+    const { container, controller } = await mountCombat({ combat });
+
+    byTestId(container, 'combat-action-attack').click();
+    // Legal enemy 0 is auto-selected; Tab cycles to the walled enemy 1. Enter attempts commit,
+    // validationError trips 'OUT OF RANGE — MOVE OR RETARGET', no attack landed.
+    container.dispatch('keydown', keyEvent('Tab'));
+    expect(byTestId(container, 'combat-target-1').getAttribute('aria-selected')).toBe('true');
+    const beforeAttacks = combat.log.filter((entry) => entry.type === 'attack').length;
+    container.dispatch('keydown', keyEvent('Enter'));
+    expect(combat.log.filter((entry) => entry.type === 'attack').length).toBe(beforeAttacks);
+    // Same error string as any out-of-range refusal — the UI-layer contract is one message for
+    // "can't target this cell right now"; the specific LOS reason surfaces on the row itself.
+    expect(byTestId(container, 'combat-error').textContent).toContain('OUT OF RANGE');
+    controller.unmount();
+  });
+
   // Regression: an injured party member entering combat must NOT get its hpMax
   // fabricated from currentHP. deriveStats(character, classData, loadout) is the
   // ONLY source of true hpMax/chargeMax — normalizeCombatActor must fall through

@@ -460,6 +460,32 @@ describe('console/combat.js — out-of-range target rows (SESSION-05 checkpoint 
     expect(row.disabled).toBe(false);
     expect(row.className).not.toContain('is-illegal');
   });
+
+  // SESSION-03 (combat-and-ux-feedback-pass) — previewForTarget now emits the reason string
+  // `no_line_of_sight` for wall-blocked attacks. The renderTargets path is unchanged: it keys
+  // off preview.range?.reason generically via REASON_LABEL, whose 'no_line_of_sight' → 'no line
+  // of sight' entry has been present since SESSION-02 landed the paired constant. This test
+  // proves the console reads the new reason through the existing path — no source change to
+  // src/ui/console/combat.js was necessary.
+  it('an LOS-blocked target row renders disabled with the NO LINE OF SIGHT reason chip', () => {
+    const container = new FakeElement('div');
+    renderCombat(container, renderContext({
+      active: makeActive(),
+      enemies: [makeEnemy({ id: 'walled' })],
+      selection: { phase: 'choose-target', actionType: 'attack', targetId: null },
+      previewFor: () => ({ distance: 2, range: { band: 'short', legal: false, reason: 'no_line_of_sight' }, coverBonus: 0, flanked: false, targetLegal: false })
+    }));
+
+    const row = byTestId(container, 'combat-target-walled');
+    expect(row.disabled).toBe(true);
+    expect(row.className).toContain('is-illegal');
+    expect(row.textContent).toContain('NO LINE OF SIGHT');
+    const icon = svgChild(row);
+    expect(icon).toBeTruthy();
+    expect(icon.className).toContain('icon-danger');
+    // aria-label carries the human-readable REASON_LABEL entry (not the raw enum key).
+    expect(icon.getAttribute('aria-label')).toBe('no line of sight');
+  });
 });
 
 describe('console/combat.js — double-activate + effect-aware picker (SESSION-03)', () => {
