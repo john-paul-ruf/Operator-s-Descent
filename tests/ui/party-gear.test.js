@@ -573,3 +573,33 @@ describe('PARTY/GEAR — SESSION-02 shared density semantics', () => {
     expect(byTestId(gearContainer, 'gear-inventory-header').classList.contains('console-static-row')).toBe(true);
   });
 });
+
+describe('GEAR — SESSION-01 smart auto-slot (rule A)', () => {
+  it('diverts a sidearm to the off-hand when a main weapon is already equipped', () => {
+    const runState = run(
+      [item('secondary-sidearm', 'sidearm')],
+      [character({ equipment: { weapon: item('service-rifle', 'light_ranged'), armor: null, offhand: null } })]
+    );
+    const { container } = renderGearWith(runState);
+
+    byTestId(container, 'gear-equip-secondary-sidearm').click();
+
+    expect(runState.party[0].equipment.offhand.id).toBe('secondary-sidearm');
+    expect(runState.party[0].equipment.weapon.id).toBe('service-rifle');
+    expect(runState.inventory).toHaveLength(0);
+  });
+
+  it('fills the empty main-hand so a lone sidearm still attacks', () => {
+    const runState = run(
+      [item('lone-sidearm', 'sidearm')],
+      [character({ equipment: { weapon: null, armor: null, offhand: null } })]
+    );
+    const { container } = renderGearWith(runState);
+
+    byTestId(container, 'gear-equip-lone-sidearm').click();
+
+    expect(runState.party[0].equipment.weapon.id).toBe('lone-sidearm');
+    expect(runState.party[0].equipment.offhand).toBe(null);
+    expect(runState.inventory).toHaveLength(0);
+  });
+});

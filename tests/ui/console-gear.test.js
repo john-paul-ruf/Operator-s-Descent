@@ -648,3 +648,60 @@ describe('GEAR mode — consumables', () => {
     expect(dispatch.mock.calls.filter(([evt]) => evt === 'state:inventory-change')).toHaveLength(0);
   });
 });
+
+describe('GEAR mode — SESSION-01 smart auto-slot (rule A)', () => {
+  it('always routes a shield to the off-hand whether the main-hand is empty or occupied', () => {
+    // Empty main-hand: a shield never fills the weapon slot — only a lone
+    // sidearm does. The shield off-hands regardless.
+    const emptyRun = run([item('bulwark-empty', 'shield')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const emptyContainer = new FakeElement('div');
+    const emptyContext = { runState: emptyRun, data, refresh: () => renderGear(emptyContainer, emptyContext) };
+    renderGear(emptyContainer, emptyContext);
+    byTestId(emptyContainer, 'gear-equip-bulwark-empty').click();
+    expect(emptyRun.party[0].equipment.offhand.id).toBe('bulwark-empty');
+    expect(emptyRun.party[0].equipment.weapon).toBe(null);
+
+    // Occupied main-hand: the shield off-hands alongside the retained weapon.
+    const occupiedRun = run([item('bulwark-busy', 'shield')], [character({ equipment: { weapon: item('service-rifle', 'light_ranged'), armor: null, offhand: null } })]);
+    const occupiedContainer = new FakeElement('div');
+    const occupiedContext = { runState: occupiedRun, data, refresh: () => renderGear(occupiedContainer, occupiedContext) };
+    renderGear(occupiedContainer, occupiedContext);
+    byTestId(occupiedContainer, 'gear-equip-bulwark-busy').click();
+    expect(occupiedRun.party[0].equipment.offhand.id).toBe('bulwark-busy');
+    expect(occupiedRun.party[0].equipment.weapon.id).toBe('service-rifle');
+  });
+
+  it('labels the sidearm equip button OFF-HAND when the main-hand is occupied and WEAPON when empty', () => {
+    const occupiedRun = run([item('label-sidearm', 'sidearm')], [character({ equipment: { weapon: item('service-rifle', 'light_ranged'), armor: null, offhand: null } })]);
+    const occupiedContainer = new FakeElement('div');
+    const occupiedContext = { runState: occupiedRun, data, refresh: () => renderGear(occupiedContainer, occupiedContext) };
+    renderGear(occupiedContainer, occupiedContext);
+    expect(byTestId(occupiedContainer, 'gear-equip-label-sidearm').getAttribute('aria-label')).toBe('EQUIP OFF-HAND');
+
+    const emptyRun = run([item('label-sidearm', 'sidearm')], [character({ equipment: { weapon: null, armor: null, offhand: null } })]);
+    const emptyContainer = new FakeElement('div');
+    const emptyContext = { runState: emptyRun, data, refresh: () => renderGear(emptyContainer, emptyContext) };
+    renderGear(emptyContainer, emptyContext);
+    expect(byTestId(emptyContainer, 'gear-equip-label-sidearm').getAttribute('aria-label')).toBe('EQUIP WEAPON');
+  });
+
+  it('projects a secondary sidearm through the off-hand so its defense shows in the compare line', () => {
+    // A reinforced sidearm grants +1 Defense. deriveStats folds defense into
+    // the derived block only from the off-hand slot (it reads
+    // offhand.defenseBonus, never weapon.defenseBonus), so a +1 DEF delta in
+    // the preview proves the projection uses the off-hand, not a main-hand swap.
+    const runState = run(
+      [item('guard-sidearm', 'sidearm', { rarity: 'tuned', affixes: ['reinforced'] })],
+      [character({ equipment: { weapon: item('service-rifle', 'light_ranged'), armor: null, offhand: null } })]
+    );
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    const compare = byTestId(container, 'gear-compare-guard-sidearm');
+    expect(compare).toBeTruthy();
+    const defSegment = compare.textContent.split('·')[0];
+    expect(defSegment).toContain('DEF');
+    expect(defSegment).toContain('(+1)');
+  });
+});
