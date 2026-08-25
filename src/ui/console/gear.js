@@ -294,6 +294,42 @@ function requestJunkAll(context) {
   return true;
 }
 
+function consumableResultSummary(result) {
+  if (result.healed != null) return `healed ${result.healed} HP`;
+  if (result.chargeRestored != null) return `restored ${result.chargeRestored} CHARGE`;
+  if (result.conditionRemoved) return `removed ${result.conditionRemoved}`;
+  if (result.conditionApplied) return `applied ${result.conditionApplied}`;
+  if (result.apRestored != null) return `restored ${result.apRestored} AP`;
+  return 'applied';
+}
+
+function requestUseConsumable(context, item) {
+  const state = stateFor(context.runState);
+  const character = context.runState.party[state.charIndex];
+  const consumableData = context.data?.consumables?.consumables?.[item.baseType];
+  const rngCursor = createRNGCursorForRun(context.runState.worldSeed, context.runState.rngState);
+  const result = applyConsumable(character, consumableData, {
+    inCombat: false,
+    rngCursor,
+    conditionsData: context.data?.conditions,
+    inventory: context.runState.inventory,
+    itemId: item.id
+  });
+  if (!result.success) {
+    state.error = result.reason || 'use_failed';
+    state.notice = '';
+    context.refresh?.();
+    return false;
+  }
+  context.runState.rngState = rngCursor.getState();
+  context.runState.inventory = result.inventory;
+  state.error = '';
+  state.notice = `Used ${itemName(item, context.data)} on ${character.name || character.classId || 'the character'} — ${consumableResultSummary(result)}.`;
+  notifyInventoryChange(context);
+  context.refresh?.();
+  return true;
+}
+
 export function render(container, context = {}) {
   clear(container);
   const runState = context.runState;

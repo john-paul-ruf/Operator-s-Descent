@@ -601,4 +601,50 @@ describe('GEAR mode — consumables', () => {
     expect(use.disabled).toBe(true);
     expect(byTestId(container, 'gear-use-reason-patch-1').textContent).toBe('Use items from the COMBAT action list during a fight.');
   });
+
+  it('using repair_patch heals the character and removes the single-count item from inventory', () => {
+    const runState = run(
+      [item('patch-1', 'repair_patch', { category: 'consumable' })],
+      [character({ currentHP: 1 })]
+    );
+    const container = new FakeElement('div');
+    const context = { runState, data, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-use-patch-1').click();
+
+    const healed = runState.party[0].currentHP;
+    expect(healed).toBeGreaterThan(1);
+    expect(healed).toBeLessThanOrEqual(30);
+    expect(runState.inventory).toHaveLength(0);
+    expect(byTestId(container, 'gear-item-patch-1')).toBeNull();
+  });
+
+  it('a successful USE dispatches state:inventory-change with the current runState', () => {
+    const runState = run([item('patch-1', 'repair_patch', { category: 'consumable' })], [character({ currentHP: 1 })]);
+    const container = new FakeElement('div');
+    const dispatch = vi.fn();
+    const context = { runState, data, bus: { dispatch }, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-use-patch-1').click();
+
+    const events = dispatch.mock.calls.filter(([evt]) => evt === 'state:inventory-change');
+    expect(events).toHaveLength(1);
+    expect(events[0][1]).toEqual({ runState });
+  });
+
+  it('clicking a blocked USE button is a no-op', () => {
+    const runState = run([item('injector-1', 'adrenal_injector', { category: 'consumable' })], [character({ currentHP: 1 })]);
+    const container = new FakeElement('div');
+    const dispatch = vi.fn();
+    const context = { runState, data, bus: { dispatch }, refresh: () => renderGear(container, context) };
+    renderGear(container, context);
+
+    byTestId(container, 'gear-use-injector-1').click();
+
+    expect(runState.party[0].currentHP).toBe(1);
+    expect(runState.inventory).toHaveLength(1);
+    expect(dispatch.mock.calls.filter(([evt]) => evt === 'state:inventory-change')).toHaveLength(0);
+  });
 });
