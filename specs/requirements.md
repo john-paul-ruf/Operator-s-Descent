@@ -257,7 +257,7 @@
   - [ ] Every action reachable by keyboard is also reachable by touch, and vice versa — full parity.
   - [ ] No gameplay affordance exists outside the console (no context menus, floating panels, hover tooltips, or map-tap movement).
   - [ ] The playfield is a readout, not a control surface.
-  - [ ] 96px minimum hit height on every console row (touch target).
+  - [ ] 48px minimum hit height on every console row (touch target).
   - [ ] The console can be collapsed to a minimal height to maximize playfield visibility.
 
 ### FR-16: Console Mode — MOVE
@@ -569,7 +569,7 @@
   - [ ] The wide telemetry dock stacks the status-strip fields vertically at the top (same fields, same accessibility guarantees — danger clock stays numeric, never color-only) and streams a **persistent live LOG feed** below (same `.log-entry` container, same log-severity classes, same `[T:NNN]` timestamp prefix, same sticky "◈ Event Log — Floor NN" header, same auto-scroll-to-newest behavior as FR-22 LOG mode).
   - [ ] The full LOG history and the copy-link action remain reachable via LOG mode in the console dock (the telemetry-dock feed is a live tail, not a replacement for LOG mode).
   - [ ] The CRT/VHS effect overlay (scanlines, vignette, aperture grille, tracking band, grain, border flicker, frame flash, glitch bars, noise lines, VHS events, per-element text glitch) covers the **full viewport** in both classes — no letterboxed column and no dead margins in `wide`.
-  - [ ] Touch-capable rows keep the 96px minimum hit height in **both** classes (per FR-15 and the Spacing System floor in `specs/design.md`).
+  - [ ] Touch-capable rows keep the 48px minimum hit height in **both** classes (per FR-15 and the Spacing System floor in `specs/design.md`).
   - [ ] Pointer-only affordances in `wide` may densify to a 44px minimum hit height — never below.
   - [ ] Wide non-game screens each use the width purposefully per the per-screen matrix in `specs/design.md` §Screen Layouts by Class: title = centered column with wider ornament field; creation = roster/editor two-pane; library = run-card grid; scorecard = summary/share two-pane; settings = two-column form; tutorial = two-page spread; import = centered column (unchanged width).
   - [ ] The `wide-` CSS class prefix is reserved for wide-only structures (e.g. `.wide-shell`, `.wide-telemetry-dock`, `.wide-console-dock`, `.wide-mode-tab`) so tooling can distinguish planned-only structures from portrait-shipped ones.
@@ -979,7 +979,7 @@
 - **`prefers-reduced-motion`:** Automatically disables all glitch effects and authored transitions. The game remains fully playable.
 - **Manual reduced-motion override:** A settings toggle for players who want reduced motion regardless of OS setting (or full motion despite the OS setting).
 - **Keyboard parity:** Every action is reachable via keyboard. No keyboard trap — the player can always return to a previous mode or exit.
-- **Touch parity:** Every action is reachable via touch. 96px minimum hit height on console rows.
+- **Touch parity:** Every action is reachable via touch. 48px minimum hit height on console rows.
 - **Color:** Status is never communicated by color alone — the accent color is atmospheric, not informational. Status (HP, conditions, corruption) is numeric or iconic.
 - **Glitch safety:** Glitch never obscures actionable information for longer than 400ms and never touches an interactive control during a pending decision. Disabling glitch costs no information.
 - **Audio:** Full per-layer volume control and master mute. The game is playable with audio disabled (information loss is intentional but the game is not broken).
