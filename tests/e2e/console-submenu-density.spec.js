@@ -21,7 +21,7 @@ const REDUCED_SETTINGS = {
 const PHONE_PROJECT = 'chromium-phone-touch';
 const TALL_PROJECT = 'chromium-portrait';
 const PORTRAIT_PROJECTS = new Set([PHONE_PROJECT, TALL_PROJECT]);
-const TOUCH_FLOOR = 96;
+const TOUCH_FLOOR = 48;
 
 // Every console mode surfaced through the exploration fixture, in visit order.
 const EXPLORATION_MODES = ['move', 'party', 'gear', 'tech', 'loot', 'log'];
@@ -208,14 +208,16 @@ test.describe('console submenu density + reachable scrolling — portrait', () =
       for (const row of staticRows) {
         if (row.isCard) {
           // KNOWN OUT-OF-LEASE DEFECT (see handoff surprises): styles/components.css
-          // ~1580-1589 applies an unqualified `.equipment-card, .protocol-card { min-height: 96px }`
-          // rule (creation-screen touch floor) that ties with, and — by later source
-          // order — beats, the `.console-static-card { min-height: 0 }` reset at
-          // ~1009-1012, so every compact card plateaus at 96px instead of collapsing.
-          // Not fixable from this session's lease (M56/M79 belong to a different
-          // session). Guard against a further regression without failing on the
-          // already-known plateau.
-          expect(row.height, `${modeId} static card height sane (${JSON.stringify(row)})`).toBeLessThanOrEqual(TOUCH_FLOOR + 44);
+          // ~1580-1589 applies an unqualified `.equipment-card, .protocol-card { min-height: 48px }`
+          // rule (creation-screen touch floor, lowered 96→48 by touch-target-density-pass
+          // SESSION-02) that ties with, and — by later source order — beats, the
+          // `.console-static-card { min-height: 0 }` reset at ~1009-1012, so every
+          // compact card plateaus at 48px plus whatever content-driven height it
+          // takes on. Not fixable from this session's lease (M56/M79 belong to a
+          // different session). Guard against a further regression only — 140 is the
+          // absolute anti-inflation ceiling (decoupled from TOUCH_FLOOR so shrinking
+          // the touch floor does not tighten this ceiling below observed content).
+          expect(row.height, `${modeId} static card height sane (${JSON.stringify(row)})`).toBeLessThanOrEqual(140);
         } else {
           const compact = row.minHeight === '0px' || row.height < TOUCH_FLOOR;
           expect(compact, `${modeId} static row stays compact (${JSON.stringify(row)})`).toBe(true);

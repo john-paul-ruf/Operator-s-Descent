@@ -150,11 +150,11 @@ test('console dock: 7 vertical tabs, always expanded, no dim layer, keyboard 1�
   await expect(page.getByTestId('console-tab-move')).toHaveAttribute('aria-selected', 'true');
 });
 
-test('console dock: touch floor ≥ 96px per tab at the 1024×1024 touch project', async ({ page }, testInfo) => {
+test('console dock: touch floor ≥ 48px per tab at the 1024×1024 touch project', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-wide-square', 'touch floor honored at the tablet-landscape project');
   await finalizeOneOperatorRun(page, 5152);
   const heights = await page.locator('.wide-mode-tab').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
-  expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
+  expect(Math.min(...heights)).toBeGreaterThanOrEqual(48);
 });
 
 // SESSION-08 — icon-first density §5.3 dock-tightening. The wide console tab
@@ -284,7 +284,7 @@ test('library screen wide: grid shell renders after a run is saved', async ({ pa
   await expect(del).toHaveClass(/btn-danger/);
 });
 
-test('settings screen wide: two columns with 96px row floor and back returns to title', async ({ page }, testInfo) => {
+test('settings screen wide: two columns with 48px row floor and back returns to title', async ({ page }, testInfo) => {
   await openBranchesFromTitle(page);
   await page.getByTestId('title-settings').click();
 
@@ -294,15 +294,16 @@ test('settings screen wide: two columns with 96px row floor and back returns to 
 
   if (testInfo.project.name === 'chromium-wide-square') {
     // SESSION-06 — extend the touch-floor guard with layout assertions so the
-    // wide settings dock at 1024×1024 (a) hits 96px on every touch-capable row
-    // container, (b) contains every row and its interactive children inside
+    // wide settings dock at 1024×1024 (a) hits 48px on every touch-capable row
+    // container (lowered 96→48 by touch-target-density-pass SESSION-02),
+    // (b) contains every row and its interactive children inside
     // the column/viewport, (c) never overlaps a slider's label / range input /
     // value rectangles, and (d) never overlaps consecutive rows. Screenshot
     // attaches for the handoff.
     const rows = page.locator('.wide-settings-body .toggle-row, .wide-settings-body .slider-row, .wide-settings-body .motion-options');
     const heights = await rows.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
     expect(heights.length).toBeGreaterThan(0);
-    expect(Math.min(...heights)).toBeGreaterThanOrEqual(96);
+    expect(Math.min(...heights)).toBeGreaterThanOrEqual(48);
 
     // Every row's rect stays inside its column rect AND inside the viewport.
     const viewport = page.viewportSize();
@@ -514,7 +515,7 @@ test('CRT scanlines span the viewport in wide and in a portrait-resized state', 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 8. Input floors — 44px baseline in wide (pointer-only) plus 96px on touch
+// 8. Input floors — 44px baseline in wide (pointer-only) plus 48px on touch
 // ─────────────────────────────────────────────────────────────────────────────
 test('pointer-only input floor: interactive controls ≥ 44px tall at wide desktop viewports', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'chromium-wide-square', 'square variant is the touch-floor case');
@@ -541,7 +542,7 @@ test('pointer-only input floor: interactive controls ≥ 44px tall at wide deskt
 // ─────────────────────────────────────────────────────────────────────────────
 const WIDE_FINE_PROJECT = 'chromium-wide-1440';
 const WIDE_TOUCH_PROJECT = 'chromium-wide-square';
-const TOUCH_FLOOR = 96;
+const TOUCH_FLOOR = 48;
 const POINTER_FLOOR = 44;
 const EXPLORATION_MODES = ['move', 'party', 'gear', 'tech', 'loot', 'log'];
 const NAMED_SCROLL_TESTIDS = { party: 'party-detail', gear: 'gear-inventory', tech: 'tech-deck', loot: 'loot-items', log: 'log-area' };
@@ -698,12 +699,15 @@ test('console density (wide dock): exploration modes reach the true end of their
       if (row.isCard) {
         // KNOWN OUT-OF-LEASE DEFECT (see handoff surprises): styles/components.css
         // ~1580-1589 applies an unqualified `.equipment-card, .protocol-card
-        // { min-height: 96px }` rule that ties with, and beats, the
-        // `.console-static-card { min-height: 0 }` reset (~1009-1012 and the
-        // wide.css fine-pointer 48px rule), so every compact card plateaus at
-        // 96px instead of collapsing. Not fixable from this session's lease.
-        // Guard against further inflation only.
-        expect(row.height, `${modeId} wide static card height sane (${JSON.stringify(row)})`).toBeLessThanOrEqual(TOUCH_FLOOR + 44);
+        // { min-height: 48px }` rule (lowered 96→48 by
+        // touch-target-density-pass SESSION-02) that ties with, and beats,
+        // the `.console-static-card { min-height: 0 }` reset (~1009-1012),
+        // so every compact card plateaus at 48px plus whatever content-driven
+        // height it takes on. Not fixable from this session's lease. Guard
+        // against further inflation only — 140 is the absolute anti-inflation
+        // ceiling (decoupled from TOUCH_FLOOR so shrinking the touch floor
+        // does not tighten this ceiling below observed content heights).
+        expect(row.height, `${modeId} wide static card height sane (${JSON.stringify(row)})`).toBeLessThanOrEqual(140);
       } else {
         const compact = row.minHeight === '0px' || row.height < floor;
         expect(compact, `${modeId} wide static row not re-inflated by the pointer rule (${JSON.stringify(row)})`).toBe(true);
