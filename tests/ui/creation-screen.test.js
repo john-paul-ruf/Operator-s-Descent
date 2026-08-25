@@ -741,6 +741,55 @@ describe('creation screen — wide layout', () => {
     expect(byTestId(container, 'finalize').disabled).toBe(true);
   });
 
+  // combat-and-ux-feedback-pass SESSION-04 — Quick Start also lives in the
+  // wide left pane, gated on empty-party exactly like the portrait section.
+  it('wide layout: renders Quick Start in the left pane on a fresh empty draft, with all three preset cards', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 5060 });
+    const section = byTestId(container, 'wide-quick-start-section');
+    expect(section).not.toBeNull();
+    // Lives in the left pane alongside roster/saved-configs — not in the editor.
+    expect(section.parentNode).toBe(byTestId(container, 'wide-creation-left'));
+    // Rendered between roster and saved-configs (Quick Start and Saved
+    // Configs share the "load a premade party" role).
+    const left = byTestId(container, 'wide-creation-left');
+    const roster = byTestId(container, 'wide-roster');
+    const saved = byTestId(container, 'wide-saved-configs');
+    expect(left.children.indexOf(roster)).toBeLessThan(left.children.indexOf(section));
+    expect(left.children.indexOf(section)).toBeLessThan(left.children.indexOf(saved));
+    // All three preset cards render.
+    for (const id of ['breach-drill', 'scout-pair', 'full-crew']) {
+      expect(byTestId(container, `wide-quick-start-${id}`)).not.toBeNull();
+    }
+    // Visible promise mirrors portrait.
+    expect(allText(section).join(' ')).toContain('Choose a starting party — edit anything before deployment.');
+  });
+
+  it('wide layout: clicking a wide Quick Start card loads that preset into the readout', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 5061 });
+    // BREACH DRILL: same 26/80 spent, 540 credits as the portrait test.
+    byTestId(container, 'wide-quick-start-breach-drill').click();
+    expect(byTestId(container, 'remaining').children[1].textContent).toBe('54');
+    expect(byTestId(container, 'credits').children[1].textContent).toBe('540');
+    expect(byTestId(container, 'character-slot-0').classList.contains('active')).toBe(true);
+  });
+
+  it('wide layout: Quick Start section disappears once a party exists (empty-state gate)', async () => {
+    installMatchMedia(true);
+    const { container } = await mountCreation({ preloadedSeed: 5062 });
+    expect(byTestId(container, 'wide-quick-start-section')).not.toBeNull();
+    // Load via a preset card — section is dismissed just like portrait.
+    byTestId(container, 'wide-quick-start-scout-pair').click();
+    expect(byTestId(container, 'wide-quick-start-section')).toBeNull();
+    // Adding characters via `add-character` also dismisses it (from a fresh
+    // remount to reset state).
+    const { container: fresh } = await mountCreation({ preloadedSeed: 5063 });
+    expect(byTestId(fresh, 'wide-quick-start-section')).not.toBeNull();
+    byTestId(fresh, 'add-character').click();
+    expect(byTestId(fresh, 'wide-quick-start-section')).toBeNull();
+  });
+
   it('adding a character updates the wide readout and marks the slot active', async () => {
     installMatchMedia(true);
     const { container } = await mountCreation({ preloadedSeed: 42 });
