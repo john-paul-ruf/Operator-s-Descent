@@ -1,3 +1,5 @@
+import { createEnemy, createEcho } from './enemies.js';
+
 const WINDOW_WIDTH = 8;
 const WINDOW_HEIGHT = 16;
 const CANDIDATE_RING_RADIUS = 2;
@@ -393,17 +395,43 @@ export function deployBands(window, partyCount, hostileCount) {
   return { partyPositions, hostilePositions };
 }
 
-export function createStandardEncounter(floor, contact, party, enemies, rngCursor) {
+// Turns a bare floor spawn stub ({id, x, y, archetypeId, ...}) into a combat-ready actor.
+// Idempotent — an already-hydrated actor (hp/hpMax/defense present) passes through untouched,
+// so this is safe to call on encounter.actors that arrived pre-hydrated from another caller.
+// When enemiesData is absent (test fixtures that skip the archetype registry), the raw spawn
+// passes through unchanged rather than crashing on the undefined archetype lookup.
+export function hydrateSpawn(spawn, depth, rngCursor, enemiesData) {
+  if (!spawn) return null;
+  if (spawn.hp !== undefined && spawn.hpMax !== undefined && spawn.defense !== undefined) return spawn;
+  if (spawn.archetypeId === 'echo') {
+    const echo = createEcho(spawn.character, depth);
+    return echo ? { ...echo, id: spawn.id ?? echo.id, x: spawn.x, y: spawn.y } : spawn;
+  }
+  if (!enemiesData) return spawn;
+  const enemy = createEnemy(spawn.archetypeId, depth, rngCursor, enemiesData);
+  if (!enemy) return spawn;
+  return {
+    ...enemy,
+    id: spawn.id ?? enemy.id,
+    x: spawn.x,
+    y: spawn.y,
+    ...(spawn.elite ? { elite: true } : {})
+  };
+}
+
+export function createStandardEncounter(floor, contact, party, enemies, rngCursor, options = {}) {
   const floorCells = floor?.cells || floor?.grid || [[1]];
   const window = carveWindow(floorCells, contact || { x: 0, y: 0 });
-  const { partyPositions, hostilePositions } = deployBands(window, party.length, enemies.length);
+  const depth = options.depth || 1;
+  const hydrated = (enemies || []).map(e => hydrateSpawn(e, depth, rngCursor, options.enemiesData));
+  const { partyPositions, hostilePositions } = deployBands(window, party.length, hydrated.length);
   const actors = [
     ...party.map((member, index) => ({
       ...member,
       side: 'party',
       position: partyPositions[index] ? { ...partyPositions[index] } : { x: 0, y: 0 }
     })),
-    ...enemies.map((enemy, index) => ({
+    ...hydrated.map((enemy, index) => ({
       ...enemy,
       side: 'enemy',
       position: hostilePositions[index] ? { ...hostilePositions[index] } : { x: window.width - 1, y: window.height - 1 }
@@ -554,11 +582,12 @@ export function createHuntEncounter(floor, partyPosition, party, runState, rngCu
         archetypeId = 'drone';
       }
     }
-    enemies.push({
-      id: `hunt_${i}`,
-      archetypeId,
-      elite: i === 0
-    });
+    enemies.push(hydrateSpawn(
+      { id: `hunt_${i}`, archetypeId, elite: i === 0 },
+      depth,
+      rngCursor,
+      data?.enemies
+    ));
   }
 
   const window = carveWindow(floorCells, partyPosition);

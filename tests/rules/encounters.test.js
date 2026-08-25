@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createStandardEncounter, createHuntEncounter, completeEncounter, getDueEchoes, consumeEcho, injectEcho, deployBands } from '../../src/rules/encounters.js';
+import { createEnemy } from '../../src/rules/enemies.js';
 // windowMetricsOfWindow / buildRawWindow below are local mirrors used by the widening tests.
 import { createRunState } from '../../src/state/run-state.js';
 import { createRNGCursorForRun } from '../../src/core/rng-cursor.js';
@@ -10,6 +11,11 @@ import { makeGrid, reachable } from '../helpers/grids.js';
 import { loadData } from '../helpers/data.js';
 
 const themesData = loadData('themes');
+const enemiesData = loadData('enemies');
+// Bundled game-data registry for hunt encounters, which read data.themes AND data.enemies
+// (themes for the enemyMixWeights table, enemies for the archetype registry that hydrateSpawn
+// consults). Structural mirror of the runtime game-data registry from src/data-loader.js.
+const huntData = { themes: themesData, enemies: enemiesData };
 
 function makeFloor() {
   return generateFloor(42, 1, {}, themesData);
@@ -47,7 +53,7 @@ describe('createHuntEncounter — basic structure', () => {
     const party = makeParty(3);
     const runState = createRunState(42, party, { depth: 5 });
     const cursor = createRNGCursorForRun(42);
-    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, themesData);
+    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, huntData);
     expect(encounter).not.toBeNull();
     expect(encounter.kind).toBe('hunt');
     expect(encounter.id).toContain('hunt_5_');
@@ -60,7 +66,7 @@ describe('createHuntEncounter — basic structure', () => {
     const party = makeParty(3);
     const runState = createRunState(42, party, { depth: 5 });
     const cursor = createRNGCursorForRun(42);
-    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, themesData);
+    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, huntData);
     expect(encounter).not.toBeNull();
     const positions = encounter.actors.map(a => `${a.position.x},${a.position.y}`);
     expect(new Set(positions).size).toBe(positions.length);
@@ -71,7 +77,7 @@ describe('createHuntEncounter — basic structure', () => {
     const party = makeParty(2);
     const runState = createRunState(42, party, { depth: 5 });
     const cursor = createRNGCursorForRun(42);
-    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, themesData);
+    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, huntData);
     expect(encounter).not.toBeNull();
     const elites = encounter.actors.filter(a => a.side === 'enemy' && a.elite);
     expect(elites.length).toBeGreaterThanOrEqual(1);
@@ -87,8 +93,8 @@ describe('createHuntEncounter — determinism', () => {
     const runState2 = createRunState(42, party, { depth: 5 });
     const cursor1 = createRNGCursorForRun(42);
     const cursor2 = createRNGCursorForRun(42);
-    const e1 = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState1, cursor1, themesData);
-    const e2 = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState2, cursor2, themesData);
+    const e1 = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState1, cursor1, huntData);
+    const e2 = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState2, cursor2, huntData);
     expect(e1).toEqual(e2);
   });
 });
@@ -103,7 +109,8 @@ describe('createHuntEncounter — geometry tolerance', () => {
     const party = makeParty(2);
     const runState = createRunState(42, party, { depth: 5 });
     const cursor = createRNGCursorForRun(42);
-    const encounter = createHuntEncounter(tinyFloor, { x: 10, y: 16 }, party, runState, cursor, themesData);
+    const encounter = createHuntEncounter(tinyFloor, { x: 10, y: 16 }, party, runState, cursor, huntData);
+
     expect(encounter).toBeNull();
   });
 });
@@ -228,10 +235,14 @@ describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkp
   const cursor = createRNGCursorForRun(1);
   const party = [makeCharacter({ id: 'a' })];
   const enemy = [{ id: 'e1', archetypeId: 'drone' }];
+  // Standard-encounter hydration options — combat-and-ux-feedback-pass SESSION-01.
+  // Kept at depth 1 for these window-geometry tests; hydrated hp/hpMax are not asserted here
+  // (see the "hydrates a bare spawn stub" test below for the hp regression assertion).
+  const hydration = { enemiesData, depth: 1 };
 
   it('left-edge contact clamps originX to 0 but the picked window shifts DOWN for openness', () => {
     const floor = { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' };
-    const encounter = createStandardEncounter(floor, { x: 0, y: 16 }, party, enemy, cursor);
+    const encounter = createStandardEncounter(floor, { x: 0, y: 16 }, party, enemy, cursor, hydration);
     expect(encounter.window.originX).toBe(0);
     // The old deterministic origin would be y = max(0, 16-8) = 8. The scoring loop must NOT
     // pick that when a shifted-up origin yields substantially more open cells.
@@ -243,7 +254,7 @@ describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkp
 
   it('corner contact never yields a negative origin', () => {
     const floor = { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' };
-    const encounter = createStandardEncounter(floor, { x: 0, y: 0 }, party, enemy, cursor);
+    const encounter = createStandardEncounter(floor, { x: 0, y: 0 }, party, enemy, cursor, hydration);
     expect(encounter.window.originX).toBeGreaterThanOrEqual(0);
     expect(encounter.window.originY).toBeGreaterThanOrEqual(0);
     expect(encounter.window.width).toBe(8);
@@ -252,7 +263,7 @@ describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkp
 
   it('contact against the far bottom-right edge clamps origin to grid maxima', () => {
     const floor = { cells: makeLeftEdgeAsymmetricFloor(), themeId: 'cold_storage' };
-    const encounter = createStandardEncounter(floor, { x: 19, y: 31 }, party, enemy, cursor);
+    const encounter = createStandardEncounter(floor, { x: 19, y: 31 }, party, enemy, cursor, hydration);
     // Floor is 20x32; window 8x16 → maxOX = 12, maxOY = 16. Every candidate origin clamps here.
     expect(encounter.window.originX).toBe(12);
     expect(encounter.window.originY).toBe(16);
@@ -262,8 +273,8 @@ describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkp
 
   it('same (floorCells, contact) inputs produce byte-identical output on repeat calls', () => {
     const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
-    const c1 = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
-    const c2 = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
+    const c1 = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor, hydration);
+    const c2 = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor, hydration);
     expect(JSON.stringify(c1.window.cells)).toBe(JSON.stringify(c2.window.cells));
     expect(c1.window.originX).toBe(c2.window.originX);
     expect(c1.window.originY).toBe(c2.window.originY);
@@ -279,7 +290,7 @@ describe('carveWindow — scoring loop over candidate origins (SESSION-03 checkp
     ];
     for (const floor of floors) {
       for (const contact of contacts) {
-        const e = createStandardEncounter(floor, contact, party, enemy, cursor);
+        const e = createStandardEncounter(floor, contact, party, enemy, cursor, hydration);
         expect(e.window.width).toBe(8);
         expect(e.window.height).toBe(16);
         expect(e.window.cells.length).toBe(16);
@@ -293,10 +304,11 @@ describe('carveWindow — post-carve widening (SESSION-03 checkpoint 2)', () => 
   const cursor = createRNGCursorForRun(1);
   const party = [makeCharacter({ id: 'a' })];
   const enemy = [{ id: 'e1', archetypeId: 'drone' }];
+  const hydration = { enemiesData, depth: 1 };
 
   it('narrow-corridor contact yields a spacious final window (>= 48 open cells, >= 2 2x2 regions)', () => {
     const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
-    const encounter = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
+    const encounter = createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor, hydration);
     const metrics = windowMetricsOfWindow(encounter.window.cells);
     expect(metrics.openCells).toBeGreaterThanOrEqual(48);
     expect(metrics.twoByTwoRegions).toBeGreaterThanOrEqual(2);
@@ -308,7 +320,7 @@ describe('carveWindow — post-carve widening (SESSION-03 checkpoint 2)', () => 
       { x: 5, y: 8 }, { x: 10, y: 16 }, { x: 10, y: 20 }, { x: 15, y: 25 }, { x: 3, y: 5 }
     ];
     for (const contact of contacts) {
-      const e = createStandardEncounter(floor, contact, party, enemy, cursor);
+      const e = createStandardEncounter(floor, contact, party, enemy, cursor, hydration);
       const metrics = windowMetricsOfWindow(e.window.cells);
       expect(metrics.openCells).toBeGreaterThanOrEqual(32);
     }
@@ -319,7 +331,7 @@ describe('carveWindow — post-carve widening (SESSION-03 checkpoint 2)', () => 
     const enemies2 = [
       { id: 'e1', archetypeId: 'drone' }, { id: 'e2', archetypeId: 'drone' }
     ];
-    const encounter = createStandardEncounter(floor, { x: 10, y: 16 }, makeParty(2), enemies2, cursor);
+    const encounter = createStandardEncounter(floor, { x: 10, y: 16 }, makeParty(2), enemies2, cursor, hydration);
     const partyPositions = encounter.actors.filter(a => a.side === 'party').map(a => a.position);
     const hostilePositions = encounter.actors.filter(a => a.side === 'enemy').map(a => a.position);
     let minSeparation = Infinity;
@@ -335,7 +347,7 @@ describe('carveWindow — post-carve widening (SESSION-03 checkpoint 2)', () => 
       { x: 10, y: 16 }, { x: 5, y: 8 }, { x: 15, y: 20 }
     ];
     for (const contact of contacts) {
-      const e = createStandardEncounter(floor, contact, party, enemy, cursor);
+      const e = createStandardEncounter(floor, contact, party, enemy, cursor, hydration);
       const raw = buildRawWindow(floor.cells, e.window.originX, e.window.originY);
       for (let x = 0; x < 8; x++) {
         expect(e.window.cells[0][x]).toBe(raw[0][x]);
@@ -351,16 +363,16 @@ describe('carveWindow — post-carve widening (SESSION-03 checkpoint 2)', () => 
   it('widening is idempotent — re-carving on the same inputs is a no-op', () => {
     const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
     const contact = { x: 10, y: 16 };
-    const first = createStandardEncounter(floor, contact, party, enemy, cursor);
-    const second = createStandardEncounter(floor, contact, party, enemy, cursor);
+    const first = createStandardEncounter(floor, contact, party, enemy, cursor, hydration);
+    const second = createStandardEncounter(floor, contact, party, enemy, cursor, hydration);
     expect(JSON.stringify(first.window.cells)).toBe(JSON.stringify(second.window.cells));
   });
 
   it('carveWindow never mutates the input floorCells (widening writes only into the window)', () => {
     const floor = { cells: makeCorridorSpotFloor(), themeId: 'cold_storage' };
     const before = JSON.stringify(floor.cells);
-    createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor);
-    createStandardEncounter(floor, { x: 5, y: 5 }, party, enemy, cursor);
+    createStandardEncounter(floor, { x: 10, y: 16 }, party, enemy, cursor, hydration);
+    createStandardEncounter(floor, { x: 5, y: 5 }, party, enemy, cursor, hydration);
     expect(JSON.stringify(floor.cells)).toBe(before);
   });
 });
@@ -422,6 +434,91 @@ describe('deployBands — reachability invariant (SESSION-01)', () => {
     // Every position sits in the same connected region as the first (BFS reachability).
     const reach = reachable(cells, all[0].x, all[0].y);
     for (const p of all) expect(reach.has(`${p.x},${p.y}`)).toBe(true);
+  });
+});
+
+describe('createStandardEncounter — spawn hydration (combat-and-ux-feedback-pass SESSION-01)', () => {
+  it('hydrates a bare spawn stub into a combat-ready actor with archetype hp/defense/attributes', () => {
+    const floor = { cells: makeGrid(20, 32, 1), themeId: 'cold_storage' };
+    const party = [makeCharacter({ id: 'a' })];
+    const cursor = createRNGCursorForRun(11);
+    const stub = [{ id: 42, x: 5, y: 5, archetypeId: 'drone' }];
+    const encounter = createStandardEncounter(floor, { x: 5, y: 5 }, party, stub, cursor, { enemiesData, depth: 3 });
+    const foe = encounter.actors.find(a => a.side === 'enemy');
+    expect(foe).toBeDefined();
+    expect(foe.id).toBe(42);           // spawn's original id preserved (defeat-tracking depends on it)
+    // Bug regression: unhydrated actors used to default to hp/hpMax = 1. Hydrated actors carry
+    // the archetype's real stats, so hp/hpMax match a directly-constructed enemy at the same depth.
+    const reference = createEnemy('drone', 3, createRNGCursorForRun(11), enemiesData);
+    expect(foe.hpMax).toBe(reference.hpMax);
+    expect(foe.hp).toBe(reference.hp);
+    expect(foe.defense).toBe(reference.defense);
+    expect(foe.attributes).toEqual(reference.attributes);
+    expect(foe.hpMax).toBeGreaterThan(1);
+    expect(foe.behavior).toBeDefined();
+  });
+
+  it('an echo spawn hydrates via createEcho instead of vanishing on a missing archetype lookup', () => {
+    const floor = { cells: makeGrid(20, 32, 1), themeId: 'cold_storage' };
+    const party = [makeCharacter({ id: 'a' })];
+    const cursor = createRNGCursorForRun(11);
+    const deadChar = makeCharacter({ id: 'dead_a', hpMax: 24, defense: 12, protocolDefense: 11, sigilCodepoint: 0xE001 });
+    const stub = [{ id: 99, x: 4, y: 4, archetypeId: 'echo', character: deadChar }];
+    const encounter = createStandardEncounter(floor, { x: 4, y: 4 }, party, stub, cursor, { enemiesData, depth: 3 });
+    const foe = encounter.actors.find(a => a.side === 'enemy');
+    expect(foe).toBeDefined();
+    expect(foe.archetypeId).toBe('echo');
+    expect(foe.isEcho).toBe(true);
+    expect(foe.hpMax).toBeGreaterThan(1);
+    expect(foe.defense).toBeGreaterThan(0);
+    expect(foe.id).toBe(99);
+  });
+
+  it('an already-hydrated actor passes through unchanged (idempotent)', () => {
+    const floor = { cells: makeGrid(20, 32, 1), themeId: 'cold_storage' };
+    const party = [makeCharacter({ id: 'a' })];
+    const cursor = createRNGCursorForRun(11);
+    const prebuilt = createEnemy('warden', 2, createRNGCursorForRun(7), enemiesData);
+    const encounter = createStandardEncounter(
+      floor, { x: 5, y: 5 }, party, [{ ...prebuilt, x: 5, y: 5 }], cursor, { enemiesData, depth: 2 }
+    );
+    const foe = encounter.actors.find(a => a.side === 'enemy');
+    expect(foe.hp).toBe(prebuilt.hp);
+    expect(foe.hpMax).toBe(prebuilt.hpMax);
+    expect(foe.defense).toBe(prebuilt.defense);
+    expect(foe.attributes).toEqual(prebuilt.attributes);
+  });
+
+  it('falls back to the raw spawn when enemiesData is absent (no crash, no fabricated stats)', () => {
+    const floor = { cells: makeGrid(20, 32, 1), themeId: 'cold_storage' };
+    const party = [makeCharacter({ id: 'a' })];
+    const cursor = createRNGCursorForRun(11);
+    const stub = [{ id: 7, x: 5, y: 5, archetypeId: 'drone' }];
+    const encounter = createStandardEncounter(floor, { x: 5, y: 5 }, party, stub, cursor);
+    const foe = encounter.actors.find(a => a.side === 'enemy');
+    expect(foe).toBeDefined();
+    expect(foe.id).toBe(7);
+    expect(foe.hpMax).toBeUndefined();
+  });
+});
+
+describe('createHuntEncounter — spawn hydration (combat-and-ux-feedback-pass SESSION-01)', () => {
+  it('hunt actors are hydrated with archetype hp/defense/attributes at the runState depth', () => {
+    const floor = makeFloor();
+    const party = makeParty(3);
+    const runState = createRunState(42, party, { depth: 5 });
+    const cursor = createRNGCursorForRun(42);
+    const encounter = createHuntEncounter(floor, { x: 10, y: 16 }, party, runState, cursor, huntData);
+    expect(encounter).not.toBeNull();
+    const foes = encounter.actors.filter(a => a.side === 'enemy');
+    expect(foes.length).toBeGreaterThan(0);
+    for (const foe of foes) {
+      expect(foe.hpMax).toBeGreaterThan(1);
+      expect(foe.defense).toBeGreaterThan(0);
+      expect(foe.attributes).toBeDefined();
+      expect(foe.behavior).toBeDefined();
+      expect(foe.id).toMatch(/^hunt_/);
+    }
   });
 });
 
