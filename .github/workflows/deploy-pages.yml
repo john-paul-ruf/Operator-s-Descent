@@ -43,7 +43,7 @@ jobs:
         run: npm run check:assets
 
       - name: Run Pages contract tests
-        run: npx vitest run ./tests/integration/service-worker.test.js ./tests/tools/build-pages.test.js ./tests/tooling/github-pages-workflow.test.js
+        run: npm run test:pages-contract
 
       - name: Stage Pages artifact
         run: npm run build:pages -- --output "${RUNNER_TEMP}/operator-s-descent-pages"

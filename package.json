@@ -10,6 +10,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "serve": "node scripts/server.js",
     "start": "node scripts/start.js",
     "stop": "node scripts/stop.js",
@@ -29,11 +30,13 @@
     "validate": "node ./scripts/validate-data.js && npm run lint:sigils && npm run font:check && npm run check:assets && npm run check:generated && npm test",
     "check:release": "npm run validate && npm run stress:generation && npm run stress:saves && npm run simulate && npm run budget:report && npm run test:e2e",
     "test:e2e": "playwright test",
+    "test:pages-contract": "vitest run ./tests/integration/service-worker.test.js ./tests/tools/build-pages.test.js ./tests/tooling/github-pages-workflow.test.js",
     "parity:shots": "node ./scripts/screenshot-parity.js",
     "build:css": "node tools/tailwind/build-css.mjs",
     "build:icons": "node tools/icons/build-sprite.mjs",
     "build:assets": "npm run build:css && npm run build:icons",
-    "build:pages": "npm run check:assets && node ./scripts/build-pages.js"
+    "build:pages": "npm run check:assets && node ./scripts/build-pages.js",
+    "predeploy": "npm run check:generated && npm run check:assets && npm run test:pages-contract && npm run build:pages"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

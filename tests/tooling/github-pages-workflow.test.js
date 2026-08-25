@@ -56,9 +56,7 @@ describe('deploy-pages workflow — build job', () => {
 
   it('verifies the production manifest and runs exactly the Pages-specific contract suite', () => {
     expect(buildJob).toMatch(/run:\s*npm run check:assets/);
-    expect(buildJob).toMatch(
-      /run:\s*npx vitest run \.\/tests\/integration\/service-worker\.test\.js \.\/tests\/tools\/build-pages\.test\.js \.\/tests\/tooling\/github-pages-workflow\.test\.js/
-    );
+    expect(buildJob).toMatch(/run:\s*npm run test:pages-contract/);
     expect(buildJob).not.toMatch(/npm test\b/);
     expect(buildJob).not.toMatch(/npm run validate/);
     expect(buildJob).not.toMatch(/npm run check:release/);
