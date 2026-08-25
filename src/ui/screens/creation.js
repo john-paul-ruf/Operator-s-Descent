@@ -250,7 +250,7 @@ export function mount(container, params = {}) {
     root.style.padding = '0';
     root.dataset.testid = 'creation-root';
     root.appendChild(renderHeader(summary));
-    root.appendChild(renderQuickStartSection());
+    if (!summary.characters.length) root.appendChild(renderQuickStartSection());
     root.appendChild(renderCharacterRail(summary));
     root.appendChild(renderTabs());
     const body = createScreenBody({ className: 'creation-body' });

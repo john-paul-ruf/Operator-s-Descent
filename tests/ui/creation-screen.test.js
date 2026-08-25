@@ -397,7 +397,7 @@ describe('creation screen workflow', () => {
 });
 
 describe('creation screen — quick start presets', () => {
-  it('renders QUICK START before the detailed editor on a fresh draft with the visible promise, and loading a preset replaces the draft and focuses the selection', async () => {
+  it('renders QUICK START before the detailed editor on a fresh draft with the visible promise, and loading a preset replaces the draft and dismisses the section', async () => {
     const { container } = await mountCreation({ preloadedSeed: 5050 });
     const root = byTestId(container, 'creation-root');
     const section = byTestId(container, 'quick-start-section');
@@ -407,13 +407,13 @@ describe('creation screen — quick start presets', () => {
     expect(root.children.indexOf(section)).toBeLessThan(root.children.indexOf(byTestId(container, 'character-rail')));
     for (const id of ['breach-drill', 'scout-pair', 'full-crew']) expect(byTestId(container, `quick-start-${id}`)).not.toBeNull();
 
-    const button = byTestId(container, 'quick-start-breach-drill');
-    button.click();
+    byTestId(container, 'quick-start-breach-drill').click();
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 26/80');
     expect(byTestId(container, 'remaining').children[1].textContent).toBe('54/80');
     expect(byTestId(container, 'credits').children[1].textContent).toBe('540');
     expect(byTestId(container, 'character-slot-0').className).toContain('active');
-    expect(byTestId(container, 'quick-start-breach-drill').focused).toBe(true);
+    // Empty-state gate — section is removed once a party exists, not merely hidden.
+    expect(byTestId(container, 'quick-start-section')).toBeNull();
   });
 
   it('BREACH DRILL loads the exact requested Breacher composition, not merely its marketing label', async () => {
@@ -435,21 +435,39 @@ describe('creation screen — quick start presets', () => {
     expect(byTestId(container, 'attribute-sig').getAttribute('aria-label')).toContain('SIGNAL rank 4');
   });
 
-  it('replaces an already-edited draft, and reselecting the same quick start reloads an independent, non-stacking draft', async () => {
+  it('is an empty-state affordance: hides once a party exists and reappears when characters return to zero, then loads cleanly', async () => {
     const { container } = await mountCreation({ preloadedSeed: 5052 });
+    // Fresh draft: the section is present.
+    expect(byTestId(container, 'quick-start-section')).not.toBeNull();
+    // Building a party dismisses the section entirely — not merely hidden.
     addBreacher(container);
-    byTestId(container, 'tab-gear').click();
-    byTestId(container, 'weapon-heavy_melee').click();
     expect(byTestId(container, 'party-count').textContent).toBe('PARTY 1/4');
-
+    expect(byTestId(container, 'quick-start-section')).toBeNull();
+    // The − REMOVE button is disabled at 1 party member (minimum-party-size UI
+    // guard). Invoke its click listener directly so this test proves the
+    // render gate re-fires when characters.length transitions back to 0 —
+    // the section is not permanently one-way-dismissed after the first build.
+    const remove = byTestId(container, 'remove-character');
+    remove.listeners.get('click')[0]({ type: 'click', target: remove });
+    expect(byTestId(container, 'quick-start-section')).not.toBeNull();
+    // Loading a preset from that restored empty state produces the same
+    // draft as an initial load — no drift, no stacking on the earlier build.
     byTestId(container, 'quick-start-scout-pair').click();
     expect(byTestId(container, 'party-count').textContent).toBe('PARTY 2/4');
     expect(byTestId(container, 'spent').textContent).toBe('SPENT 29/80');
+  });
 
-    // Repeated selection reloads the same composition rather than stacking or drifting.
-    byTestId(container, 'quick-start-scout-pair').click();
-    expect(byTestId(container, 'party-count').textContent).toBe('PARTY 2/4');
-    expect(byTestId(container, 'spent').textContent).toBe('SPENT 29/80');
+  it('empty-state gate: renders on mount, disappears when any character is added, returns when characters.length is back to 0', async () => {
+    const { container } = await mountCreation({ preloadedSeed: 5054 });
+    expect(byTestId(container, 'quick-start-section')).not.toBeNull();
+    // Add a character via the minimal path (no class/sigil needed).
+    byTestId(container, 'add-character').click();
+    expect(byTestId(container, 'quick-start-section')).toBeNull();
+    // Bypass the minimum-party UI guard on − REMOVE to drop back to 0 —
+    // the render gate reads model state, not the guard.
+    const remove = byTestId(container, 'remove-character');
+    remove.listeners.get('click')[0]({ type: 'click', target: remove });
+    expect(byTestId(container, 'quick-start-section')).not.toBeNull();
   });
 
   it('a player can edit a loaded quick-start member and still receive the standard cost/validity feedback — a shortcut, not a parallel character system', async () => {
