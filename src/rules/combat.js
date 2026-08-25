@@ -5,7 +5,7 @@ import { castProtocol, overclockProtocol } from './protocols.js';
 import { applyConsumable } from './consumables.js';
 import { evaluateRange } from './equipment.js';
 import { getSignatureCapabilities, applySignatureModifier } from './classes.js';
-import { distanceCells, getEdgeCoverBonus, isFlanked, getOpportunityAttackers, FLANK_ATTACK_BONUS, findApproachPath } from './combat-geometry.js';
+import { distanceCells, getEdgeCoverBonus, hasLineOfSight, isFlanked, getOpportunityAttackers, FLANK_ATTACK_BONUS, findApproachPath } from './combat-geometry.js';
 
 const AP_PER_TURN = 2;
 export const MOVE_RANGE = 5;
@@ -488,9 +488,16 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
   const distance = distanceCells(attacker.position, target.position);
   const positioned = distance !== null;
   const ignoresCover = options.ignoreCover ?? (weapon.effects?.attack?.ignoreCover === true || signatureEffectsFor(attacker, 'attack', context).some(effect => effect.parameters?.ignoreCover));
-  const range = positioned
+  let range = positioned
     ? evaluateRange(weapon, distance)
     : { legal: true, band: weapon.rangeBand ?? null, accuracyModifier: weapon.accuracyBonus || 0, reason: 'unpositioned' };
+  // A solid wall between attacker and target hard-blocks the shot — cover only softens it,
+  // it doesn't grant permission to shoot through. Melee is exempt (adjacency can't be
+  // wall-blocked by construction of the wall trace), and this never downgrades an already-
+  // illegal range (out-of-range still reads as such, not silently re-labeled as no-LOS).
+  if (!isMelee && range.legal && positioned && !hasLineOfSight(combatState.window, attacker.position, target.position)) {
+    range = { ...range, legal: false, reason: 'no_line_of_sight' };
+  }
 
   const attribute = isMelee ? 'mgt' : 'fin';
   const attributeModifier = modifier((attacker.effectiveAttributes ?? attacker.attributes)?.[attribute] ?? 3);
@@ -553,7 +560,7 @@ function performAttackRoll(combatState, attacker, target, rngCursor, context, op
     flanked,
     flankBonus,
     coverBonus,
-    range: { distance, band: range.band, legal: range.legal },
+    range: { distance, band: range.band, legal: range.legal, reason: range.reason ?? null },
     roll: total,
     targetDefense: defense,
     hit,

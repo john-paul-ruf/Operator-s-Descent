@@ -386,6 +386,57 @@ describe('executeAction — attack resolution', () => {
     expect(atkLog.targetDefense).toBe(10);
   });
 
+  it('ranged attack through a solid wall is illegal — reason no_line_of_sight, no damage, cover still logged', () => {
+    // A single wall cell placed on the straight line from (0,0) to (4,0) — that's an interior
+    // orthogonal step (corner: false), so hasLineOfSight rejects it as a hard block. Cover is
+    // computed independently and still surfaces in the log entry for parity with legal shots.
+    const window = openCombatWindow();
+    window.cells[0][2] = 0;
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 4, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    const result = executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    expect(result.hit).toBe(false);
+    expect(result.damage).toBe(0);
+    expect(state.combatants.get('enemy_1').hp).toBe(100);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.range).toMatchObject({ distance: 4, band: 'short', legal: false, reason: 'no_line_of_sight' });
+    // Cover computation is independent of the LOS gate — half cover on a single-wall trace
+    // still surfaces in the log so the UI can explain what the wall would have contributed.
+    expect(atkLog.coverBonus).toBe(2);
+  });
+
+  it('LOS gate never fires for melee: a wall behind an adjacent enemy is irrelevant', () => {
+    // Adjacency is a single step; the trace has one edge (the target's own cell), which
+    // hasLineOfSight excludes by construction. A wall behind the target must not block melee.
+    const window = openCombatWindow();
+    window.cells[0][2] = 0; // wall at (2,0), attacker at (0,0), target at (1,0)
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent', maxRange: 1, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 1, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.range.legal).toBe(true);
+    expect(atkLog.range.reason).not.toBe('no_line_of_sight');
+  });
+
+  it('LOS gate does not re-label an out-of-range shot: beyond_maximum stays the reason', () => {
+    // Wall at (3,0) between attacker (0,0) and target (5,0). Weapon maxRange is 4, so the
+    // shot is illegal from evaluateRange first — the LOS gate must not clobber that reason.
+    const window = openCombatWindow();
+    window.cells[0][3] = 0;
+    const party = [makeCharacter({ id: 'a', position: { x: 0, y: 0 }, weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'short', maxRange: 4, accuracyBonus: 0 }) })];
+    const enemy = makeEnemy({ id: 'enemy_1', position: { x: 5, y: 0 }, defense: 10, hp: 100, hpMax: 100 });
+    const { state, cursor } = startCombat(party, [enemy], 1, 'a');
+    state.window = window;
+    executeAction(state, { type: 'attack', actorId: 'a', targetId: 'enemy_1' }, cursor, baseContext);
+    const atkLog = state.log.find(e => e.type === 'attack');
+    expect(atkLog.range.legal).toBe(false);
+    expect(atkLog.range.reason).toBe('beyond_maximum');
+  });
+
   it('overloaded target → damage ×1.5 floored', () => {
     const seed = findAttackSeed(19, 1, 1);
     const party = [makeCharacter({ id: 'a', weapon: makeWeapon({ damageDie: 'd6', rangeBand: 'adjacent' }) })];
