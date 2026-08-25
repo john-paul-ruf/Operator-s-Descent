@@ -10,7 +10,7 @@ import { createLattice } from '../../exploration/lattice.js';
 import { createEnemy } from '../../rules/enemies.js';
 import { initiateCombat, executeAction, resolveTurn, checkCombatEnd, getLegalActions, getCharacterDeaths, toCombatSnapshot, reachableMoveCells, isLegalMoveStep, MOVE_RANGE } from '../../rules/combat.js';
 import { createStandardEncounter, completeEncounter } from '../../rules/encounters.js';
-import { distanceCells, getEdgeCoverBonus, isFlanked } from '../../rules/combat-geometry.js';
+import { distanceCells, getEdgeCoverBonus, hasLineOfSight, isFlanked } from '../../rules/combat-geometry.js';
 import { evaluateRange, resolveLoadout, getAffixHooks, useAffixReroll } from '../../rules/equipment.js';
 import { deriveStats } from '../../rules/attributes.js';
 import { createViewportCamera, attachViewportGestures, sizeCanvasToContainer } from '../viewport.js';
@@ -436,7 +436,12 @@ export function mount(container, params = {}) {
     consumablesData: data.consumables,
     classData: data.classes,
     classesData: data.classes,
-    lattice: combatState.window
+    lattice: combatState.window,
+    // Protocol-cast LOS seam (SESSION-03 of combat-and-ux-feedback-pass). protocols.js:83-96
+    // reads context.hasLineOfSight (falling through to context.hasLOS) inside targetError,
+    // returning 'blocked-los' when a wall sits between caster and target. Sharing one primitive
+    // with the weapon-attack LOS gate in performAttackRoll keeps both paths symmetric.
+    hasLineOfSight: (caster, target) => hasLineOfSight(combatState.window, caster?.position, target?.position)
   };
 
   let mounted = true;
@@ -766,7 +771,11 @@ export function mount(container, params = {}) {
     let legal = 0;
     for (const target of targets) {
       const distance = distanceCells(actor?.position, target.position);
-      const inRange = distance == null || distance < 1 ? true : evaluateRange(weapon, distance).legal;
+      // Range and LOS live independently here (never fold LOS into the range check): both must
+      // hold for a target to count as legal, but keeping them separate means a future
+      // reason-surfacing change here doesn't have to untangle a merged predicate.
+      const rangeLegal = distance == null || distance < 1 ? true : evaluateRange(weapon, distance).legal;
+      const inRange = rangeLegal && (distance == null || distance < 1 || hasLineOfSight(combatState.window, actor?.position, target.position));
       if (inRange) legal += 1;
     }
     return { total: targets.length, legal };
@@ -1478,6 +1487,14 @@ export function mount(container, params = {}) {
         ? evaluateRange(weapon, distance)
         : { legal: true, band: weapon.rangeBand ?? 'adjacent', accuracyModifier: 0, reason: 'in_range' };
       targetLegal = range.legal;
+      // LOS gate (SESSION-03) — an interior wall between attacker and target hard-blocks the shot
+      // even when the target is within the weapon's range band. Mirrors the rules-layer check in
+      // performAttackRoll (combat.js:498). Only downgrades a currently-legal preview; an already-
+      // illegal reason (out-of-range) stays out-of-range so the console reason chip reads honestly.
+      if (targetLegal && distance != null && distance >= 1 && !hasLineOfSight(combatState.window, actor.position, target.position)) {
+        range = { ...range, legal: false, reason: 'no_line_of_sight' };
+        targetLegal = false;
+      }
     } else if (selection.actionType === 'cast' || selection.actionType === 'overclock') {
       // Protocol range gate: honor a numeric `range` on the protocol tier when present. Every
       // shipped protocol in data/protocols.json today declares range as a human-readable string
