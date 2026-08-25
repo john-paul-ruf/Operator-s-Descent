@@ -10,6 +10,10 @@ const gameData = {
   equipment: loadData('equipment'),
   affixes: loadData('affixes'),
   consumables: loadData('consumables'),
+  // Enemies registry drives spawn hydration on the contact-combat path — without it the
+  // hydrator returns raw stubs and combatants enter combat unhydrated. Mirrors the runtime
+  // game-data registry produced by src/data-loader.js (combat-and-ux-feedback-pass SESSION-01).
+  enemies: loadData('enemies'),
 };
 
 class FakeClassList {
@@ -236,6 +240,52 @@ describe('exploration screen controller', () => {
 
     expect(combat).toHaveLength(1);
     expect(combat[0]).toMatchObject({ runState: state, floor: hostileFloor, reason: 'hostile', encounter: expect.objectContaining({ kind: 'standard' }), moveResult: expect.objectContaining({ interruptType: 'hostile', combatContact: true }) });
+    off();
+  });
+
+  it('groups a second nearby hostile into the same encounter (combat chaining, SESSION-01)', async () => {
+    const combat = [];
+    const off = bus.on('state:combat-start', (payload) => combat.push(payload));
+    // Spawn 0 at (12,10) triggers contact when the party steps east onto (11,10);
+    // spawn 1 at (13,11) is Chebyshev 1 from the contact spawn → chains into the same fight.
+    const hostileFloor = floor({ enemySpawns: [
+      { id: 0, x: 12, y: 10, archetypeId: 'drone' },
+      { id: 1, x: 13, y: 11, archetypeId: 'drone' }
+    ] });
+    const { container } = await mountExploration({ floor: hostileFloor });
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+
+    expect(combat).toHaveLength(1);
+    const enemyActors = combat[0].encounter.actors.filter(a => a.side === 'enemy');
+    expect(enemyActors).toHaveLength(2);
+    // Regression: hydration bug — pre-fix, contact-triggered enemies entered combat with
+    // hpMax === 1. Both chained enemies must arrive with real archetype hp.
+    for (const foe of enemyActors) {
+      expect(foe.hpMax).toBeGreaterThan(1);
+      expect(foe.hp).toBe(foe.hpMax);
+      expect(foe.defense).toBeGreaterThan(0);
+    }
+    off();
+  });
+
+  it('excludes a hostile outside chain range from a contact-triggered encounter', async () => {
+    const combat = [];
+    const off = bus.on('state:combat-start', (payload) => combat.push(payload));
+    // Contact spawn at (12,10); the distant spawn at (18,10) is Chebyshev 6 away and not
+    // reachable via any bridge — chain leaves it out. Single-enemy encounter dispatches.
+    const hostileFloor = floor({ enemySpawns: [
+      { id: 0, x: 12, y: 10, archetypeId: 'drone' },
+      { id: 1, x: 18, y: 10, archetypeId: 'drone' }
+    ] });
+    const { container } = await mountExploration({ floor: hostileFloor });
+
+    container.dispatch('keydown', keyEvent('ArrowRight'));
+
+    expect(combat).toHaveLength(1);
+    const enemyActors = combat[0].encounter.actors.filter(a => a.side === 'enemy');
+    expect(enemyActors).toHaveLength(1);
+    expect(enemyActors[0].hpMax).toBeGreaterThan(1);
     off();
   });
 
