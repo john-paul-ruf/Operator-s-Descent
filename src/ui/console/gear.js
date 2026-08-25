@@ -134,11 +134,17 @@ function consumeSwap(context, character) {
   syncCombatActor(actor, character, context.data);
 }
 
-function resolveEquipSlot(item, data) {
+function resolveEquipSlot(item, data, character) {
   if (item?.category === 'armor') return 'armor';
   if (item?.category !== 'weapon') return null;
-  const slot = data?.equipment?.weapons?.[item.baseType]?.slot;
-  return slot === 'weapon' || slot === 'offhand' ? slot : null;
+  const nativeSlot = data?.equipment?.weapons?.[item.baseType]?.slot;
+  if (nativeSlot === 'offhand') return 'offhand';        // shield — always off-hand
+  if (nativeSlot !== 'weapon') return null;
+  // Secondary-sidearm rule (mirrors creation-model.js:71 / party-configs.js:88):
+  // a sidearm diverts to the off-hand when a main weapon is already equipped,
+  // and fills the empty main-hand otherwise so a lone sidearm still attacks.
+  if (item.baseType === 'sidearm' && character?.equipment?.weapon) return 'offhand';
+  return 'weapon';
 }
 
 function itemLegalForCharacter(data, character, item) {
@@ -146,7 +152,7 @@ function itemLegalForCharacter(data, character, item) {
 }
 
 function isEquippableInventoryItem(item, data, character) {
-  return Boolean(resolveEquipSlot(item, data))
+  return Boolean(resolveEquipSlot(item, data, character))
     && itemLegalForCharacter(data || {}, character, item);
 }
 
@@ -210,7 +216,7 @@ function transactionResult(context, result, message) {
 function requestEquip(context, item) {
   const state = stateFor(context.runState);
   const character = context.runState.party[state.charIndex];
-  const slot = resolveEquipSlot(item, context.data);
+  const slot = resolveEquipSlot(item, context.data, character);
   if (!slot) return false;
   const reason = equipDisabledReason(context, character, item);
   if (reason) {
@@ -527,7 +533,7 @@ function renderInventoryItem(list, context, character, ui, item, cleanups = []) 
   wrapper.dataset.testid = `gear-item-${item.id}`;
   wrapper.appendChild(createEquipmentCard(displayItem(item, context.data), { stats: itemStats(item, context.data), compact: true }));
   const before = runStats(context.data || {}, character);
-  const slot = resolveEquipSlot(item, context.data);
+  const slot = resolveEquipSlot(item, context.data, character);
   const after = slot ? projectedStats(context.data || {}, character, slot, item) : before;
   wrapper.appendChild(text('gear-comparison console-static-row', statDeltaLine(before, after), `gear-compare-${item.id}`));
   wrapper.appendChild(classesChip(item, context.data || {}, `gear-classes-${item.id}`));

@@ -413,7 +413,11 @@ describe('GEAR mode', () => {
 
     expect(actor.ap).toBe(2);
     expect(actor.swapAvailable).toBe(false);
-    expect(runState.party[0].equipment.weapon.id).toBe('fresh-sidearm');
+    // Smart auto-slot (rule A): the default character already holds
+    // equipped-sidearm in the main-hand, so fresh-sidearm diverts to the
+    // off-hand and the primary weapon is left untouched.
+    expect(runState.party[0].equipment.offhand.id).toBe('fresh-sidearm');
+    expect(runState.party[0].equipment.weapon.id).toBe('equipped-sidearm');
     expect(byTestId(container, 'gear-equip-backup-sidearm').disabled).toBe(true);
     expect(byTestId(container, 'gear-equip-backup-sidearm').getAttribute('aria-description')).toBe('Free combat swap already spent.');
   });
