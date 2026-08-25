@@ -3,6 +3,7 @@ import {
   distanceCells,
   traceSupercoverEdges,
   getEdgeCoverBonus,
+  hasLineOfSight,
   isFlanked,
   getOpportunityAttackers,
   findApproachPath,
@@ -117,6 +118,43 @@ describe('getEdgeCoverBonus', () => {
   it('diagonal diagonal line grazes both orthogonal neighbors at a corner — both count as crossings', () => {
     const lattice = latticeWithWalls(8, 8, [[1, 0], [0, 1]]);
     expect(getEdgeCoverBonus(lattice, { position: { x: 0, y: 0 } }, { position: { x: 3, y: 3 } })).toBe(FULL_COVER_BONUS);
+  });
+});
+
+describe('hasLineOfSight', () => {
+  it('clear straight line: no walls between → true', () => {
+    const lattice = latticeWithWalls(8, 8, []);
+    expect(hasLineOfSight(lattice, { x: 0, y: 0 }, { x: 4, y: 0 })).toBe(true);
+  });
+
+  it('corner-graze: a wall touched only at an exact diagonal corner still allows LOS (cover-only, not a block)', () => {
+    // Diagonal from (0,0)→(3,3) grazes the corner between (1,0) and (0,1). Both are walls,
+    // so getEdgeCoverBonus treats it as full cover — but hasLineOfSight must still be true.
+    const lattice = latticeWithWalls(8, 8, [[1, 0], [0, 1]]);
+    expect(hasLineOfSight(lattice, { x: 0, y: 0 }, { x: 3, y: 3 })).toBe(true);
+    // Sanity: the same fixture is full cover under the existing cover function.
+    expect(getEdgeCoverBonus(lattice, { position: { x: 0, y: 0 } }, { position: { x: 3, y: 3 } })).toBe(FULL_COVER_BONUS);
+  });
+
+  it('straight-through orthogonal wall: interior wall cell blocks LOS → false', () => {
+    const lattice = latticeWithWalls(8, 8, [[2, 0]]);
+    expect(hasLineOfSight(lattice, { x: 0, y: 0 }, { x: 4, y: 0 })).toBe(false);
+  });
+
+  it('target\'s own cell is never treated as an obstruction', () => {
+    // Even if (4,0) itself is somehow "blocked" data, LOS to the target cell stays legal.
+    const lattice = latticeWithWalls(8, 8, [[4, 0]]);
+    expect(hasLineOfSight(lattice, { x: 0, y: 0 }, { x: 4, y: 0 })).toBe(true);
+  });
+
+  it('missing endpoint → true (matches performAttackRoll\'s unpositioned short-circuit)', () => {
+    const lattice = latticeWithWalls(8, 8, [[2, 0]]);
+    expect(hasLineOfSight(lattice, null, { x: 4, y: 0 })).toBe(true);
+    expect(hasLineOfSight(lattice, { x: 0, y: 0 }, null)).toBe(true);
+  });
+
+  it('null lattice → true (no walls known → nothing to block)', () => {
+    expect(hasLineOfSight(null, { x: 0, y: 0 }, { x: 4, y: 0 })).toBe(true);
   });
 });
 

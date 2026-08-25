@@ -56,6 +56,23 @@ export function traceSupercoverEdges(from, to) {
   return edges;
 }
 
+// True line of sight: false only when the trace's interior genuinely threads through a wall
+// cell (corner: false — an orthogonal step or the final diagonal landing cell). A grazed
+// corner (corner: true) is NOT a block — that's what getEdgeCoverBonus's half/full cover
+// already represents, and this function must not change that existing behavior. Unpositioned
+// callers (either endpoint missing a position) pass through as legal, matching how existing
+// callers (performAttackRoll's `positioned` guard, protocol targeting's null-context short-
+// circuit) already treat missing geometry.
+export function hasLineOfSight(lattice, from, to) {
+  if (!from || !to) return true;
+  for (const edge of traceSupercoverEdges(from, to)) {
+    if (edge.x === to.x && edge.y === to.y) continue;
+    if (edge.corner) continue;
+    if (isBlockedCell(lattice, edge.x, edge.y)) return false;
+  }
+  return true;
+}
+
 // Cover from edge-crossing, not a wall value guessed off a raw string: trace the supercover
 // line and count blocked cells it grazes between the two positions (excluding the target's
 // own occupied cell). Zero crossings is no cover; one is half; two or more is full.
