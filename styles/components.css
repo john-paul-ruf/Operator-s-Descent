@@ -31,7 +31,7 @@
    accessible name). Square touch box, centered glyph, no side-heavy padding
    inherited from `.has-icon`. `.icon-only` on `.action-btn` follows the same
    shape when action-row callers opt in the same way. Both variants keep the
-   96px touch floor via the surrounding `.console-row` context; the
+   48px touch floor via the surrounding `.console-row` context; the
    `min-width: 48px` guard here holds when the button is used bare.
    `justify-content: center` overrides the row-flex-start on `.combat-action`
    so the lone glyph sits truly centered. */
@@ -48,7 +48,7 @@
    prevent shared portrait rows from wrapping. Row-minimum densification
    (48px, pointer-only) moved to styles/wide.css inside a fine-pointer /
    hover-only media guard so any coarse-pointer wide surface (e.g.
-   1024×1024 touch tablet) still hits the 96px floor. */
+   1024×1024 touch tablet) still hits the 48px floor. */
 :root[data-layout="wide"] .combat-active-panel,
 :root[data-layout="wide"] .loot-container-header { flex-wrap: nowrap; min-width: 0; }
 :root[data-layout="wide"] .combat-active-panel .combat-active-name,
@@ -125,7 +125,7 @@
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-height: 96px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -163,7 +163,7 @@
    swap textual labels for lucide sprites; this rule owns the stack: glyph
    centered, `.tab-key` recentered below the icon so the numeric shortcut is
    still discoverable without stealing pointer space. Height stays at the
-   96px touch floor set by `.console-row` — icon-only reclaims the label
+   48px touch floor set by `.console-row` — icon-only reclaims the label
    row, never the touch target. Applies in portrait; the wide dock variant
    lives in styles/wide.css. */
 .mode-tab.icon-only {
@@ -252,8 +252,8 @@
 /* D-Pad */
 .dpad {
   display: grid;
-  grid-template-columns: repeat(3, 96px);
-  grid-template-rows: repeat(3, 96px);
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
   gap: 4px;
   justify-content: center;
 }
@@ -284,9 +284,9 @@
 /* Icon glyphs inside the D-pad (icon-first-ui-density SESSION-03). The
    D-pad button font-size sets arrow-character glyph size for the current
    arrow-character D-pad; when SESSION-05 swaps them for lucide arrows the
-   sprite must be authored large enough to read at glance across the 96×96
+   sprite must be authored large enough to read at glance across the 48×48
    button. Sits above the 44 px WCAG touch floor by construction (parent
-   button is 96×96). */
+   button is 48×48). */
 .dpad-btn > .icon {
   width: 32px;
   height: 32px;
@@ -688,7 +688,7 @@ input[type="range"]::-moz-range-thumb {
   transition: all 0.15s ease;
   text-align: center;
   flex: 1;
-  min-height: 96px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -983,11 +983,12 @@ input[type="range"]::-moz-range-thumb {
   color: var(--accent);
   text-shadow: 0 0 4px var(--accent);
 }
-/* Touch floor (SESSION-06) — every touch-capable row is at least 96 CSS px
-   at phone (412×915), portrait-reference (1080×1920), and touch-wide (1024×
-   1024). Wide-mode densification down to 48px is now scoped to fine-pointer
-   hover contexts only (see styles/wide.css) so any coarse-pointer / touch
-   surface still hits this 96px floor. */
+/* Touch floor (SESSION-06; lowered 96 → 48 by touch-target-density-pass
+   SESSION-02) — every touch-capable row is at least 48 CSS px at phone
+   (412×915), portrait-reference (1080×1920), and touch-wide (1024×1024).
+   Wide-mode densification down to 48px is now scoped to fine-pointer hover
+   contexts only (see styles/wide.css) so any coarse-pointer / touch surface
+   still hits this 48px floor. */
 .console-row:not(.console-static-row):not(.console-static-card),
 .mode-tab,
 .menu-action,
@@ -1001,7 +1002,7 @@ input[type="range"]::-moz-range-thumb {
 .toggle-row,
 .slider-row,
 .text-input-row {
-  min-height: 96px;
+  min-height: 48px;
 }
 
 .console-static-row,
@@ -1272,7 +1273,7 @@ button.protocol-card[aria-selected="true"],
 .console-bar.expanded-half {
   /* icon-first-ui-density SESSION-03 — half-tray min height / dvh trimmed
      220→200 / 32dvh→30dvh per §5.1 so icon-first tabs let the playfield claim
-     ~20 additional CSS pixels on phone. 200 stays well above the 96 px touch
+     ~20 additional CSS pixels on phone. 200 stays well above the 48 px touch
      floor; the 420 px ceiling still governs tall portrait. */
   height: clamp(200px, 30dvh, 420px);
   min-height: 200px;
@@ -1288,7 +1289,7 @@ button.protocol-card[aria-selected="true"],
 .console-tab-bar {
   display: flex;
   flex: 0 0 auto;
-  min-height: 96px;
+  min-height: 48px;
 }
 
 .console-content {
@@ -1408,7 +1409,7 @@ button.protocol-card[aria-selected="true"],
 
 .creation-readout {
   min-width: 128px;
-  min-height: 96px;
+  min-height: 48px;
   padding: 12px;
   border: 1px solid var(--border-dim);
   background: var(--bg-panel);
@@ -1552,7 +1553,7 @@ button.protocol-card[aria-selected="true"],
 
 .config-name-input {
   width: 100%;
-  min-height: 96px;
+  min-height: 48px;
   padding: 8px 12px;
   color: var(--text-primary);
   background: var(--bg-base);
@@ -1583,7 +1584,7 @@ button.protocol-card[aria-selected="true"],
 .equipment-card,
 .protocol-card,
 .config-row {
-  min-height: 96px;
+  min-height: 48px;
 }
 
 .btn-crt.footer-back-btn {
@@ -1820,9 +1821,10 @@ button.protocol-card[aria-selected="true"],
    `.combat-action--primary` only exist inside `.console-bar` (portrait); the
    wide dock uses its own grid. Direction pad stays 3×3 with 48px+ cells (M97
    touch-target floor). */
-/* Portrait CMBT action + direction rows (SESSION-06) — every touch-capable
-   row hits the 96px floor at phone (412×915) and 1080-portrait alike.
-   Direction pad becomes a 3×3 grid of 96px cells for reliable thumb reach. */
+/* Portrait CMBT action + direction rows (SESSION-06; lowered 96 → 48 by
+   touch-target-density-pass SESSION-02) — every touch-capable row hits the
+   48px floor at phone (412×915) and 1080-portrait alike. Direction pad
+   becomes a 3×3 grid of 48px cells for reliable thumb reach. */
 /* SESSION-01 (mobile-combat-density-repair) — 3-column grid so Move / Attack /
    End Turn (emitted first by renderActions) land in the initial visual row in
    their DOM/focus order without a grid-column span; `.combat-action--primary`
@@ -1830,7 +1832,7 @@ button.protocol-card[aria-selected="true"],
    full-width row. Icon-forward compact buttons stack icon/label/cost
    vertically to stay legible in a narrower column. */
 .combat-action-list { margin-bottom: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.combat-action { width: 100%; min-height: 96px; padding: 8px 6px; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.combat-action { width: 100%; min-height: 48px; padding: 8px 6px; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
 .combat-action .action-cost { font-size: 8px; }
 
 /* Fallback threshold — only drop to 2 columns when 3 truly can't fit (below
@@ -1839,8 +1841,8 @@ button.protocol-card[aria-selected="true"],
 @media (max-width: 340px) {
   .combat-action-list { grid-template-columns: 1fr 1fr; }
 }
-.combat-direction-grid { display: grid; grid-template-columns: repeat(3, minmax(96px, 1fr)); grid-template-rows: repeat(3, 96px); gap: 6px; justify-content: center; margin-bottom: 12px; }
-.combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; min-height: 96px; }
+.combat-direction-grid { display: grid; grid-template-columns: repeat(3, minmax(48px, 1fr)); grid-template-rows: repeat(3, 48px); gap: 6px; justify-content: center; margin-bottom: 12px; }
+.combat-direction { background: var(--bg-panel-elevated); border: 1px solid var(--border-dim); font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; min-height: 48px; }
 .combat-protocol-list { margin-bottom: 12px; }
 .combat-item-list { margin-bottom: 12px; }
 .combat-item { padding: 6px 12px; font-size: 10px; }
@@ -1849,7 +1851,7 @@ button.protocol-card[aria-selected="true"],
    (clip + ellipsis), keep the 44px tap floor, and stay compatible with
    `.combat-target.is-illegal` (defined at :53 above). Under `.console-bar`
    only. */
-.combat-target { padding: 10px 12px; font-size: 10px; min-height: 96px; display: flex; align-items: center; gap: 6px; }
+.combat-target { padding: 10px 12px; font-size: 10px; min-height: 48px; display: flex; align-items: center; gap: 6px; }
 .combat-target > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .combat-confirm-row { display: flex; gap: 8px; margin-bottom: 12px; }
 .combat-terminal { font-size: 12px; color: var(--danger); text-align: center; padding: 16px; text-transform: uppercase; }
@@ -1939,8 +1941,8 @@ button.protocol-card[aria-selected="true"],
 /* Per-run action row on the portrait library card (icon-first-ui-density
    SESSION-04). Holds the icon-only RESUME chevron and the icon+text
    destructive DELETE LOCAL STATE button. The surrounding `.run-row`
-   itself carries the 96px touch floor via the shared `.console-row, ...,
-   .run-row { min-height: 96px }` rule — this container only owns layout;
+   itself carries the 48px touch floor via the shared `.console-row, ...,
+   .run-row { min-height: 48px }` rule — this container only owns layout;
    no new min-height is introduced. */
 .run-actions {
   display: flex;
@@ -2123,8 +2125,8 @@ button.protocol-card[aria-selected="true"],
 }
 .update-toast-label { white-space: nowrap; }
 .update-toast-reload {
-  min-height: 96px;
-  min-width: 96px;
+  min-height: 48px;
+  min-width: 48px;
   padding: 10px 20px;
   font-size: 12px;
   letter-spacing: 0.2em;
